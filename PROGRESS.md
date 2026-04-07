@@ -1,20 +1,25 @@
 # DentaBill AI — Progress
 
-_Read this at the start of every session. Update it after every
-completed task._
+Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
-## Next Task
-Step 1 — Monorepo initialization.
-
-## Currently In Progress
-Nothing.
-
-## Last Updated
-Not started.
+**Last updated:** 2026-04-07
+**Current phase:** Phase 1 — Foundations
+**Next task:** P1-T1 — Initialize Turborepo + pnpm workspace
+**In progress:** Nothing (planning complete, awaiting kickoff)
 
 ---
 
-## Step Checklist
+## Phase status
+
+| Phase | Name                       | Status      |
+|-------|----------------------------|-------------|
+| 1     | Foundations                | In progress |
+| 2     | API + Ingestion            | Queued      |
+| 3     | Queue + Voice              | Queued      |
+| 4     | Intelligence + Realtime    | Queued      |
+| 5     | Deployment                 | Queued      |
+
+## PRD step checklist
 
 - [ ] Step 1 — Monorepo
 - [ ] Step 2 — Database Schema
@@ -29,11 +34,13 @@ Not started.
 - [ ] Step 11 — Real-Time Updates
 - [ ] Step 12 — Railway Deployment
 
-## Completed Steps
-None yet.
+## Recent activity
 
-## Decisions Made
-None yet.
+- 2026-04-07 — Lean docs system bootstrapped (`docs/PROJECT_BRIEF.md`, `PHASE_PLAN.md`, `TASKS.md`, `DECISIONS.md`, `SESSION_CONTEXT.md`, `ENGINEERING_RULES.md`, `UX_RULES.md`). Phase 1 task list drafted (10 tasks).
 
-## Known Issues
-None yet.
+## Decisions log
+See `docs/DECISIONS.md`. Currently: ADR-001 (lock PRD stack), ADR-002 (lean docs), ADR-003 (Vitest + Playwright).
+
+## Known issues / open questions
+- Repo branch is `master` but PR target is `main` — confirm before first PR.
+- No external service credentials yet (Postgres/Redis/Clerk/Retell/Anthropic/Resend/Stripe/Telnyx) — needed from P1-T4 onward.
