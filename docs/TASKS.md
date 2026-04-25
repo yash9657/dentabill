@@ -10,7 +10,7 @@ Rules:
 
 ## Phase 1 — Foundations (active)
 
-- [ ] **P1-T1** Initialize Turborepo + pnpm workspace
+- [x] **P1-T1** Initialize Turborepo + pnpm workspace
   - Branch: `phase-1/monorepo-init`
   - Create `pnpm-workspace.yaml`, `turbo.json` (dev/build/lint/typecheck), root `package.json`, `.gitignore`, `.claudeignore`.
   - Test: `pnpm install && pnpm turbo run lint --filter=...` exits 0 with empty graph.

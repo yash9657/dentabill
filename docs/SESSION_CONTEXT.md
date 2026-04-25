@@ -1,23 +1,25 @@
 # Session Context
 
-_Last updated: 2026-04-07_
+_Last updated: 2026-04-20_
 
 ## What was just done
-- Read full `PRD.md` once (renamed from `PRD..md`).
-- Initialized lean docs system: `PROJECT_BRIEF.md`, `PHASE_PLAN.md`, `TASKS.md`, `DECISIONS.md` (ADR-001..003), `ENGINEERING_RULES.md`, `UX_RULES.md`, this file.
-- Refreshed `PROGRESS.md` to a human-friendly status report.
-- Proposed Phase 1 with 10 starter tasks (`P1-T1` … `P1-T10`).
+- Verified P1-T1 complete: `pnpm install` + `pnpm turbo run lint` both exit 0 with empty graph.
+- Set up full Claude Code harness: `.claude/settings.json` (Sonnet default, token caps, compaction), 4 hooks (secret scanner, env blocker, typecheck, PHI detector), 4 subagents (security-reviewer, code-reviewer, db-schema-reviewer, test-writer), 5 skills (tdd-workflow, new-feature, db-migration, fix-issue, security-check).
+- Updated `CLAUDE.md` with verification commands, skills/agents index, compaction hint.
+- Updated `.claudeignore` with `strructure.txt` and `*.lock`.
 
 ## Current state of the repo
-- `PRD.md`, `PROGRESS.md`, `CLAUDE.md`, `.gitignore`, and `docs/` exist. No code yet.
-- Branch: `main`. Origin: `github.com/yash9657/dentabill` (private).
-- No package manager artifacts, no apps, no packages.
+- Branch: `phase-1/monorepo-init`.
+- P1-T1 done: `pnpm-workspace.yaml`, `turbo.json`, root `package.json`, `.gitignore`, `.claudeignore`, `node_modules/`, `pnpm-lock.yaml` all present and correct.
+- No apps or packages scaffolded yet.
+- Claude Code harness fully configured in `.claude/`.
 
 ## Next task
-**P1-T1 — Initialize Turborepo + pnpm workspace** (see `docs/TASKS.md`).
+**P1-T2 — Shared config package (`packages/config`)** (see `docs/TASKS.md`).
 
 ## Open questions / ambiguities
-- No existing Postgres / Redis / Clerk / Retell credentials yet — will be needed by Phase 1-T4 onward.
+- No existing Postgres / Redis / Clerk / Retell credentials yet — needed by P1-T4 onward.
+- Turbo telemetry printed on first run — consider opting out via `TURBO_TELEMETRY_DISABLED=1` in `.env.example`.
 
 ## Do not forget
 - One task at a time. Tests are part of the task, not a follow-up.

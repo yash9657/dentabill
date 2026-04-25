@@ -2,10 +2,10 @@
 
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
-**Last updated:** 2026-04-07
+**Last updated:** 2026-04-20
 **Current phase:** Phase 1 — Foundations
-**Next task:** P1-T1 — Initialize Turborepo + pnpm workspace
-**In progress:** Nothing (planning complete, awaiting kickoff)
+**Next task:** P1-T2 — Shared config package (`packages/config`)
+**In progress:** Nothing
 
 ---
 
@@ -21,7 +21,7 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 
 ## PRD step checklist
 
-- [ ] Step 1 — Monorepo
+- [x] Step 1 — Monorepo
 - [ ] Step 2 — Database Schema
 - [ ] Step 3 — Authentication
 - [ ] Step 4 — Dashboard Shell
@@ -36,6 +36,7 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 
 ## Recent activity
 
+- 2026-04-20 — P1-T1 verified complete. Claude Code harness configured: Sonnet default, token caps, 4 hooks, 4 subagents, 5 skills. Ready for P1-T2.
 - 2026-04-07 — Lean docs system bootstrapped (`docs/PROJECT_BRIEF.md`, `PHASE_PLAN.md`, `TASKS.md`, `DECISIONS.md`, `SESSION_CONTEXT.md`, `ENGINEERING_RULES.md`, `UX_RULES.md`). Phase 1 task list drafted (10 tasks).
 
 ## Decisions log
