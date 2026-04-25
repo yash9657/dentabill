@@ -128,14 +128,11 @@ jobs:
             (echo > /dev/tcp/localhost/6379) >/dev/null 2>&1 && break || sleep 2
           done
 
-      - name: Apply Prisma migrations
-        # No-op until P1-T4 lands @dentabill/db with a Prisma schema.
-        run: |
-          if [ -f packages/db/prisma/schema.prisma ]; then
-            pnpm --filter @dentabill/db exec prisma migrate deploy
-          else
-            echo "@dentabill/db schema not yet present (Phase 1 P1-T4) — skipping migrate"
-          fi
+      - name: Generate Prisma client
+        run: pnpm --filter @dentabill/db exec prisma generate
+
+      - name: Apply Prisma migrations to test database
+        run: pnpm --filter @dentabill/db exec prisma migrate deploy
 
       - name: Test (turbo)
         run: pnpm turbo run test
