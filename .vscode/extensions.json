@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "Prisma.prisma",
+    "EditorConfig.EditorConfig",
+    "yoavbls.pretty-ts-errors",
+    "vitest.explorer"
+  ],
+  "unwantedRecommendations": []
+}
