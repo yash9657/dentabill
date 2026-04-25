@@ -34,6 +34,7 @@ Open `docs/PHASE_PLAN.md`. For the current phase, mark off any criteria that are
 ## 4. Delegate doc updates
 
 Use the `doc-updater` agent. Pass it:
+
 - A 3-line summary of what was done this session
 - The list of changed files from step 1
 - The verification result from step 2
@@ -48,6 +49,7 @@ If `apps/` or `packages/` gained or lost a workspace this session, run the `code
 ## 6. Final review
 
 Show the user:
+
 - Modified docs (one line each)
 - Any open TypeScript errors not yet handled
 - Pending Prisma migrations not yet committed

@@ -15,30 +15,36 @@ You execute the end-of-session protocol from `CLAUDE.md`. Your job is mechanical
 ## Steps
 
 ### 1. Gather facts
+
 - `git status` — list modified and untracked files
 - `git log -n 10 --oneline` — recent commits this session
 - `git diff --stat main..HEAD` if on a feature branch
 
 ### 2. Update `docs/SESSION_CONTEXT.md`
+
 - Append a new dated entry under "Recent sessions"
 - Update the "Next task" pointer based on what was completed
 - Move resolved open questions to a "Resolved" section; add new ones
 
 ### 3. Update `docs/TASKS.md`
+
 - Check off completed tasks with `[x]` and a date suffix
 - Add any new tasks that were discovered this session, sized 1–3 hours
 - Do not delete uncompleted tasks — only add or check off
 
 ### 4. Update `PROGRESS.md`
+
 - Bump phase status if exit criteria were met (verify against `docs/PHASE_PLAN.md`)
 - Add a one-line "Recent activity" entry
 - Add to "Known issues" only if a real new issue surfaced
 
 ### 5. Update `docs/DECISIONS.md` if applicable
+
 Append a new ADR ONLY if a non-trivial decision was made. Use:
 
 ```markdown
 ## ADR-<n>: <title>
+
 **Date:** YYYY-MM-DD
 **Status:** Accepted
 **Context:** <what forced the decision>

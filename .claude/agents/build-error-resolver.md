@@ -32,19 +32,24 @@ You diagnose build and test failures in a Turborepo + pnpm + TypeScript + Prisma
 
 ## Output
 
-```markdown
+````markdown
 ## Failure: <one-line summary>
+
 **Category:** <one of the above>
 **Root cause:** <what is actually wrong>
 
 ### Fix
+
 - File: `path/to/file.ts:42`
 - Change: <minimal diff description>
 
 ### Verify
+
 ```bash
 <exact command>
 ```
+````
+
 ```
 
 ## Hard rules
@@ -52,3 +57,4 @@ You diagnose build and test failures in a Turborepo + pnpm + TypeScript + Prisma
 - Never suppress an error with `// @ts-ignore`, `// @ts-expect-error`, `as any`, or `eslint-disable` to make a build pass. If suggesting one of these legitimately (e.g., a known library bug), justify why.
 - Never edit `.env*` files (other than `.env.example`).
 - Never widen Prisma types to `any` to dodge a schema mismatch — regenerate the client instead.
+```

@@ -21,6 +21,7 @@ describe('ThingUnderTest', () => {
 ```
 
 Always cover:
+
 - Happy path
 - Empty / null / undefined inputs
 - Wrong `organizationId` — should throw or return 403
@@ -34,19 +35,22 @@ For Prisma tests: use a real test DB, not mocks. Configure `DATABASE_URL` for th
 Placement: `apps/web/tests/<feature>.spec.ts`
 
 Always test:
+
 - Unauthenticated access → redirects to `/sign-in`
 - Authenticated access → renders correct content
 - Responsive breakpoints: 375px (mobile), 900px (tablet), 1280px (desktop)
 
 Use semantic selectors only:
+
 ```typescript
-await page.getByRole('heading', { name: 'Dashboard' })
-await page.getByRole('button', { name: 'Submit Claim' })
+await page.getByRole('heading', { name: 'Dashboard' });
+await page.getByRole('button', { name: 'Submit Claim' });
 ```
 
 Never use CSS class selectors in e2e tests.
 
 ## Standards
+
 - Import from workspace names (`@dentabill/db`, not `../../packages/db`)
 - No `any` in test files
 - Tests must be deterministic — mock `Date` and `Math.random` when needed

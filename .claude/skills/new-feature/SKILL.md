@@ -15,6 +15,7 @@ disable-model-invocation: true
 ## 2. Plan (still in Plan Mode)
 
 Write a checklist of:
+
 - Every file to create or modify
 - New env vars needed → document in `.env.example`
 - DB schema changes → will need `/db-migration`

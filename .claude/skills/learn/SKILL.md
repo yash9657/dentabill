@@ -26,13 +26,13 @@ Run this immediately after solving something non-trivial, while the context is f
 
 ### 1. Decide the bucket
 
-| Bucket | Goes in | Format |
-|---|---|---|
-| User-level habit / preference | auto memory | `feedback` or `user` memory |
-| Project-specific pattern | `docs/PATTERNS.md` (create if missing) | `## Pattern: <name>` |
-| Tool / library workaround | `docs/PATTERNS.md` | same |
-| Architecture decision | `docs/DECISIONS.md` | new ADR |
-| Reusable workflow | new skill in `.claude/skills/<name>/SKILL.md` | full skill file |
+| Bucket                        | Goes in                                       | Format                      |
+| ----------------------------- | --------------------------------------------- | --------------------------- |
+| User-level habit / preference | auto memory                                   | `feedback` or `user` memory |
+| Project-specific pattern      | `docs/PATTERNS.md` (create if missing)        | `## Pattern: <name>`        |
+| Tool / library workaround     | `docs/PATTERNS.md`                            | same                        |
+| Architecture decision         | `docs/DECISIONS.md`                           | new ADR                     |
+| Reusable workflow             | new skill in `.claude/skills/<name>/SKILL.md` | full skill file             |
 
 ### 2. Write the entry
 
@@ -40,6 +40,7 @@ For `docs/PATTERNS.md`:
 
 ```markdown
 ## Pattern: <short name>
+
 **When this applies:** <trigger condition>
 **Why:** <root cause / context>
 **How:** <minimum working approach, 1–5 bullets>

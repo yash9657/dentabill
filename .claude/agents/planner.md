@@ -39,13 +39,16 @@ A flat checklist of tasks, each:
 ## Plan: <one-line goal>
 
 ### Open questions (if any — ask before tasks)
+
 - ...
 
 ### Tasks
+
 - [ ] **T1** (≤2h) — <what>; touches `apps/api/src/...`, `packages/db/...`
 - [ ] **T2** (≤1h) — ...
 
 ### Verification (whole-feature)
+
 - pnpm turbo run typecheck lint --filter=...
 - pnpm --filter <pkg> vitest run
 - pnpm --filter web playwright test

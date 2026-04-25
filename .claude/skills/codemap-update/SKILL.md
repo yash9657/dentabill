@@ -31,13 +31,15 @@ Use this exact shape per package:
 
 ```markdown
 ### `@dentabill/<name>` — apps/<name> or packages/<name>
+
 **Purpose:** <one line>
 **Entry:** `apps/<name>/src/index.ts`
 **Key files:**
+
 - `src/routes/claims.ts` — claim status endpoints
 - `src/lib/retell.ts` — Retell AI client wrapper
-**Depends on:** `@dentabill/db`, `@dentabill/types`
-**Integrations:** Retell, Clerk, Postgres
+  **Depends on:** `@dentabill/db`, `@dentabill/types`
+  **Integrations:** Retell, Clerk, Postgres
 ```
 
 ### 4. Verification

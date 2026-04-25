@@ -17,6 +17,7 @@ Read the description, all comments, and any linked stack traces or code referenc
 ## 2. Reproduce with a failing test
 
 Before writing any fix:
+
 1. Find the relevant code (Grep / Glob)
 2. Write a test that fails in exactly the way the issue describes:
    ```bash
