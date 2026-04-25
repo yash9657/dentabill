@@ -5,13 +5,15 @@ Format: one entry per decision. Append-only. Mark `Superseded by ADR-NNN` instea
 ---
 
 ## ADR-001 — Adopt the PRD stack as locked for Phase 1
+
 **Date:** 2026-04-07
-**Status:** Accepted
+**Status:** Accepted (deploy line superseded by ADR-004)
 **Context:** PRD §2 lists every framework/service. Re-evaluating mid-build wastes tokens and time.
 **Decision:** Treat PRD §2 as frozen for Phase 1. Any deviation must be a new ADR.
 **Consequences:** Faster execution, fewer rabbit holes; future changes require explicit ADR + PRD update.
 
 ## ADR-002 — Lean docs system, PRD remains source of truth
+
 **Date:** 2026-04-07
 **Status:** Accepted
 **Context:** Re-reading the full PRD every session is expensive; duplicating it is worse (drift).
@@ -19,8 +21,61 @@ Format: one entry per decision. Append-only. Mark `Superseded by ADR-NNN` instea
 **Consequences:** Lower context cost per session; risk of brief drifting from PRD — mitigated by never duplicating, only compressing.
 
 ## ADR-003 — Test framework: Vitest (unit) + Playwright (e2e/UI)
+
 **Date:** 2026-04-07
 **Status:** Accepted
 **Context:** PRD doesn't pin a test runner. Need one consistent choice across packages.
 **Decision:** Vitest for all unit/integration tests (TS-native, fast), Playwright for browser/e2e in `apps/web`.
 **Consequences:** One config style across the monorepo; Playwright adds CI cost but is the standard for Next.js.
+
+## ADR-004 — Cloud target deferred until Phase 5
+
+**Date:** 2026-04-24
+**Status:** Accepted (supersedes the deploy line of ADR-001)
+**Context:** PRD §2 names Railway; the technical-plan source document pushes for AWS-from-day-1. Both are defensible; committing to either pre-revenue is premature. The user explicitly chose to defer.
+**Decision:** Phase 1–4 build cloud-agnostic services. Configuration comes from env vars; external services are accessed through interfaces (`@dentabill/logger`, future `@dentabill/queue`, etc.). No Terraform, no provider SDKs, no cloud-specific APIs in application code until a real deploy target is selected. Decision criteria for Phase 5: monthly cost ceiling, BAA availability, data-residency requirements, vendor-managed Postgres + Redis on the candidate.
+**Consequences:** No Dockerfiles in Phase 1 (only `docker-compose.yml` for local dev). Sentry DSN deferred. AWS-specific guidance from the .docx (Terraform, ECS, RDS, ElastiCache, KMS, CloudTrail) is preserved as Phase 5 reference, not Phase-1 work.
+
+## ADR-005 — CI from Phase 1 (no e2e until UI lands)
+
+**Date:** 2026-04-24
+**Status:** Accepted
+**Context:** Existing `docs/PHASE_PLAN.md` deferred CI to Phase 5. The .docx requires CI from day 1 ("industry standard like big tech"). The user agreed CI belongs in Phase 1.
+**Decision:** GitHub Actions runs typecheck + lint + build + commitlint + format-check on every PR (`quality` job). A separate `test` job runs Vitest with a real `postgres:16-alpine` + `redis:7-alpine` service container so integration tests don't mock the DB. Playwright/e2e job lands in Phase 2 alongside `apps/web` Playwright config. Staging/production pipelines remain Phase 5 work.
+**Consequences:** Every PR is gated by the same checks the engineer ran locally. Real DB tests catch ORM-level bugs. Playwright job is intentionally absent until there's a UI to test.
+
+## ADR-006 — Commit and PR enforcement
+
+**Date:** 2026-04-24
+**Status:** Accepted
+**Context:** Conventional commits were documented but not enforced. Solo dev today, but the rules need to survive the first PR from another contributor without retraining anyone.
+**Decision:** Conventional Commits enforced via `commitlint` in CI (`@commitlint/config-conventional` + a `scope-enum` matching the workspaces) AND locally via Husky `commit-msg` hook. `lint-staged` runs `eslint --fix` + `prettier --write` on staged files via Husky `pre-commit`. PRs require typecheck + lint + test green and the PR template completed (especially the Security/HIPAA section).
+**Consequences:** Bad commit messages and ungreen PRs cannot reach `main`. Branch-protection settings in the GitHub UI codify the rules — see `docs/SECURITY.md`.
+
+## ADR-007 — Observability stack baseline (`@dentabill/logger` first; Sentry deferred)
+
+**Date:** 2026-04-24
+**Status:** Accepted
+**Context:** Logging discipline is the cheapest HIPAA control. Sentry needs a deploy target (DSN, environment) which doesn't exist yet (ADR-004).
+**Decision:** Phase 1 ships `@dentabill/logger` — pino with PHI-field redaction enforced by unit test. Every Node service must use it; raw `console.*` is an ESLint error. Sentry SDK installation is deferred to Phase 5 alongside the cloud target. Request-id middleware added when `apps/api` lands in Phase 2.
+**Consequences:** PHI redaction lives in one curated list; over-redacting is acceptable, missing a path is not. New paths added in any PR that introduces a shape that could carry PHI.
+
+## ADR-008 — Packages topology — add `packages/logger`
+
+**Date:** 2026-04-24
+**Status:** Accepted
+**Context:** PRD §3 lists 6 packages (`db`, `types`, `ui`, `config`, `queue`, `payer-ivr`). Pino + redaction is shared across every Node service; placing it inside `@dentabill/config` (build tooling) or `@dentabill/types` (no runtime code) is wrong.
+**Decision:** Add a 7th package — `@dentabill/logger` — owning runtime logging. Keep the rest of PRD §3 unchanged.
+**Consequences:** Every Node service depends on `@dentabill/logger`. CODEOWNERS routes changes there to the maintainer.
+
+## ADR-009 — Multi-tenancy enforcement layers
+
+**Date:** 2026-04-24
+**Status:** Accepted (P1-T4A and P1-T5 implement)
+**Context:** PRD §4 calls for Prisma middleware on writes. That alone is insufficient — read-side leaks are the more likely vector.
+**Decision:** Defense in depth — three layers in `@dentabill/db`:
+
+1. Prisma `$extends` middleware (`org-scope.ts`, P1-T5) blocks writes to multi-tenant models that lack `organizationId`. Throws `MissingOrgScopeError`.
+2. `getOrgScopedDb(orgId)` helper (`with-org.ts`, P1-T4A) wraps the singleton client and auto-applies `where: { organizationId: orgId }` to read methods on multi-tenant models.
+3. `audit({ action, ... })` helper (`audit.ts`, P1-T4A) writes an `AuditLog` row for any PHI-touching read. Rejects calls without `organizationId`.
+   **Consequences:** Three independent failsafes; any single bypass requires bypassing all three. Tests in P1-T4A/P1-T5 include "two orgs, no leak" cases. The `security-reviewer` agent checks every PR for direct `prisma.*` access against multi-tenant models.

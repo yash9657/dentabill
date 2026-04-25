@@ -1,6 +1,7 @@
 # Tasks
 
 Rules:
+
 - Each task is 1–3 hours max. Split if larger.
 - Every code task includes tests (unit or integration as noted).
 - Work on one feature branch per task: `phase-<n>/<short-slug>`.
@@ -10,57 +11,77 @@ Rules:
 
 ## Phase 1 — Foundations (active)
 
-- [x] **P1-T1** Initialize Turborepo + pnpm workspace
-  - Branch: `phase-1/monorepo-init`
-  - Create `pnpm-workspace.yaml`, `turbo.json` (dev/build/lint/typecheck), root `package.json`, `.gitignore`, `.claudeignore`.
-  - Test: `pnpm install && pnpm turbo run lint --filter=...` exits 0 with empty graph.
+> Phase 1 was reshaped during the 2026-04-24 planning session — UI tasks moved to Phase 2; cloud target deferred to Phase 5; CI, commit enforcement, HIPAA primitives, architecture docs added. See `docs/PHASE_PLAN.md` and ADR-004 / ADR-005 / ADR-006.
 
-- [ ] **P1-T2** Shared config package (`packages/config`)
-  - tsconfig base (strict), eslint base, prettier.
-  - Test: `tsc --noEmit` against a tiny fixture passes; eslint runs against fixture with zero violations.
+- [x] **P1-T1** Initialize Turborepo + pnpm workspace _(done 2026-04-20)_
+- [x] **P1-T2** Shared config package (`packages/config`) _(done 2026-04-24)_
+- [x] **P1-T2A** Commit enforcement & repo hygiene _(done 2026-04-24)_
+- [x] **P1-T2B** GitHub Actions CI workflow _(done 2026-04-25)_
+- [x] **P1-T11** Docker compose + `.env.example` + dev tooling _(done 2026-04-24)_
+- [x] **P1-T3** Scaffold apps + packages stubs _(done 2026-04-24)_
+- [x] **P1-T3A** `@dentabill/logger` (pino + PHI redaction) _(done 2026-04-24)_
+- [x] **P1-T3B** `@dentabill/types` (Zod ApiError + pagination + ids + enums) _(done 2026-04-24)_
+- [x] **P1-T3C** Vitest workspace + smoke tests _(done 2026-04-25)_
+- [x] **P1-T12** Architecture / API / Security docs _(done 2026-04-25)_
 
-- [ ] **P1-T3** Scaffold empty apps + packages directories with stub `package.json`
-  - `apps/{web,api,call-worker,summary-worker}`, `packages/{db,types,ui,queue,payer-ivr}`.
-  - Test: `pnpm -r exec node -e "console.log(1)"` succeeds in every workspace.
+- [ ] **P1-T4** `@dentabill/db` — Prisma init + full PRD §5 schema
+  - Branch: `phase-1/prisma-schema`
+  - `packages/db/prisma/schema.prisma` with all 8 models + 6 enums + indexes + `@@map` for snake_case
+  - `packages/db/src/client.ts` singleton wired to `@dentabill/logger`
+  - Migration `0000_init` against local Postgres
+  - **Blocker:** Docker not installed locally. Install Docker Desktop / OrbStack / Colima before starting.
+  - Test: `prisma validate` clean; `prisma migrate dev --name init` succeeds; tsc clean against client usage
 
-- [ ] **P1-T4** `packages/db` — Prisma init + full schema from PRD §5
-  - Schema, enums, indexes, PrismaClient singleton export.
-  - Test: `prisma validate` + `prisma migrate dev --name init` against local Postgres; vitest snapshot of generated client types.
+- [ ] **P1-T4A** Audit log helper + read-side org-scope helper
+  - Branch: `phase-1/db-helpers`
+  - `packages/db/src/lib/audit.ts` — `audit({ action, resourceType, resourceId, organizationId, userId?, metadata? })`; throws if no `organizationId`
+  - `packages/db/src/lib/with-org.ts` — `getOrgScopedDb(orgId)` via Prisma `$extends`, auto-applies `where: { organizationId }` on reads
+  - Test: vitest with real test DB — audit rejects without orgId; `getOrgScopedDb` filters reads correctly across two orgs
 
 - [ ] **P1-T5** Prisma multi-tenant write middleware
-  - Throw if any write op missing `organizationId` (where applicable).
-  - Test: vitest — write without orgId throws; write with orgId succeeds.
-
-- [ ] **P1-T6** `apps/web` — Next.js 15 App Router scaffold + Tailwind v3 + shadcn init
-  - Strict TS, base layout, Inter + JetBrains Mono fonts.
-  - Test: `pnpm --filter web build` succeeds; Playwright smoke: `/` returns 200.
-
-- [ ] **P1-T7** Clerk integration + `/dashboard` route protection
-  - ClerkProvider, middleware, sign-in/sign-up routes per PRD §8 env vars.
-  - Test: Playwright — unauthenticated `/dashboard` redirects to `/sign-in`.
-
-- [ ] **P1-T8** Landing page (`/`) per PRD §7 spec
-  - Headline, subheadline, primary + ghost buttons, fully responsive.
-  - Test: Playwright — copy + buttons present; lighthouse a11y ≥ 95 on CI.
-
-- [ ] **P1-T9** Dashboard shell: sidebar (240px navy), top bar (64px), responsive collapse
-  - Nav links: Overview, Claims, Calls, Analytics. Mobile bottom-tab variant.
-  - Test: Playwright — resize matrix (375/900/1280) renders correct nav variant.
-
-- [ ] **P1-T10** Stub the 4 dashboard pages with correct layout grids per PRD §7
-  - Overview (4 stat cards + 60/40 split), Claims (filter bar + table), Calls (2-col grid + empty state), Analytics (4 metrics + chart placeholders).
-  - Test: Playwright — each route 200s, key landmarks visible.
+  - Branch: `phase-1/db-middleware`
+  - `packages/db/src/middleware/org-scope.ts` — Prisma `$extends` query interceptor; `MissingOrgScopeError` thrown when write missing `organizationId`
+  - `MULTI_TENANT_MODELS` exported as the single list of gated models
+  - Test: vitest — write without orgId throws; write with orgId succeeds; integration test stacks middleware + `getOrgScopedDb`
+  - Use `security-reviewer` agent on the resulting PR
 
 ---
 
-## Phase 2 — API + Ingestion (queued)
-_To be expanded when Phase 1 closes._
+## Phase 2 — UI + API + Ingestion (queued)
+
+UI work was moved here from Phase 1 per ADR-004 + planning session.
+
+- [ ] **P2-T1** `apps/web` — Next.js 15 App Router scaffold + Tailwind v3 + shadcn init + Inter / JetBrains Mono
+- [ ] **P2-T2** Clerk integration + middleware + `/sign-in`, `/sign-up`, `/dashboard` protection
+- [ ] **P2-T3** Landing page (`/`) per PRD §7
+- [ ] **P2-T4** Dashboard shell (240px sidebar, 64px topbar, responsive collapse)
+- [ ] **P2-T5** Stub the four dashboard pages with PRD §7 grids
+- [ ] **P2-T6** Playwright config + first e2e suite (smoke + auth flow) + add `e2e` job to CI
+- [ ] **P2-T7** Fastify API scaffold (`apps/api`) — Clerk JWT verify, request-id middleware, `@dentabill/logger`, ApiError serializer
+- [ ] **P2-T8** Claims router (CRUD over `getOrgScopedDb`), Zod-validated input
+- [ ] **P2-T9** CSV upload (Dentrix / Eaglesoft / Open Dental detection)
+- [ ] **P2-T10** DOB hashing (SHA-256) + payer mapping + priority scoring
+- [ ] **P2-T11** Upload UI in `apps/web`
 
 ## Phase 3 — Queue + Voice (queued)
+
 ## Phase 4 — Intelligence + Realtime (queued)
-## Phase 5 — Deployment (queued)
+
+## Phase 5 — Deployment & cloud target (queued)
+
+The cloud target decision lands here (per ADR-004): Railway vs AWS, Dockerfiles, secret-store wiring, Sentry DSN.
 
 ---
 
 ## Done
-_(none yet)_
+
+- **P1-T1** Initialize Turborepo + pnpm workspace _(2026-04-20)_
+- **P1-T2** `@dentabill/config` _(2026-04-24)_
+- **P1-T2A** Repo hygiene + commit enforcement _(2026-04-24)_
+- **P1-T2B** GitHub Actions CI workflow _(2026-04-25)_
+- **P1-T11** Docker compose + .env.example + dev tooling _(2026-04-24)_
+- **P1-T3** Workspace scaffold (4 apps + 7 packages stubs) _(2026-04-24)_
+- **P1-T3A** `@dentabill/logger` (pino + PHI redaction) _(2026-04-24)_
+- **P1-T3B** `@dentabill/types` (ApiError + pagination + ids + enums) _(2026-04-24)_
+- **P1-T3C** Vitest workspace + smoke tests _(2026-04-25)_
+- **P1-T12** Architecture / API / Security docs _(2026-04-25)_
