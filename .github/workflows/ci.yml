@@ -49,6 +49,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        # Required before typecheck — @dentabill/db's lib/with-org.ts uses
+        # generated extension types from @prisma/client. pnpm v10 only runs
+        # postinstall for deps in onlyBuiltDependencies, but we run it
+        # explicitly so the gate doesn't depend on that allowlist staying
+        # in sync.
+        run: pnpm --filter @dentabill/db exec prisma generate
+
       - name: Lint commit messages (PR only)
         if: github.event_name == 'pull_request'
         run: pnpm exec commitlint --from=origin/${{ github.base_ref }} --to=HEAD --verbose
