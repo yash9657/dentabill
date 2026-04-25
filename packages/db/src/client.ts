@@ -1,6 +1,8 @@
 import { createLogger } from '@dentabill/logger';
 import { PrismaClient } from '@prisma/client';
 
+import { orgScopeWriteExtension } from './middleware/org-scope.js';
+
 /**
  * Singleton Prisma client. Importing `prisma` from `@dentabill/db` is the
  * ONLY sanctioned entry point for direct database access — never instantiate
@@ -18,12 +20,11 @@ import { PrismaClient } from '@prisma/client';
 
 const log = createLogger({ base: { service: 'prisma' } });
 
-declare global {
-  var __dentabillPrisma: PrismaClient | undefined;
-}
-
-function buildClient(): PrismaClient {
-  const client = new PrismaClient({
+// Build the base client, then layer the org-scope write extension on top.
+// All consumers of `@dentabill/db` see the extended client, so multi-tenant
+// writes are guarded everywhere — there is no un-guarded escape hatch.
+function buildClient() {
+  const base = new PrismaClient({
     log: [
       { emit: 'event', level: 'error' },
       { emit: 'event', level: 'warn' },
@@ -31,22 +32,28 @@ function buildClient(): PrismaClient {
     ],
   });
 
-  client.$on('error', (e) => {
+  base.$on('error', (e) => {
     log.error({ prisma: e }, 'prisma error');
   });
-  client.$on('warn', (e) => {
+  base.$on('warn', (e) => {
     log.warn({ prisma: e }, 'prisma warn');
   });
-  client.$on('info', (e) => {
+  base.$on('info', (e) => {
     log.info({ prisma: e }, 'prisma info');
   });
 
-  return client;
+  return base.$extends(orgScopeWriteExtension);
+}
+
+type ExtendedPrisma = ReturnType<typeof buildClient>;
+
+declare global {
+  var __dentabillPrisma: ExtendedPrisma | undefined;
 }
 
 const isProd = process.env.NODE_ENV === 'production';
 
-export const prisma: PrismaClient = isProd
+export const prisma: ExtendedPrisma = isProd
   ? buildClient()
   : (globalThis.__dentabillPrisma ?? buildClient());
 
