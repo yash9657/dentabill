@@ -1,1 +1,44 @@
+# OS
 .DS_Store
+
+# Node
+node_modules/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+.next/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Logs
+logs/
+*.log
+
+# Prisma
+prisma/migrations/dev.db*
+
+# Claude Code runtime state (counters, last-compaction marker)
+.claude/state/
+
+# Reference materials (kept locally, not version-controlled)
+DentaBill_AI_Technical_Plan.docx
+everything-claude-code-*.txt
+strructure.txt

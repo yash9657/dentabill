@@ -1,0 +1,13 @@
+node_modules/
+.next/
+.turbo/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+pnpm-lock.yaml
+*.lock
+strructure.txt

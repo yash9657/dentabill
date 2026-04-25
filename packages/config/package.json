@@ -1,0 +1,40 @@
+{
+  "name": "@dentabill/config",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Shared TypeScript, ESLint, Prettier, and Vitest configuration for the DentaBill monorepo.",
+  "files": [
+    "tsconfig.base.json",
+    "tsconfig.app.json",
+    "tsconfig.lib.json",
+    "eslint.config.js",
+    "prettier.config.js",
+    "vitest.config.base.js"
+  ],
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.app.json": "./tsconfig.app.json",
+    "./tsconfig.lib.json": "./tsconfig.lib.json",
+    "./eslint": "./eslint.config.js",
+    "./prettier": "./prettier.config.js",
+    "./vitest": "./vitest.config.base.js"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "build": "echo 'no build for config package'"
+  },
+  "dependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
+    "eslint": "^9.18.0",
+    "eslint-import-resolver-typescript": "^3.7.0",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-security": "^3.0.1",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.21.0",
+    "vitest": "^2.1.9"
+  }
+}

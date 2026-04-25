@@ -1,0 +1,59 @@
+# Local development services for DentaBill.
+#
+# Boot:    docker compose up -d
+# Stop:    docker compose down
+# Reset:   docker compose down -v   (drops named volumes)
+#
+# Bound to 127.0.0.1 only — never expose Postgres or Redis on a public
+# interface. PHI never lands in these volumes during normal Phase-1 work,
+# but treat them as PHI-bearing once Phase 2 ingests claims.
+
+name: dentabill
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dentabill-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dentabill
+      POSTGRES_PASSWORD: dentabill
+      POSTGRES_DB: dentabill
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - dentabill_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dentabill -d dentabill']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    container_name: dentabill-redis
+    restart: unless-stopped
+    command:
+      - 'redis-server'
+      - '--appendonly'
+      - 'yes'
+      - '--maxmemory-policy'
+      - 'noeviction'
+    ports:
+      - '127.0.0.1:6379:6379'
+    volumes:
+      - dentabill_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  dentabill_pg_data:
+    name: dentabill_pg_data
+  dentabill_redis_data:
+    name: dentabill_redis_data

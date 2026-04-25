@@ -1,0 +1,37 @@
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '07:00'
+      timezone: 'America/Los_Angeles'
+    open-pull-requests-limit: 5
+    target-branch: 'main'
+    labels:
+      - 'dependencies'
+    commit-message:
+      prefix: 'chore(deps)'
+      include: 'scope'
+    groups:
+      production:
+        dependency-type: 'production'
+        update-types:
+          - 'minor'
+          - 'patch'
+      development:
+        dependency-type: 'development'
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: 'ci'
+      include: 'scope'

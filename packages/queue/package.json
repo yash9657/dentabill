@@ -1,0 +1,22 @@
+{
+  "name": "@dentabill/queue",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "BullMQ job definitions and queue setup. Lands in Phase 3.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings=0 --no-warn-ignored",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build": "echo 'no build for stub'"
+  },
+  "devDependencies": {
+    "@dentabill/config": "workspace:*",
+    "vitest": "^2.1.9"
+  }
+}

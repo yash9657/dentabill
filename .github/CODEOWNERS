@@ -1,0 +1,17 @@
+# DentaBill — Code Ownership
+#
+# Owners listed here are auto-requested for review on PRs touching the
+# matching paths. Update as the team grows.
+#
+# Syntax: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-security/customizing-your-repository/about-code-owners
+
+* @yash9657
+
+# Security-sensitive areas — require explicit review
+/.github/                  @yash9657
+/.husky/                   @yash9657
+/packages/db/              @yash9657
+/packages/config/          @yash9657
+/docs/SECURITY.md          @yash9657
+/docs/ENGINEERING_RULES.md @yash9657
+/docs/DECISIONS.md         @yash9657

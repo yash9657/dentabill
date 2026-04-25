@@ -1,0 +1,97 @@
+import { prisma } from '../client.js';
+
+import { MissingOrgScopeError } from './errors.js';
+
+/**
+ * Returns a Prisma client where every read against a multi-tenant model
+ * (per `MULTI_TENANT_MODELS`) is automatically filtered by
+ * `organizationId = orgId`. The caller cannot forget to scope.
+ *
+ * Intercepted methods on each multi-tenant model:
+ *   - findMany
+ *   - findFirst / findFirstOrThrow
+ *   - count
+ *   - aggregate
+ *   - groupBy
+ *
+ * `findUnique` / `findUniqueOrThrow` are intentionally NOT intercepted —
+ * Prisma's findUnique requires a unique-key `where`, and silently mixing
+ * scope into it can produce surprising 'record not found' results that
+ * mask cross-tenant attempts. For scoped lookups by id, use:
+ *
+ *   getOrgScopedDb(orgId).claim.findFirst({ where: { id } })
+ *
+ * Writes pass through unchanged here — the org-scope write middleware
+ * (`packages/db/src/middleware/org-scope.ts`, P1-T5) handles those.
+ */
+
+interface ArgsWithWhere {
+  where?: Record<string, unknown>;
+}
+
+function injectOrg<T extends ArgsWithWhere>(args: T | undefined, orgId: string): T {
+  const base = (args ?? {}) as T;
+  return {
+    ...base,
+    where: { ...(base.where ?? {}), organizationId: orgId },
+  };
+}
+
+export type OrgScopedDb = ReturnType<typeof getOrgScopedDb>;
+
+// The Prisma `$extends` return type is generic over the extension config
+// and impractical to spell out by hand. TypeScript infers it correctly for
+// downstream callers (see `OrgScopedDb`); we suppress the explicit-return
+// rule for this single boundary.
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+export function getOrgScopedDb(orgId: string) {
+  if (typeof orgId !== 'string' || orgId.length === 0) {
+    throw new MissingOrgScopeError('getOrgScopedDb(orgId) requires a non-empty orgId');
+  }
+
+  return prisma.$extends({
+    name: 'orgScope',
+    query: {
+      user: {
+        findMany: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirst: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirstOrThrow: ({ args, query }) => query(injectOrg(args, orgId)),
+        count: ({ args, query }) => query(injectOrg(args, orgId)),
+        aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
+        groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
+      },
+      claim: {
+        findMany: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirst: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirstOrThrow: ({ args, query }) => query(injectOrg(args, orgId)),
+        count: ({ args, query }) => query(injectOrg(args, orgId)),
+        aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
+        groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
+      },
+      call: {
+        findMany: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirst: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirstOrThrow: ({ args, query }) => query(injectOrg(args, orgId)),
+        count: ({ args, query }) => query(injectOrg(args, orgId)),
+        aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
+        groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
+      },
+      payerConfig: {
+        findMany: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirst: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirstOrThrow: ({ args, query }) => query(injectOrg(args, orgId)),
+        count: ({ args, query }) => query(injectOrg(args, orgId)),
+        aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
+        groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
+      },
+      auditLog: {
+        findMany: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirst: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirstOrThrow: ({ args, query }) => query(injectOrg(args, orgId)),
+        count: ({ args, query }) => query(injectOrg(args, orgId)),
+        aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
+        groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
+      },
+    },
+  });
+}

@@ -1,0 +1,14 @@
+node_modules
+.next
+.turbo
+dist
+build
+coverage
+pnpm-lock.yaml
+*.tsbuildinfo
+.claude/state
+DentaBill_AI_Technical_Plan.docx
+everything-claude-code-*.txt
+PRD.md
+.github/CODEOWNERS
+.husky/_
