@@ -90,7 +90,7 @@ Hard rules:
 Enable in GitHub UI (cannot be configured via committed file):
 
 - [ ] Require a pull request before merging
-- [ ] Require status checks to pass: `quality`, `test` (`e2e` once Phase 2 lands)
+- [ ] Require status checks to pass: `Quality (typecheck + lint + build)`, `Test (vitest + real Postgres)`, `Analyze (javascript-typescript)` (`e2e` added once Phase 2 lands)
 - [ ] Require branches to be up to date before merging
 - [ ] Require linear history (no merge commits)
 - [ ] Block force pushes
@@ -100,6 +100,23 @@ Enable in GitHub UI (cannot be configured via committed file):
 
 When the team grows beyond solo maintenance, also enable "require approval
 of most recent reviewable push" and "require review from CODEOWNERS".
+
+## Repository security settings (GitHub UI)
+
+These are repo-level toggles that cannot be set via a committed file:
+
+- [ ] **Code scanning** — Settings → Code security → Code scanning → "Set up"
+      → Default. Required for the CodeQL workflow's SARIF upload to land in
+      the Security tab. Until enabled, the CodeQL workflow runs but the
+      upload step is `continue-on-error` (see `.github/workflows/codeql.yml`).
+      Once enabled, remove that flag so high-severity findings block merges.
+- [ ] **Secret scanning + push protection** — Settings → Code security →
+      Secret scanning. Augments GitGuardian (already passing).
+- [ ] **Dependency review** — Settings → Code security → Dependency review.
+      Surfaces vulnerable dependencies on every PR.
+- [ ] **Private vulnerability reporting** — Settings → Code security →
+      Private vulnerability reporting. Wires the disclosure address from
+      `SECURITY.md` (root) to a GitHub-managed reporting channel.
 
 ## Threat model — top 5
 

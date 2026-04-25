@@ -23,7 +23,7 @@ Locked per `PRD.md` §2 and `docs/DECISIONS.md`. Highlights:
 
 ## Quickstart (local dev)
 
-Prerequisites: Node 20.11+, Docker Desktop running, Corepack-enabled pnpm.
+Prerequisites: Node 20.19+, Docker Desktop / OrbStack running, Corepack-enabled pnpm.
 
 ```bash
 # 1. Clone
