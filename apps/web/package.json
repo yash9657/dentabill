@@ -12,11 +12,12 @@
   "scripts": {
     "lint": "eslint . --max-warnings=0 --no-warn-ignored",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "echo 'no tests yet — vitest wired in P1-T3C'",
+    "test": "vitest run",
     "build": "echo 'no build for stub'",
     "dev": "echo 'apps/web — Next.js dev server lands in Phase 2'"
   },
   "devDependencies": {
-    "@dentabill/config": "workspace:*"
+    "@dentabill/config": "workspace:*",
+    "vitest": "^2.1.9"
   }
 }

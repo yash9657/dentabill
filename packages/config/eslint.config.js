@@ -20,6 +20,7 @@ export default tseslint.config(
       // Config files at any depth, including multi-dot variants like vitest.config.base.js
       '**/*.config.{js,mjs,cjs,ts}',
       '**/*.config.*.{js,mjs,cjs,ts}',
+      '**/vitest.workspace.{ts,js,mjs}',
     ],
   },
   ...tseslint.configs.strictTypeChecked,

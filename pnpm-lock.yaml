@@ -35,30 +35,45 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@25.6.0)
 
   apps/api:
     devDependencies:
       '@dentabill/config':
         specifier: workspace:*
         version: link:../../packages/config
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@25.6.0)
 
   apps/call-worker:
     devDependencies:
       '@dentabill/config':
         specifier: workspace:*
         version: link:../../packages/config
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@25.6.0)
 
   apps/summary-worker:
     devDependencies:
       '@dentabill/config':
         specifier: workspace:*
         version: link:../../packages/config
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@25.6.0)
 
   apps/web:
     devDependencies:
       '@dentabill/config':
         specifier: workspace:*
         version: link:../../packages/config
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@25.6.0)
 
   packages/config:
     dependencies:
@@ -95,6 +110,9 @@ importers:
       '@dentabill/config':
         specifier: workspace:*
         version: link:../config
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@25.6.0)
 
   packages/logger:
     dependencies:
@@ -120,12 +138,18 @@ importers:
       '@dentabill/config':
         specifier: workspace:*
         version: link:../config
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@25.6.0)
 
   packages/queue:
     devDependencies:
       '@dentabill/config':
         specifier: workspace:*
         version: link:../config
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@25.6.0)
 
   packages/types:
     dependencies:
@@ -145,6 +169,9 @@ importers:
       '@dentabill/config':
         specifier: workspace:*
         version: link:../config
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@25.6.0)
 
 packages:
 
