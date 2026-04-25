@@ -1,0 +1,188 @@
+# Security & HIPAA Inventory
+
+Operational security guide for DentaBill. This is the engineering view —
+for vulnerability disclosure, see the top-level `SECURITY.md`. For wire-level
+API contracts, see `docs/API_CONVENTIONS.md`.
+
+## HIPAA technical safeguards
+
+DentaBill processes Protected Health Information (PHI) on behalf of dental
+practices. We do not have formal HIPAA certification yet, and that's fine
+for Phase 1. What is _not_ fine is building the system in a way that makes
+later certification expensive. The table below tracks each technical
+safeguard's status.
+
+| Safeguard                     | Implementation                                                                                        | Status                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Access control                | Clerk auth + RBAC (Owner, Admin, Billing Staff)                                                       | Phase 1 (RBAC enforcement Phase 2)      |
+| Audit controls                | `AuditLog` row on every PHI access via `audit()` helper                                               | Phase 1 (P1-T4A)                        |
+| Data integrity                | Prisma strict types + Zod input validation; no raw SQL                                                | Ongoing                                 |
+| Transmission security         | TLS 1.3, HSTS — enforced by deploy platform                                                           | Phase 5 (cloud target — ADR-004)        |
+| Encryption at rest            | Postgres + Redis encrypted volumes via deploy platform                                                | Phase 5                                 |
+| PHI minimization              | DOB hashed (SHA-256), member IDs not logged, redaction list                                           | Phase 1 (logger) + Phase 2 (DOB hash)   |
+| Business associate agreements | BAAs with all PHI-bearing vendors (Retell, Telnyx, Clerk, Anthropic, Resend, Stripe + cloud provider) | Day-1 task before first paying customer |
+| Breach notification           | Sentry + on-call rotation                                                                             | Phase 5 (alongside cloud target)        |
+| Workforce controls            | GitHub branch protection, MFA required, no shared creds                                               | Repo settings — see `SECURITY.md`       |
+| Contingency plan              | Postgres automated backups, restore procedure documented                                              | Phase 5                                 |
+
+## PHI handling rules
+
+PHI in DentaBill = patient names, DOBs, SSNs, member/subscriber IDs, full
+claim narrative, contact info (email, phone, address), call transcripts.
+
+### Logging — non-negotiable
+
+- Use `@dentabill/logger` `createLogger`. Never `console.*`. Never raw `pino`.
+- The redact list in `packages/logger/src/index.ts` covers the standard
+  PHI field names. **Add a path immediately when you introduce a new
+  shape that could contain PHI** — false positives (over-redacting a
+  non-PHI field with the same name) are acceptable.
+- The `phi-log-detector.sh` Claude Code hook warns when PHI field names
+  appear in `console.*` / `logger.*` calls. It is best-effort, not
+  authoritative — do the redaction yourself.
+
+### Database
+
+- Every PHI-bearing column lives on a multi-tenant model with `organizationId`.
+- Every read against a multi-tenant model goes through
+  `getOrgScopedDb(orgId)` so the org filter cannot be forgotten.
+- Every write is gated by the `org-scope` Prisma middleware (P1-T5).
+- DOB is stored as `patientDOBHash` (SHA-256) plus `patientDOBLast4` for
+  rep verification — never the raw value.
+
+### Audit log
+
+Every PHI read SHOULD call `audit({ action: 'claim.read', resourceType,
+resourceId, organizationId, userId })` so we can replay who saw what when.
+The helper rejects calls without `organizationId` — see `packages/db/src/lib/audit.ts`
+(P1-T4A).
+
+### API surface
+
+- 404 over 403 when the existence of the resource is sensitive across
+  tenants — see `docs/API_CONVENTIONS.md`.
+- Never echo a raw `Error.message` to the client.
+- Never include PHI in error `message` strings — only codes + opaque IDs.
+
+## Secret management
+
+| Secret class                                                | Where it lives in dev    | Where it lives in prod                                         |
+| ----------------------------------------------------------- | ------------------------ | -------------------------------------------------------------- |
+| API keys (Retell, Telnyx, Anthropic, Stripe, Resend, Clerk) | `.env` (gitignored)      | Deploy platform secret store (decision in Phase 5 per ADR-004) |
+| Webhook signing secrets                                     | `.env`                   | Same                                                           |
+| Database / Redis URLs                                       | `.env` (compose locally) | Vendor-managed Postgres + Redis URLs                           |
+| Application-level encryption keys (Phase 4+)                | Not used yet             | Cloud KMS (Phase 5)                                            |
+
+Hard rules:
+
+- **Never commit `.env*` files.** Only `.env.example`. The `env-read-blocker.sh`
+  Claude Code hook prevents accidental reads of `.env*` (other than
+  `.env.example`).
+- **Never hardcode secrets in source.** The `secret-scanner.sh` hook blocks
+  writes containing common secret patterns (sk-…, ghp\_…, AKIA…, BEGIN
+  PRIVATE KEY).
+- New env vars MUST be added to `.env.example` with a one-line comment
+  describing purpose. Codify the requirement in PR review (template
+  checklist).
+
+## Branch protection — `main`
+
+Enable in GitHub UI (cannot be configured via committed file):
+
+- [ ] Require a pull request before merging
+- [ ] Require status checks to pass: `quality`, `test` (`e2e` once Phase 2 lands)
+- [ ] Require branches to be up to date before merging
+- [ ] Require linear history (no merge commits)
+- [ ] Block force pushes
+- [ ] Block deletions
+- [ ] Require conversation resolution before merging
+- [ ] Restrict who can dismiss pull request reviews
+
+When the team grows beyond solo maintenance, also enable "require approval
+of most recent reviewable push" and "require review from CODEOWNERS".
+
+## Threat model — top 5
+
+Listed in declining order of likelihood × impact. Mitigations are tracked
+in code, not just on paper.
+
+### 1. Cross-tenant data leak
+
+**Threat.** A handler forgets to scope a Prisma query by `organizationId`,
+leaking another practice's claims into the response.
+
+**Mitigation.**
+
+- `getOrgScopedDb(orgId)` is the only sanctioned read API for multi-tenant
+  models (P1-T4A).
+- Prisma middleware (`org-scope`, P1-T5) blocks writes missing
+  `organizationId`.
+- `code-reviewer` and `security-reviewer` agents check this on every PR.
+- Integration tests (P1-T4A onward) include a "two orgs, no leak" case.
+
+### 2. PHI in logs
+
+**Threat.** A developer logs an error object that contains a request body
+with patient data; the log lands in CloudWatch / Sentry / a dump file.
+
+**Mitigation.**
+
+- `@dentabill/logger` ships with PHI redaction; using `console.*` is an
+  ESLint error.
+- `phi-log-detector.sh` hook warns at write time.
+- Logger unit tests assert redaction (P1-T3A).
+
+### 3. Webhook spoofing
+
+**Threat.** An attacker calls our Retell or Stripe webhook URL directly
+with a forged payload, triggering a phantom call summary or a free
+upgrade.
+
+**Mitigation.**
+
+- All webhooks verify HMAC-SHA256 signature against
+  `RETELL_WEBHOOK_SECRET` / `STRIPE_WEBHOOK_SECRET` BEFORE any side effect.
+- Pattern documented in `docs/API_CONVENTIONS.md`; helper lands in Phase 2.
+
+### 4. Claim CSV injection
+
+**Threat.** A malicious CSV upload contains formula content (=cmd|...) or
+malformed Unicode that, when re-exported, executes in Excel or breaks
+downstream parsers.
+
+**Mitigation.**
+
+- CSV ingestion (Phase 2) Zod-validates every cell.
+- Cells beginning with `=`, `+`, `-`, `@` are prefixed with `'` on
+  re-export.
+- Files larger than 5 MB or with more than 50,000 rows are rejected.
+
+### 5. BullMQ job poisoning
+
+**Threat.** A poison-pill job in Redis crashes the call-worker repeatedly,
+causing the queue to back up and (worst case) leaking Retell credentials
+in retry logs.
+
+**Mitigation.**
+
+- Workers wrap job handlers in try/catch and emit a typed failure event
+  via `@dentabill/queue` (Phase 3).
+- Max retry count + exponential backoff per job; failures past the limit
+  go to a dead-letter queue and a `MANUAL_REVIEW` claim status.
+- Worker logs use `@dentabill/logger` with PHI redaction.
+
+## Incident response
+
+For a confirmed PHI exposure:
+
+1. Identify the scope: how many records, which orgs, which fields.
+2. Halt the leaking pipeline (disable the offending route via env flag
+   or roll back the deploy).
+3. Email all affected orgs within 24 hours; full HIPAA notification within
+   60 days (HIPAA Breach Notification Rule).
+4. File a post-mortem in `docs/INCIDENTS/<date>-<slug>.md` (created on
+   first incident).
+5. Add a regression test that would have caught the issue.
+
+The incident-response template lands when (if) we have a first incident,
+not preemptively.
