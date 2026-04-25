@@ -26,7 +26,7 @@
   "devDependencies": {
     "@dentabill/config": "workspace:*",
     "@types/node": "^20.17.6",
-    "prisma": "^6.2.1",
+    "prisma": "^7.8.0",
     "vitest": "^2.1.9"
   }
 }
