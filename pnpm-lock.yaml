@@ -36,6 +36,30 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  apps/api:
+    devDependencies:
+      '@dentabill/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+
+  apps/call-worker:
+    devDependencies:
+      '@dentabill/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+
+  apps/summary-worker:
+    devDependencies:
+      '@dentabill/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+
+  apps/web:
+    devDependencies:
+      '@dentabill/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+
   packages/config:
     dependencies:
       '@vitest/coverage-v8':
@@ -65,6 +89,42 @@ importers:
       vitest:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@25.6.0)
+
+  packages/db:
+    devDependencies:
+      '@dentabill/config':
+        specifier: workspace:*
+        version: link:../config
+
+  packages/logger:
+    devDependencies:
+      '@dentabill/config':
+        specifier: workspace:*
+        version: link:../config
+
+  packages/payer-ivr:
+    devDependencies:
+      '@dentabill/config':
+        specifier: workspace:*
+        version: link:../config
+
+  packages/queue:
+    devDependencies:
+      '@dentabill/config':
+        specifier: workspace:*
+        version: link:../config
+
+  packages/types:
+    devDependencies:
+      '@dentabill/config':
+        specifier: workspace:*
+        version: link:../config
+
+  packages/ui:
+    devDependencies:
+      '@dentabill/config':
+        specifier: workspace:*
+        version: link:../config
 
 packages:
 

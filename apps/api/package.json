@@ -1,0 +1,22 @@
+{
+  "name": "@dentabill/api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "DentaBill Fastify v5 REST API. Scaffold lands in Phase 2.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings=0 --no-warn-ignored",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "build": "echo 'no build for stub'",
+    "dev": "echo 'apps/api — Fastify dev server lands in Phase 2'"
+  },
+  "devDependencies": {
+    "@dentabill/config": "workspace:*"
+  }
+}
