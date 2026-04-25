@@ -1,0 +1,235 @@
+// DentaBill database schema.
+//
+// SOURCE OF TRUTH: this file. Changes require a migration via
+// `pnpm --filter @dentabill/db exec prisma migrate dev --name <slug>`.
+//
+// Conventions:
+//   - cuid() for all primary keys (URL-safe, sortable, no random gaps)
+//   - Every multi-tenant model has organizationId; reads must go through
+//     `getOrgScopedDb(orgId)` and writes are gated by the org-scope
+//     middleware (see packages/db/src/middleware/org-scope.ts).
+//   - DOB is stored as patientDOBHash (SHA-256) + patientDOBLast4 — never raw.
+//   - PHI fields are bounded; raw transcripts and Claude outputs use Text.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────
+
+enum Plan {
+  TRIAL
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  BILLING_STAFF
+}
+
+enum ClaimStatus {
+  PENDING
+  IN_QUEUE
+  CALLING
+  COMPLETED
+  DENIED
+  NEEDS_INFO
+  APPEALING
+  RESOLVED
+  WRITTEN_OFF
+  FAILED
+  MANUAL_REVIEW
+}
+
+enum CallStatus {
+  INITIATED
+  NAVIGATING_IVR
+  ON_HOLD
+  HUMAN_REACHED
+  COLLECTING
+  COMPLETED
+  FAILED
+  VOICEMAIL
+}
+
+enum PayerCode {
+  DELTA_DENTAL_PPO
+  DELTA_DENTAL_PREMIER
+  CIGNA_DENTAL
+  METLIFE_DENTAL
+  AETNA_DENTAL
+  GUARDIAN_DENTAL
+  UNITED_CONCORDIA
+  HUMANA_DENTAL
+  UNKNOWN
+}
+
+enum NextAction {
+  RESUBMIT
+  APPEAL
+  SUBMIT_DOCS
+  CALL_BACK
+  WRITE_OFF
+  RESOLVED
+  MANUAL_REVIEW
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────
+
+model Organization {
+  id         String   @id @default(cuid())
+  clerkOrgId String   @unique
+  name       String
+  npi        String?
+  plan       Plan     @default(TRIAL)
+  callsUsed  Int      @default(0)
+  settings   Json     @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  users        User[]
+  claims       Claim[]
+  calls        Call[]
+  payerConfigs PayerConfig[]
+  auditLogs    AuditLog[]
+}
+
+model User {
+  id             String   @id @default(cuid())
+  clerkUserId    String   @unique
+  organizationId String
+  role           UserRole @default(BILLING_STAFF)
+  email          String
+  name           String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  auditLogs    AuditLog[]
+
+  @@index([organizationId])
+}
+
+model Claim {
+  id              String      @id @default(cuid())
+  organizationId  String
+  patientDOBHash  String
+  patientDOBLast4 String?
+  claimNumber     String
+  cdtCodes        String[]
+  claimAmount     Decimal     @db.Decimal(10, 2)
+  payerCode       PayerCode
+  serviceDate     DateTime
+  submittedDate   DateTime?
+  status          ClaimStatus @default(PENDING)
+  priority        Int         @default(0)
+  lastCallAt      DateTime?
+  nextCallAt      DateTime?
+  retryCount      Int         @default(0)
+  maxRetries      Int         @default(3)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  calls        Call[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, priority])
+}
+
+model Call {
+  id                String     @id @default(cuid())
+  organizationId    String
+  claimId           String
+  retellCallId      String     @unique
+  retellAgentId     String?
+  status            CallStatus @default(INITIATED)
+  ivrNavigated      Boolean    @default(false)
+  humanReached      Boolean    @default(false)
+  holdTimeSeconds   Int?
+  startedAt         DateTime?
+  endedAt           DateTime?
+  durationSeconds   Int?
+  audioQualityScore Float?
+  callCostCents     Int?
+  createdAt         DateTime   @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  claim        Claim        @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  summary      CallSummary?
+  events       CallEvent[]
+
+  @@index([organizationId])
+  @@index([claimId])
+}
+
+model CallSummary {
+  id              String     @id @default(cuid())
+  callId          String     @unique
+  claimStatus     String
+  denialReason    String?
+  denialCode      String?
+  nextAction      NextAction
+  confidence      Float?
+  repName         String?
+  referenceNumber String?
+  callbackDate    DateTime?
+  amountApproved  Decimal?   @db.Decimal(10, 2)
+  notes           String?
+  rawTranscript   String     @db.Text
+  claudeSummary   String     @db.Text
+  createdAt       DateTime   @default(now())
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+}
+
+model CallEvent {
+  id        String   @id @default(cuid())
+  callId    String
+  eventType String
+  data      Json     @default("{}")
+  timestamp DateTime @default(now())
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@index([callId])
+}
+
+model PayerConfig {
+  id             String    @id @default(cuid())
+  organizationId String
+  payerCode      PayerCode
+  enabled        Boolean   @default(true)
+  providerNpi    String?
+  groupNumber    String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, payerCode])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String
+  resourceType   String
+  resourceId     String
+  ipAddress      String?
+  userAgent      String?
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([userId])
+}

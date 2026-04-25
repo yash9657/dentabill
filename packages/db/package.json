@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Prisma schema, generated client, multi-tenant middleware, and audit/org-scope helpers. Schema + client land in P1-T4.",
+  "description": "Prisma schema, generated client, multi-tenant middleware, and audit/org-scope helpers.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -13,10 +13,20 @@
     "lint": "eslint . --max-warnings=0 --no-warn-ignored",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "build": "echo 'no build for stub'"
+    "build": "echo 'no build for db'",
+    "db:generate": "prisma generate",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@dentabill/logger": "workspace:*",
+    "@prisma/client": "^6.2.1"
   },
   "devDependencies": {
     "@dentabill/config": "workspace:*",
+    "@types/node": "^20.17.6",
+    "prisma": "^6.2.1",
     "vitest": "^2.1.9"
   }
 }
