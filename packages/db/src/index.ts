@@ -1,4 +1,12 @@
 export { prisma } from './client.js';
+export { audit, type AuditInput } from './lib/audit.js';
+export { getOrgScopedDb, type OrgScopedDb } from './lib/with-org.js';
+export { MissingOrgScopeError } from './lib/errors.js';
+export {
+  MULTI_TENANT_MODELS,
+  isMultiTenantModel,
+  type MultiTenantModel,
+} from './lib/multi-tenant.js';
 export { PrismaClient, Prisma } from '@prisma/client';
 export type {
   Organization,
