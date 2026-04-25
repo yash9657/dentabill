@@ -4,54 +4,43 @@ _Last updated: 2026-04-25_
 
 ## What was just done
 
-Phase 1 backend foundations — 9 of 12 implementation tasks landed in this session:
+**Phase 1 closed out.** The Prisma trio landed in this session:
 
-- **P1-T2** `@dentabill/config` — strict tsconfig (base/lib/app), eslint flat config (typescript-eslint strict + import + security), prettier, vitest base.
-- **P1-T2A** Repo hygiene — Husky v9 pre-commit (lint-staged) + commit-msg (commitlint), `commitlint.config.cjs` with workspace-aware scope-enum, `.github/PULL_REQUEST_TEMPLATE.md` with HIPAA/multi-tenancy gates, `CODEOWNERS`, `dependabot.yml`, `CONTRIBUTING.md`, top-level `SECURITY.md`.
-- **P1-T2B** GitHub Actions CI — `.github/workflows/ci.yml` with `quality` job (typecheck/lint/build/commitlint/format-check) and `test` job (real `postgres:16-alpine` + `redis:7-alpine` service containers).
-- **P1-T11** Local dev — `docker-compose.yml` (postgres + redis, 127.0.0.1, healthchecks), `.env.example` (28 vars from PRD §8 + observability), `.nvmrc`, `.editorconfig`, `.vscode/`, `README.md` Quickstart.
-- **P1-T3** Workspace scaffold — 4 apps + 7 packages (added `@dentabill/logger` per ADR-008) all wired with strict tsconfigs.
-- **P1-T3A** `@dentabill/logger` — pino + curated PHI redact list (auth headers, patient/DOB/SSN/member/email/phone/address) + 6 vitest cases asserting redaction.
-- **P1-T3B** `@dentabill/types` — Zod `ApiError` + `API_ERROR_CODES` catalog + `httpStatusForCode`, cursor pagination, branded IDs (`OrgId`/`UserId`/`ClaimId`/…), enums mirroring PRD §5. 26 vitest cases.
-- **P1-T3C** Vitest workspace — root `vitest.workspace.ts` + per-workspace `vitest.config.ts` extending `@dentabill/config/vitest` + smoke tests in every package. Root `pnpm exec vitest run` aggregates 13 files / 40 tests.
-- **P1-T12** Architecture docs — `docs/ARCHITECTURE.md` (mermaid topology, call lifecycle state machine, package graph), `docs/API_CONVENTIONS.md` (status codes, ApiError shape, pagination, idempotency, webhook HMAC, org scoping), `docs/SECURITY.md` (HIPAA inventory, PHI rules, secret management, top-5 threat model, branch-protection checklist). Refreshed `docs/CODEMAP.md`.
-- **6 new ADRs** appended to `docs/DECISIONS.md`: ADR-004 (cloud target deferred), ADR-005 (CI from Phase 1), ADR-006 (commit/PR enforcement), ADR-007 (observability baseline), ADR-008 (packages topology + `@dentabill/logger`), ADR-009 (multi-tenancy enforcement layers).
+- **P1-T4** `@dentabill/db` Prisma init — full PRD §5 schema (8 models, 6 enums, cascade deletes, `Decimal(10,2)` money, indexes on `(organizationId, status)` and `(organizationId, priority)`), singleton client wired to `@dentabill/logger` via Prisma event hooks, initial migration `20260425075528_init`. pnpm v10 `onlyBuiltDependencies` allowlist added so Prisma engines download.
+- **P1-T4A** Audit + read-side org scope — `audit({ action, resourceType, resourceId, organizationId, ... })` rejects missing org; `getOrgScopedDb(orgId)` uses `prisma.$extends` to auto-filter `findMany` / `findFirst` / `count` / `aggregate` / `groupBy` on the 5 multi-tenant models. `findUnique` deliberately not intercepted (callers must use `findFirst` for scoped lookups by id; documented in `with-org.ts`). `MULTI_TENANT_MODELS` is a single source of truth shared with the write middleware.
+- **P1-T5** Multi-tenant write middleware — `Prisma.defineExtension` query hook on `$allModels.$allOperations` rejects writes against multi-tenant models that lack `organizationId`. Validates `create` / `createMany` / `createManyAndReturn` / `upsert` payloads (every row in array creates checked individually) and `update` / `updateMany` / `delete` / `deleteMany` `where` clauses. Extension is layered into the singleton client so every consumer of `@dentabill/db` is guarded — no un-guarded escape hatch. Non-multi-tenant models (`Organization`) pass through.
 
-Verification at end of session:
-
-- `pnpm turbo run typecheck lint test build` → 34 successful, 0 failed
-- `pnpm exec vitest run` → 13 test files, 40 tests, all green
-- `pnpm exec prettier --check .` → clean
-- Husky hooks proven by rejecting bad commit message, accepting well-formed one
+15 new tests in this session, 30 total in `@dentabill/db`. All green.
 
 ## Current state of the repo
 
-- Branch: `phase-1/session-doc-updates` (this session's final doc commit). `main` is 10 commits ahead of `origin/main` and ready to push.
-- 11 workspaces scaffolded; 3 packages have real implementations (`config`, `logger`, `types`); 8 are stubs awaiting their respective phase work.
-- `@dentabill/db` is a stub awaiting P1-T4. No Prisma schema yet.
-- `apps/web`, `apps/api`, workers are stubs — Phase 2 / 3 / 4 work.
-- CI workflow ready but not yet pushed to GitHub — first PR after push proves it.
+- Branch: `main`. 15 commits ahead of `origin/main`. Working tree clean.
+- All 12 Phase-1 implementation tasks complete (P1-T2 through P1-T12).
+- 11 workspaces: 4 apps (stubs), 7 packages (`config`, `logger`, `types`, `db` are real; `ui`, `queue`, `payer-ivr` are stubs awaiting their phases).
+- Three-layer multi-tenancy defense (ADR-009) is fully in place: write middleware + read helper + audit log.
+- Local stack: `dentabill-postgres` and `dentabill-redis` containers are healthy via OrbStack.
+- CI workflow ready in `.github/workflows/ci.yml` but **not yet exercised** — pushing the 15 commits will trigger the first run.
 
 ## Next task
 
-**P1-T4 — `@dentabill/db` Prisma init + full PRD §5 schema.**
+**Phase 1 is done. Phase 2 begins with P2-T1 — `apps/web` Next.js 15 App Router scaffold.**
 
-Prerequisite: a running Postgres. Local-dev path is `docker compose up -d` from the repo root, but **Docker is not yet installed on this machine** (no `docker` CLI on PATH). Options:
+Per `docs/TASKS.md` Phase 2 plan: Next.js 15 + Tailwind v3 + shadcn init + Inter / JetBrains Mono fonts + theme tokens from PRD §7. After P2-T1 lands, P2-T2 wires Clerk auth, P2-T6 adds the Playwright e2e job to CI (per ADR-005).
 
-1. Install Docker Desktop for macOS, OR
-2. Install OrbStack (lighter on macOS), OR
-3. Install Colima (`brew install colima docker docker-compose && colima start`)
+Before starting Phase 2, recommend:
 
-Once Postgres is reachable on `localhost:5432` per `.env.example`'s `DATABASE_URL`, P1-T4, P1-T4A, P1-T5 can proceed in sequence as one dependency-linked stream.
+1. Push the 15 unpushed commits on `main` to publish the foundation work and exercise CI for the first time.
+2. Enable branch protection on `main` per `docs/SECURITY.md` checklist (require PR, require `quality` + `test` checks, linear history, no force push).
+3. Open a draft PR to verify CI is green end-to-end against the real GitHub Actions runners + service containers.
 
 ## Open questions / ambiguities
 
-- Docker not installed — see "Next task". Pick a runtime before proceeding.
-- 10 unpushed commits on `main` — first push will publish the foundation work and trigger the GitHub Actions CI for the first time. Recommend pushing after a quick visual review of recent `git log`.
-- Default-branch confusion (legacy `master` vs current `main`) — confirmed as resolved: `main` is the working default; `master` does not exist locally or remotely.
+- 15 unpushed commits on `main`. First push will exercise CI — review `git log` first to spot any commit-message issues.
+- Branch protection still needs enabling in the GitHub UI (one-time, blocked on having a remote with at least one push).
+- Phase 2 task ordering not yet broken into branches in `docs/TASKS.md` — happens at start of next session.
 
 ## Do not forget
 
 - One task at a time. Tests are part of the task, not a follow-up.
 - Update this file + `TASKS.md` + `PROGRESS.md` + `DECISIONS.md` (ADRs only) at end of every session.
-- Branch-protection settings in the GitHub UI need enabling before the first external PR — see `docs/SECURITY.md`.
+- Branch-protection in GitHub UI is still not enabled — see `docs/SECURITY.md`.

@@ -9,9 +9,9 @@ Rules:
 
 ---
 
-## Phase 1 — Foundations (active)
+## Phase 1 — Foundations (complete)
 
-> Phase 1 was reshaped during the 2026-04-24 planning session — UI tasks moved to Phase 2; cloud target deferred to Phase 5; CI, commit enforcement, HIPAA primitives, architecture docs added. See `docs/PHASE_PLAN.md` and ADR-004 / ADR-005 / ADR-006.
+> Phase 1 was reshaped during the 2026-04-24 planning session — UI tasks moved to Phase 2; cloud target deferred to Phase 5; CI, commit enforcement, HIPAA primitives, architecture docs added. See `docs/PHASE_PLAN.md` and ADR-004 / ADR-005 / ADR-006. **All 12 implementation tasks landed by 2026-04-25.**
 
 - [x] **P1-T1** Initialize Turborepo + pnpm workspace _(done 2026-04-20)_
 - [x] **P1-T2** Shared config package (`packages/config`) _(done 2026-04-24)_
@@ -23,27 +23,9 @@ Rules:
 - [x] **P1-T3B** `@dentabill/types` (Zod ApiError + pagination + ids + enums) _(done 2026-04-24)_
 - [x] **P1-T3C** Vitest workspace + smoke tests _(done 2026-04-25)_
 - [x] **P1-T12** Architecture / API / Security docs _(done 2026-04-25)_
-
-- [ ] **P1-T4** `@dentabill/db` — Prisma init + full PRD §5 schema
-  - Branch: `phase-1/prisma-schema`
-  - `packages/db/prisma/schema.prisma` with all 8 models + 6 enums + indexes + `@@map` for snake_case
-  - `packages/db/src/client.ts` singleton wired to `@dentabill/logger`
-  - Migration `0000_init` against local Postgres
-  - **Blocker:** Docker not installed locally. Install Docker Desktop / OrbStack / Colima before starting.
-  - Test: `prisma validate` clean; `prisma migrate dev --name init` succeeds; tsc clean against client usage
-
-- [ ] **P1-T4A** Audit log helper + read-side org-scope helper
-  - Branch: `phase-1/db-helpers`
-  - `packages/db/src/lib/audit.ts` — `audit({ action, resourceType, resourceId, organizationId, userId?, metadata? })`; throws if no `organizationId`
-  - `packages/db/src/lib/with-org.ts` — `getOrgScopedDb(orgId)` via Prisma `$extends`, auto-applies `where: { organizationId }` on reads
-  - Test: vitest with real test DB — audit rejects without orgId; `getOrgScopedDb` filters reads correctly across two orgs
-
-- [ ] **P1-T5** Prisma multi-tenant write middleware
-  - Branch: `phase-1/db-middleware`
-  - `packages/db/src/middleware/org-scope.ts` — Prisma `$extends` query interceptor; `MissingOrgScopeError` thrown when write missing `organizationId`
-  - `MULTI_TENANT_MODELS` exported as the single list of gated models
-  - Test: vitest — write without orgId throws; write with orgId succeeds; integration test stacks middleware + `getOrgScopedDb`
-  - Use `security-reviewer` agent on the resulting PR
+- [x] **P1-T4** `@dentabill/db` — Prisma init + full PRD §5 schema _(done 2026-04-25)_
+- [x] **P1-T4A** Audit log helper + read-side `getOrgScopedDb(orgId)` _(done 2026-04-25)_
+- [x] **P1-T5** Prisma multi-tenant write middleware _(done 2026-04-25)_
 
 ---
 
@@ -85,3 +67,6 @@ The cloud target decision lands here (per ADR-004): Railway vs AWS, Dockerfiles,
 - **P1-T3B** `@dentabill/types` (ApiError + pagination + ids + enums) _(2026-04-24)_
 - **P1-T3C** Vitest workspace + smoke tests _(2026-04-25)_
 - **P1-T12** Architecture / API / Security docs _(2026-04-25)_
+- **P1-T4** `@dentabill/db` Prisma init + full PRD §5 schema _(2026-04-25)_
+- **P1-T4A** Audit + read-side `getOrgScopedDb(orgId)` _(2026-04-25)_
+- **P1-T5** Multi-tenant write middleware _(2026-04-25)_

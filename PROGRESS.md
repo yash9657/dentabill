@@ -3,8 +3,8 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-04-25
-**Current phase:** Phase 1 — Foundations (9/12 tasks done; 3 blocked on Docker install)
-**Next task:** P1-T4 — `@dentabill/db` Prisma init + schema
+**Current phase:** Phase 1 — Foundations **(complete — 12/12 tasks done)**. Next: Phase 2 — UI + API + Ingestion.
+**Next task:** P2-T1 — `apps/web` Next.js 15 App Router scaffold
 **In progress:** Nothing
 
 ---
@@ -13,7 +13,7 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 
 | Phase | Name                      | Status                                   |
 | ----- | ------------------------- | ---------------------------------------- |
-| 1     | Foundations               | In progress (75% — 9 of 12 tasks done)   |
+| 1     | Foundations               | **Complete** (12 of 12 tasks done)       |
 | 2     | UI + API + Ingestion      | Queued (UI tasks moved here per ADR-004) |
 | 3     | Queue + Voice             | Queued                                   |
 | 4     | Intelligence + Realtime   | Queued                                   |
@@ -22,7 +22,7 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 ## PRD step checklist
 
 - [x] Step 1 — Monorepo
-- [ ] Step 2 — Database Schema (P1-T4 — blocked on Docker install)
+- [x] Step 2 — Database Schema (P1-T4 / T4A / T5 — schema, audit, org-scope read helper, write middleware all landed 2026-04-25)
 - [ ] Step 3 — Authentication (Phase 2)
 - [ ] Step 4 — Dashboard Shell (Phase 2)
 - [ ] Step 5 — API Server (Phase 2)
@@ -36,7 +36,8 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 
 ## Recent activity
 
-- 2026-04-25 — Phase 1 reshaped after architectural review of `DentaBill_AI_Technical_Plan.docx`. Landed P1-T2 (`@dentabill/config`), P1-T2A (Husky + commitlint + repo hygiene), P1-T2B (GitHub Actions CI), P1-T11 (docker-compose + .env.example), P1-T3 (workspace scaffold — 4 apps + 7 packages incl. new `@dentabill/logger`), P1-T3A (`@dentabill/logger` with PHI redaction + 6 tests), P1-T3B (`@dentabill/types` with ApiError + Zod + branded IDs + 26 tests), P1-T3C (Vitest workspace — 40 tests, 13 files), P1-T12 (ARCHITECTURE / API_CONVENTIONS / SECURITY docs). Added 6 new ADRs (004–009). 10 commits ready to push to origin/main.
+- 2026-04-25 — **Phase 1 complete.** Closed out the Prisma trio: P1-T4 (`@dentabill/db` schema + singleton client + initial migration `20260425075528_init`), P1-T4A (`audit()` helper + `getOrgScopedDb(orgId)` read-side scope via `prisma.$extends`), P1-T5 (write middleware via `Prisma.defineExtension` on `$allModels.$allOperations` rejecting writes lacking `organizationId` on multi-tenant models). 30 tests in `@dentabill/db`, all green against the docker-compose Postgres (running under OrbStack). 15 commits on local `main`, ready to push.
+- 2026-04-25 — Phase 1 reshaped after architectural review of `DentaBill_AI_Technical_Plan.docx`. Landed P1-T2 (`@dentabill/config`), P1-T2A (Husky + commitlint + repo hygiene), P1-T2B (GitHub Actions CI), P1-T11 (docker-compose + .env.example), P1-T3 (workspace scaffold — 4 apps + 7 packages incl. new `@dentabill/logger`), P1-T3A (`@dentabill/logger` with PHI redaction + 6 tests), P1-T3B (`@dentabill/types` with ApiError + Zod + branded IDs + 26 tests), P1-T3C (Vitest workspace — 40 tests, 13 files), P1-T12 (ARCHITECTURE / API_CONVENTIONS / SECURITY docs). Added 6 new ADRs (004–009).
 - 2026-04-20 — P1-T1 verified complete. Claude Code harness configured: Sonnet default, token caps, 4 hooks, 4 subagents, 5 skills. Ready for P1-T2.
 - 2026-04-07 — Lean docs system bootstrapped (`docs/PROJECT_BRIEF.md`, `PHASE_PLAN.md`, `TASKS.md`, `DECISIONS.md`, `SESSION_CONTEXT.md`, `ENGINEERING_RULES.md`, `UX_RULES.md`). Phase 1 task list drafted (10 tasks).
 
@@ -56,7 +57,7 @@ See `docs/DECISIONS.md`. Currently 9 ADRs:
 
 ## Known issues / open questions
 
-- **Docker is not installed** on the dev machine. Required for P1-T4 (Prisma migrate against local Postgres). Pick one: Docker Desktop, OrbStack, or Colima.
-- 10 unpushed commits on local `main` — push when ready to publish foundations and trigger first GitHub Actions CI run.
+- 15 unpushed commits on local `main` — push when ready to publish Phase 1 and trigger first GitHub Actions CI run.
+- Branch-protection rules need enabling in the GitHub UI per the checklist in `docs/SECURITY.md` (one-time, requires the first push).
 - No external service credentials yet (Clerk / Retell / Anthropic / Resend / Stripe / Telnyx) — `.env.example` placeholders ready, populate as Phases 2–4 activate them.
-- Branch-protection rules need enabling in the GitHub UI per the checklist in `docs/SECURITY.md`.
+- Docker runtime is OrbStack (chosen over Docker Desktop for lower overhead on macOS); `docker compose up -d` from repo root brings up Postgres + Redis healthy.
