@@ -1,4 +1,15 @@
 version: 2
+
+# Dependency update policy — see ADR-010 in docs/DECISIONS.md.
+#
+# Default mode: only minor + patch + security updates auto-PR.
+# Major version bumps are intentionally suppressed to keep CI noise low and
+# prevent drive-by breakage on a small team. Majors land via a deliberate
+# quarterly review session, not opportunistic merges.
+#
+# Security advisories from GitHub are NEVER suppressed — Dependabot opens those
+# regardless of the `ignore` block, including for major versions.
+
 updates:
   - package-ecosystem: 'npm'
     directory: '/'
@@ -15,16 +26,24 @@ updates:
       prefix: 'chore(deps)'
       include: 'scope'
     groups:
-      production:
+      production-minor-patch:
         dependency-type: 'production'
         update-types:
           - 'minor'
           - 'patch'
-      development:
+      development-minor-patch:
         dependency-type: 'development'
         update-types:
           - 'minor'
           - 'patch'
+    ignore:
+      # Suppress major version updates across all npm dependencies.
+      # Security updates still flow through (Dependabot bypasses ignore for
+      # advisories). Lift this rule deliberately during a quarterly major
+      # bump pass — see ADR-010.
+      - dependency-name: '*'
+        update-types:
+          - 'version-update:semver-major'
 
   - package-ecosystem: 'github-actions'
     directory: '/'
@@ -32,6 +51,18 @@ updates:
       interval: 'weekly'
       day: 'monday'
     open-pull-requests-limit: 3
+    labels:
+      - 'dependencies'
+      - 'ci'
     commit-message:
-      prefix: 'ci'
+      prefix: 'ci(deps)'
       include: 'scope'
+    groups:
+      actions-minor-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+    ignore:
+      - dependency-name: '*'
+        update-types:
+          - 'version-update:semver-major'
