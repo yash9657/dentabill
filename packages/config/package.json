@@ -10,7 +10,7 @@
     "tsconfig.lib.json",
     "eslint.config.js",
     "prettier.config.js",
-    "vitest.config.base.ts"
+    "vitest.config.base.js"
   ],
   "exports": {
     "./tsconfig.base.json": "./tsconfig.base.json",
@@ -18,7 +18,7 @@
     "./tsconfig.lib.json": "./tsconfig.lib.json",
     "./eslint": "./eslint.config.js",
     "./prettier": "./prettier.config.js",
-    "./vitest": "./vitest.config.base.ts"
+    "./vitest": "./vitest.config.base.js"
   },
   "scripts": {
     "lint": "eslint . --max-warnings=0",

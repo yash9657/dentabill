@@ -12,7 +12,7 @@
   "scripts": {
     "lint": "eslint . --max-warnings=0 --no-warn-ignored",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run --passWithNoTests",
+    "test": "echo 'no tests yet — vitest wired in P1-T3C'",
     "build": "echo 'no build for stub'",
     "dev": "echo 'apps/call-worker — Phase 3'"
   },

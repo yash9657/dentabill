@@ -1,11 +1,16 @@
 import { defineConfig } from 'vitest/config';
 
 /**
- * Shared Vitest base. Consumers extend via:
+ * Shared Vitest base. JS (not TS) so cross-package imports resolve through
+ * Node's ESM loader without a build step.
  *
- *   import { mergeConfig } from 'vitest/config';
+ * Consumers extend via:
+ *
+ *   import { mergeConfig, defineConfig } from 'vitest/config';
  *   import base from '@dentabill/config/vitest';
  *   export default mergeConfig(base, defineConfig({ ... }));
+ *
+ * @type {import('vitest/config').UserConfig}
  */
 export default defineConfig({
   test: {
@@ -27,7 +32,7 @@ export default defineConfig({
         '**/dist/**',
         '**/node_modules/**',
         '**/__fixtures__/**',
-        '**/vitest.config.{ts,js}',
+        '**/vitest.config.*',
       ],
     },
   },

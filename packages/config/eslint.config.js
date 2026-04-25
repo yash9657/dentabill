@@ -17,7 +17,9 @@ export default tseslint.config(
       '**/.turbo/**',
       '**/coverage/**',
       '**/node_modules/**',
+      // Config files at any depth, including multi-dot variants like vitest.config.base.js
       '**/*.config.{js,mjs,cjs,ts}',
+      '**/*.config.*.{js,mjs,cjs,ts}',
     ],
   },
   ...tseslint.configs.strictTypeChecked,

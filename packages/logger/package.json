@@ -15,7 +15,13 @@
     "test": "vitest run --passWithNoTests",
     "build": "echo 'no build for stub'"
   },
+  "dependencies": {
+    "pino": "^9.5.0"
+  },
   "devDependencies": {
-    "@dentabill/config": "workspace:*"
+    "@dentabill/config": "workspace:*",
+    "@types/node": "^20.17.6",
+    "pino-pretty": "^13.0.0",
+    "vitest": "^2.1.9"
   }
 }
