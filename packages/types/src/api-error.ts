@@ -1,0 +1,94 @@
+import { z } from 'zod';
+
+/**
+ * Wire-format contract for API errors. Every Fastify route returns this
+ * shape on failure — no stack traces, no raw `Error` objects.
+ *
+ *   { "error": true, "message": "string", "code": "STRING_CODE" }
+ *
+ * Frontend consumers parse with `ApiErrorSchema.parse(body)` — never trust
+ * the shape blindly.
+ */
+export const ApiErrorSchema = z.object({
+  error: z.literal(true),
+  message: z.string().min(1),
+  code: z.string().min(1),
+});
+
+export type ApiErrorPayload = z.infer<typeof ApiErrorSchema>;
+
+/**
+ * Catalog of well-known error codes. Add new codes here, never inline.
+ * Each maps to a default HTTP status via {@link httpStatusForCode}.
+ */
+export const API_ERROR_CODES = {
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  AUTHENTICATION_REQUIRED: 'AUTHENTICATION_REQUIRED',
+  FORBIDDEN: 'FORBIDDEN',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
+  RATE_LIMITED: 'RATE_LIMITED',
+  WEBHOOK_SIGNATURE_INVALID: 'WEBHOOK_SIGNATURE_INVALID',
+  ORG_SCOPE_MISSING: 'ORG_SCOPE_MISSING',
+  ORG_SCOPE_VIOLATION: 'ORG_SCOPE_VIOLATION',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+} as const;
+
+export type ApiErrorCode = (typeof API_ERROR_CODES)[keyof typeof API_ERROR_CODES];
+
+const CODE_TO_STATUS: Readonly<Record<ApiErrorCode, number>> = {
+  VALIDATION_ERROR: 400,
+  AUTHENTICATION_REQUIRED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  RATE_LIMITED: 429,
+  WEBHOOK_SIGNATURE_INVALID: 401,
+  ORG_SCOPE_MISSING: 403,
+  ORG_SCOPE_VIOLATION: 403,
+  INTERNAL_ERROR: 500,
+};
+
+/**
+ * Returns the canonical HTTP status code for a known {@link ApiErrorCode}.
+ * Unknown codes fall back to 500 — but you should add new codes to the
+ * catalog rather than relying on the fallback.
+ */
+export function httpStatusForCode(code: string): number {
+  // Cast for the lookup, but the runtime value may not be a known code,
+  // so the lookup may return undefined. The fallback handles that.
+  const status: number | undefined = (CODE_TO_STATUS as Record<string, number>)[code];
+  return status ?? 500;
+}
+
+/**
+ * Throwable + serializable application error. Construct with a known code;
+ * serializers turn this into the {@link ApiErrorSchema} wire format.
+ *
+ *   throw new ApiError('ORG_SCOPE_MISSING', 'organizationId required')
+ */
+export class ApiError extends Error {
+  public readonly code: ApiErrorCode;
+  public readonly statusCode: number;
+
+  public constructor(code: ApiErrorCode, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.code = code;
+    this.statusCode = httpStatusForCode(code);
+    // Restore prototype chain across compile targets that strip it.
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+
+  public toJson(): ApiErrorPayload {
+    return {
+      error: true,
+      message: this.message,
+      code: this.code,
+    };
+  }
+
+  public static isApiError(value: unknown): value is ApiError {
+    return value instanceof ApiError;
+  }
+}
