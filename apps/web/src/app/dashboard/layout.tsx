@@ -4,7 +4,7 @@ import * as React from 'react';
 import {
   DashboardBreadcrumbs,
   DashboardShell,
-  DashboardSidebarPlaceholder,
+  DashboardSidebar,
   DashboardTopbarPlaceholder,
 } from '../../components/dashboard/index.js';
 
@@ -39,10 +39,7 @@ export default function DashboardLayout({
   readonly children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <DashboardShell
-      sidebar={<DashboardSidebarPlaceholder />}
-      topbar={<DashboardTopbarPlaceholder />}
-    >
+    <DashboardShell sidebar={<DashboardSidebar />} topbar={<DashboardTopbarPlaceholder />}>
       <div className="px-4 pb-12 pt-6 sm:px-6 lg:px-8">
         <DashboardBreadcrumbs />
         <div className="mt-4">{children}</div>
