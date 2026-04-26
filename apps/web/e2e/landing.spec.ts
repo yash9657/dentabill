@@ -156,6 +156,26 @@ test.describe('landing page (Phase 2 scaffold)', () => {
     expect(consoleErrors).toEqual([]);
   });
 
+  test('/faq renders, accordion expands, and is axe-clean', async ({
+    page,
+    makeAxeBuilder,
+    consoleErrors,
+  }) => {
+    const response = await page.goto('/faq');
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/questions we hear most/i);
+
+    // Native <details><summary> is accessible without JS; the test
+    // exercises the keyboard activation path.
+    const summary = page.getByText(/how long does setup take\?/i);
+    await summary.click();
+    await expect(page.getByText(/most practices are running on the same day/i)).toBeVisible();
+
+    const results = await makeAxeBuilder().analyze();
+    expect(results.violations, 'axe violations on /faq').toEqual([]);
+    expect(consoleErrors).toEqual([]);
+  });
+
   test('robots.txt and sitemap.xml are public', async ({ page }) => {
     const robots = await page.request.get('/robots.txt');
     expect(robots.status()).toBe(200);
