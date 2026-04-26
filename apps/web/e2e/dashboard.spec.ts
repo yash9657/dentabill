@@ -78,6 +78,35 @@ test.describe('dashboard shell (P2-T32)', () => {
     await expect(sidebarAfter).toHaveAttribute('data-collapsed', 'true');
   });
 
+  test('topbar exposes search, notifications, and account placeholders without Clerk keys', async ({
+    page,
+    consoleErrors,
+  }) => {
+    await page.goto('/dashboard/overview');
+
+    const searchTriggers = page.getByRole('button', { name: /open command palette/i });
+    await expect(searchTriggers.first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /^notifications$/i })).toBeVisible();
+    await expect(page.getByLabel(/demo workspace/i)).toBeVisible();
+    await expect(page.getByLabel(/account placeholder/i)).toBeVisible();
+
+    expect(consoleErrors).toEqual([]);
+  });
+
+  test('clicking the search trigger opens the command palette and Escape closes it', async ({
+    page,
+  }) => {
+    await page.goto('/dashboard/overview');
+    await page
+      .getByRole('button', { name: /open command palette/i })
+      .first()
+      .click();
+    const dialog = page.getByRole('dialog', { name: /command palette/i });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+  });
+
   test('mobile hamburger opens the sidebar drawer and Escape closes it', async ({ page }) => {
     await page.setViewportSize({ width: 480, height: 844 });
     await page.goto('/dashboard/overview');
