@@ -92,14 +92,14 @@ Rules:
 - [x] **P2-T39** Claims pagination + filtering (cursor base64url, status / payer / search / sort) — _PR #53, 2026-04-26_
 - [x] **P2-T40** Claim detail + state-machine transitions per PRD §6 — _PR #54, 2026-04-26_
 - [x] **P2-T41** Claims list UI page (TanStack virtual table) — _PR #55, 2026-04-26_
-- [ ] **P2-T42** Claim detail UI page (history timeline + manual status edit) — **this PR**
+- [x] **P2-T42** Claim detail UI page (history timeline + manual status edit) — _PR #56, 2026-04-26_
 
 ### W6 — CSV ingestion (9 tasks, ~19.5h)
 
 - [ ] **P2-T43** `POST /v1/ingest/claims` upload endpoint
 - [ ] **P2-T44** Streaming CSV parser (Dentrix / Eaglesoft / Open Dental)
 - [ ] **P2-T45** DOB hashing helper in `@dentabill/db`
-- [ ] **P2-T46** Payer-code lookup table in `packages/payer-ivr`
+- [ ] **P2-T46** Payer-code lookup table in `packages/payer-ivr` — **this PR**
 - [ ] **P2-T47** Priority scoring helper in `@dentabill/db`
 - [ ] **P2-T48** Bulk insert with idempotency-key
 - [ ] **P2-T49** Ingestion integration test (3 sample CSVs, cross-org isolation)
