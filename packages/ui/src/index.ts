@@ -17,3 +17,10 @@ export { Badge, badgeVariants, type BadgeProps } from './components/badge.js';
 export { Skeleton } from './components/skeleton.js';
 export { Separator } from './components/separator.js';
 export { Avatar, AvatarFallback, AvatarImage } from './components/avatar.js';
+
+// Brand primitives — DentaBill-specific compositions on top of the shadcn primitives.
+export { Pill, pillVariants, type PillProps } from './components/pill.js';
+export { HeroDisplay, type HeroDisplayProps } from './components/hero-display.js';
+export { SectionDisplay, type SectionDisplayProps } from './components/section-display.js';
+export { ShadowCard, shadowCardVariants, type ShadowCardProps } from './components/shadow-card.js';
+export { StatusDot, statusDotVariants, type StatusDotProps } from './components/status-dot.js';
