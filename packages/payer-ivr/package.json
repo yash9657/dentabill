@@ -15,6 +15,9 @@
     "test": "vitest run",
     "build": "echo 'no build for stub'"
   },
+  "dependencies": {
+    "@dentabill/db": "workspace:*"
+  },
   "devDependencies": {
     "@dentabill/config": "workspace:*",
     "vitest": "^2.1.9"
