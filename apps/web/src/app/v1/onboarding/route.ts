@@ -25,7 +25,13 @@ import { recordHit, type RateLimitConfig } from '../../../lib/rate-limit-memory.
  * end to end. PHI redaction is a no-op here — onboarding fields
  * (practice name, NPI, zip, payer list) are not PHI.
  */
-const RATE_LIMIT: RateLimitConfig = { windowMs: 60 * 60 * 1000, max: 10 };
+/**
+ * Generous because the e2e suite hits this stub from a single
+ * shared origin (the `next start` web server, all requests landing
+ * on IP "unknown") plus CI retries. The real API adds proper per-
+ * organization throttling once it owns the write path.
+ */
+const RATE_LIMIT: RateLimitConfig = { windowMs: 60 * 60 * 1000, max: 100 };
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
