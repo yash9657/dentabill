@@ -143,7 +143,11 @@ jobs:
         run: pnpm --filter @dentabill/db exec prisma migrate deploy
 
       - name: Test (turbo)
-        run: pnpm turbo run test
+        # `--concurrency=1` so packages that share the dentabill_test database
+        # (currently `@dentabill/db` and `@dentabill/api`) do not race their
+        # `truncate` cleanup hooks against each other. Cheap enough — the
+        # per-package suites are sub-second.
+        run: pnpm turbo run test --concurrency=1
 
   e2e:
     name: E2E (Playwright + axe + visual)
