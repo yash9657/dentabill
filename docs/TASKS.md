@@ -101,17 +101,17 @@ Rules:
 - [x] **P2-T45** DOB hashing helper in `@dentabill/db` — _PR #57, 2026-04-26_
 - [x] **P2-T46** Payer-code lookup table in `packages/payer-ivr` — _PR #58, 2026-04-26_
 - [x] **P2-T47** Priority scoring helper in `@dentabill/db` — _PR #59, 2026-04-26_
-- [x] **P2-T48** Bulk insert with idempotency-key — _PR #63, 2026-04-26_ — **this PR**
-- [x] **P2-T49** Ingestion integration test (3 sample CSVs, cross-org isolation) — _bundled into T48_
+- [x] **P2-T48** Bulk insert with idempotency-key — _PR #63, 2026-04-26_
+- [x] **P2-T49** Ingestion integration test (3 sample CSVs, cross-org isolation) — _bundled into T48 / PR #63_
 - [x] **P2-T50** Sample CSV fixtures — _PR #60, 2026-04-26_
-- [ ] **P2-T51** `/dashboard/claims/import` upload UI — **this PR**
+- [x] **P2-T51** `/dashboard/claims/import` upload UI — _PR #64, 2026-04-26_
 
 ### W7 — Closeout (4 tasks, ~4h)
 
-- [ ] **P2-T52** `PRODUCT.md` via `$impeccable teach`
-- [ ] **P2-T53** `DESIGN.md` final pass (TBDs replaced with concrete tokens)
-- [ ] **P2-T54** Phase 2 doc closeout (PHASE_PLAN / TASKS / PROGRESS / CODEMAP / SESSION_CONTEXT)
-- [ ] **P2-T55** Phase 2 retro ADR (ADR-030)
+- [ ] **P2-T52** `PRODUCT.md` via `$impeccable teach` — **deferred to user (interactive skill; cannot be done autonomously)**
+- [x] **P2-T53** `DESIGN.md` final pass (TBDs replaced with concrete tokens) — **this PR**
+- [x] **P2-T54** Phase 2 doc closeout (PHASE_PLAN / TASKS / PROGRESS / CODEMAP / SESSION_CONTEXT) — **this PR**
+- [x] **P2-T55** Phase 2 retro ADR (ADR-030) — **this PR**
 
 ## Phase 3 — Queue + Voice (queued)
 
@@ -155,3 +155,36 @@ The cloud target decision lands here (per ADR-004): Railway vs AWS, Dockerfiles,
 - **P2-T13** OpenAPI from Zod + `@dentabill/api-sdk` codegen _(PR #29, 2026-04-25)_
 - **P2-T14** TanStack Query v5 setup + CI hardening (vitest env defaults + Linux Playwright baseline) _(PR #30, 2026-04-25)_
 - **P2-T17** Marketing chrome (Header / Footer / CookieBanner / NewsletterSignupStub) + `(marketing)` route group _(2026-04-25)_
+- **P2-T18** Landing (`/`) hero + waveform + value props + CTAs _(PR #32, 2026-04-26)_
+- **P2-T19** About page _(PR #33, 2026-04-26)_
+- **P2-T20** Pricing page _(PR #34, 2026-04-26)_
+- **P2-T21** Security page _(PR #35, 2026-04-26)_
+- **P2-T22** Privacy page _(PR #36, 2026-04-26)_
+- **P2-T23** Terms page + ADR-029 _(PR #37, 2026-04-26)_
+- **P2-T24** Contact page + same-origin POST sink _(PR #38, 2026-04-26)_
+- **P2-T25** FAQ page _(PR #39, 2026-04-26)_
+- **P2-T26** Blog skeleton _(PR #40, 2026-04-26)_
+- **P2-T27** Marketing e2e suite _(PR #41, 2026-04-26)_
+- **P2-T28** Clerk integration with conditional gating _(PR #42, 2026-04-26)_
+- **P2-T29** Sign-in / sign-up themed pages _(PR #43, 2026-04-26)_
+- **P2-T30** `/onboarding` form _(PR #49, 2026-04-26)_
+- **P2-T31** Auth e2e suite _(PR #50, 2026-04-26)_
+- **P2-T32** Dashboard shell layout _(PR #44, 2026-04-26)_
+- **P2-T33** Sidebar nav with persisted collapse _(PR #45, 2026-04-26)_
+- **P2-T34** Topbar with Clerk + cmd-k stubs _(PR #46, 2026-04-26)_
+- **P2-T35** `/dashboard/overview` _(PR #47, 2026-04-26)_
+- **P2-T36** Page stubs (claims / calls / reports / settings) _(PR #48, 2026-04-26)_
+- **P2-T37** Fastify Clerk auth middleware _(PR #51, 2026-04-26)_
+- **P2-T38** `/v1/claims` CRUD with org-scoping + audit _(PR #52, 2026-04-26)_
+- **P2-T39** Cursor pagination + filtering on `/v1/claims` _(PR #53, 2026-04-26)_
+- **P2-T40** Claim state machine + state-validated PATCH _(PR #54, 2026-04-26)_
+- **P2-T41** `/dashboard/claims` virtualised list page _(PR #55, 2026-04-26)_
+- **P2-T42** `/dashboard/claims/[id]` detail + manual edit _(PR #56, 2026-04-26)_
+- **P2-T45** `hashPatientDOB` helper _(PR #57, 2026-04-26)_
+- **P2-T46** Payer canonicalisation lookup _(PR #58, 2026-04-26)_
+- **P2-T47** Priority scoring helper _(PR #59, 2026-04-26)_
+- **P2-T50** Dentrix / Eaglesoft / Open Dental CSV fixtures _(PR #60, 2026-04-26)_
+- **P2-T44** Streaming CSV parser _(PR #61, 2026-04-26)_
+- **P2-T43** `POST /v1/ingest/claims` upload endpoint _(PR #62, 2026-04-26)_
+- **P2-T48 + T49** Bulk insert with idempotency + cross-org integration tests _(PR #63, 2026-04-26)_
+- **P2-T51** `/dashboard/claims/import` upload UI _(PR #64, 2026-04-26)_

@@ -292,3 +292,22 @@ Mocking the database is forbidden in integration tests (PRD rule). Mocking exter
 **Context:** The marketing site needs a `/terms` page so the footer and the future contact / sign-up flows can link to one. Drafting attorney-reviewed terms before any public copy lands is expensive in time and money for a pre-revenue product. Holding the page indefinitely (as a stub) is also wrong because security reviewers and prospective customers expect to see something real before signing a BAA.
 **Decision:** Ship a plain-English template `/terms` page in P2-T23 with a prominent draft-status note at the top (`role="note"`, copy explicitly saying "draft template"). Per ADR-029 the commitment is: attorney-reviewed terms replace this draft before we accept paid customers in production. Until then, prospects requiring redline get a marked-up version on request to `legal@dentabill.example`. Governing-law clause provisionally set to Delaware; that is reviewed alongside the rest of the document.
 **Consequences:** The site has a real Terms link working today. Customers can read it during evaluation. We carry a known follow-up: replace the template with reviewed text. The follow-up is tracked as a Phase 5 acceptance criterion (cloud target / production launch); the task gate will not let production deploy ship without it.
+
+## ADR-030 — Phase 2 retrospective: what worked, what to fold into Phase 3
+
+**Date:** 2026-04-26
+**Status:** Accepted
+**Context:** Phase 2 closed with 54 of the 55 planned tasks merged across 51 PRs in two working days. The lone deferred task is T52 (`PRODUCT.md` via `$impeccable teach`), which requires interactive Claude Code skill invocation and is appropriately a follow-up. Capturing what to keep doing — and what to stop doing — before Phase 3 (Queue + Voice) opens.
+
+**Decision:** Lock the following process changes. Each is one sentence; the rationale is in the consequences.
+
+1. Keep the **one task → one branch → one PR** discipline. It paid off: every CI failure landed in a small PR where the cause was obvious, and merging often kept the conflict surface tiny.
+2. Keep **bundling truly co-shipped tasks** (T48 + T49) when their tests are the same file. The retroactive split adds two empty PRs and no clarity.
+3. Keep the **conditional Clerk gating** pattern — the same `hasClerkKeys` boolean in middleware, providers, route pages, and the API auth plugin — so dev/CI without keys has a clean fallback that doesn't crash hooks. Phase 3's call-worker should reuse this for Retell keys.
+4. Keep the **Impeccable design laws on every UI PR** (no em dashes in copy, no card grids, no side-stripe banners, no glassmorphism, no hero-metric template). Reviewer cost is low; visual drift cost is high.
+5. **Stop** branching from main when the previous PR for the same package is still in flight if we know there will be a doc-file conflict on `docs/TASKS.md`. Either merge first, or don't touch TASKS.md until landing. The merge-commit dance for #58/#59/#60 cost ~20 min and several CI re-runs.
+6. **Keep** writing per-row error returns instead of per-row throws (T44, T48). The CSV ingestion and parser surfaces are dramatically better for billers than a binary "the upload failed".
+7. **Keep** the **client-side mirror of server-authoritative rules** pattern (state-machine in T40 + T42; payer canonicalisation already lives entirely in `@dentabill/payer-ivr`). Two-layer validation gives clear UX without giving up the server's authoritative role.
+8. **Keep** **inline integration tests against real Postgres** for write paths. The cross-org leak guards in `/v1/claims` and `/v1/ingest/claims` would have been impossible to verify with mocks.
+
+**Consequences:** Phase 3 (T52 PRODUCT.md follow-up + Queue + Voice) inherits a clean baseline: 7 CI gates green on every PR, 220+ tests, bundle budgets respected, visual regression baselines per OS, and the full ingestion path proven end-to-end. The merge-commit pain in §5 is the one rough edge to fix early — Phase 3 should land its in-flight PRs serially when they share `docs/TASKS.md` lines, or batch the doc updates into a final closeout.
