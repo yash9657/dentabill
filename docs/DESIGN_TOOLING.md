@@ -45,11 +45,11 @@ npx skillui@1.3.2 --url https://stripe.com --mode ultra --screens 7 --name "Stri
 
 ## Repo files SkillUI is meant to populate
 
-| File          | How it gets populated             | Committed? |
-| ------------- | --------------------------------- | ---------- |
-| `PRODUCT.md`  | `$impeccable teach` (interactive) | Yes        |
-| `DESIGN.md`   | Curated synthesis of SkillUI runs | Yes        |
-| `references/` | Curated subset of SkillUI screens | Optional   |
+| File          | How it gets populated                                                  | Committed? | Status                      |
+| ------------- | ---------------------------------------------------------------------- | ---------- | --------------------------- |
+| `PRODUCT.md`  | `$impeccable teach` (interactive)                                      | Yes        | Pending — Phase 2 kickoff   |
+| `DESIGN.md`   | Curated synthesis (initially: ElevenLabs analysis; iterate from there) | Yes        | **Populated** — see ADR-012 |
+| `references/` | Curated subset of SkillUI screens                                      | Optional   | Empty                       |
 
 `PRODUCT.md` and `DESIGN.md` live at **repo root**, not under `docs/`, because that's where Impeccable's `load-context.mjs` script looks (case-insensitive).
 

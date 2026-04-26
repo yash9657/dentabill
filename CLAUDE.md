@@ -17,11 +17,12 @@ Full requirements live in `PRD.md` (root). **Do not re-read it every session** �
 5. `docs/SESSION_CONTEXT.md` — what just happened, what's next, open questions
 6. `docs/ENGINEERING_RULES.md` — code/test/git rules
 7. `docs/UX_RULES.md` — UI/UX standards
-8. `docs/ARCHITECTURE.md` — system topology, call lifecycle, package graph
-9. `docs/API_CONVENTIONS.md` — wire-level rules for the Fastify API
-10. `docs/SECURITY.md` — HIPAA/PHI inventory, threat model, branch protection
-11. `docs/CODEMAP.md` — navigable workspace index (auto-maintained)
-12. `PROGRESS.md` — human-friendly status report
+8. `DESIGN.md` (repo root) — working visual spec, inspired by ElevenLabs; consumed by Impeccable
+9. `docs/ARCHITECTURE.md` — system topology, call lifecycle, package graph
+10. `docs/API_CONVENTIONS.md` — wire-level rules for the Fastify API
+11. `docs/SECURITY.md` — HIPAA/PHI inventory, threat model, branch protection
+12. `docs/CODEMAP.md` — navigable workspace index (auto-maintained)
+13. `PROGRESS.md` — human-friendly status report
 
 Only fall back to `PRD.md` when these don't answer the question.
 
