@@ -1,16 +1,19 @@
 import type { Metadata } from 'next';
 import * as React from 'react';
 
-import { DashboardPageStub } from '../../../components/dashboard/index.js';
+import { DashboardEmptyState, SkeletonTable } from '../../../components/dashboard/index.js';
 
 export const metadata: Metadata = { title: 'Claims' };
 
 export default function DashboardClaimsPage(): React.ReactElement {
   return (
-    <DashboardPageStub
-      title="Claims"
-      nextTaskId="P2-T36 (empty state) and P2-T41 (real list)"
-      description="The claims list will live here once the API ships. From this view you will be able to filter by payer, status, and service date, and click through to a single claim's call history."
+    <DashboardEmptyState
+      eyebrow="Claims"
+      title="Bring in your open claims"
+      body="Once you upload a CSV from Dentrix, Eaglesoft, or Open Dental, every open claim shows up here ranked by aging, amount, and payer. The import flow ships in P2-T51; the live list and filters ship in P2-T41."
+      previewChildren={<SkeletonTable rows={6} columns={5} />}
+      primaryCta={{ label: 'Import claims', href: '/dashboard/claims/import' }}
+      secondaryCta={{ label: 'View documentation', href: '/security' }}
     />
   );
 }
