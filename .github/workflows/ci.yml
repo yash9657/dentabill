@@ -144,3 +144,73 @@ jobs:
 
       - name: Test (turbo)
         run: pnpm turbo run test
+
+  e2e:
+    name: E2E (Playwright + axe + visual)
+    runs-on: ubuntu-latest
+    needs: quality
+    timeout-minutes: 25
+
+    env:
+      NODE_ENV: test
+      # Disable Next.js telemetry in CI.
+      NEXT_TELEMETRY_DISABLED: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Cache Playwright browsers — keyed on the @playwright/test version so
+      # cache busts on upgrades. Without this, `playwright install` re-downloads
+      # ~150 MB on every CI run.
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: |
+          version=$(pnpm --filter @dentabill/web list --json --depth 0 @playwright/test \
+            | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const a=JSON.parse(s);const v=a[0]?.devDependencies?.["@playwright/test"]?.version;process.stdout.write(v||"")})')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @dentabill/web exec playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit case)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @dentabill/web exec playwright install-deps chromium
+
+      - name: Build Next.js app
+        run: pnpm --filter @dentabill/web build
+
+      - name: Run Playwright tests (chromium only on CI)
+        run: pnpm --filter @dentabill/web exec playwright test --project=chromium
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore
