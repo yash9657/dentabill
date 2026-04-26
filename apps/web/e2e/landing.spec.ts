@@ -62,6 +62,23 @@ test.describe('landing page (Phase 2 scaffold)', () => {
     expect(results.violations, 'axe violations on 404').toEqual([]);
   });
 
+  test('/about renders, is axe-clean, and links back to / and /contact', async ({
+    page,
+    makeAxeBuilder,
+    consoleErrors,
+  }) => {
+    const response = await page.goto('/about');
+    expect(response?.status(), '/about returns 200').toBe(200);
+
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(
+      /billing teams should not spend their day on hold/i,
+    );
+
+    const results = await makeAxeBuilder().analyze();
+    expect(results.violations, 'axe violations on /about').toEqual([]);
+    expect(consoleErrors, 'no console errors during /about render').toEqual([]);
+  });
+
   test('robots.txt and sitemap.xml are public', async ({ page }) => {
     const robots = await page.request.get('/robots.txt');
     expect(robots.status()).toBe(200);
