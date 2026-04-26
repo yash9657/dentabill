@@ -46,7 +46,7 @@ export function NewsletterSignupStub({ className }: NewsletterSignupStubProps): 
   if (submitted) {
     return (
       <p role="status" className={cn('text-body-small text-gray-dark', className)}>
-        Thanks — we&apos;ll keep you posted.
+        Thanks. We&apos;ll keep you posted.
       </p>
     );
   }
