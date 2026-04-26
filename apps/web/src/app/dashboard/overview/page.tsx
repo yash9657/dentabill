@@ -1,37 +1,73 @@
 import type { Metadata } from 'next';
 import * as React from 'react';
 
+import { OverviewEmptySection, OverviewStatStrip } from '../../../components/dashboard/index.js';
+import type { OverviewStat } from '../../../components/dashboard/index.js';
+
 /**
  * `/dashboard/overview` — the post-sign-in landing page.
  *
- * P2-T32 lands the empty shell so the layout, breadcrumbs, and
- * mobile drawer can be reviewed visually and exercised by e2e.
- * The real overview content (KPI summary, recent claims preview,
- * recent calls list — all with empty-state CTAs) lands with
- * P2-T35.
+ * Three blocks, in reading order:
  *
- * Keeping the placeholder copy spare on purpose: this page is the
- * first thing a freshly-onboarded biller sees, so when it ships
- * for real (T35) it should not have to compete with leftover
- * Phase-2-progress noise. Today it is a single sentence.
+ *   1. Stat strip. Calls today, queue depth, denials this week,
+ *      recovered amount. Em-dash placeholders on first load until
+ *      P2-T41 (claims) and Phase 3 (calls) wire the real numbers
+ *      in. The strip is one cohesive horizontal block, not a card
+ *      grid — Impeccable design law against the four-cards-in-a-
+ *      row template applies here.
+ *   2. Recent claims panel. Empty state with a "Import claims" CTA
+ *      pointing at the claims index until the import flow ships in
+ *      P2-T51.
+ *   3. Recent calls panel. Empty state explaining the call worker
+ *      is wired in Phase 3, with a CTA back to the calls index.
+ *
+ * The two panels stack on phones and tablets and reflow into a
+ * 2-up grid only above the lg breakpoint, so each panel keeps its
+ * full readable width on the dashboard's sidebar-shrunken content
+ * column.
  */
 export const metadata: Metadata = {
   title: 'Overview',
 };
 
+const HEADLINE_STATS: readonly OverviewStat[] = [
+  { label: 'Calls today', value: '—', caption: 'Phase 3 lights this up' },
+  { label: 'Queue depth', value: '—', caption: 'Pending follow-ups' },
+  { label: 'Denials this week', value: '—', caption: 'Across all payers' },
+  { label: 'Recovered', value: '—', caption: 'Lifetime, USD' },
+];
+
 export default function DashboardOverviewPage(): React.ReactElement {
   return (
-    <section aria-labelledby="overview-heading" className="max-w-3xl">
-      <h1
-        id="overview-heading"
-        className="font-display mb-3 text-[28px] font-light leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]"
-      >
-        Overview
-      </h1>
-      <p className="text-body text-gray-dark">
-        The dashboard shell is in place. Real content arrives with P2-T35: call activity, queue
-        depth, recent claims, and recovered amounts.
-      </p>
-    </section>
+    <div className="flex flex-col gap-8">
+      <header className="max-w-3xl">
+        <h1 className="font-display text-[28px] font-light leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]">
+          Welcome back
+        </h1>
+        <p className="text-body text-gray-dark mt-2">
+          A snapshot of what DentaBill is doing for your practice today. Numbers fill in the moment
+          claims start moving through the queue.
+        </p>
+      </header>
+
+      <OverviewStatStrip stats={HEADLINE_STATS} />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <OverviewEmptySection
+          eyebrow="Recent claims"
+          heading="Nothing in the queue yet"
+          body="Upload a CSV from Dentrix, Eaglesoft, or Open Dental and DentaBill will start prioritising follow-ups by aging, amount, and payer. The import flow ships in P2-T51."
+          ctaLabel="Open claims"
+          ctaHref="/dashboard/claims"
+        />
+        <OverviewEmptySection
+          eyebrow="Recent calls"
+          heading="No payer calls yet"
+          body="Once the call worker is live in Phase 3, every payer call DentaBill makes will appear here in chronological order with the claim it touched and the result."
+          ctaLabel="Open calls"
+          ctaHref="/dashboard/calls"
+        />
+      </div>
+    </div>
   );
 }
