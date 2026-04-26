@@ -1,0 +1,137 @@
+/*
+ * DentaBill Tailwind v4 preset.
+ *
+ * Aggregates the @theme tokens (DESIGN.md / ADR-013) plus DentaBill-specific
+ * @utility and @keyframes directives into one file. Apps import this once and
+ * get the full DentaBill design system:
+ *
+ *   @import "tailwindcss";
+ *   @import "@dentabill/ui/tailwind.preset.css";
+ *
+ * The consuming app installs `tailwindcss` and any plugins (e.g.
+ * `tw-animate-css` for shadcn primitives) in its own `package.json`.
+ *
+ * Token canon lives in `tokens.ts`; mirror in `theme.css`; this file extends
+ * neither — it only stacks @utilities on top.
+ */
+
+@import './theme.css';
+
+/* ─────────────────────────────────────────────────────────────────────
+ * keyframes
+ * ─────────────────────────────────────────────────────────────────── */
+
+/*
+ * The only motion the design system uses by default. Calm and predictable
+ * (ADR-013 / DESIGN.md "no bounce, no elastic"). Used by the active-call
+ * status indicator — the one place the teal accent appears.
+ */
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * @utility — DentaBill-specific compositions of token primitives.
+ *
+ * Authored as Tailwind v4 `@utility` so they participate in variants
+ * (`hover:`, `focus:`, `motion-safe:` etc.) and tree-shake automatically.
+ * ─────────────────────────────────────────────────────────────────── */
+
+/*
+ * The signature hairline edge — surfaces define themselves through the
+ * lightest possible touch (DESIGN.md §6). Use on cards that need an edge
+ * without a heavy 1px border.
+ */
+@utility hairline-edge {
+  box-shadow: var(--shadow-inset-border);
+}
+
+/*
+ * Multi-layer card stack from DESIGN.md depth Level 1.
+ * Use on prominent cards that need to feel slightly elevated.
+ */
+@utility shadow-card-layered {
+  box-shadow: var(--shadow-card-layered);
+}
+
+/*
+ * Status indicator pulse. Apply alongside `bg-status-active` for the
+ * `CALLING` / live-call dot (the only place the teal accent appears).
+ * Honors `prefers-reduced-motion` automatically via Tailwind's
+ * `motion-safe:` variant — wrap usage in `motion-safe:status-pulse`.
+ */
+@utility status-pulse {
+  animation: status-pulse 2s var(--ease-calm) infinite;
+}
+
+/*
+ * Skeleton shimmer for loading states. Achromatic per ADR-013;
+ * gradient lives entirely in the gray scale.
+ */
+@utility shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-gray-light) 0%,
+    var(--color-gray-light-alt) 50%,
+    var(--color-gray-light) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s var(--ease-calm) infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * @layer base — element resets that align with the design system.
+ *
+ * Kept minimal: only set what Tailwind v4's preflight doesn't already
+ * cover and what every DentaBill surface needs.
+ * ─────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  /* Force the base color tokens at the root so every descendant inherits
+   * them without explicit class names. Apps may override per-section. */
+  :where(html) {
+    background-color: var(--color-white);
+    color: var(--color-black);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Visible focus ring for keyboard nav (WCAG 2.2 AA, ADR-021). Never
+   * `outline: none` without a replacement. */
+  :where(:focus-visible) {
+    outline: 2px solid var(--color-ring-blue);
+    outline-offset: 2px;
+  }
+
+  /* Honor `prefers-reduced-motion` site-wide. Components that animate
+   * intentionally should opt in via the `motion-safe:` variant. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
