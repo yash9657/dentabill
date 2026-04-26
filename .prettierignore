@@ -7,6 +7,7 @@ coverage
 pnpm-lock.yaml
 *.tsbuildinfo
 .claude/state
+.claude/skills/impeccable
 DentaBill_AI_Technical_Plan.docx
 everything-claude-code-*.txt
 PRD.md

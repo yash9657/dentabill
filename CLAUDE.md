@@ -73,6 +73,7 @@ Invoke with `/<name>` in the chat:
 - `/codemap-update` — refresh `docs/CODEMAP.md` after structural changes
 - `/learn` — capture a non-obvious pattern to `docs/PATTERNS.md` mid-session
 - `/phase-complete` — end-of-session protocol (verify gates → update docs)
+- `impeccable` (third-party) — frontend design expertise: `craft`, `audit`, `critique`, `polish`, `harden`, `animate`, `colorize`, `typeset`, `layout`, `clarify`, `distill`, `bolder`, `quieter`, `delight`, `overdrive`, `optimize`, `adapt`, `extract`, `live`, `teach`, `document`, `shape`, `onboard`. Installed via `npx skills add pbakaus/impeccable` (locked in `skills-lock.json`). Required setup: a `PRODUCT.md` (and ideally `DESIGN.md`) at repo root before serious design work — run `$impeccable teach` to bootstrap them. Apache-2.0; see `.claude/skills/impeccable/SKILL.md`.
 
 ## Available agents
 
