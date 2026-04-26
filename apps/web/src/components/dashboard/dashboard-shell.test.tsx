@@ -1,10 +1,17 @@
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { DashboardShell } from './dashboard-shell.js';
 
 describe('<DashboardShell />', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
   it('renders the sidebar, topbar, and main content slots', () => {
     render(
       <DashboardShell
@@ -48,6 +55,17 @@ describe('<DashboardShell />', () => {
 
     await user.keyboard('{Escape}');
     expect(opener).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('hydrates the collapsed state from localStorage and exposes it on the aside', async () => {
+    window.localStorage.setItem('dentabill:dashboard:sidebar-collapsed', '1');
+    render(
+      <DashboardShell sidebar={<div />} topbar={<div />}>
+        <div />
+      </DashboardShell>,
+    );
+    const sidebar = await screen.findByRole('complementary', { name: /dashboard navigation/i });
+    expect(sidebar).toHaveAttribute('data-collapsed', 'true');
   });
 
   it('closes the drawer when the close button inside the sidebar is pressed', async () => {

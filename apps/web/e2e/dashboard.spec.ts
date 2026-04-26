@@ -40,6 +40,44 @@ test.describe('dashboard shell (P2-T32)', () => {
     expect(consoleErrors).toEqual([]);
   });
 
+  test('sidebar links navigate to each top-level dashboard route', async ({
+    page,
+    consoleErrors,
+  }) => {
+    await page.goto('/dashboard/overview');
+    const sidebar = page.getByRole('navigation', { name: /^sidebar$/i });
+
+    await sidebar.getByRole('link', { name: /claims/i }).click();
+    await expect(page).toHaveURL(/\/dashboard\/claims$/);
+    await expect(page.getByRole('heading', { level: 1, name: /claims/i })).toBeVisible();
+    await expect(sidebar.getByRole('link', { name: /claims/i })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    await sidebar.getByRole('link', { name: /reports/i }).click();
+    await expect(page).toHaveURL(/\/dashboard\/reports$/);
+    await expect(sidebar.getByRole('link', { name: /reports/i })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    expect(consoleErrors).toEqual([]);
+  });
+
+  test('desktop collapse toggle persists the preference across reloads', async ({ page }) => {
+    await page.goto('/dashboard/overview');
+    const sidebar = page.getByRole('complementary', { name: /dashboard navigation/i });
+    await expect(sidebar).toHaveAttribute('data-collapsed', 'false');
+
+    await page.getByRole('button', { name: /collapse sidebar/i }).click();
+    await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+
+    await page.reload();
+    const sidebarAfter = page.getByRole('complementary', { name: /dashboard navigation/i });
+    await expect(sidebarAfter).toHaveAttribute('data-collapsed', 'true');
+  });
+
   test('mobile hamburger opens the sidebar drawer and Escape closes it', async ({ page }) => {
     await page.setViewportSize({ width: 480, height: 844 });
     await page.goto('/dashboard/overview');
