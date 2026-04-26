@@ -32,7 +32,14 @@ test.describe('dashboard shell (P2-T32)', () => {
 
     await expect(page.getByRole('complementary', { name: /dashboard navigation/i })).toBeAttached();
     await expect(page.getByRole('navigation', { name: /breadcrumb/i })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1, name: /overview/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /welcome back/i })).toBeVisible();
+    await expect(page.getByRole('region', { name: /headline metrics/i })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 2, name: /nothing in the queue yet/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 2, name: /no payer calls yet/i }),
+    ).toBeVisible();
 
     const axeResults = await makeAxeBuilder().analyze();
     expect(axeResults.violations, 'axe violations on /dashboard/overview').toEqual([]);
