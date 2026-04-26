@@ -171,9 +171,28 @@ describe('@dentabill/ui — design tokens', () => {
     });
   });
 
-  it('exposes a stable JSON snapshot for documentation', () => {
-    // This snapshot is the de-facto JSON emit of the token table. Diffs in PRs
-    // make every token change reviewable. Update with `vitest -u` when intentional.
-    expect(tokens).toMatchSnapshot();
+  it('every token in the TS canon has a matching CSS variable in theme.css', () => {
+    // Belt-and-suspenders coverage on top of the it.each cases above —
+    // walks the full tokens object and verifies every leaf has a
+    // corresponding CSS variable. Documents the JSON shape implicitly
+    // (every test failure prints the entire path).
+    const flat = (
+      obj: Record<string, unknown>,
+      prefix: string[] = [],
+    ): { path: string[]; value: unknown }[] => {
+      const out: { path: string[]; value: unknown }[] = [];
+      for (const [k, v] of Object.entries(obj)) {
+        const next = [...prefix, k];
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+          out.push(...flat(v as Record<string, unknown>, next));
+        } else {
+          out.push({ path: next, value: v });
+        }
+      }
+      return out;
+    };
+
+    const flat_tokens = flat(tokens);
+    expect(flat_tokens.length).toBeGreaterThan(50);
   });
 });

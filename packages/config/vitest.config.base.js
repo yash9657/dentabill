@@ -15,7 +15,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     globals: false,
-    include: ['**/*.{test,spec}.ts'],
+    include: ['**/*.{test,spec}.{ts,tsx}'],
     exclude: ['**/dist/**', '**/node_modules/**', '**/.turbo/**'],
     coverage: {
       provider: 'v8',
@@ -27,8 +27,8 @@ export default defineConfig({
         lines: 80,
       },
       exclude: [
-        '**/*.test.ts',
-        '**/*.spec.ts',
+        '**/*.test.{ts,tsx}',
+        '**/*.spec.{ts,tsx}',
         '**/dist/**',
         '**/node_modules/**',
         '**/__fixtures__/**',
