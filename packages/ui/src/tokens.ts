@@ -134,16 +134,22 @@ export const tokens = {
       /** Code — Geist Mono. */
       mono: 'var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
     },
+    /**
+     * Numeric weights are documentation only — they are NOT emitted as
+     * `--font-weight-*` CSS vars because `--font-weight-display: 300` would
+     * generate a `font-display` utility that collides with the family token.
+     * Use Tailwind's built-in weight utilities instead, per the mapping below.
+     */
     weight: {
-      /** Hero display — ethereal, weight 200. */
+      /** Hero display — ethereal. Use `font-extralight` (Tailwind built-in). */
       displayHero: '200',
-      /** Section + card headings, weight 300. */
+      /** Section + card headings. Use `font-light` (Tailwind built-in). */
       display: '300',
-      /** Body, weight 400. */
+      /** Body. Use `font-normal` (Tailwind built-in). */
       body: '400',
-      /** Emphasized body, UI text, nav, buttons — weight 500. */
+      /** Emphasized body, UI text, nav, buttons. Use `font-medium` (Tailwind built-in). */
       bodyMedium: '500',
-      /** The one place type goes loud — uppercase CTA labels only. */
+      /** Uppercase CTA labels only. Use `font-bold` (Tailwind built-in). */
       bold: '700',
     },
     size: {
