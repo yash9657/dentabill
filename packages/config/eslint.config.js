@@ -32,6 +32,10 @@ export default tseslint.config(
       // service available — so linting them with the typed-checked rules
       // produces parse-error noise. They still go through prettier.
       '**/scripts/**/*.mjs',
+      // Tool configs that don't match the `.config.*` glob (Lighthouse,
+      // future similar). Same rationale as above — plain Node, no project
+      // service, prettier still applies.
+      '**/.lighthouserc.{cjs,js,mjs}',
       // Third-party Claude Code skill bundles — vendored, not authored here.
       '.claude/skills/impeccable/**',
     ],
