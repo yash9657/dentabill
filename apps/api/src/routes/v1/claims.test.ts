@@ -92,8 +92,13 @@ describe('/v1/claims (integration, real Postgres)', () => {
 
     const list = await server.inject({ method: 'GET', url: '/v1/claims', headers });
     expect(list.statusCode).toBe(200);
-    const listBody = list.json<{ claims: { id: string }[] }>();
-    expect(listBody.claims.map((c) => c.id)).toContain(createdBody.id);
+    const listBody = list.json<{
+      items: { id: string }[];
+      nextCursor: string | null;
+      hasMore: boolean;
+    }>();
+    expect(listBody.items.map((c) => c.id)).toContain(createdBody.id);
+    expect(listBody.hasMore).toBe(false);
   });
 
   it('writes an AuditLog row on every read', async () => {
@@ -146,7 +151,7 @@ describe('/v1/claims (integration, real Postgres)', () => {
       url: '/v1/claims',
       headers: headersA,
     });
-    const aIds = aListsOnlyA.json<{ claims: { id: string }[] }>().claims.map((c) => c.id);
+    const aIds = aListsOnlyA.json<{ items: { id: string }[] }>().items.map((c) => c.id);
     expect(aIds).toContain(idA);
     expect(aIds).not.toContain(idB);
 
@@ -205,5 +210,155 @@ describe('/v1/claims (integration, real Postgres)', () => {
 
     const refetched = await server.inject({ method: 'GET', url: `/v1/claims/${id}`, headers });
     expect(refetched.statusCode).toBe(404);
+  });
+
+  it('paginates the list with cursor + limit and walks every page', async () => {
+    const org = await makeOrg('Paged');
+    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+
+    // Seed 7 claims; we'll page in chunks of 3.
+    for (let i = 0; i < 7; i++) {
+      const res = await server.inject({
+        method: 'POST',
+        url: '/v1/claims',
+        headers,
+        payload: { ...VALID_CLAIM, claimNumber: `CL-PAGE-${String(i)}` },
+      });
+      expect(res.statusCode).toBe(201);
+    }
+
+    interface Page {
+      items: { id: string }[];
+      nextCursor: string | null;
+    }
+    const seen: string[] = [];
+    const fetchPage = async (cursor: string | null): Promise<Page> => {
+      const url = `/v1/claims?limit=3${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+      const response = await server.inject({ method: 'GET', url, headers });
+      expect(response.statusCode).toBe(200);
+      return response.json<Page>();
+    };
+
+    let next: string | null = null;
+    for (let safety = 0; safety < 5; safety++) {
+      const body: Page = await fetchPage(next);
+      seen.push(...body.items.map((c) => c.id));
+      next = body.nextCursor;
+      if (next === null) break;
+    }
+    expect(seen.length).toBe(7);
+    expect(new Set(seen).size).toBe(7);
+  });
+
+  it('filters by status and payer', async () => {
+    const org = await makeOrg('Filtered');
+    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+
+    await server.inject({
+      method: 'POST',
+      url: '/v1/claims',
+      headers,
+      payload: { ...VALID_CLAIM, claimNumber: 'CL-DELTA', payerCode: 'DELTA_DENTAL_PPO' },
+    });
+    await server.inject({
+      method: 'POST',
+      url: '/v1/claims',
+      headers,
+      payload: { ...VALID_CLAIM, claimNumber: 'CL-CIGNA', payerCode: 'CIGNA_DENTAL' },
+    });
+
+    const cignaOnly = await server.inject({
+      method: 'GET',
+      url: '/v1/claims?payer=CIGNA_DENTAL',
+      headers,
+    });
+    expect(cignaOnly.statusCode).toBe(200);
+    const cignaBody = cignaOnly.json<{ items: { claimNumber: string }[] }>();
+    expect(cignaBody.items.map((c) => c.claimNumber)).toEqual(['CL-CIGNA']);
+
+    const deltaOnly = await server.inject({
+      method: 'GET',
+      url: '/v1/claims?payer=DELTA_DENTAL_PPO&status=PENDING',
+      headers,
+    });
+    const deltaBody = deltaOnly.json<{ items: { claimNumber: string }[] }>();
+    expect(deltaBody.items.map((c) => c.claimNumber)).toEqual(['CL-DELTA']);
+  });
+
+  it('searches by claimNumber substring (case-insensitive)', async () => {
+    const org = await makeOrg('Searched');
+    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+
+    await server.inject({
+      method: 'POST',
+      url: '/v1/claims',
+      headers,
+      payload: { ...VALID_CLAIM, claimNumber: 'CL-FOO-001' },
+    });
+    await server.inject({
+      method: 'POST',
+      url: '/v1/claims',
+      headers,
+      payload: { ...VALID_CLAIM, claimNumber: 'CL-BAR-002' },
+    });
+
+    const hits = await server.inject({
+      method: 'GET',
+      url: '/v1/claims?search=foo',
+      headers,
+    });
+    expect(hits.statusCode).toBe(200);
+    const body = hits.json<{ items: { claimNumber: string }[] }>();
+    expect(body.items.map((c) => c.claimNumber)).toEqual(['CL-FOO-001']);
+  });
+
+  it('sorts by priority asc / desc', async () => {
+    const org = await makeOrg('Sorted');
+    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+
+    for (const [i, prio] of [10, 30, 20].entries()) {
+      const created = await server.inject({
+        method: 'POST',
+        url: '/v1/claims',
+        headers,
+        payload: { ...VALID_CLAIM, claimNumber: `CL-SORT-${String(i)}` },
+      });
+      const { id } = created.json<{ id: string }>();
+      await server.inject({
+        method: 'PATCH',
+        url: `/v1/claims/${id}`,
+        headers,
+        payload: { priority: prio },
+      });
+    }
+
+    const desc = await server.inject({
+      method: 'GET',
+      url: '/v1/claims?sort=priority&dir=desc',
+      headers,
+    });
+    const descBody = desc.json<{ items: { priority: number }[] }>();
+    expect(descBody.items.map((c) => c.priority)).toEqual([30, 20, 10]);
+
+    const asc = await server.inject({
+      method: 'GET',
+      url: '/v1/claims?sort=priority&dir=asc',
+      headers,
+    });
+    const ascBody = asc.json<{ items: { priority: number }[] }>();
+    expect(ascBody.items.map((c) => c.priority)).toEqual([10, 20, 30]);
+  });
+
+  it('rejects malformed cursors with a 400 VALIDATION_ERROR', async () => {
+    const org = await makeOrg('CursorBroken');
+    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+    const response = await server.inject({
+      method: 'GET',
+      url: '/v1/claims?cursor=not-base64-encoded-properly%21',
+      headers,
+    });
+    expect(response.statusCode).toBe(400);
+    const body = response.json<{ code?: string }>();
+    expect(body.code).toBe('VALIDATION_ERROR');
   });
 });
