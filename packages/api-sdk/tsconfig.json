@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@dentabill/config/tsconfig.lib.json",
+  "compilerOptions": {
+    // The SDK runs in both Node (workers, RSC) and the browser
+    // (apps/web client components). DOM lib provides global `fetch`,
+    // Headers, etc.; without it `typeof fetch` doesn't resolve.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
