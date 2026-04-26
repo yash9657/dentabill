@@ -29,8 +29,8 @@ export default function DashboardOverviewPage(): React.ReactElement {
         Overview
       </h1>
       <p className="text-body text-gray-dark">
-        The dashboard shell is in place. Real content — call activity, queue depth, recent claims,
-        and recovered amounts — arrives with P2-T35.
+        The dashboard shell is in place. Real content arrives with P2-T35: call activity, queue
+        depth, recent claims, and recovered amounts.
       </p>
     </section>
   );
