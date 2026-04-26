@@ -1,5 +1,5 @@
 import { audit, getOrgScopedDb, prisma } from '@dentabill/db';
-import { ApiError } from '@dentabill/types';
+import { ApiError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@dentabill/types';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -111,11 +111,85 @@ const ClaimPatchSchema = ClaimCreateSchema.partial().extend({
   priority: z.number().int().min(0).max(1_000_000).optional(),
 });
 
+/**
+ * Inline `paginatedResponseSchema` rather than the helper from
+ * `@dentabill/types`. The helper is a generic over `ZodTypeAny` and
+ * the cross-package zod v3 / v4 type bleed forces a `as never` at the
+ * call site that hides the actual response shape from the SDK
+ * generator. Inlining keeps the OpenAPI emit accurate.
+ */
 const ClaimsListResponseSchema = z.object({
-  claims: z.array(ClaimResponseSchema),
+  items: z.array(ClaimResponseSchema),
+  nextCursor: z.string().nullable(),
+  hasMore: z.boolean(),
 });
 
 const IdParamSchema = z.object({ id: z.string().min(1) });
+
+/**
+ * Cursor format: base64url("<sortValue>|<id>") so a tie on the sort
+ * field (`createdAt`, `priority`, etc.) still produces a deterministic
+ * page boundary. The id half breaks ties; sortValue is the field we
+ * order by so the client never sees the underlying date / number.
+ *
+ * Cursors are opaque to the client per `docs/API_CONVENTIONS.md` —
+ * round-trip them as-is, do not parse.
+ */
+function encodeCursor(sortValue: string, id: string): string {
+  return Buffer.from(`${sortValue}|${id}`, 'utf8').toString('base64url');
+}
+
+function decodeCursor(cursor: string): { sortValue: string; id: string } | null {
+  try {
+    const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
+    const sep = decoded.indexOf('|');
+    if (sep < 1 || sep === decoded.length - 1) return null;
+    return { sortValue: decoded.slice(0, sep), id: decoded.slice(sep + 1) };
+  } catch {
+    return null;
+  }
+}
+
+const SortFieldEnum = z.enum(['createdAt', 'serviceDate', 'priority', 'status']);
+const SortDirEnum = z.enum(['asc', 'desc']);
+
+const ClaimsListQuerySchema = z.object({
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+  sort: SortFieldEnum.default('createdAt'),
+  dir: SortDirEnum.default('desc'),
+  status: ClaimStatusEnum.optional(),
+  payer: PayerCodeEnum.optional(),
+  serviceDateFrom: z.iso.datetime().optional(),
+  serviceDateTo: z.iso.datetime().optional(),
+  // Search runs case-insensitively against `claimNumber` (the only
+  // PHI-safe text field on the Claim row). Patient names / DOB are
+  // never searchable from this surface.
+  search: z.string().min(1).max(120).optional(),
+});
+
+type ClaimsListQuery = z.infer<typeof ClaimsListQuerySchema>;
+
+interface ClaimRowForCursor {
+  id: string;
+  createdAt: Date;
+  serviceDate: Date;
+  priority: number;
+  status: ClaimResponse['status'];
+}
+
+function cursorValueOf(row: ClaimRowForCursor, field: ClaimsListQuery['sort']): string {
+  switch (field) {
+    case 'createdAt':
+      return row.createdAt.toISOString();
+    case 'serviceDate':
+      return row.serviceDate.toISOString();
+    case 'priority':
+      return row.priority.toString().padStart(11, '0');
+    case 'status':
+      return row.status;
+  }
+}
 
 /**
  * Serialise a Prisma `Claim` row into the wire shape. Decimals and
@@ -205,8 +279,10 @@ export function claimsRoutes(fastify: FastifyInstance): void {
     {
       preHandler: requireAuth,
       schema: {
-        description: 'List claims for the authenticated organization (most recent 100).',
+        description:
+          'List claims for the authenticated organization with cursor pagination, sortable by createdAt / serviceDate / priority / status, and filterable by status / payer / service-date range / claimNumber search.',
         security,
+        querystring: ClaimsListQuerySchema,
         response: { 200: ClaimsListResponseSchema },
       },
     },
@@ -214,23 +290,84 @@ export function claimsRoutes(fastify: FastifyInstance): void {
       const auth = request.auth;
       if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
       const { orgId } = auth;
+      const query = request.query as ClaimsListQuery;
+
+      const where: Record<string, unknown> = {};
+      if (query.status) where.status = query.status;
+      if (query.payer) where.payerCode = query.payer;
+      if (query.serviceDateFrom || query.serviceDateTo) {
+        const range: Record<string, Date> = {};
+        if (query.serviceDateFrom) range.gte = new Date(query.serviceDateFrom);
+        if (query.serviceDateTo) range.lte = new Date(query.serviceDateTo);
+        where.serviceDate = range;
+      }
+      if (query.search) {
+        // claimNumber is the only PHI-safe searchable text — the schema
+        // exposes nothing else free-form to the client. case-insensitive
+        // contains so partial matches feel natural in the UI.
+        where.claimNumber = { contains: query.search, mode: 'insensitive' };
+      }
+
+      // Cursor decoding. The cursor encodes (sortValue, id); we use it
+      // as a strict-greater / strict-less seek key. For descending
+      // sorts the predicate flips. We also break ties on `id` using
+      // the secondary order so two rows with the same sortValue are
+      // not rendered twice.
+      let cursorPredicate: Record<string, unknown> | null = null;
+      if (query.cursor) {
+        const decoded = decodeCursor(query.cursor);
+        if (!decoded) {
+          throw new ApiError('VALIDATION_ERROR', 'cursor is malformed.');
+        }
+        const seekField = query.sort;
+        const seekValue =
+          seekField === 'createdAt' || seekField === 'serviceDate'
+            ? new Date(decoded.sortValue)
+            : seekField === 'priority'
+              ? Number(decoded.sortValue)
+              : decoded.sortValue;
+        const op = query.dir === 'desc' ? 'lt' : 'gt';
+        cursorPredicate = {
+          OR: [
+            { [seekField]: { [op]: seekValue } },
+            { AND: [{ [seekField]: seekValue }, { id: { [op]: decoded.id } }] },
+          ],
+        };
+      }
+
+      const finalWhere = cursorPredicate === null ? where : { AND: [where, cursorPredicate] };
+
       const db = getOrgScopedDb(orgId);
       const rows = await db.claim.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 100,
+        where: finalWhere,
+        orderBy: [{ [query.sort]: query.dir }, { id: query.dir }],
+        take: query.limit + 1,
       });
+
+      const hasMore = rows.length > query.limit;
+      const page = hasMore ? rows.slice(0, query.limit) : rows;
+      const last = page.at(-1);
+      const nextCursor =
+        hasMore && last ? encodeCursor(cursorValueOf(last, query.sort), last.id) : null;
+
       await audit({
         action: 'claim.list',
         resourceType: 'Claim',
         resourceId: 'list',
         organizationId: orgId,
-        // userId intentionally omitted: Clerk's userId does not yet
-        // map to a DentaBill `User.id` until P2-T30 onboarding writes
-        // those rows. Audit captures org + action; user attribution
-        // wires up in Phase 4 with the user-management endpoints.
-        metadata: { count: rows.length, clerkUserId: auth.userId },
+        metadata: {
+          count: page.length,
+          clerkUserId: auth.userId,
+          sort: query.sort,
+          dir: query.dir,
+        },
       });
-      return { claims: rows.map(toResponse) };
+
+      return {
+        items: page.map(toResponse),
+        nextCursor,
+        hasMore,
+      };
     },
   );
 
