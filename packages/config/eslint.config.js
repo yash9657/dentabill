@@ -21,6 +21,9 @@ export default tseslint.config(
       '**/*.config.{js,mjs,cjs,ts}',
       '**/*.config.*.{js,mjs,cjs,ts}',
       '**/vitest.workspace.{ts,js,mjs}',
+      // Next.js auto-generates this on every dev/build — any local edits get
+      // wiped, so linting it would be a no-op or worse, a perpetual fail.
+      '**/next-env.d.ts',
       // Third-party Claude Code skill bundles — vendored, not authored here.
       '.claude/skills/impeccable/**',
     ],

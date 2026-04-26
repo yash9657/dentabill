@@ -1,6 +1,13 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@dentabill/config/tsconfig.app.json",
-  "include": ["src/**/*"],
+  "compilerOptions": {
+    "jsx": "preserve",
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["next-env.d.ts", "src/**/*", "test/**/*", ".next/types/**/*.ts"],
   "exclude": ["node_modules", "dist", ".next"]
 }
