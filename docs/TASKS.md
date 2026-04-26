@@ -58,7 +58,7 @@ Rules:
 
 ### W2 — Marketing site (11 tasks, ~22h)
 
-- [ ] **P2-T17** Marketing chrome (Header / Footer / CookieBanner / Newsletter)
+- [x] **P2-T17** Marketing chrome (Header / Footer / CookieBanner / Newsletter) — **this PR**
 - [ ] **P2-T18** Landing (`/`) — hero + waveform + value props + CTAs
 - [ ] **P2-T19** About (`/about`)
 - [ ] **P2-T20** Pricing (`/pricing`)
@@ -153,4 +153,5 @@ The cloud target decision lands here (per ADR-004): Railway vs AWS, Dockerfiles,
 - **P2-T8** Lighthouse CI budgets _(PR #27, 2026-04-25)_
 - **P2-T16** Web observability (web-vitals + ErrorBoundary + request-id) _(PR #28, 2026-04-25)_
 - **P2-T13** OpenAPI from Zod + `@dentabill/api-sdk` codegen _(PR #29, 2026-04-25)_
-- **P2-T14** TanStack Query v5 setup + CI hardening (vitest env defaults + Linux Playwright baseline) _(2026-04-25)_
+- **P2-T14** TanStack Query v5 setup + CI hardening (vitest env defaults + Linux Playwright baseline) _(PR #30, 2026-04-25)_
+- **P2-T17** Marketing chrome (Header / Footer / CookieBanner / NewsletterSignupStub) + `(marketing)` route group _(2026-04-25)_
