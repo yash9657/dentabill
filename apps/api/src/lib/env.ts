@@ -21,6 +21,14 @@ const envSchema = z.object({
    */
   CLERK_SECRET_KEY: z.string().optional(),
   CLERK_PUBLISHABLE_KEY: z.string().optional(),
+  /**
+   * Org-scoped DOB hashing secret per ADR-007 + `docs/SECURITY.md`.
+   * Combined with `organizationId` and the cleartext DOB to produce
+   * the on-disk `Claim.patientDOBHash`. Required in production —
+   * server.ts validates on boot. Defaulted in dev/test so the
+   * existing fixture-driven tests keep working.
+   */
+  DOB_HASH_SECRET: z.string().min(16).default('dev-only-dob-hash-secret-rotate-before-production'),
 });
 
 export type Env = z.infer<typeof envSchema>;
