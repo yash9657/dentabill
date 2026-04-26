@@ -2,4 +2,14 @@ import { defineConfig, mergeConfig } from 'vitest/config';
 
 import base from '@dentabill/config/vitest';
 
-export default mergeConfig(base, defineConfig({ test: { name: '@dentabill/api' } }));
+export default mergeConfig(
+  base,
+  defineConfig({
+    test: {
+      name: '@dentabill/api',
+      environment: 'node',
+      globals: false,
+      setupFiles: ['./vitest.setup.ts'],
+    },
+  }),
+);
