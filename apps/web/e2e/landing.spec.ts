@@ -1,20 +1,21 @@
 import { expect, test } from './fixtures.js';
 
 /**
- * Smoke + a11y + visual regression for the Phase 2 scaffold landing.
+ * Landing-specific Playwright suite. The per-page render / a11y /
+ * console-clean / OG-meta walk lives in `marketing.spec.ts`
+ * (P2-T27); this file holds the things that only make sense on the
+ * landing route:
  *
- * Three things this test gates on every PR:
- *   - The page renders and the hero copy is present.
- *   - axe-core finds zero WCAG 2.2 AA violations (ADR-021).
- *   - No `console.error` fires during navigation (regression guard for
- *     CSP misconfigurations, hydration mismatches, etc.).
- *
- * Visual regression has its own test below so it can be skipped or
- * masked independently of the smoke checks. Per-OS baselines are stored
- * under `e2e/__screenshots__/` and managed via `--update-snapshots`.
+ *   - CSP + security headers asserted on the initial response.
+ *   - Visual regression baseline.
+ *   - The `/contact` form end-to-end submission (it's the only
+ *     interactive path on the marketing site, so the assertion
+ *     stays here rather than living in the parameterised loop).
+ *   - The 404 path (root not-found.tsx) and the static
+ *     `/robots.txt` + `/sitemap.xml`.
  */
 test.describe('landing page (Phase 2 scaffold)', () => {
-  test('renders the hero, headers from middleware, and clean console', async ({
+  test('initial response carries strict CSP + clickjacking + nosniff headers', async ({
     page,
     consoleErrors,
   }) => {
@@ -30,28 +31,14 @@ test.describe('landing page (Phase 2 scaffold)', () => {
     );
     // CSP arrives as either Content-Security-Policy (prod) or
     // Content-Security-Policy-Report-Only (dev). Either is acceptable;
-    // the important property is that one of them is present.
+    // the important property is that one of them is present and that
+    // it has the per-request nonce.
     const csp =
       headers['content-security-policy'] ?? headers['content-security-policy-report-only'];
     expect(csp, 'CSP header present').toBeTruthy();
     expect(csp ?? '', 'CSP includes a script-src nonce').toMatch(/script-src[^;]*'nonce-/);
 
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/stop waiting on hold/i);
-    // The CTA pair appears in three places now (header pill, hero, closing
-    // CTA section). Assert "at least one of each is rendered and linked
-    // correctly" rather than chasing strict-mode locators.
-    const trialLinks = page.getByRole('link', { name: /start free trial/i });
-    expect(await trialLinks.count()).toBeGreaterThanOrEqual(2);
-    const demoLinks = page.getByRole('link', { name: /book a 20-minute demo/i });
-    expect(await demoLinks.count()).toBeGreaterThanOrEqual(1);
-
     expect(consoleErrors, 'no console errors during landing render').toEqual([]);
-  });
-
-  test('axe-core: 0 WCAG 2.2 AA violations on /', async ({ page, makeAxeBuilder }) => {
-    await page.goto('/');
-    const results = await makeAxeBuilder().analyze();
-    expect(results.violations, 'axe violations on landing').toEqual([]);
   });
 
   test('not-found page renders and stays a11y-clean', async ({ page, makeAxeBuilder }) => {
@@ -62,82 +49,11 @@ test.describe('landing page (Phase 2 scaffold)', () => {
     expect(results.violations, 'axe violations on 404').toEqual([]);
   });
 
-  test('/about renders, is axe-clean, and links back to / and /contact', async ({
-    page,
-    makeAxeBuilder,
-    consoleErrors,
-  }) => {
-    const response = await page.goto('/about');
-    expect(response?.status(), '/about returns 200').toBe(200);
-
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(
-      /billing teams should not spend their day on hold/i,
-    );
-
-    const results = await makeAxeBuilder().analyze();
-    expect(results.violations, 'axe violations on /about').toEqual([]);
-    expect(consoleErrors, 'no console errors during /about render').toEqual([]);
-  });
-
-  test('/pricing renders the three tiers and is axe-clean', async ({
-    page,
-    makeAxeBuilder,
-    consoleErrors,
-  }) => {
-    const response = await page.goto('/pricing');
-    expect(response?.status(), '/pricing returns 200').toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/pay per call/i);
-    await expect(page.getByRole('heading', { level: 3, name: /^starter$/i })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 3, name: /^professional$/i })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 3, name: /^enterprise$/i })).toBeVisible();
-    const results = await makeAxeBuilder().analyze();
-    expect(results.violations, 'axe violations on /pricing').toEqual([]);
-    expect(consoleErrors).toEqual([]);
-  });
-
-  test('/security renders the sub-processor table and is axe-clean', async ({
-    page,
-    makeAxeBuilder,
-    consoleErrors,
-  }) => {
-    const response = await page.goto('/security');
-    expect(response?.status(), '/security returns 200').toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/paid to call insurance/i);
-    await expect(page.getByRole('table')).toBeVisible();
-    const results = await makeAxeBuilder().analyze();
-    expect(results.violations, 'axe violations on /security').toEqual([]);
-    expect(consoleErrors).toEqual([]);
-  });
-
-  test('/privacy renders and is axe-clean', async ({ page, makeAxeBuilder, consoleErrors }) => {
-    const response = await page.goto('/privacy');
-    expect(response?.status()).toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/privacy policy/i);
-    const results = await makeAxeBuilder().analyze();
-    expect(results.violations, 'axe violations on /privacy').toEqual([]);
-    expect(consoleErrors).toEqual([]);
-  });
-
-  test('/terms renders and is axe-clean', async ({ page, makeAxeBuilder, consoleErrors }) => {
-    const response = await page.goto('/terms');
-    expect(response?.status()).toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/plain-english terms/i);
-    const results = await makeAxeBuilder().analyze();
-    expect(results.violations, 'axe violations on /terms').toEqual([]);
-    expect(consoleErrors).toEqual([]);
-  });
-
   test('/contact form submits and surfaces a 204 success state', async ({
     page,
-    makeAxeBuilder,
     consoleErrors,
   }) => {
-    const response = await page.goto('/contact');
-    expect(response?.status()).toBe(200);
-
-    const results = await makeAxeBuilder().analyze();
-    expect(results.violations, 'axe violations on /contact').toEqual([]);
-
+    await page.goto('/contact');
     await page.getByLabel(/your name/i).fill('Alex Garcia');
     await page.getByLabel(/work email/i).fill('alex@example.com');
     await page.getByLabel(/practice name/i).fill('Sunrise Family Dental');
@@ -156,51 +72,6 @@ test.describe('landing page (Phase 2 scaffold)', () => {
     expect(consoleErrors).toEqual([]);
   });
 
-  test('/faq renders, accordion expands, and is axe-clean', async ({
-    page,
-    makeAxeBuilder,
-    consoleErrors,
-  }) => {
-    const response = await page.goto('/faq');
-    expect(response?.status()).toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/questions we hear most/i);
-
-    // Native <details><summary> is accessible without JS; the test
-    // exercises the keyboard activation path.
-    const summary = page.getByText(/how long does setup take\?/i);
-    await summary.click();
-    await expect(page.getByText(/most practices are running on the same day/i)).toBeVisible();
-
-    const results = await makeAxeBuilder().analyze();
-    expect(results.violations, 'axe violations on /faq').toEqual([]);
-    expect(consoleErrors).toEqual([]);
-  });
-
-  test('/blog renders the empty state and is axe-clean', async ({
-    page,
-    makeAxeBuilder,
-    consoleErrors,
-  }) => {
-    const response = await page.goto('/blog');
-    expect(response?.status()).toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/no posts yet/i);
-    // Two Subscribe buttons render (empty-state CTA + footer newsletter
-    // both share `<NewsletterSignupStub>`). Scope to the empty-state region.
-    const emptyState = page.getByRole('region', { name: /first post lands in your inbox/i });
-    await expect(emptyState.getByRole('button', { name: /subscribe/i })).toBeVisible();
-    const results = await makeAxeBuilder().analyze();
-    expect(results.violations, 'axe violations on /blog').toEqual([]);
-    expect(consoleErrors).toEqual([]);
-  });
-
-  test('/blog/non-existent-slug renders the not-found page', async ({ page }) => {
-    // Next.js sometimes streams a 200 response while the rendered body is
-    // the not-found page (especially under route groups + dynamic params).
-    // We assert on the rendered content rather than the wire status.
-    await page.goto('/blog/this-post-does-not-exist');
-    await expect(page.getByText('404')).toBeVisible();
-  });
-
   test('robots.txt and sitemap.xml are public', async ({ page }) => {
     const robots = await page.request.get('/robots.txt');
     expect(robots.status()).toBe(200);
@@ -213,10 +84,11 @@ test.describe('landing page (Phase 2 scaffold)', () => {
 });
 
 /**
- * Visual regression. The screenshot baseline is committed alongside the
- * test under `__screenshots__/`. Authors update it intentionally with
- * `pnpm --filter @dentabill/web exec playwright test --update-snapshots`
- * (or `-u`) and the diff goes through code review like any other change.
+ * Visual regression. The screenshot baseline is committed alongside
+ * the test under `__screenshots__/`. Authors update it intentionally
+ * with `pnpm --filter @dentabill/web exec playwright test
+ * --update-snapshots` and the diff goes through code review like any
+ * other change.
  */
 test.describe('visual regression (Phase 2 scaffold)', () => {
   test('landing page snapshot', async ({ page }) => {
