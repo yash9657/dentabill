@@ -97,7 +97,7 @@ Rules:
 ### W6 — CSV ingestion (9 tasks, ~19.5h)
 
 - [ ] **P2-T43** `POST /v1/ingest/claims` upload endpoint
-- [ ] **P2-T44** Streaming CSV parser (Dentrix / Eaglesoft / Open Dental)
+- [ ] **P2-T44** Streaming CSV parser (Dentrix / Eaglesoft / Open Dental) — **this PR**
 - [x] **P2-T45** DOB hashing helper in `@dentabill/db` — _PR #57, 2026-04-26_
 - [x] **P2-T46** Payer-code lookup table in `packages/payer-ivr` — _PR #58, 2026-04-26_
 - [x] **P2-T47** Priority scoring helper in `@dentabill/db` — _PR #59, 2026-04-26_
