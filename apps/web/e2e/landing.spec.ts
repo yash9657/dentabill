@@ -37,8 +37,11 @@ test.describe('landing page (Phase 2 scaffold)', () => {
     expect(csp ?? '', 'CSP includes a script-src nonce').toMatch(/script-src[^;]*'nonce-/);
 
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/stop waiting on hold/i);
-    await expect(page.getByRole('link', { name: /start free trial/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /book demo/i })).toBeVisible();
+    // Two "Start free trial" pills exist (header + hero) since P2-T17 added
+    // the marketing chrome — scope to <main> for the hero CTA assertion.
+    const main = page.getByRole('main');
+    await expect(main.getByRole('link', { name: /start free trial/i })).toBeVisible();
+    await expect(main.getByRole('link', { name: /book demo/i })).toBeVisible();
 
     expect(consoleErrors, 'no console errors during landing render').toEqual([]);
   });

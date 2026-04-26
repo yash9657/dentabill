@@ -10,10 +10,14 @@ import * as React from 'react';
  * isn't loaded, this page reads in the system fallback; if Tailwind isn't
  * piped through, the layout collapses; if `@dentabill/ui` is broken, the
  * imports fail at build time.
+ *
+ * The marketing layout (`(marketing)/layout.tsx`) provides the sticky
+ * `<MarketingHeader>` + `<MarketingFooter>` + cookie notice; this page
+ * only renders the centre hero block.
  */
 export default function HomePage(): React.ReactElement {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-8 px-4 py-16">
+    <main className="mx-auto flex max-w-3xl flex-col items-center justify-center gap-8 px-4 py-24 sm:py-32">
       <HeroDisplay className="text-center">Stop waiting on hold with insurance.</HeroDisplay>
 
       <p className="text-body-large text-gray-dark max-w-xl text-center">
