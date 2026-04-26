@@ -9,5 +9,6 @@ export { CookieBanner, COOKIE_BANNER_STORAGE_KEY } from './cookie-banner.js';
 export { MarketingFooter } from './footer.js';
 export { MarketingHeader, MARKETING_NAV_LINKS } from './header.js';
 export { NewsletterSignupStub } from './newsletter-signup-stub.js';
+export { LegalDoc, type LegalDocProps } from './legal-doc.js';
 export { MarketingPageStub, type MarketingPageStubProps } from './page-stub.js';
 export { Wordmark, type WordmarkProps } from './wordmark.js';
