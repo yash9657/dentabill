@@ -25,7 +25,7 @@ import { cn } from '../lib/utils.js';
 const shadowCardVariants = cva('rounded-section p-4', {
   variants: {
     tone: {
-      neutral: 'bg-white shadow-card-layered',
+      neutral: 'shadow-card-layered bg-white',
       warm: 'bg-warm-stone/80 shadow-warm',
     },
     padding: {

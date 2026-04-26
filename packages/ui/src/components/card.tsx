@@ -16,7 +16,7 @@ export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
     return (
       <div
         ref={ref}
-        className={cn('rounded-card bg-white shadow-card-layered', className)}
+        className={cn('rounded-card shadow-card-layered bg-white', className)}
         {...props}
       />
     );
@@ -36,13 +36,15 @@ export const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<
 export const CardTitle = React.forwardRef<
   HTMLHeadingElement,
   React.HTMLAttributes<HTMLHeadingElement>
->(function CardTitle({ className, ...props }, ref) {
+>(function CardTitle({ className, children, ...props }, ref) {
   return (
     <h3
       ref={ref}
-      className={cn('font-display font-light text-card-heading leading-tight', className)}
+      className={cn('font-display text-card-heading font-light leading-tight', className)}
       {...props}
-    />
+    >
+      {children}
+    </h3>
   );
 });
 

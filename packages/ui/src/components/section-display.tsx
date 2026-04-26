@@ -24,7 +24,7 @@ export const SectionDisplay = React.forwardRef<HTMLHeadingElement, SectionDispla
       <Comp
         ref={ref}
         className={cn(
-          'text-section-heading font-display font-light text-balance text-black',
+          'text-section-heading font-display text-balance font-light text-black',
           className,
         )}
         {...props}

@@ -16,7 +16,7 @@ export default function HomePage(): React.ReactElement {
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-8 px-4 py-16">
       <HeroDisplay className="text-center">Stop waiting on hold with insurance.</HeroDisplay>
 
-      <p className="text-body-large max-w-xl text-center text-gray-dark">
+      <p className="text-body-large text-gray-dark max-w-xl text-center">
         DentaBill calls payers, navigates IVRs, and returns structured claim status to your billing
         team — so your front desk gets time back.
       </p>

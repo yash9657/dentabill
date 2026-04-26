@@ -28,7 +28,7 @@ export const HeroDisplay = React.forwardRef<HTMLHeadingElement, HeroDisplayProps
     return (
       <Comp
         ref={ref}
-        className={cn('text-hero font-display font-extralight text-balance text-black', className)}
+        className={cn('text-hero font-display text-balance font-extralight text-black', className)}
         {...props}
       />
     );
