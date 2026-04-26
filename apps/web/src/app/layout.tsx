@@ -4,6 +4,7 @@ import type { Metadata, Viewport } from 'next';
 import { Geist_Mono, Inter } from 'next/font/google';
 import * as React from 'react';
 
+import { Providers } from '../components/providers.js';
 import { WebVitalsReporter } from '../components/web-vitals-reporter.js';
 import { getServerRequestId, REQUEST_ID_META_NAME } from '../lib/observability/request-id.js';
 
@@ -129,7 +130,7 @@ export default async function RootLayout({
       </head>
       <body className="bg-white text-black antialiased">
         <WebVitalsReporter />
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

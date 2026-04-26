@@ -1,7 +1,37 @@
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { config } from 'dotenv';
 
+/**
+ * Test-time environment for `@dentabill/api`.
+ *
+ * Loading order:
+ *   1. Read `.env` at the repo root if it exists (local dev convenience).
+ *   2. Apply test-default placeholders for any required env that's still
+ *      missing — `DATABASE_URL`, `REDIS_URL`, `NEXT_PUBLIC_APP_URL`. The
+ *      Zod env loader (`src/lib/env.ts`) only checks shape, not
+ *      reachability, so dummy URLs are sufficient — `server.inject()`
+ *      never opens a real socket.
+ *
+ * Without this, CI test jobs that don't export every variable (the `test`
+ * job in `.github/workflows/ci.yml` exports `DATABASE_URL` and
+ * `REDIS_URL` but not `NEXT_PUBLIC_APP_URL`) crash at `getEnv()` before
+ * any `it()` body runs. Seeding defaults here keeps tests hermetic — they
+ * don't depend on a populated `.env` or on CI YAML staying in sync with
+ * new schema fields.
+ */
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
+
+const TEST_DEFAULTS: Readonly<Record<string, string>> = {
+  NODE_ENV: 'test',
+  DATABASE_URL: 'postgres://test@localhost:5432/test',
+  REDIS_URL: 'redis://localhost:6379',
+  NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
+  NEXT_PUBLIC_API_URL: 'http://localhost:3001',
+};
+
+for (const [key, value] of Object.entries(TEST_DEFAULTS)) {
+  process.env[key] ??= value;
+}
