@@ -95,6 +95,21 @@ export default tseslint.config(
       'no-console': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
+      // Tests routinely mock browser globals via shallow spread / partial
+      // copies; the strict-checked rule fires on every navigator shim.
+      '@typescript-eslint/no-misused-spread': 'off',
+      // Tests use `vi.fn((..._: unknown[]) => …)` to type a mock without
+      // referencing the args. Underscore-prefix is the conventional
+      // "intentionally unused" signal.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      // `async () => …` test fixtures sometimes have no awaits but stay
+      // async for signature consistency.
+      '@typescript-eslint/require-await': 'off',
+      // `vi.fn().mock.calls[0]` is `unknown[][]`; destructuring needs `any`.
+      '@typescript-eslint/no-unsafe-assignment': 'off',
     },
   },
   {
