@@ -16,6 +16,7 @@ import {
 
 import { getEnv } from './lib/env.js';
 import { registerAuthPlugin } from './plugins/auth.js';
+import { claimsRoutes } from './routes/v1/claims.js';
 import { healthRoutes } from './routes/v1/health.js';
 import { meRoutes } from './routes/v1/me.js';
 
@@ -163,6 +164,7 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   // Register health routes
   await fastify.register(healthRoutes, { prefix: '/v1' });
   await fastify.register(meRoutes, { prefix: '/v1' });
+  await fastify.register(claimsRoutes, { prefix: '/v1' });
 
   return fastify;
 }

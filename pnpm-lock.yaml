@@ -47,6 +47,9 @@ importers:
       '@clerk/fastify':
         specifier: ^3.1.19
         version: 3.1.19(fastify@5.8.5)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@dentabill/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@dentabill/logger':
         specifier: workspace:*
         version: link:../../packages/logger
