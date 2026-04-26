@@ -15,7 +15,9 @@ import {
 } from 'fastify-type-provider-zod';
 
 import { getEnv } from './lib/env.js';
+import { registerAuthPlugin } from './plugins/auth.js';
 import { healthRoutes } from './routes/v1/health.js';
+import { meRoutes } from './routes/v1/me.js';
 
 export interface BuildServerOptions {
   /**
@@ -149,8 +151,18 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
     });
   });
 
+  // Authentication plugin — Clerk in production, header-bypass in
+  // dev/test. Registered before route modules so they can reference
+  // the returned `requireAuth` preHandler. The returned object is
+  // decorated onto the instance (`fastify.auth`) so route modules
+  // pulled in via `fastify.register(...)` can access it without
+  // threading the preHandler through every plugin signature.
+  const authExports = await registerAuthPlugin(fastify);
+  fastify.decorate('auth', authExports);
+
   // Register health routes
   await fastify.register(healthRoutes, { prefix: '/v1' });
+  await fastify.register(meRoutes, { prefix: '/v1' });
 
   return fastify;
 }

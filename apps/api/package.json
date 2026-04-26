@@ -19,6 +19,7 @@
     "gen:openapi": "tsx scripts/dump-openapi.mts"
   },
   "dependencies": {
+    "@clerk/fastify": "^3.1.19",
     "@dentabill/logger": "workspace:*",
     "@dentabill/types": "workspace:*",
     "@fastify/cors": "^11.0.0",

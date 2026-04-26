@@ -12,6 +12,15 @@ const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().includes('://').min(1),
   NEXT_PUBLIC_API_URL: z.string().includes('://').optional(),
   API_CORS_ORIGINS: z.string().default(''),
+  /**
+   * Clerk authentication. Both keys are optional in dev / test so the
+   * API boots without provisioned Clerk keys; the auth plugin reads
+   * the same `hasClerkKeys` gate the web side uses and falls back to
+   * a test-only header bypass when they are absent. Required in
+   * production — server.ts validates that explicitly at boot.
+   */
+  CLERK_SECRET_KEY: z.string().optional(),
+  CLERK_PUBLISHABLE_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
