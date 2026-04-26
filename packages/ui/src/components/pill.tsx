@@ -1,0 +1,83 @@
+import { Slot } from '@radix-ui/react-slot';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { ArrowRight } from 'lucide-react';
+import * as React from 'react';
+
+import { cn } from '../lib/utils.js';
+
+/**
+ * Pill — the brand-signature CTA shape from DESIGN.md §4. Three variants
+ * mirror the ElevenLabs treatment exactly:
+ *
+ *   • `black`        Pure black pill, white text — primary CTA in headers
+ *                    and hero blocks.
+ *   • `whiteShadow`  White pill with the layered card shadow — secondary
+ *                    CTA on white surfaces.
+ *   • `warmStone`    The signature translucent warm-stone CTA with the
+ *                    warm-tinted shadow and asymmetric padding (more right
+ *                    than left), creating a tactile/physical quality.
+ *
+ * **Pill vs Button.** Both exist deliberately. Button is the shadcn-style
+ * `<button>` primitive used inside forms and interactive surfaces. Pill is
+ * a *navigation* primitive — defaults to `<a>` because that's how pills
+ * appear in our marketing chrome (hero CTA, sticky header CTA, footer
+ * "Get started"). Use `asChild` to drop in a Next.js `<Link>` so the
+ * router takes over. If you need a form-submitting pill, use Button with
+ * `variant="primary"` instead.
+ *
+ * Optional `withArrow` renders a trailing → glyph (lucide ArrowRight),
+ * matching the ElevenLabs hero pattern. Achromatic by design — the arrow
+ * inherits the pill's text color.
+ */
+const pillVariants = cva(
+  'inline-flex items-center justify-center gap-1 font-body font-medium transition-colors duration-standard ease-calm disabled:pointer-events-none disabled:opacity-50',
+  {
+    variants: {
+      variant: {
+        black: 'bg-black text-white hover:bg-black/90 rounded-pill',
+        whiteShadow: 'bg-white text-black shadow-card hover:bg-gray-light/50 rounded-pill',
+        warmStone:
+          'bg-warm-stone/80 text-black rounded-warm-button shadow-warm hover:bg-warm-stone',
+      },
+      size: {
+        default: 'h-10 px-3.5 text-button',
+        sm: 'h-8 px-2 text-small',
+        lg: 'h-12 px-2.5 text-button',
+        warm: 'h-11 pl-1.5 pr-2.5 text-button',
+      },
+    },
+    defaultVariants: {
+      variant: 'black',
+      size: 'default',
+    },
+  },
+);
+
+export interface PillProps
+  extends
+    Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'color'>,
+    VariantProps<typeof pillVariants> {
+  asChild?: boolean;
+  withArrow?: boolean;
+}
+
+export const Pill = React.forwardRef<HTMLAnchorElement, PillProps>(function Pill(
+  { className, variant, size, asChild = false, withArrow = false, children, ...props },
+  ref,
+) {
+  const Comp = asChild ? Slot : 'a';
+  return (
+    <Comp ref={ref} className={cn(pillVariants({ variant, size, className }))} {...props}>
+      {asChild ? (
+        children
+      ) : (
+        <>
+          {children}
+          {withArrow ? <ArrowRight aria-hidden className="h-4 w-4" /> : null}
+        </>
+      )}
+    </Comp>
+  );
+});
+
+export { pillVariants };
