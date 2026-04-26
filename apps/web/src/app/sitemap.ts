@@ -35,11 +35,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly',
       priority: 0.9,
     },
+    {
+      url: `${siteUrl}/security`,
+      lastModified,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
     // The remaining marketing routes are committed as `<MarketingPageStub>`
-    // pages today (P2-T21 to P2-T26 will replace them with real content).
+    // pages today (P2-T22 to P2-T26 will replace them with real content).
     // They're listed here so internal links in the chrome don't 404 for
     // crawlers while we're filling them in.
-    ...(['security', 'privacy', 'terms', 'contact', 'faq', 'blog'] as const).map((slug) => ({
+    ...(['privacy', 'terms', 'contact', 'faq', 'blog'] as const).map((slug) => ({
       url: `${siteUrl}/${slug}`,
       lastModified,
       changeFrequency: 'monthly' as const,
