@@ -18,6 +18,7 @@
     "lighthouse": "lhci autorun --config=.lighthouserc.cjs"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.2.7",
     "@dentabill/types": "workspace:*",
     "@dentabill/ui": "workspace:*",
     "@hookform/resolvers": "3.9.1",
