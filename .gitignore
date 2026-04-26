@@ -38,6 +38,12 @@ prisma/migrations/dev.db*
 # Claude Code runtime state (counters, last-compaction marker, scheduled-task locks)
 .claude/state/
 .claude/scheduled_tasks.lock
+.claude/worktrees/
+
+# Playwright artifacts
+test-results/
+playwright-report/
+playwright/.cache/
 
 # Reference materials (kept locally, not version-controlled)
 DentaBill_AI_Technical_Plan.docx
