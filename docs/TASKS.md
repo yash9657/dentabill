@@ -101,10 +101,10 @@ Rules:
 - [x] **P2-T45** DOB hashing helper in `@dentabill/db` — _PR #57, 2026-04-26_
 - [x] **P2-T46** Payer-code lookup table in `packages/payer-ivr` — _PR #58, 2026-04-26_
 - [x] **P2-T47** Priority scoring helper in `@dentabill/db` — _PR #59, 2026-04-26_
-- [ ] **P2-T48** Bulk insert with idempotency-key — **this PR**
+- [x] **P2-T48** Bulk insert with idempotency-key — _PR #63, 2026-04-26_ — **this PR**
 - [x] **P2-T49** Ingestion integration test (3 sample CSVs, cross-org isolation) — _bundled into T48_
 - [x] **P2-T50** Sample CSV fixtures — _PR #60, 2026-04-26_
-- [ ] **P2-T51** `/dashboard/claims/import` upload UI
+- [ ] **P2-T51** `/dashboard/claims/import` upload UI — **this PR**
 
 ### W7 — Closeout (4 tasks, ~4h)
 
