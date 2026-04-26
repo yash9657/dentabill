@@ -1,0 +1,25 @@
+/*
+ * apps/web global stylesheet. Imported once from the root layout (RSC).
+ *
+ * Two imports, deliberately ordered:
+ *   1. tailwindcss               — provides @theme, @utility, preflight.
+ *   2. @dentabill/ui/tailwind.preset.css
+ *      — token canon (theme.css), DentaBill @utilities (status-pulse,
+ *        shimmer, hairline-edge, shadow-card-layered), and the @layer
+ *        base resets (html font / focus-visible ring / reduced-motion).
+ *
+ * Below the imports we alias `--font-inter-display` to `--font-inter`.
+ * Per ADR-013, "Inter Display" is just Inter at weights 200/300 — a
+ * naming convention, not a separate font file. next/font/google's
+ * Inter loader sets `--font-inter` on <html>; the alias makes the
+ * `font-display` utility (which our theme.css points at
+ * `var(--font-inter-display)`) resolve to the same loaded variable
+ * font without doubling the network cost.
+ */
+
+@import 'tailwindcss';
+@import '@dentabill/ui/tailwind.preset.css';
+
+:root {
+  --font-inter-display: var(--font-inter);
+}
