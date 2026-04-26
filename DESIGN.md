@@ -4,17 +4,13 @@ Working visual spec for DentaBill, inspired by [ElevenLabs](https://elevenlabs.i
 
 ## DentaBill notes (read first)
 
-The body of this document is a faithful capture of the ElevenLabs visual language. Three places where DentaBill diverges or has not yet decided:
+The body of this document is a faithful capture of the ElevenLabs visual language. Three places where DentaBill diverges. Items 1 and 2 were locked by ADR-013 in P2-T0; item 3 is ongoing.
 
-1. **Fonts (open before Phase 2 starts).** Waldenburg is a commercial font from Lineto (~€500+ license). We are not licensing it for Phase 2. Pick one of the following before the first UI task lands:
-   - **Recommended free substitute:** [Inter Display](https://rsms.me/inter/) at weight 200/300, with letter-spacing tightened to `-0.96px` at hero sizes. Same humanist geometry, openly licensed (OFL), already in our font stack. The "lightness as the brand" rule still works.
-   - **Alternative:** [Manrope](https://fonts.google.com/specimen/Manrope) ExtraLight (200) or Light (300). Slightly more geometric, also free.
-   - **Do not** pick a generic Google sans-serif (Open Sans Light, Lato Light) — they read as "default SaaS" and lose the ethereal quality that makes the system work.
-   - Inter (body/UI) and Geist Mono (code) stay as specified — both are open-source.
+1. **Fonts — locked.** Inter weight 200 (hero) and 300 (section / card headings) replaces Waldenburg, with letter-spacing `−0.96px` at 48px hero sizes. Inter at 400/500 handles body and UI, Geist Mono handles code. See ADR-013. Inter is OFL-licensed and already in the `next/font/google` stack via `apps/web/src/app/layout.tsx`.
 
-2. **Brand color (open).** ElevenLabs is achromatic on purpose. DentaBill could follow that strictly (reads editorial/serious — fits HIPAA trust narrative) **or** introduce one tightly-rationed accent for live-call status (e.g., a calm muted teal `oklch(0.78 0.04 200)` for "call in progress", a warm amber for "queued", muted red for "denial"). Decision should land alongside `apps/web` scaffolding (P2-T1).
+2. **Brand color — locked.** Achromatic + warm-stone, plus exactly **one** muted teal status accent (`oklch(0.78 0.04 200)`) used only for `CALLING` and live-call indicators. All other status badges are achromatic — a dot + label, weight + warm-stone shadow do the differentiating. The PRD §7 rainbow palette (gray / blue / yellow / green / red / orange) is superseded by ADR-013. Status dots are emitted by `@dentabill/ui`'s `<StatusDot>` primitive — every status surface in the app calls through that one component so the rule is enforced in code, not just in this doc.
 
-3. **PHI on screen — non-negotiable constraint not present in ElevenLabs.** Their hero shows audio waveforms with no privacy concern. Ours will show call lists, claim statuses, and — eventually — call playback. **Patient names, DOB, SSN, member IDs never appear in screenshots, gradient fills, demo modes, or empty-state mockups.** Use synthetic data with obviously-fake names (`Acme Dental`, `Smile Patient #001`). This is enforced at the runtime layer by `@dentabill/logger`'s redaction; the design layer should not reintroduce it.
+3. **PHI on screen — non-negotiable constraint not present in ElevenLabs.** Their hero shows audio waveforms with no privacy concern. Ours will show call lists, claim statuses, and — eventually — call playback. **Patient names, DOB, SSN, member IDs never appear in screenshots, gradient fills, demo modes, or empty-state mockups.** Use synthetic data with obviously-fake names (`Acme Dental`, `Smile Patient #001`). DOB is stored on disk only as `patientDOBHash` (T45) + last-4 of birth year — never in cleartext. This is enforced at the runtime layer by `@dentabill/logger`'s redaction; the design layer should not reintroduce it.
 
 Composes with our other design tooling per `docs/DESIGN_TOOLING.md`:
 
@@ -80,12 +76,12 @@ What makes ElevenLabs distinctive is its multi-layered shadow system. Rather tha
 
 ### Font families
 
-| Role         | Specified font (ElevenLabs)   | DentaBill substitute (free)                                                |
-| ------------ | ----------------------------- | -------------------------------------------------------------------------- |
-| Display      | `Waldenburg` (commercial)     | `Inter Display` weight 200–300 OR `Manrope` 200–300 — final pick TBD       |
-| Display Bold | `WaldenburgFH` (commercial)   | `Inter` weight 700 with `text-transform: uppercase` — final pick TBD       |
-| Body / UI    | `Inter`                       | `Inter` (unchanged, OFL)                                                   |
-| Monospace    | `Geist Mono` / `ui-monospace` | `Geist Mono` (unchanged, MIT) with `ui-monospace, SFMono-Regular` fallback |
+| Role         | Specified font (ElevenLabs)   | DentaBill final (locked by ADR-013)                                                 |
+| ------------ | ----------------------------- | ----------------------------------------------------------------------------------- |
+| Display      | `Waldenburg` (commercial)     | `Inter` weight 200 (hero) / 300 (sections + cards), letter-spacing −0.96px @ 48px   |
+| Display Bold | `WaldenburgFH` (commercial)   | `Inter` weight 700 with `text-transform: uppercase` — used sparingly for CTA labels |
+| Body / UI    | `Inter`                       | `Inter` weights 400 / 500 (unchanged, OFL)                                          |
+| Monospace    | `Geist Mono` / `ui-monospace` | `Geist Mono` (unchanged, MIT) with `ui-monospace, SFMono-Regular` fallback          |
 
 ### Hierarchy
 
