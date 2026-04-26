@@ -3,6 +3,8 @@ import { ApiError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@dentabill/types';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { isValidClaimTransition } from '../../lib/claim-state.js';
+
 /**
  * `/v1/claims` — basic CRUD on Claim rows (P2-T38).
  *
@@ -424,9 +426,24 @@ export function claimsRoutes(fastify: FastifyInstance): void {
       const body = request.body as z.infer<typeof ClaimPatchSchema>;
 
       const db = getOrgScopedDb(orgId);
-      const existing = await db.claim.findFirst({ where: { id }, select: { id: true } });
+      const existing = await db.claim.findFirst({
+        where: { id },
+        select: { id: true, status: true },
+      });
       if (!existing) {
         throw new ApiError('NOT_FOUND', 'Claim not found in your organization.');
+      }
+
+      // State-machine validation. A status change is only accepted
+      // when the (existing.status, body.status) pair is permitted by
+      // the table in `claim-state.ts`. Self-transitions are allowed
+      // so a PATCH that echoes the current status (alongside, say, a
+      // priority bump) is not rejected.
+      if (body.status && !isValidClaimTransition(existing.status, body.status)) {
+        throw new ApiError(
+          'INVALID_STATE_TRANSITION',
+          `Cannot transition claim from ${existing.status} to ${body.status}.`,
+        );
       }
 
       const data: Record<string, unknown> = {

@@ -361,4 +361,90 @@ describe('/v1/claims (integration, real Postgres)', () => {
     const body = response.json<{ code?: string }>();
     expect(body.code).toBe('VALIDATION_ERROR');
   });
+
+  it('rejects illegal state-machine jumps with 409 INVALID_STATE_TRANSITION', async () => {
+    const org = await makeOrg('StateJump');
+    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+
+    const created = await server.inject({
+      method: 'POST',
+      url: '/v1/claims',
+      headers,
+      payload: VALID_CLAIM,
+    });
+    const { id } = created.json<{ id: string }>();
+
+    // PENDING -> CALLING is not allowed (must go through IN_QUEUE).
+    const skipped = await server.inject({
+      method: 'PATCH',
+      url: `/v1/claims/${id}`,
+      headers,
+      payload: { status: 'CALLING' },
+    });
+    expect(skipped.statusCode).toBe(409);
+    const skipBody = skipped.json<{ code?: string; message?: string }>();
+    expect(skipBody.code).toBe('INVALID_STATE_TRANSITION');
+    expect(skipBody.message).toContain('PENDING');
+    expect(skipBody.message).toContain('CALLING');
+  });
+
+  it('blocks transitions out of terminal states (RESOLVED, WRITTEN_OFF)', async () => {
+    const org = await makeOrg('Terminal');
+    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+
+    const created = await server.inject({
+      method: 'POST',
+      url: '/v1/claims',
+      headers,
+      payload: VALID_CLAIM,
+    });
+    const { id } = created.json<{ id: string }>();
+
+    // Walk PENDING -> IN_QUEUE -> CALLING -> COMPLETED -> RESOLVED.
+    for (const next of ['IN_QUEUE', 'CALLING', 'COMPLETED', 'RESOLVED'] as const) {
+      const step = await server.inject({
+        method: 'PATCH',
+        url: `/v1/claims/${id}`,
+        headers,
+        payload: { status: next },
+      });
+      expect(step.statusCode, `transition to ${next}`).toBe(200);
+    }
+
+    const reopen = await server.inject({
+      method: 'PATCH',
+      url: `/v1/claims/${id}`,
+      headers,
+      payload: { status: 'IN_QUEUE' },
+    });
+    expect(reopen.statusCode).toBe(409);
+    expect(reopen.json<{ code?: string }>().code).toBe('INVALID_STATE_TRANSITION');
+  });
+
+  it('allows self-transitions when other fields change', async () => {
+    const org = await makeOrg('SelfTransition');
+    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+
+    const created = await server.inject({
+      method: 'POST',
+      url: '/v1/claims',
+      headers,
+      payload: VALID_CLAIM,
+    });
+    const { id } = created.json<{ id: string }>();
+
+    // Echoing the current status (PENDING) alongside a priority bump
+    // should not trip state-machine validation.
+    const echo = await server.inject({
+      method: 'PATCH',
+      url: `/v1/claims/${id}`,
+      headers,
+      payload: { status: 'PENDING', priority: 75 },
+    });
+    expect(echo.statusCode).toBe(200);
+    expect(echo.json<{ status: string; priority: number }>()).toMatchObject({
+      status: 'PENDING',
+      priority: 75,
+    });
+  });
 });

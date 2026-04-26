@@ -2,30 +2,30 @@
 
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
-**Last updated:** 2026-04-25
-**Current phase:** Phase 2 — UI + API + Ingestion **(in progress — 17/55 tasks done; W1 foundation gates 16/16 ✓)**.
-**Next task:** **P2-T17** — Marketing chrome (Header / Footer / CookieBanner / NewsletterSignupStub) — kicks off W2 marketing site.
-**In progress:** Nothing.
+**Last updated:** 2026-04-26
+**Current phase:** Phase 2 — UI + API + Ingestion **(in progress — 39/55 tasks done; W1 ✓ W2 ✓ W3 ✓ W4 ✓ W5 50% (3/6))**.
+**Next task:** **P2-T40** — claim-state machine + state-validated PATCH; PR open shortly.
+**In progress:** P2-T40 (`phase-2/api-claim-state`) — state-machine module, unit tests, integration tests for INVALID_STATE_TRANSITION 409.
 
 ---
 
 ## Phase status
 
-| Phase | Name                      | Status                                                                                           |
-| ----- | ------------------------- | ------------------------------------------------------------------------------------------------ |
-| 1     | Foundations               | **Complete** (12 of 12 tasks done, merged via PRs #1–#13)                                        |
-| 2     | UI + API + Ingestion      | **In progress** — 17 of 55 tasks done; W1 foundation gates complete (PRs #14–#21, #23–#29 + T14) |
-| 3     | Queue + Voice             | Queued                                                                                           |
-| 4     | Intelligence + Realtime   | Queued                                                                                           |
-| 5     | Deployment + cloud target | Queued (cloud decision lives here per ADR-004)                                                   |
+| Phase | Name                      | Status                                                                                                    |
+| ----- | ------------------------- | --------------------------------------------------------------------------------------------------------- |
+| 1     | Foundations               | **Complete** (12 of 12 tasks done, merged via PRs #1–#13)                                                 |
+| 2     | UI + API + Ingestion      | **In progress** — 39 of 55 tasks done; W1 + W2 + W3 + W4 complete; W5 3/6 (T37–T39 merged, T40 in flight) |
+| 3     | Queue + Voice             | Queued                                                                                                    |
+| 4     | Intelligence + Realtime   | Queued                                                                                                    |
+| 5     | Deployment + cloud target | Queued (cloud decision lives here per ADR-004)                                                            |
 
 ## PRD step checklist
 
 - [x] Step 1 — Monorepo (Phase 1)
 - [x] Step 2 — Database Schema (Phase 1)
-- [ ] Step 3 — Authentication (Phase 2 — Clerk wires in P2-T28)
-- [ ] Step 4 — Dashboard Shell (Phase 2 — P2-T32 onward)
-- [ ] Step 5 — API Server (Phase 2 — P2-T12 onward)
+- [x] Step 3 — Authentication (Phase 2 — Clerk integrated in P2-T28; auth flow + onboarding through P2-T31)
+- [x] Step 4 — Dashboard Shell (Phase 2 — P2-T32 → P2-T36 merged; UI features built atop the shell continue in T41/T42/T51)
+- [~] Step 5 — API Server (Phase 2 — Fastify scaffold T12, OpenAPI T13, auth T37, claims CRUD T38, pagination T39 done; state machine T40 in flight)
 - [ ] Step 6 — CSV Upload (Phase 2 — P2-T43 onward)
 - [ ] Step 7 — Job Queue (Phase 3)
 - [ ] Step 8 — Retell Integration (Phase 3)
@@ -36,6 +36,7 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 
 ## Recent activity
 
+- 2026-04-26 (mid-day) — **Phase 2 W2/W3/W4/W5 progress.** 22 PRs merged (PRs #31–#53) covering: full marketing site (T17 chrome, T18 landing, T19 about, T20 pricing, T21 security, T22 privacy, T23 terms + ADR-029, T24 contact, T25 faq, T26 blog skeleton, T27 marketing e2e), Clerk auth flow (T28 conditional gating, T29 sign-in/up, T30 onboarding, T31 auth e2e), dashboard shell (T32 layout, T33 sidebar, T34 topbar, T35 overview, T36 page stubs), and W5 API claims domain (T37 auth plugin with test-header bypass, T38 claims CRUD with 3-layer multi-tenancy + audit on every read, T39 cursor pagination + status/payer/search/sort filters). **P2-T40** in flight on `phase-2/api-claim-state`: `claim-state.ts` with terminal-state-aware transition map, PATCH validates `(from, to)` and returns 409 `INVALID_STATE_TRANSITION` on illegal jumps, 6 unit tests + 3 new integration tests (illegal jump, terminal block, self-transition allowed) — all 35 vitest tests green locally.
 - 2026-04-25 (late eve) — **Phase 2 W1 foundation gates complete (16/16).** Eight more PRs merged after the morning checkpoint:
   - **P2-T12** (PR #23) `apps/api` Fastify v5 scaffold — ZodTypeProvider, request-id, structured logger via `@dentabill/logger`, CORS, `@fastify/rate-limit`, `/v1/healthz` + `/v1/readyz`.
   - **P2-T15** (PR #24) `react-hook-form` + `@hookform/resolvers` Zod resolver wired into `@dentabill/ui` Form component; FieldError display, async submission state.

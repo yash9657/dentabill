@@ -52,45 +52,45 @@ Rules:
 - [x] **P2-T11** Tailwind class-order — delegated to `prettier-plugin-tailwindcss` (eslint plugin deferred until v4-native lands; documented in ADR-015 note) — _PR #21, 2026-04-25_
 - [x] **P2-T12** `apps/api` Fastify v5 scaffold — _PR #23, 2026-04-25_
 - [x] **P2-T13** OpenAPI from Zod + generated SDK in `packages/api-sdk` — _PR #29, 2026-04-25_
-- [x] **P2-T14** TanStack Query v5 setup (`@dentabill/ui/query`) + CI hardening (vitest env defaults + Linux Playwright baseline) — **this PR**
+- [x] **P2-T14** TanStack Query v5 setup (`@dentabill/ui/query`) + CI hardening (vitest env defaults + Linux Playwright baseline) — _PR #30, 2026-04-25_
 - [x] **P2-T15** `react-hook-form` + Zod resolver Form component — _PR #24, 2026-04-25_
 - [x] **P2-T16** Web observability — `web-vitals` reporter + ErrorBoundary — _PR #28, 2026-04-25_
 
 ### W2 — Marketing site (11 tasks, ~22h)
 
-- [x] **P2-T17** Marketing chrome (Header / Footer / CookieBanner / Newsletter) — **this PR**
-- [ ] **P2-T18** Landing (`/`) — hero + waveform + value props + CTAs
-- [ ] **P2-T19** About (`/about`)
-- [ ] **P2-T20** Pricing (`/pricing`)
-- [ ] **P2-T21** Security (`/security`)
-- [ ] **P2-T22** Privacy (`/privacy`)
-- [ ] **P2-T23** Terms (`/terms`)
-- [ ] **P2-T24** Contact (`/contact`) + `POST /v1/contact`
-- [ ] **P2-T25** FAQ (`/faq`)
-- [ ] **P2-T26** Blog skeleton (`/blog` + MDX content collection)
-- [ ] **P2-T27** Marketing e2e suite (9 pages, axe-clean, link check, OG meta)
+- [x] **P2-T17** Marketing chrome (Header / Footer / CookieBanner / Newsletter) — _PR #31, 2026-04-25_
+- [x] **P2-T18** Landing (`/`) — hero + waveform + value props + CTAs — _PR #32, 2026-04-26_
+- [x] **P2-T19** About (`/about`) — _PR #33, 2026-04-26_
+- [x] **P2-T20** Pricing (`/pricing`) — _PR #34, 2026-04-26_
+- [x] **P2-T21** Security (`/security`) — _PR #35, 2026-04-26_
+- [x] **P2-T22** Privacy (`/privacy`) — _PR #36, 2026-04-26_
+- [x] **P2-T23** Terms (`/terms`) + ADR-029 — _PR #37, 2026-04-26_
+- [x] **P2-T24** Contact (`/contact`) + same-origin POST sink — _PR #38, 2026-04-26_
+- [x] **P2-T25** FAQ (`/faq`) — _PR #39, 2026-04-26_
+- [x] **P2-T26** Blog skeleton (`/blog` + dynamic slug) — _PR #40, 2026-04-26_
+- [x] **P2-T27** Marketing e2e suite (9 pages, axe-clean, link check, OG meta) — _PR #41, 2026-04-26_
 
 ### W3 — Auth + onboarding (4 tasks, ~9h)
 
-- [ ] **P2-T28** Clerk integration + themed `<ClerkProvider>` + `clerkMiddleware()`
-- [ ] **P2-T29** Sign-in / sign-up / verify-email pages
-- [ ] **P2-T30** First-login `/onboarding` (practice name / NPI / zip / accepted payers)
-- [ ] **P2-T31** Auth e2e suite
+- [x] **P2-T28** Clerk integration + themed `<ClerkProvider>` + `clerkMiddleware()` — _PR #42, 2026-04-26_
+- [x] **P2-T29** Sign-in / sign-up / verify-email pages — _PR #43, 2026-04-26_
+- [x] **P2-T30** First-login `/onboarding` (practice name / NPI / zip / accepted payers) — _PR #49, 2026-04-26_
+- [x] **P2-T31** Auth e2e suite — _PR #50, 2026-04-26_
 
 ### W4 — Dashboard shell (5 tasks, ~13h)
 
-- [ ] **P2-T32** Dashboard layout (white 240px sidebar, 64px topbar, mobile drawer)
-- [ ] **P2-T33** Sidebar nav with localStorage-persisted collapse
-- [ ] **P2-T34** Topbar (`<OrganizationSwitcher>`, `<UserButton>`, notifications + cmd-k stubs)
-- [ ] **P2-T35** `/dashboard/overview` with KPI cards + empty states
-- [ ] **P2-T36** Page stubs (claims / calls / reports / settings/\*)
+- [x] **P2-T32** Dashboard layout (white 240px sidebar, 64px topbar, mobile drawer) — _PR #44, 2026-04-26_
+- [x] **P2-T33** Sidebar nav with localStorage-persisted collapse — _PR #45, 2026-04-26_
+- [x] **P2-T34** Topbar (`<OrganizationSwitcher>`, `<UserButton>`, notifications + cmd-k stubs) — _PR #46, 2026-04-26_
+- [x] **P2-T35** `/dashboard/overview` with stat strip + empty-state panels — _PR #47, 2026-04-26_
+- [x] **P2-T36** Page stubs (claims / calls / reports / settings/\*) — _PR #48, 2026-04-26_
 
 ### W5 — API + claims domain (6 tasks, ~17h)
 
-- [ ] **P2-T37** Fastify auth middleware (`@clerk/fastify`)
-- [ ] **P2-T38** Claims router (CRUD over `getOrgScopedDb`)
-- [ ] **P2-T39** Claims pagination + filtering
-- [ ] **P2-T40** Claim detail + state-machine transitions per PRD §6
+- [x] **P2-T37** Fastify auth middleware (`@clerk/fastify` + test-header bypass) — _PR #51, 2026-04-26_
+- [x] **P2-T38** Claims router (CRUD over `getOrgScopedDb` + audit on every read) — _PR #52, 2026-04-26_
+- [x] **P2-T39** Claims pagination + filtering (cursor base64url, status / payer / search / sort) — _PR #53, 2026-04-26_
+- [ ] **P2-T40** Claim detail + state-machine transitions per PRD §6 — **in flight, branch `phase-2/api-claim-state`**
 - [ ] **P2-T41** Claims list UI page (TanStack virtual table)
 - [ ] **P2-T42** Claim detail UI page (history timeline + manual status edit)
 
