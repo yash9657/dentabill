@@ -10,6 +10,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().includes('://').min(1),
   REDIS_URL: z.string().includes('://').min(1),
   NEXT_PUBLIC_APP_URL: z.string().includes('://').min(1),
+  NEXT_PUBLIC_API_URL: z.string().includes('://').optional(),
   API_CORS_ORIGINS: z.string().default(''),
 });
 

@@ -5,9 +5,14 @@ import { ApiError } from '@dentabill/types';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
+import swagger from '@fastify/swagger';
 import type { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
-import { createSerializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import {
+  createSerializerCompiler,
+  jsonSchemaTransform,
+  validatorCompiler,
+} from 'fastify-type-provider-zod';
 
 import { getEnv } from './lib/env.js';
 import { healthRoutes } from './routes/v1/health.js';
@@ -61,6 +66,50 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
 
   // Register sensible plugin (httpErrors factories)
   await fastify.register(sensible);
+
+  /**
+   * @fastify/swagger walks every route's Zod schemas and emits an OpenAPI
+   * 3.1 document. `jsonSchemaTransform` from fastify-type-provider-zod
+   * unwraps the Zod types into JSON Schema. The spec is exposed at
+   * `/docs/json` so `pnpm gen:openapi` can curl it and feed the result
+   * into `packages/api-sdk` for typed-client codegen (ADR-017).
+   */
+  await fastify.register(swagger, {
+    openapi: {
+      info: {
+        title: 'DentaBill API',
+        description:
+          'Internal REST API for the DentaBill dashboard and CSV ingestion. Generated from Zod schemas — see ADR-017.',
+        version: '0.0.0',
+      },
+      servers: [
+        {
+          url: env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001',
+          description: env.NODE_ENV,
+        },
+      ],
+      components: {
+        securitySchemes: {
+          // Phase 2 auth lands with @clerk/fastify (P2-T37); document the
+          // bearer-token shape now so generated clients are aligned.
+          bearer: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+          },
+        },
+      },
+    },
+    transform: jsonSchemaTransform,
+  });
+
+  /**
+   * Headless JSON endpoint at `/docs/json` — we deliberately omit
+   * `@fastify/swagger-ui` for now to keep the surface minimal. The SDK
+   * codegen pipeline only needs the JSON; an interactive UI is a Phase 5
+   * follow-up alongside the cloud target.
+   */
+  fastify.get('/docs/json', () => fastify.swagger());
 
   // Register CORS
   const corsOrigins = env.API_CORS_ORIGINS

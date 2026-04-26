@@ -15,6 +15,7 @@
     "test": "turbo run test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "gen:sdk": "pnpm --filter @dentabill/api gen:openapi && pnpm --filter @dentabill/api-sdk gen:types",
     "prepare": "husky"
   },
   "devDependencies": {
