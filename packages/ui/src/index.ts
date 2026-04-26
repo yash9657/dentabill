@@ -3,6 +3,16 @@ export { cn } from './lib/utils.js';
 
 // Components
 export { Button, buttonVariants, type ButtonProps } from './components/button.js';
+export {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  useFormField,
+} from './components/form.js';
 export { Input, type InputProps } from './components/input.js';
 export { Label } from './components/label.js';
 export {
