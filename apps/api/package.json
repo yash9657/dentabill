@@ -13,11 +13,27 @@
     "lint": "eslint . --max-warnings=0 --no-warn-ignored",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "build": "echo 'no build for stub'",
-    "dev": "echo 'apps/api — Fastify dev server lands in Phase 2'"
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts"
+  },
+  "dependencies": {
+    "@dentabill/logger": "workspace:*",
+    "@dentabill/types": "workspace:*",
+    "@fastify/cors": "^11.0.0",
+    "@fastify/rate-limit": "^10.1.0",
+    "@fastify/sensible": "^6.0.1",
+    "fastify": "^5.8.5",
+    "fastify-type-provider-zod": "^6.1.0",
+    "pino": "^9.4.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@dentabill/config": "workspace:*",
+    "@types/node": "^20.15.1",
+    "dotenv": "^16.4.5",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4",
     "vitest": "^2.1.9"
   }
 }
