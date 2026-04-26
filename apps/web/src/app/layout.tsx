@@ -4,6 +4,9 @@ import type { Metadata, Viewport } from 'next';
 import { Geist_Mono, Inter } from 'next/font/google';
 import * as React from 'react';
 
+import { WebVitalsReporter } from '../components/web-vitals-reporter.js';
+import { getServerRequestId, REQUEST_ID_META_NAME } from '../lib/observability/request-id.js';
+
 /**
  * Root layout for every route in `apps/web` — both the unauthenticated
  * marketing site and the authenticated `/dashboard` shell.
@@ -106,14 +109,28 @@ export const viewport: Viewport = {
   colorScheme: 'light',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   readonly children: React.ReactNode;
-}): React.ReactElement {
+}): Promise<React.ReactElement> {
+  const requestId = await getServerRequestId();
   return (
     <html lang="en" className={`${inter.variable} ${geistMono.variable}`}>
-      <body className="bg-white text-black antialiased">{children}</body>
+      <head>
+        {/*
+         * Embed the per-request id so client-side code can read it via
+         * `getClientRequestId()` (lib/observability/request-id.ts) and
+         * propagate it on every fetch as `x-request-id`. This makes
+         * browser logs, server logs, and downstream traces correlate
+         * to the same id.
+         */}
+        <meta name={REQUEST_ID_META_NAME} content={requestId} />
+      </head>
+      <body className="bg-white text-black antialiased">
+        <WebVitalsReporter />
+        {children}
+      </body>
     </html>
   );
 }
