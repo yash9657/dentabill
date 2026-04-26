@@ -318,6 +318,10 @@ importers:
         version: 2.1.9(@types/node@20.19.39)(jsdom@29.0.2)(lightningcss@1.32.0)
 
   packages/payer-ivr:
+    dependencies:
+      '@dentabill/db':
+        specifier: workspace:*
+        version: link:../db
     devDependencies:
       '@dentabill/config':
         specifier: workspace:*
