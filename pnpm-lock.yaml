@@ -120,6 +120,9 @@ importers:
       '@dentabill/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@hookform/resolvers':
+        specifier: 3.9.1
+        version: 3.9.1(react-hook-form@7.74.0(react@19.2.5))
       '@next/bundle-analyzer':
         specifier: ^15.5.0
         version: 15.5.15
@@ -135,9 +138,15 @@ importers:
       react-dom:
         specifier: ^19.2.5
         version: 19.2.5(react@19.2.5)
+      react-hook-form:
+        specifier: ^7.74.0
+        version: 7.74.0(react@19.2.5)
       web-vitals:
         specifier: ^4.2.4
         version: 4.2.4
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@axe-core/playwright':
         specifier: ^4.10.0

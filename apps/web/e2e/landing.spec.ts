@@ -127,6 +127,35 @@ test.describe('landing page (Phase 2 scaffold)', () => {
     expect(consoleErrors).toEqual([]);
   });
 
+  test('/contact form submits and surfaces a 204 success state', async ({
+    page,
+    makeAxeBuilder,
+    consoleErrors,
+  }) => {
+    const response = await page.goto('/contact');
+    expect(response?.status()).toBe(200);
+
+    const results = await makeAxeBuilder().analyze();
+    expect(results.violations, 'axe violations on /contact').toEqual([]);
+
+    await page.getByLabel(/your name/i).fill('Alex Garcia');
+    await page.getByLabel(/work email/i).fill('alex@example.com');
+    await page.getByLabel(/practice name/i).fill('Sunrise Family Dental');
+    await page
+      .getByLabel(/what is on your mind/i)
+      .fill('We follow up on around eighty claims a week with Delta and Cigna and want a demo.');
+
+    const apiResponse = page.waitForResponse(
+      (r) => r.url().endsWith('/v1/contact') && r.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: /^send$/i }).click();
+    const post = await apiResponse;
+    expect(post.status(), 'POST /v1/contact returns 204').toBe(204);
+
+    await expect(page.getByRole('status')).toContainText(/will be in touch/i);
+    expect(consoleErrors).toEqual([]);
+  });
+
   test('robots.txt and sitemap.xml are public', async ({ page }) => {
     const robots = await page.request.get('/robots.txt');
     expect(robots.status()).toBe(200);
