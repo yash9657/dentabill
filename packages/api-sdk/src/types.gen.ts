@@ -451,6 +451,8 @@ export interface paths {
                             source: "DENTRIX" | "EAGLESOFT" | "OPEN_DENTAL";
                             totalRows: number;
                             validRows: number;
+                            insertedRows: number;
+                            skippedDuplicates: number;
                             errors: {
                                 rowIndex: number;
                                 message: string;

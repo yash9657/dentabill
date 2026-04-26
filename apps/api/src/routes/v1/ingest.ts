@@ -3,8 +3,10 @@ import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { bulkInsertClaims } from '../../lib/csv/insert.js';
 import { parseClaimsCSV } from '../../lib/csv/parser.js';
 import { UnknownCsvFormatError } from '../../lib/csv/types.js';
+import { getEnv } from '../../lib/env.js';
 
 /**
  * `POST /v1/ingest/claims` — synchronous CSV ingestion (P2-T43).
@@ -42,6 +44,8 @@ const IngestResponseSchema = z.object({
   source: z.enum(['DENTRIX', 'EAGLESOFT', 'OPEN_DENTAL']),
   totalRows: z.number().int().nonnegative(),
   validRows: z.number().int().nonnegative(),
+  insertedRows: z.number().int().nonnegative(),
+  skippedDuplicates: z.number().int().nonnegative(),
   errors: z.array(ParseRowErrorSchema),
 });
 
@@ -109,14 +113,9 @@ export async function ingestRoutes(fastify: FastifyInstance): Promise<void> {
 
       assertCsvLike(buffer, file.mimetype);
 
+      let parsed;
       try {
-        const result = parseClaimsCSV(buffer);
-        return {
-          source: result.source,
-          totalRows: result.rows.length + result.errors.length,
-          validRows: result.rows.length,
-          errors: result.errors.map((e) => ({ rowIndex: e.rowIndex, message: e.message })),
-        };
+        parsed = parseClaimsCSV(buffer);
       } catch (err) {
         if (err instanceof UnknownCsvFormatError) {
           throw new ApiError(
@@ -126,6 +125,22 @@ export async function ingestRoutes(fastify: FastifyInstance): Promise<void> {
         }
         throw err;
       }
+
+      const env = getEnv();
+      const { insertedRows, skippedDuplicates } = await bulkInsertClaims({
+        organizationId: auth.orgId,
+        canonicalRows: parsed.rows,
+        dobHashSecret: env.DOB_HASH_SECRET,
+      });
+
+      return {
+        source: parsed.source,
+        totalRows: parsed.rows.length + parsed.errors.length,
+        validRows: parsed.rows.length,
+        insertedRows,
+        skippedDuplicates,
+        errors: parsed.errors.map((e) => ({ rowIndex: e.rowIndex, message: e.message })),
+      };
     },
   );
 }

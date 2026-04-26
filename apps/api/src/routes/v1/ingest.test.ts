@@ -84,7 +84,7 @@ describe('/v1/ingest/claims (integration)', () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it('parses a valid Dentrix CSV and returns the source + counts', async () => {
+  it('parses, inserts the valid rows, and returns counts', async () => {
     const org = await makeOrg('IngestAcme');
     const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
     const { body, contentType } = multipartBody({ content: DENTRIX_CSV });
@@ -99,13 +99,100 @@ describe('/v1/ingest/claims (integration)', () => {
       source: string;
       totalRows: number;
       validRows: number;
+      insertedRows: number;
+      skippedDuplicates: number;
       errors: { rowIndex: number; message: string }[];
     }>();
     expect(json.source).toBe('DENTRIX');
     expect(json.totalRows).toBe(2);
     expect(json.validRows).toBe(1);
+    expect(json.insertedRows).toBe(1);
+    expect(json.skippedDuplicates).toBe(0);
     expect(json.errors).toHaveLength(1);
     expect(json.errors[0]?.message).toMatch(/serviceDate/);
+
+    // Verify the inserted row landed in the DB with hashed DOB +
+    // computed priority + canonical payer code.
+    const persisted = await prisma.claim.findFirst({
+      where: { organizationId: org.id, claimNumber: 'CL-1' },
+    });
+    expect(persisted).not.toBeNull();
+    expect(persisted?.payerCode).toBe('DELTA_DENTAL_PPO');
+    expect(persisted?.patientDOBHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(persisted?.patientDOBLast4).toBe('1990');
+    expect(persisted?.priority).toBeGreaterThan(0);
+  });
+
+  it('skips duplicate rows on re-upload (idempotency by claimNumber)', async () => {
+    const org = await makeOrg('IngestDedupe');
+    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+    const VALID_CSV = `Patient ID,Patient Name,DOB,Insurance Carrier,Claim #,Procedure Codes,Charge,Service Date,Submission Date,Status
+P1,"Sample",1990-05-12,Delta Dental PPO,CL-DUP,D2740,1240.00,2026-01-08,2026-01-09,Submitted
+P2,"Sample",1985-11-30,Cigna Dental,CL-NEW,D0150,215.50,2026-01-12,2026-01-13,Submitted
+`;
+    const PARTIAL_OVERLAP_CSV = `Patient ID,Patient Name,DOB,Insurance Carrier,Claim #,Procedure Codes,Charge,Service Date,Submission Date,Status
+P1,"Sample",1990-05-12,Delta Dental PPO,CL-DUP,D2740,1240.00,2026-01-08,2026-01-09,Submitted
+P3,"Sample",2001-07-22,MetLife Dental,CL-FRESH,D2950,485.00,2026-01-15,2026-01-16,Submitted
+`;
+    const send = async (
+      csv: string,
+    ): Promise<{
+      insertedRows: number;
+      skippedDuplicates: number;
+    }> => {
+      const { body, contentType } = multipartBody({ content: csv });
+      const response = await server.inject({
+        method: 'POST',
+        url: '/v1/ingest/claims',
+        headers: { ...headers, 'content-type': contentType },
+        payload: body,
+      });
+      expect(response.statusCode).toBe(200);
+      return response.json<{ insertedRows: number; skippedDuplicates: number }>();
+    };
+
+    const first = await send(VALID_CSV);
+    expect(first.insertedRows).toBe(2);
+    expect(first.skippedDuplicates).toBe(0);
+
+    const second = await send(PARTIAL_OVERLAP_CSV);
+    expect(second.insertedRows).toBe(1);
+    expect(second.skippedDuplicates).toBe(1);
+
+    const total = await prisma.claim.count({ where: { organizationId: org.id } });
+    expect(total).toBe(3); // CL-DUP + CL-NEW + CL-FRESH
+  });
+
+  it('isolates uploads between organizations (cross-org leak guard)', async () => {
+    const orgA = await makeOrg('IngestA');
+    const orgB = await makeOrg('IngestB');
+    const headersA = { 'x-test-user-id': 'user_a', 'x-test-org-id': orgA.id };
+    const headersB = { 'x-test-user-id': 'user_b', 'x-test-org-id': orgB.id };
+    const csv = `Patient ID,Patient Name,DOB,Insurance Carrier,Claim #,Procedure Codes,Charge,Service Date,Submission Date,Status
+P1,"Sample",1990-05-12,Delta Dental PPO,CL-X,D2740,1240.00,2026-01-08,2026-01-09,Submitted
+`;
+    const send = async (h: typeof headersA): Promise<void> => {
+      const { body, contentType } = multipartBody({ content: csv });
+      const response = await server.inject({
+        method: 'POST',
+        url: '/v1/ingest/claims',
+        headers: { ...h, 'content-type': contentType },
+        payload: body,
+      });
+      expect(response.statusCode).toBe(200);
+    };
+
+    await send(headersA);
+    await send(headersB);
+
+    // Same claim number; both orgs should have their own row.
+    const aRows = await prisma.claim.findMany({ where: { organizationId: orgA.id } });
+    const bRows = await prisma.claim.findMany({ where: { organizationId: orgB.id } });
+    expect(aRows).toHaveLength(1);
+    expect(bRows).toHaveLength(1);
+    // The DOB hash MUST differ across orgs (per ADR-007 — no
+    // global rainbow table risk).
+    expect(aRows[0]?.patientDOBHash).not.toBe(bRows[0]?.patientDOBHash);
   });
 
   it('rejects an unknown CSV format with 400 VALIDATION_ERROR', async () => {
