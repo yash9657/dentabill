@@ -45,16 +45,16 @@ Rules:
 - [x] **P2-T4** `@dentabill/ui` brand primitives (Pill / HeroDisplay / SectionDisplay / ShadowCard / StatusDot) — _PR #18, 2026-04-25_
 - [x] **P2-T5** `apps/web` Next.js 15 App Router scaffold (next/font, root layout, error/not-found/loading, robots, sitemap, icon) — _PR #19, 2026-04-25_
 - [x] **P2-T6** `apps/web` security headers + strict CSP via middleware — _PR #20, 2026-04-25_
-- [ ] **P2-T7** Playwright + axe foundation; new `e2e` job in CI — **next**
-- [ ] **P2-T8** Lighthouse CI (`.lighthouserc.cjs`, `lighthouse` job)
-- [ ] **P2-T9** Bundle budget (`@next/bundle-analyzer` + custom assertion)
+- [x] **P2-T7** Playwright + axe + visual regression foundation; new `e2e` job in CI — _PR #25, 2026-04-25_
+- [x] **P2-T8** Lighthouse CI (`.lighthouserc.cjs`, `lighthouse` job) — _PR #27, 2026-04-25_
+- [x] **P2-T9** Bundle budget (`@next/bundle-analyzer` + custom assertion) — _PR #26, 2026-04-25_
 - [x] **P2-T10** ESLint a11y + react + react-hooks plugins in shared config — _bundled w/ T11 in PR #21, 2026-04-25_
 - [x] **P2-T11** Tailwind class-order — delegated to `prettier-plugin-tailwindcss` (eslint plugin deferred until v4-native lands; documented in ADR-015 note) — _PR #21, 2026-04-25_
-- [ ] **P2-T12** `apps/api` Fastify v5 scaffold
-- [ ] **P2-T13** OpenAPI from Zod + generated SDK in `packages/api-sdk`
-- [ ] **P2-T14** TanStack Query v5 setup (`@dentabill/ui/query`)
-- [ ] **P2-T15** `react-hook-form` + Zod resolver Form component
-- [ ] **P2-T16** Web observability — `web-vitals` reporter + ErrorBoundary
+- [x] **P2-T12** `apps/api` Fastify v5 scaffold — _PR #23, 2026-04-25_
+- [x] **P2-T13** OpenAPI from Zod + generated SDK in `packages/api-sdk` — _PR #29, 2026-04-25_
+- [x] **P2-T14** TanStack Query v5 setup (`@dentabill/ui/query`) + CI hardening (vitest env defaults + Linux Playwright baseline) — **this PR**
+- [x] **P2-T15** `react-hook-form` + Zod resolver Form component — _PR #24, 2026-04-25_
+- [x] **P2-T16** Web observability — `web-vitals` reporter + ErrorBoundary — _PR #28, 2026-04-25_
 
 ### W2 — Marketing site (11 tasks, ~22h)
 
@@ -146,3 +146,11 @@ The cloud target decision lands here (per ADR-004): Railway vs AWS, Dockerfiles,
 - **P2-T5** `apps/web` Next.js 15 App Router scaffold _(PR #19, 2026-04-25)_
 - **P2-T6** `apps/web` strict CSP + security headers _(PR #20, 2026-04-25)_
 - **P2-T10 + T11** ESLint a11y/react plugins + prettier-plugin-tailwindcss _(PR #21, 2026-04-25)_
+- **P2-T12** `apps/api` Fastify v5 scaffold _(PR #23, 2026-04-25)_
+- **P2-T15** `react-hook-form` + Zod resolver Form component _(PR #24, 2026-04-25)_
+- **P2-T7** Playwright + axe + visual regression foundation _(PR #25, 2026-04-25)_
+- **P2-T9** Bundle budget enforcement _(PR #26, 2026-04-25)_
+- **P2-T8** Lighthouse CI budgets _(PR #27, 2026-04-25)_
+- **P2-T16** Web observability (web-vitals + ErrorBoundary + request-id) _(PR #28, 2026-04-25)_
+- **P2-T13** OpenAPI from Zod + `@dentabill/api-sdk` codegen _(PR #29, 2026-04-25)_
+- **P2-T14** TanStack Query v5 setup + CI hardening (vitest env defaults + Linux Playwright baseline) _(2026-04-25)_

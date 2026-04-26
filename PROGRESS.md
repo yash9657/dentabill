@@ -3,21 +3,21 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-04-25
-**Current phase:** Phase 2 — UI + API + Ingestion **(in progress — 9/55 tasks done; W1 foundation gates 5/16)**.
-**Next task:** **P2-T7** — Playwright + axe foundation (`apps/web/e2e/`, browsers cached in CI, base test fixture, axe-core integration, visual snapshot strategy, screenshot-diff threshold; new `e2e` job in `ci.yml`).
+**Current phase:** Phase 2 — UI + API + Ingestion **(in progress — 17/55 tasks done; W1 foundation gates 16/16 ✓)**.
+**Next task:** **P2-T17** — Marketing chrome (Header / Footer / CookieBanner / NewsletterSignupStub) — kicks off W2 marketing site.
 **In progress:** Nothing.
 
 ---
 
 ## Phase status
 
-| Phase | Name                      | Status                                                    |
-| ----- | ------------------------- | --------------------------------------------------------- |
-| 1     | Foundations               | **Complete** (12 of 12 tasks done, merged via PRs #1–#13) |
-| 2     | UI + API + Ingestion      | **In progress** — 9 of 55 tasks done (PRs #14, #15–#21)   |
-| 3     | Queue + Voice             | Queued                                                    |
-| 4     | Intelligence + Realtime   | Queued                                                    |
-| 5     | Deployment + cloud target | Queued (cloud decision lives here per ADR-004)            |
+| Phase | Name                      | Status                                                                                           |
+| ----- | ------------------------- | ------------------------------------------------------------------------------------------------ |
+| 1     | Foundations               | **Complete** (12 of 12 tasks done, merged via PRs #1–#13)                                        |
+| 2     | UI + API + Ingestion      | **In progress** — 17 of 55 tasks done; W1 foundation gates complete (PRs #14–#21, #23–#29 + T14) |
+| 3     | Queue + Voice             | Queued                                                                                           |
+| 4     | Intelligence + Realtime   | Queued                                                                                           |
+| 5     | Deployment + cloud target | Queued (cloud decision lives here per ADR-004)                                                   |
 
 ## PRD step checklist
 
@@ -36,6 +36,15 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 
 ## Recent activity
 
+- 2026-04-25 (late eve) — **Phase 2 W1 foundation gates complete (16/16).** Eight more PRs merged after the morning checkpoint:
+  - **P2-T12** (PR #23) `apps/api` Fastify v5 scaffold — ZodTypeProvider, request-id, structured logger via `@dentabill/logger`, CORS, `@fastify/rate-limit`, `/v1/healthz` + `/v1/readyz`.
+  - **P2-T15** (PR #24) `react-hook-form` + `@hookform/resolvers` Zod resolver wired into `@dentabill/ui` Form component; FieldError display, async submission state.
+  - **P2-T7** (PR #25) Playwright + axe + visual regression foundation — `apps/web/e2e/` config, base fixture, axe-core integration, per-OS screenshots at 0.1% diff threshold, new `e2e` CI job.
+  - **P2-T9** (PR #26) Bundle budget — `@next/bundle-analyzer` + custom CI assertion (≤200 KB initial JS per route, ≤350 KB total).
+  - **P2-T8** (PR #27) Lighthouse CI via `treosh/lighthouse-ci-action` enforcing ADR-020 budgets (LCP ≤ 2.5s, CLS ≤ 0.1, INP ≤ 200ms, perf ≥ 90, a11y = 100).
+  - **P2-T16** (PR #28) Web observability — `web-vitals` reporter (`sendBeacon` + `keepalive` fallback), `<ErrorBoundary>` posting to `/v1/errors`, `x-request-id` propagation via `<meta>` + fetch wrapper.
+  - **P2-T13** (PR #29) OpenAPI generated from Zod via `@fastify/swagger` + `jsonSchemaTransform`; typed `@dentabill/api-sdk` codegen via `openapi-typescript` + `openapi-fetch`.
+  - **P2-T14** (this PR) TanStack Query v5 setup at `@dentabill/ui/query` — `DENTABILL_QUERY_DEFAULTS` (30s staleTime, 5min gcTime, retry 3 with exp backoff capped at 30s, mutations no retry to prevent double-sending claims, `throwOnError` true for boundary integration), `<QueryProvider>` with lazy-loaded devtools, wired into `apps/web` via Client `<Providers>`. **Bundled CI hardening** for the two failures left by PR #29: `apps/api/vitest.setup.ts` now seeds test env defaults (DATABASE_URL/REDIS_URL/NEXT_PUBLIC_APP_URL/NEXT_PUBLIC_API_URL) via `process.env[k] ??= v`, and added the `landing-chromium-linux.png` Playwright baseline so CI's Ubuntu visual snapshot stays green.
 - 2026-04-25 (eve) — **Phase 2 W1 foundations underway.** Landed eight PRs in dependency order:
   - **P2-T0** (PR #14) ADR cluster 013–028 (16 ADRs locking Phase 2 design contract — visual lock, framework, styling, primitives, API, forms, server-state, perf budgets, a11y, visual regression, security headers, auth, test pyramid, MDX, i18n + Storybook deferrals).
   - **P2-T1** (PR #15) `@dentabill/ui` design tokens — OKLCH color, shadow stack, radius, spacing, typography, motion + drift-detecting test against `theme.css`.
