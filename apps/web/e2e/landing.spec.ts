@@ -79,6 +79,22 @@ test.describe('landing page (Phase 2 scaffold)', () => {
     expect(consoleErrors, 'no console errors during /about render').toEqual([]);
   });
 
+  test('/pricing renders the three tiers and is axe-clean', async ({
+    page,
+    makeAxeBuilder,
+    consoleErrors,
+  }) => {
+    const response = await page.goto('/pricing');
+    expect(response?.status(), '/pricing returns 200').toBe(200);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/pay per call/i);
+    await expect(page.getByRole('heading', { level: 3, name: /^starter$/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 3, name: /^professional$/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 3, name: /^enterprise$/i })).toBeVisible();
+    const results = await makeAxeBuilder().analyze();
+    expect(results.violations, 'axe violations on /pricing').toEqual([]);
+    expect(consoleErrors).toEqual([]);
+  });
+
   test('robots.txt and sitemap.xml are public', async ({ page }) => {
     const robots = await page.request.get('/robots.txt');
     expect(robots.status()).toBe(200);
