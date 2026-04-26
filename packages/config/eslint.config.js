@@ -27,6 +27,11 @@ export default tseslint.config(
       // Next.js auto-generates this on every dev/build — any local edits get
       // wiped, so linting it would be a no-op or worse, a perpetual fail.
       '**/next-env.d.ts',
+      // Build / CI helper scripts authored in plain Node ESM. They aren't
+      // application code, don't ship to users, and don't have a TS project
+      // service available — so linting them with the typed-checked rules
+      // produces parse-error noise. They still go through prettier.
+      '**/scripts/**/*.mjs',
       // Third-party Claude Code skill bundles — vendored, not authored here.
       '.claude/skills/impeccable/**',
     ],
