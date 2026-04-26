@@ -1,46 +1,56 @@
 # Session Context
 
-_Last updated: 2026-04-25_
+_Last updated: 2026-04-25 (evening)_
 
 ## What was just done
 
-**Phase 1 closed out.** The Prisma trio landed in this session:
+**Phase 2 W1 foundation gates: 5 of 16 done; first 9 of 55 Phase 2 tasks merged to `main`.**
 
-- **P1-T4** `@dentabill/db` Prisma init — full PRD §5 schema (8 models, 6 enums, cascade deletes, `Decimal(10,2)` money, indexes on `(organizationId, status)` and `(organizationId, priority)`), singleton client wired to `@dentabill/logger` via Prisma event hooks, initial migration `20260425075528_init`. pnpm v10 `onlyBuiltDependencies` allowlist added so Prisma engines download.
-- **P1-T4A** Audit + read-side org scope — `audit({ action, resourceType, resourceId, organizationId, ... })` rejects missing org; `getOrgScopedDb(orgId)` uses `prisma.$extends` to auto-filter `findMany` / `findFirst` / `count` / `aggregate` / `groupBy` on the 5 multi-tenant models. `findUnique` deliberately not intercepted (callers must use `findFirst` for scoped lookups by id; documented in `with-org.ts`). `MULTI_TENANT_MODELS` is a single source of truth shared with the write middleware.
-- **P1-T5** Multi-tenant write middleware — `Prisma.defineExtension` query hook on `$allModels.$allOperations` rejects writes against multi-tenant models that lack `organizationId`. Validates `create` / `createMany` / `createManyAndReturn` / `upsert` payloads (every row in array creates checked individually) and `update` / `updateMany` / `delete` / `deleteMany` `where` clauses. Extension is layered into the singleton client so every consumer of `@dentabill/db` is guarded — no un-guarded escape hatch. Non-multi-tenant models (`Organization`) pass through.
+This session, in dependency order:
 
-15 new tests in this session, 30 total in `@dentabill/db`. All green.
+1. **P2-T0** — ADR cluster 013–028 appended to `docs/DECISIONS.md` (16 ADRs locking visual / framework / styling / primitives / API / forms / server-state / perf / a11y / visual regression / security / auth / test pyramid / MDX / i18n+Storybook deferrals). PR #14.
+2. **P2-T1** — `@dentabill/ui` OKLCH design tokens canon (`tokens.ts`) + Tailwind v4 mirror (`theme.css`) + drift-detecting test. PR #15.
+3. **P2-T2** — Tailwind v4 preset (`tailwind.preset.css`) with `@theme`, `@utility` (status-pulse, shimmer, hairline-edge, shadow-card-layered), focus-visible ring, prefers-reduced-motion. PR #16.
+4. **P2-T3** — 8 shadcn primitives in `@dentabill/ui` (Button, Input, Label, Card subparts, Badge, Skeleton, Separator, Avatar) themed via tokens. `cn()` with `extendTailwindMerge` so our custom class groups dedup correctly. jsdom + @testing-library/react; 93 tests. PR #17.
+5. **P2-T4** — 5 brand primitives (Pill, HeroDisplay, SectionDisplay, ShadowCard, StatusDot). StatusDot's `active` variant is the only chromatic surface in the system — uses the locked teal accent with `motion-safe:status-pulse`. 24 new tests. PR #18.
+6. **P2-T5** — `apps/web` Next.js 15 App Router scaffold. `next/font/google` Inter + Geist Mono. Full Metadata + Viewport on root layout. error.tsx, not-found.tsx, loading.tsx, icon.svg, robots.ts, sitemap.ts. Webpack `extensionAlias` so `@dentabill/ui`'s `.js` relative imports resolve to TS sources without a build step. 4 tests. PR #19.
+7. **P2-T6** — Edge middleware with strict CSP (per-request 16-byte base64 nonce via Web Crypto, `script-src 'strict-dynamic'`), HSTS preload, X-Frame-Options DENY, COOP same-origin, COEP credentialless, CORP same-origin, Permissions-Policy denying camera/mic/geo/payment/FLoC/Topics. Production enforces; dev reports. 17 tests. PR #20.
+8. **P2-T10 + T11** — Bundled because both edit `packages/config/eslint.config.js`. Adds `eslint-plugin-jsx-a11y`, `eslint-plugin-react`, `eslint-plugin-react-hooks`. **Deferred:** `eslint-plugin-tailwindcss` — v3 can't ingest Tailwind v4 CSS-first config without `tailwindcss` being a dep of `@dentabill/config`, and v4-native ESLint plugins are still pre-1.0. Class ordering delegated to `prettier-plugin-tailwindcss`; dedup remains runtime via twMerge. PR #21.
+
+Test totals after this session: `@dentabill/ui` 117 / 117, `@dentabill/web` 21 / 21, `@dentabill/db` 30 / 30.
 
 ## Current state of the repo
 
-- Branch: `main`. 15 commits ahead of `origin/main`. Working tree clean.
-- All 12 Phase-1 implementation tasks complete (P1-T2 through P1-T12).
-- 11 workspaces: 4 apps (stubs), 7 packages (`config`, `logger`, `types`, `db` are real; `ui`, `queue`, `payer-ivr` are stubs awaiting their phases).
-- Three-layer multi-tenancy defense (ADR-009) is fully in place: write middleware + read helper + audit log.
-- Local stack: `dentabill-postgres` and `dentabill-redis` containers are healthy via OrbStack.
-- CI workflow ready in `.github/workflows/ci.yml` but **not yet exercised** — pushing the 15 commits will trigger the first run.
+- Branch: `main`. 8 new squashed commits since the morning. Working tree clean.
+- 11 workspaces unchanged in count, but `apps/web` is now a real Next.js 15 app and `@dentabill/ui` is a real package with tokens + Tailwind preset + 13 components and 117 tests.
+- New deps at root: `prettier-plugin-tailwindcss`. New deps in `apps/web`: `next`, `react`, `react-dom`, `lucide-react`, `tailwindcss`, `@tailwindcss/postcss`, `postcss`, `@vitejs/plugin-react`, `jsdom`, `@testing-library/*`. New deps in `packages/config`: `eslint-plugin-{jsx-a11y,react,react-hooks}`, `prettier-plugin-tailwindcss`.
+- All quality gates green: `pnpm turbo run lint` (11 packages, 0 warnings), `pnpm turbo run test` (15 task suites pass), `pnpm exec prettier --check .` clean.
 
 ## Next task
 
-**Phase 1 is done. Phase 2 begins with P2-T1 — `apps/web` Next.js 15 App Router scaffold.**
+**P2-T7 — Playwright + axe foundation.** From the locked plan:
 
-Per `docs/TASKS.md` Phase 2 plan: Next.js 15 + Tailwind v3 + shadcn init + Inter / JetBrains Mono fonts + theme tokens from PRD §7. After P2-T1 lands, P2-T2 wires Clerk auth, P2-T6 adds the Playwright e2e job to CI (per ADR-005).
+> `apps/web/e2e/` config, browsers cached in CI, base test fixture, axe-core integration, visual snapshot strategy, screenshot diff 0.1% threshold; new `e2e` job in `ci.yml`.
 
-Before starting Phase 2, recommend:
+Estimate 3h. Branch: `phase-2/playwright-foundation`. Depends on T5 (✓ merged in #19).
 
-1. Push the 15 unpushed commits on `main` to publish the foundation work and exercise CI for the first time.
-2. Enable branch protection on `main` per `docs/SECURITY.md` checklist (require PR, require `quality` + `test` checks, linear history, no force push).
-3. Open a draft PR to verify CI is green end-to-end against the real GitHub Actions runners + service containers.
+After T7, the next foundation tasks are:
+
+- **P2-T8** Lighthouse CI (depends on T5+T7) — `.lighthouserc.cjs` + new `lighthouse` job; budgets per ADR-020 (LCP ≤ 2.5s, CLS ≤ 0.1, INP ≤ 200ms, perf ≥ 90).
+- **P2-T9** Bundle budget — `@next/bundle-analyzer` + custom assertion (initial JS ≤ 200KB per route, total ≤ 350KB).
+- **P2-T12** Fastify v5 scaffold — independent of T7/T8/T9, can run in parallel.
+
+Critical-path next is T28 (Clerk integration), which is unblocked by T5+T6 and only really needs T7's Playwright fixture for its own auth e2e.
 
 ## Open questions / ambiguities
 
-- 15 unpushed commits on `main`. First push will exercise CI — review `git log` first to spot any commit-message issues.
-- Branch protection still needs enabling in the GitHub UI (one-time, blocked on having a remote with at least one push).
-- Phase 2 task ordering not yet broken into branches in `docs/TASKS.md` — happens at start of next session.
+- Branch protection on `main` still not enabled in the GitHub UI. Auto-merge is working per-PR but enforcement is per-PR rather than rule-bound.
+- First PR after this checkpoint will exercise CI against Tailwind v4 + jsdom tests + Next.js 15 + middleware for the first time end-to-end.
 
 ## Do not forget
 
 - One task at a time. Tests are part of the task, not a follow-up.
 - Update this file + `TASKS.md` + `PROGRESS.md` + `DECISIONS.md` (ADRs only) at end of every session.
 - Branch-protection in GitHub UI is still not enabled — see `docs/SECURITY.md`.
+- `@dentabill/ui` ships sources directly (no build step). Any consumer (Next.js, Vitest) needs `extensionAlias` `.js → .ts`. Pattern is in `apps/web/next.config.ts`.
+- Status-active teal (`oklch(0.78 0.04 200)`) is the **only** chromatic surface allowed in the system per ADR-013. Reviewers should reject any PR introducing additional brand color.
