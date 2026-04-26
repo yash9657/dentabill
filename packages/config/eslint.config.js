@@ -21,6 +21,8 @@ export default tseslint.config(
       '**/*.config.{js,mjs,cjs,ts}',
       '**/*.config.*.{js,mjs,cjs,ts}',
       '**/vitest.workspace.{ts,js,mjs}',
+      // Third-party Claude Code skill bundles — vendored, not authored here.
+      '.claude/skills/impeccable/**',
     ],
   },
   ...tseslint.configs.strictTypeChecked,
