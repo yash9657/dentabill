@@ -99,11 +99,11 @@ Rules:
 - [ ] **P2-T43** `POST /v1/ingest/claims` upload endpoint
 - [ ] **P2-T44** Streaming CSV parser (Dentrix / Eaglesoft / Open Dental)
 - [x] **P2-T45** DOB hashing helper in `@dentabill/db` — _PR #57, 2026-04-26_
-- [ ] **P2-T46** Payer-code lookup table in `packages/payer-ivr` — **this PR**
+- [x] **P2-T46** Payer-code lookup table in `packages/payer-ivr` — _PR #58, 2026-04-26_
 - [ ] **P2-T47** Priority scoring helper in `@dentabill/db`
 - [ ] **P2-T48** Bulk insert with idempotency-key
 - [ ] **P2-T49** Ingestion integration test (3 sample CSVs, cross-org isolation)
-- [ ] **P2-T50** Sample CSV fixtures
+- [ ] **P2-T50** Sample CSV fixtures — **this PR**
 - [ ] **P2-T51** `/dashboard/claims/import` upload UI
 
 ### W7 — Closeout (4 tasks, ~4h)
