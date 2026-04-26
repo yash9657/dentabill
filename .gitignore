@@ -43,3 +43,9 @@ prisma/migrations/dev.db*
 DentaBill_AI_Technical_Plan.docx
 everything-claude-code-*.txt
 strructure.txt
+
+# SkillUI scratch output — design-system extracts should live OUTSIDE the
+# repo, but this catches the case where someone runs `npx skillui --out ./`
+# against the repo root by accident. See docs/DESIGN_TOOLING.md.
+design-extracts/
+*.skill
