@@ -65,15 +65,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly',
       priority: 0.7,
     },
-    // The remaining marketing route (/blog) is committed as a
-    // `<MarketingPageStub>` today (P2-T26 replaces it with the real
-    // MDX-backed surface). It's listed here so internal links in the
-    // chrome don't 404 for crawlers while we're filling it in.
-    ...(['blog'] as const).map((slug) => ({
-      url: `${siteUrl}/${slug}`,
+    {
+      url: `${siteUrl}/blog`,
       lastModified,
-      changeFrequency: 'monthly' as const,
-      priority: 0.5,
-    })),
+      changeFrequency: 'weekly',
+      priority: 0.6,
+    },
   ];
 }

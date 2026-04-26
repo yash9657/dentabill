@@ -176,6 +176,31 @@ test.describe('landing page (Phase 2 scaffold)', () => {
     expect(consoleErrors).toEqual([]);
   });
 
+  test('/blog renders the empty state and is axe-clean', async ({
+    page,
+    makeAxeBuilder,
+    consoleErrors,
+  }) => {
+    const response = await page.goto('/blog');
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/no posts yet/i);
+    // Two Subscribe buttons render (empty-state CTA + footer newsletter
+    // both share `<NewsletterSignupStub>`). Scope to the empty-state region.
+    const emptyState = page.getByRole('region', { name: /first post lands in your inbox/i });
+    await expect(emptyState.getByRole('button', { name: /subscribe/i })).toBeVisible();
+    const results = await makeAxeBuilder().analyze();
+    expect(results.violations, 'axe violations on /blog').toEqual([]);
+    expect(consoleErrors).toEqual([]);
+  });
+
+  test('/blog/non-existent-slug renders the not-found page', async ({ page }) => {
+    // Next.js sometimes streams a 200 response while the rendered body is
+    // the not-found page (especially under route groups + dynamic params).
+    // We assert on the rendered content rather than the wire status.
+    await page.goto('/blog/this-post-does-not-exist');
+    await expect(page.getByText('404')).toBeVisible();
+  });
+
   test('robots.txt and sitemap.xml are public', async ({ page }) => {
     const robots = await page.request.get('/robots.txt');
     expect(robots.status()).toBe(200);
