@@ -75,6 +75,12 @@ Invoke with `/<name>` in the chat:
 - `/phase-complete` — end-of-session protocol (verify gates → update docs)
 - `impeccable` (third-party) — frontend design expertise: `craft`, `audit`, `critique`, `polish`, `harden`, `animate`, `colorize`, `typeset`, `layout`, `clarify`, `distill`, `bolder`, `quieter`, `delight`, `overdrive`, `optimize`, `adapt`, `extract`, `live`, `teach`, `document`, `shape`, `onboard`. Installed via `npx skills add pbakaus/impeccable` (locked in `skills-lock.json`). Required setup: a `PRODUCT.md` (and ideally `DESIGN.md`) at repo root before serious design work — run `$impeccable teach` to bootstrap them. Apache-2.0; see `.claude/skills/impeccable/SKILL.md`.
 
+## Companion design tooling — SkillUI
+
+`SkillUI` is an external CLI (NOT a skill) that extracts a design system from any URL / repo / local directory and emits a `DESIGN.md` + tokens + screenshots that Impeccable can consume. We do **not** install it as a devDep — invoke it on demand from a scratch directory with the version pinned: `npx skillui@1.3.2 --url <ref>`.
+
+Full workflow, when to run, what to commit / ignore: `docs/DESIGN_TOOLING.md`. Policy rationale: ADR-011.
+
 ## Available agents
 
 Delegate via `"use the <name> agent to review <files>"`:
