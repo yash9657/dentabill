@@ -95,6 +95,20 @@ test.describe('landing page (Phase 2 scaffold)', () => {
     expect(consoleErrors).toEqual([]);
   });
 
+  test('/security renders the sub-processor table and is axe-clean', async ({
+    page,
+    makeAxeBuilder,
+    consoleErrors,
+  }) => {
+    const response = await page.goto('/security');
+    expect(response?.status(), '/security returns 200').toBe(200);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/paid to call insurance/i);
+    await expect(page.getByRole('table')).toBeVisible();
+    const results = await makeAxeBuilder().analyze();
+    expect(results.violations, 'axe violations on /security').toEqual([]);
+    expect(consoleErrors).toEqual([]);
+  });
+
   test('robots.txt and sitemap.xml are public', async ({ page }) => {
     const robots = await page.request.get('/robots.txt');
     expect(robots.status()).toBe(200);
