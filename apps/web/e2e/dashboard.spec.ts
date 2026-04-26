@@ -54,16 +54,20 @@ test.describe('dashboard shell (P2-T32)', () => {
     await page.goto('/dashboard/overview');
     const sidebar = page.getByRole('navigation', { name: /^sidebar$/i });
 
-    await sidebar.getByRole('link', { name: /claims/i }).click();
-    await expect(page).toHaveURL(/\/dashboard\/claims$/);
+    await Promise.all([
+      page.waitForURL(/\/dashboard\/claims$/),
+      sidebar.getByRole('link', { name: /claims/i }).click(),
+    ]);
     await expect(page.getByRole('heading', { level: 1, name: /claims/i })).toBeVisible();
     await expect(sidebar.getByRole('link', { name: /claims/i })).toHaveAttribute(
       'aria-current',
       'page',
     );
 
-    await sidebar.getByRole('link', { name: /reports/i }).click();
-    await expect(page).toHaveURL(/\/dashboard\/reports$/);
+    await Promise.all([
+      page.waitForURL(/\/dashboard\/reports$/),
+      sidebar.getByRole('link', { name: /reports/i }).click(),
+    ]);
     await expect(sidebar.getByRole('link', { name: /reports/i })).toHaveAttribute(
       'aria-current',
       'page',
