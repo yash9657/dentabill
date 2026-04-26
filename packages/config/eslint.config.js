@@ -1,4 +1,7 @@
 import importPlugin from 'eslint-plugin-import';
+import jsxA11yPlugin from 'eslint-plugin-jsx-a11y';
+import reactPlugin from 'eslint-plugin-react';
+import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import securityPlugin from 'eslint-plugin-security';
 import tseslint from 'typescript-eslint';
 
@@ -76,12 +79,61 @@ export default tseslint.config(
     },
   },
   {
-    // Tests may use console for diagnostics and don't need explicit return types
-    files: ['**/*.test.ts', '**/*.spec.ts', '**/__tests__/**'],
+    // Tests may use console for diagnostics and don't need explicit return types.
+    // Also covers .tsx test files written with @testing-library/react.
+    files: ['**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}', '**/__tests__/**'],
     rules: {
       'no-console': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
+    },
+  },
+  {
+    /**
+     * React + JSX surface — apps/web and packages/ui.
+     *
+     * Combines:
+     *   - `eslint-plugin-jsx-a11y` recommended (ADR-021 WCAG 2.2 AA gate),
+     *     with three extra rules elevated to `error`.
+     *   - `eslint-plugin-react` recommended via its `flat.recommended`
+     *     export, with `react-in-jsx-scope` / `jsx-uses-react` /
+     *     `prop-types` off (Next.js + TSX, not legacy CRA).
+     *   - `eslint-plugin-react-hooks` recommended (no flat export — wire
+     *     via `plugins` + `rules` directly).
+     *
+     * NOT wired: `eslint-plugin-tailwindcss`. Its v3 line cannot load
+     * Tailwind v4 CSS-first configs without `tailwindcss` itself being a
+     * dep of this package, and v4-native ESLint plugins are still
+     * pre-1.0. Class ordering is delegated to `prettier-plugin-tailwindcss`
+     * (registered in `prettier.config.js`); class deduplication is
+     * delegated to twMerge at runtime via `cn()`. Revisit ADR-015 once a
+     * stable Tailwind-v4-native plugin lands.
+     */
+    files: ['**/*.{tsx,jsx}'],
+    plugins: {
+      'jsx-a11y': jsxA11yPlugin,
+      react: reactPlugin,
+      'react-hooks': reactHooksPlugin,
+    },
+    languageOptions: {
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+      },
+    },
+    settings: {
+      react: { version: 'detect' },
+    },
+    rules: {
+      ...jsxA11yPlugin.configs.recommended.rules,
+      'jsx-a11y/anchor-is-valid': 'error',
+      'jsx-a11y/no-autofocus': 'error',
+      'jsx-a11y/no-redundant-roles': 'error',
+
+      ...reactPlugin.configs.flat.recommended.rules,
+      ...reactHooksPlugin.configs.recommended.rules,
+      'react/react-in-jsx-scope': 'off',
+      'react/jsx-uses-react': 'off',
+      'react/prop-types': 'off',
     },
   },
 );

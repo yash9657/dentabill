@@ -9,12 +9,12 @@ import { cn } from '../lib/utils.js';
  * for live-call indicators. Everything else is achromatic + warm-tinted.
  */
 const badgeVariants = cva(
-  'inline-flex items-center rounded-subtle px-1.5 py-0.5 text-small font-body font-medium',
+  'rounded-subtle text-small font-body inline-flex items-center px-1.5 py-0.5 font-medium',
   {
     variants: {
       variant: {
         default: 'bg-gray-light text-gray-dark',
-        outline: 'border border-border-light bg-white text-gray-dark',
+        outline: 'border-border-light text-gray-dark border bg-white',
         muted: 'bg-warm-stone/80 text-gray-dark',
         // The only chromatic badge — used ONLY for `CALLING` / live-call.
         active: 'bg-status-active/15 text-status-active',

@@ -17,8 +17,8 @@ export default function Loading(): React.ReactElement {
       <Skeleton className="h-12 w-3/4" />
       <Skeleton className="h-6 w-2/3" />
       <div className="flex gap-3">
-        <Skeleton className="h-10 w-32 rounded-pill" />
-        <Skeleton className="h-10 w-28 rounded-pill" />
+        <Skeleton className="rounded-pill h-10 w-32" />
+        <Skeleton className="rounded-pill h-10 w-28" />
       </div>
     </main>
   );

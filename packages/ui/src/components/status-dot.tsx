@@ -29,11 +29,11 @@ import { cn } from '../lib/utils.js';
  * that would announce every dot on every render — it should be opt-in at
  * the consumer layer.
  */
-const statusDotVariants = cva('inline-block rounded-pill shrink-0', {
+const statusDotVariants = cva('rounded-pill inline-block shrink-0', {
   variants: {
     variant: {
       idle: 'bg-gray-light',
-      pending: 'bg-transparent ring-1 ring-gray-warm',
+      pending: 'ring-gray-warm bg-transparent ring-1',
       active: 'bg-status-active motion-safe:status-pulse',
       success: 'bg-black',
       warning: 'bg-gray-dark ring-1 ring-black',

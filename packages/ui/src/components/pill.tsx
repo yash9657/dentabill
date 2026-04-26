@@ -30,20 +30,20 @@ import { cn } from '../lib/utils.js';
  * inherits the pill's text color.
  */
 const pillVariants = cva(
-  'inline-flex items-center justify-center gap-1 font-body font-medium transition-colors duration-standard ease-calm disabled:pointer-events-none disabled:opacity-50',
+  'font-body duration-standard ease-calm inline-flex items-center justify-center gap-1 font-medium transition-colors disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        black: 'bg-black text-white hover:bg-black/90 rounded-pill',
-        whiteShadow: 'bg-white text-black shadow-card hover:bg-gray-light/50 rounded-pill',
+        black: 'rounded-pill bg-black text-white hover:bg-black/90',
+        whiteShadow: 'shadow-card hover:bg-gray-light/50 rounded-pill bg-white text-black',
         warmStone:
-          'bg-warm-stone/80 text-black rounded-warm-button shadow-warm hover:bg-warm-stone',
+          'bg-warm-stone/80 rounded-warm-button shadow-warm hover:bg-warm-stone text-black',
       },
       size: {
-        default: 'h-10 px-3.5 text-button',
-        sm: 'h-8 px-2 text-small',
-        lg: 'h-12 px-2.5 text-button',
-        warm: 'h-11 pl-1.5 pr-2.5 text-button',
+        default: 'text-button h-10 px-3.5',
+        sm: 'text-small h-8 px-2',
+        lg: 'text-button h-12 px-2.5',
+        warm: 'text-button h-11 pl-1.5 pr-2.5',
       },
     },
     defaultVariants: {
