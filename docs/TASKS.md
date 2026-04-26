@@ -98,7 +98,7 @@ Rules:
 
 - [ ] **P2-T43** `POST /v1/ingest/claims` upload endpoint
 - [ ] **P2-T44** Streaming CSV parser (Dentrix / Eaglesoft / Open Dental)
-- [ ] **P2-T45** DOB hashing helper in `@dentabill/db`
+- [ ] **P2-T45** DOB hashing helper in `@dentabill/db` — **this PR**
 - [ ] **P2-T46** Payer-code lookup table in `packages/payer-ivr`
 - [ ] **P2-T47** Priority scoring helper in `@dentabill/db` — **this PR**
 - [ ] **P2-T48** Bulk insert with idempotency-key

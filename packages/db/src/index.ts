@@ -1,5 +1,6 @@
 export { prisma } from './client.js';
 export { audit, type AuditInput } from './lib/audit.js';
+export { hashPatientDOB, patientDOBLast4, type HashPatientDOBInput } from './lib/dob.js';
 export { getOrgScopedDb, type OrgScopedDb } from './lib/with-org.js';
 export { MissingOrgScopeError } from './lib/errors.js';
 export { daysOutstandingSince, scoreClaim, type ScoreClaimInput } from './lib/priority.js';
