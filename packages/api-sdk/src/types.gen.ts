@@ -117,6 +117,310 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the userId + orgId of the current Clerk session. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            userId: string;
+                            orgId: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List claims for the authenticated organization with cursor pagination, sortable by createdAt / serviceDate / priority / status, and filterable by status / payer / service-date range / claimNumber search. */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: string;
+                    limit?: number;
+                    sort?: "createdAt" | "serviceDate" | "priority" | "status";
+                    dir?: "asc" | "desc";
+                    status?: "PENDING" | "IN_QUEUE" | "CALLING" | "COMPLETED" | "DENIED" | "NEEDS_INFO" | "APPEALING" | "RESOLVED" | "WRITTEN_OFF" | "FAILED" | "MANUAL_REVIEW";
+                    payer?: "DELTA_DENTAL_PPO" | "DELTA_DENTAL_PREMIER" | "CIGNA_DENTAL" | "METLIFE_DENTAL" | "AETNA_DENTAL" | "GUARDIAN_DENTAL" | "UNITED_CONCORDIA" | "HUMANA_DENTAL" | "UNKNOWN";
+                    serviceDateFrom?: string;
+                    serviceDateTo?: string;
+                    search?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                id: string;
+                                organizationId: string;
+                                patientDOBHash: string;
+                                patientDOBLast4: string | null;
+                                claimNumber: string;
+                                cdtCodes: string[];
+                                claimAmount: string;
+                                /** @enum {string} */
+                                payerCode: "DELTA_DENTAL_PPO" | "DELTA_DENTAL_PREMIER" | "CIGNA_DENTAL" | "METLIFE_DENTAL" | "AETNA_DENTAL" | "GUARDIAN_DENTAL" | "UNITED_CONCORDIA" | "HUMANA_DENTAL" | "UNKNOWN";
+                                serviceDate: string;
+                                submittedDate: string | null;
+                                /** @enum {string} */
+                                status: "PENDING" | "IN_QUEUE" | "CALLING" | "COMPLETED" | "DENIED" | "NEEDS_INFO" | "APPEALING" | "RESOLVED" | "WRITTEN_OFF" | "FAILED" | "MANUAL_REVIEW";
+                                priority: number;
+                                retryCount: number;
+                                maxRetries: number;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                            nextCursor: string | null;
+                            hasMore: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Create a claim under the authenticated user's organization. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        patientDOBHash: string;
+                        patientDOBLast4?: string;
+                        claimNumber: string;
+                        /** @default [] */
+                        cdtCodes?: string[];
+                        claimAmount: string;
+                        /** @enum {string} */
+                        payerCode: "DELTA_DENTAL_PPO" | "DELTA_DENTAL_PREMIER" | "CIGNA_DENTAL" | "METLIFE_DENTAL" | "AETNA_DENTAL" | "GUARDIAN_DENTAL" | "UNITED_CONCORDIA" | "HUMANA_DENTAL" | "UNKNOWN";
+                        /** Format: date-time */
+                        serviceDate: string;
+                        /** Format: date-time */
+                        submittedDate?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            patientDOBHash: string;
+                            patientDOBLast4: string | null;
+                            claimNumber: string;
+                            cdtCodes: string[];
+                            claimAmount: string;
+                            /** @enum {string} */
+                            payerCode: "DELTA_DENTAL_PPO" | "DELTA_DENTAL_PREMIER" | "CIGNA_DENTAL" | "METLIFE_DENTAL" | "AETNA_DENTAL" | "GUARDIAN_DENTAL" | "UNITED_CONCORDIA" | "HUMANA_DENTAL" | "UNKNOWN";
+                            serviceDate: string;
+                            submittedDate: string | null;
+                            /** @enum {string} */
+                            status: "PENDING" | "IN_QUEUE" | "CALLING" | "COMPLETED" | "DENIED" | "NEEDS_INFO" | "APPEALING" | "RESOLVED" | "WRITTEN_OFF" | "FAILED" | "MANUAL_REVIEW";
+                            priority: number;
+                            retryCount: number;
+                            maxRetries: number;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/claims/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Fetch a single claim by id, scoped to the auth organization. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            patientDOBHash: string;
+                            patientDOBLast4: string | null;
+                            claimNumber: string;
+                            cdtCodes: string[];
+                            claimAmount: string;
+                            /** @enum {string} */
+                            payerCode: "DELTA_DENTAL_PPO" | "DELTA_DENTAL_PREMIER" | "CIGNA_DENTAL" | "METLIFE_DENTAL" | "AETNA_DENTAL" | "GUARDIAN_DENTAL" | "UNITED_CONCORDIA" | "HUMANA_DENTAL" | "UNKNOWN";
+                            serviceDate: string;
+                            submittedDate: string | null;
+                            /** @enum {string} */
+                            status: "PENDING" | "IN_QUEUE" | "CALLING" | "COMPLETED" | "DENIED" | "NEEDS_INFO" | "APPEALING" | "RESOLVED" | "WRITTEN_OFF" | "FAILED" | "MANUAL_REVIEW";
+                            priority: number;
+                            retryCount: number;
+                            maxRetries: number;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** @description Delete a claim. Hard-delete; soft-delete arrives in Phase 4. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": null;
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** @description Patch a claim. Only fields supplied in the body are updated. */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        patientDOBHash?: string;
+                        patientDOBLast4?: string;
+                        claimNumber?: string;
+                        /** @default [] */
+                        cdtCodes?: string[];
+                        claimAmount?: string;
+                        /** @enum {string} */
+                        payerCode?: "DELTA_DENTAL_PPO" | "DELTA_DENTAL_PREMIER" | "CIGNA_DENTAL" | "METLIFE_DENTAL" | "AETNA_DENTAL" | "GUARDIAN_DENTAL" | "UNITED_CONCORDIA" | "HUMANA_DENTAL" | "UNKNOWN";
+                        /** Format: date-time */
+                        serviceDate?: string;
+                        /** Format: date-time */
+                        submittedDate?: string;
+                        /** @enum {string} */
+                        status?: "PENDING" | "IN_QUEUE" | "CALLING" | "COMPLETED" | "DENIED" | "NEEDS_INFO" | "APPEALING" | "RESOLVED" | "WRITTEN_OFF" | "FAILED" | "MANUAL_REVIEW";
+                        priority?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            patientDOBHash: string;
+                            patientDOBLast4: string | null;
+                            claimNumber: string;
+                            cdtCodes: string[];
+                            claimAmount: string;
+                            /** @enum {string} */
+                            payerCode: "DELTA_DENTAL_PPO" | "DELTA_DENTAL_PREMIER" | "CIGNA_DENTAL" | "METLIFE_DENTAL" | "AETNA_DENTAL" | "GUARDIAN_DENTAL" | "UNITED_CONCORDIA" | "HUMANA_DENTAL" | "UNKNOWN";
+                            serviceDate: string;
+                            submittedDate: string | null;
+                            /** @enum {string} */
+                            status: "PENDING" | "IN_QUEUE" | "CALLING" | "COMPLETED" | "DENIED" | "NEEDS_INFO" | "APPEALING" | "RESOLVED" | "WRITTEN_OFF" | "FAILED" | "MANUAL_REVIEW";
+                            priority: number;
+                            retryCount: number;
+                            maxRetries: number;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {

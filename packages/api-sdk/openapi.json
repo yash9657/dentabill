@@ -91,6 +91,887 @@
           }
         }
       }
+    },
+    "/v1/me": {
+      "get": {
+        "description": "Returns the userId + orgId of the current Clerk session.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "userId": {
+                      "type": "string"
+                    },
+                    "orgId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "userId",
+                    "orgId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/claims": {
+      "post": {
+        "description": "Create a claim under the authenticated user's organization.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "patientDOBHash": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "patientDOBLast4": {
+                    "type": "string"
+                  },
+                  "claimNumber": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "cdtCodes": {
+                    "default": [],
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "claimAmount": {
+                    "type": "string"
+                  },
+                  "payerCode": {
+                    "type": "string",
+                    "enum": [
+                      "DELTA_DENTAL_PPO",
+                      "DELTA_DENTAL_PREMIER",
+                      "CIGNA_DENTAL",
+                      "METLIFE_DENTAL",
+                      "AETNA_DENTAL",
+                      "GUARDIAN_DENTAL",
+                      "UNITED_CONCORDIA",
+                      "HUMANA_DENTAL",
+                      "UNKNOWN"
+                    ]
+                  },
+                  "serviceDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  },
+                  "submittedDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  }
+                },
+                "required": [
+                  "patientDOBHash",
+                  "claimNumber",
+                  "claimAmount",
+                  "payerCode",
+                  "serviceDate"
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "patientDOBHash": {
+                      "type": "string"
+                    },
+                    "patientDOBLast4": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "claimNumber": {
+                      "type": "string"
+                    },
+                    "cdtCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "claimAmount": {
+                      "type": "string"
+                    },
+                    "payerCode": {
+                      "type": "string",
+                      "enum": [
+                        "DELTA_DENTAL_PPO",
+                        "DELTA_DENTAL_PREMIER",
+                        "CIGNA_DENTAL",
+                        "METLIFE_DENTAL",
+                        "AETNA_DENTAL",
+                        "GUARDIAN_DENTAL",
+                        "UNITED_CONCORDIA",
+                        "HUMANA_DENTAL",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "serviceDate": {
+                      "type": "string"
+                    },
+                    "submittedDate": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "PENDING",
+                        "IN_QUEUE",
+                        "CALLING",
+                        "COMPLETED",
+                        "DENIED",
+                        "NEEDS_INFO",
+                        "APPEALING",
+                        "RESOLVED",
+                        "WRITTEN_OFF",
+                        "FAILED",
+                        "MANUAL_REVIEW"
+                      ]
+                    },
+                    "priority": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "retryCount": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "maxRetries": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "patientDOBHash",
+                    "patientDOBLast4",
+                    "claimNumber",
+                    "cdtCodes",
+                    "claimAmount",
+                    "payerCode",
+                    "serviceDate",
+                    "submittedDate",
+                    "status",
+                    "priority",
+                    "retryCount",
+                    "maxRetries",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "description": "List claims for the authenticated organization with cursor pagination, sortable by createdAt / serviceDate / priority / status, and filterable by status / payer / service-date range / claimNumber search.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "maximum": 200
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": "createdAt",
+              "type": "string",
+              "enum": [
+                "createdAt",
+                "serviceDate",
+                "priority",
+                "status"
+              ]
+            },
+            "in": "query",
+            "name": "sort",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            },
+            "in": "query",
+            "name": "dir",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "IN_QUEUE",
+                "CALLING",
+                "COMPLETED",
+                "DENIED",
+                "NEEDS_INFO",
+                "APPEALING",
+                "RESOLVED",
+                "WRITTEN_OFF",
+                "FAILED",
+                "MANUAL_REVIEW"
+              ]
+            },
+            "in": "query",
+            "name": "status",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DELTA_DENTAL_PPO",
+                "DELTA_DENTAL_PREMIER",
+                "CIGNA_DENTAL",
+                "METLIFE_DENTAL",
+                "AETNA_DENTAL",
+                "GUARDIAN_DENTAL",
+                "UNITED_CONCORDIA",
+                "HUMANA_DENTAL",
+                "UNKNOWN"
+              ]
+            },
+            "in": "query",
+            "name": "payer",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            },
+            "in": "query",
+            "name": "serviceDateFrom",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            },
+            "in": "query",
+            "name": "serviceDateTo",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "in": "query",
+            "name": "search",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "patientDOBHash": {
+                            "type": "string"
+                          },
+                          "patientDOBLast4": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "claimNumber": {
+                            "type": "string"
+                          },
+                          "cdtCodes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "claimAmount": {
+                            "type": "string"
+                          },
+                          "payerCode": {
+                            "type": "string",
+                            "enum": [
+                              "DELTA_DENTAL_PPO",
+                              "DELTA_DENTAL_PREMIER",
+                              "CIGNA_DENTAL",
+                              "METLIFE_DENTAL",
+                              "AETNA_DENTAL",
+                              "GUARDIAN_DENTAL",
+                              "UNITED_CONCORDIA",
+                              "HUMANA_DENTAL",
+                              "UNKNOWN"
+                            ]
+                          },
+                          "serviceDate": {
+                            "type": "string"
+                          },
+                          "submittedDate": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "PENDING",
+                              "IN_QUEUE",
+                              "CALLING",
+                              "COMPLETED",
+                              "DENIED",
+                              "NEEDS_INFO",
+                              "APPEALING",
+                              "RESOLVED",
+                              "WRITTEN_OFF",
+                              "FAILED",
+                              "MANUAL_REVIEW"
+                            ]
+                          },
+                          "priority": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "retryCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "maxRetries": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "patientDOBHash",
+                          "patientDOBLast4",
+                          "claimNumber",
+                          "cdtCodes",
+                          "claimAmount",
+                          "payerCode",
+                          "serviceDate",
+                          "submittedDate",
+                          "status",
+                          "priority",
+                          "retryCount",
+                          "maxRetries",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor",
+                    "hasMore"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/claims/{id}": {
+      "get": {
+        "description": "Fetch a single claim by id, scoped to the auth organization.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "patientDOBHash": {
+                      "type": "string"
+                    },
+                    "patientDOBLast4": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "claimNumber": {
+                      "type": "string"
+                    },
+                    "cdtCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "claimAmount": {
+                      "type": "string"
+                    },
+                    "payerCode": {
+                      "type": "string",
+                      "enum": [
+                        "DELTA_DENTAL_PPO",
+                        "DELTA_DENTAL_PREMIER",
+                        "CIGNA_DENTAL",
+                        "METLIFE_DENTAL",
+                        "AETNA_DENTAL",
+                        "GUARDIAN_DENTAL",
+                        "UNITED_CONCORDIA",
+                        "HUMANA_DENTAL",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "serviceDate": {
+                      "type": "string"
+                    },
+                    "submittedDate": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "PENDING",
+                        "IN_QUEUE",
+                        "CALLING",
+                        "COMPLETED",
+                        "DENIED",
+                        "NEEDS_INFO",
+                        "APPEALING",
+                        "RESOLVED",
+                        "WRITTEN_OFF",
+                        "FAILED",
+                        "MANUAL_REVIEW"
+                      ]
+                    },
+                    "priority": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "retryCount": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "maxRetries": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "patientDOBHash",
+                    "patientDOBLast4",
+                    "claimNumber",
+                    "cdtCodes",
+                    "claimAmount",
+                    "payerCode",
+                    "serviceDate",
+                    "submittedDate",
+                    "status",
+                    "priority",
+                    "retryCount",
+                    "maxRetries",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "description": "Patch a claim. Only fields supplied in the body are updated.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "patientDOBHash": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "patientDOBLast4": {
+                    "type": "string"
+                  },
+                  "claimNumber": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "cdtCodes": {
+                    "default": [],
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "claimAmount": {
+                    "type": "string"
+                  },
+                  "payerCode": {
+                    "type": "string",
+                    "enum": [
+                      "DELTA_DENTAL_PPO",
+                      "DELTA_DENTAL_PREMIER",
+                      "CIGNA_DENTAL",
+                      "METLIFE_DENTAL",
+                      "AETNA_DENTAL",
+                      "GUARDIAN_DENTAL",
+                      "UNITED_CONCORDIA",
+                      "HUMANA_DENTAL",
+                      "UNKNOWN"
+                    ]
+                  },
+                  "serviceDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  },
+                  "submittedDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "PENDING",
+                      "IN_QUEUE",
+                      "CALLING",
+                      "COMPLETED",
+                      "DENIED",
+                      "NEEDS_INFO",
+                      "APPEALING",
+                      "RESOLVED",
+                      "WRITTEN_OFF",
+                      "FAILED",
+                      "MANUAL_REVIEW"
+                    ]
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "patientDOBHash": {
+                      "type": "string"
+                    },
+                    "patientDOBLast4": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "claimNumber": {
+                      "type": "string"
+                    },
+                    "cdtCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "claimAmount": {
+                      "type": "string"
+                    },
+                    "payerCode": {
+                      "type": "string",
+                      "enum": [
+                        "DELTA_DENTAL_PPO",
+                        "DELTA_DENTAL_PREMIER",
+                        "CIGNA_DENTAL",
+                        "METLIFE_DENTAL",
+                        "AETNA_DENTAL",
+                        "GUARDIAN_DENTAL",
+                        "UNITED_CONCORDIA",
+                        "HUMANA_DENTAL",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "serviceDate": {
+                      "type": "string"
+                    },
+                    "submittedDate": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "PENDING",
+                        "IN_QUEUE",
+                        "CALLING",
+                        "COMPLETED",
+                        "DENIED",
+                        "NEEDS_INFO",
+                        "APPEALING",
+                        "RESOLVED",
+                        "WRITTEN_OFF",
+                        "FAILED",
+                        "MANUAL_REVIEW"
+                      ]
+                    },
+                    "priority": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "retryCount": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "maxRetries": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "patientDOBHash",
+                    "patientDOBLast4",
+                    "claimNumber",
+                    "cdtCodes",
+                    "claimAmount",
+                    "payerCode",
+                    "serviceDate",
+                    "submittedDate",
+                    "status",
+                    "priority",
+                    "retryCount",
+                    "maxRetries",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "description": "Delete a claim. Hard-delete; soft-delete arrives in Phase 4.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "nullable": true,
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [

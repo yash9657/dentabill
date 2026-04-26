@@ -90,8 +90,8 @@ Rules:
 - [x] **P2-T37** Fastify auth middleware (`@clerk/fastify` + test-header bypass) — _PR #51, 2026-04-26_
 - [x] **P2-T38** Claims router (CRUD over `getOrgScopedDb` + audit on every read) — _PR #52, 2026-04-26_
 - [x] **P2-T39** Claims pagination + filtering (cursor base64url, status / payer / search / sort) — _PR #53, 2026-04-26_
-- [ ] **P2-T40** Claim detail + state-machine transitions per PRD §6 — **in flight, branch `phase-2/api-claim-state`**
-- [ ] **P2-T41** Claims list UI page (TanStack virtual table)
+- [x] **P2-T40** Claim detail + state-machine transitions per PRD §6 — _PR #54, 2026-04-26_
+- [ ] **P2-T41** Claims list UI page (TanStack virtual table) — **this PR**
 - [ ] **P2-T42** Claim detail UI page (history timeline + manual status edit)
 
 ### W6 — CSV ingestion (9 tasks, ~19.5h)
