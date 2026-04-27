@@ -1,32 +1,37 @@
 # Session Context
 
-_Last updated: 2026-04-26 (late afternoon)_
+_Last updated: 2026-04-26 (evening)_
 
 ## What was just done
 
-**Phase 2 substantively complete: 54 of 55 tasks merged across 52 PRs.** The final substantive PR (T51, /dashboard/claims/import upload UI) merged earlier today. W7 closeout is in flight — this PR ships ADR-030 (retro), the DESIGN.md final pass replacing the TBD font picks with the ADR-013 lock, and these doc updates.
+**Onboarding-flow + design polish PR (#66) shipped after a long debug session.** The user ran the app locally for the first time end-to-end and surfaced a stack of bugs that no test had caught: Fastify v5 logger init signature, Clerk env-var name mismatch (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` vs `CLERK_PUBLISHABLE_KEY`), `@clerk/fastify`'s exported `clerkClient` singleton failing with "Missing Clerk Secret Key", Fastify decorator collision on the name `auth` between our preHandler and the Clerk plugin, and — the silent killer — the JWT-cache lag making the `publicMetadata.onboarded` middleware gate loop new users back to `/onboarding` after they completed it.
 
-W6 ingestion pipeline summary (the final lane): T43 upload endpoint → T44 streaming parser (Dentrix / Eaglesoft / Open Dental detection + per-source schemas) → T45 DOB hashing helper → T46 payer-name canonicalisation → T47 PRD §5 priority scoring → T48 bulk insert with `(organizationId, claimNumber)` idempotency and DB-asserting integration tests (T49 satisfied here) → T50 fixtures → T51 drag-drop upload UI.
+Architectural fix: **DB became the source of truth for onboarding state** instead of JWT claims. Added `apps/web/src/lib/onboarding-status.ts` (React `cache()` + `prisma.user.findUnique` on Clerk userId), made `app/dashboard/layout.tsx` async to call it, removed the publicMetadata gate from `middleware.ts`. The onboarding endpoint still stamps `publicMetadata.onboarded` (load-bearing — throws on failure) but nothing reads it on the hot path. New synthetic `clerkOrgId = local_<clerkUserId>` for the personal-org fallback (Clerk Organizations intentionally NOT used in Phase 2 — see open question below).
 
-Across Phase 2 we shipped: 9 marketing pages, full Clerk auth flow, dashboard shell with sidebar/topbar/overview/page-stubs, claims router with cursor pagination + state machine + manual-edit UI, full CSV ingestion + bulk insert with cross-org leak guards, 7-gate CI on every PR, ADRs 013–030.
+Polish along the way: BrandMark glyph component in `@dentabill/ui`, restored proper button/pill padding (`h-10 px-4` default), call-flow waveform visual cleanup (motion-safe pulse on Reach cluster, radial spotlight, 800×280 viewBox), vertical newsletter footer, card-style contact-form success, Wordmark with glyph, "Import claims" Pill on `/dashboard/claims` (sm size, text-only after the user rejected the first two designs as "extremely ugly").
+
+Final fix in this session: CI was red on `bundle`, `e2e`, `lighthouse` because adding `@dentabill/db` as a workspace dep of `apps/web` means `next build` now bundles Prisma — those 3 jobs lacked an explicit `prisma generate` step. Mirrored the pattern from `quality` + `test` and added a `postinstall` script to `packages/db` as a fresh-clone safeguard. Pushed as `ci(ci): generate Prisma client in bundle/e2e/lighthouse jobs`; CI rerun in flight at the time of this update.
 
 ## Current state of the repo
 
-- Branch in flight: `phase-2/docs-closeout`. After merge, `main` has 52 squashed Phase 2 commits.
-- All quality gates green: typecheck / lint / test / build / prettier / Playwright (chromium) / axe / Lighthouse / bundle budget / CodeQL / GitGuardian.
-- Test totals: api 54, db 56, ui 138+, web 193, payer-ivr 21, types 14, db.audit + with-org integration covered.
-- Bundle: every authenticated route ≤ 200 KB first-load JS. Marketing routes ≤ 170 KB.
-- New ADRs since checkpoint: ADR-029 (terms-template), ADR-030 (Phase 2 retro).
+- Branch in flight: `fix/onboarding-flow-and-design-polish` (PR #66). Once green it merges to `main`.
+- Phase 2 was already 54/55 done before this PR; this PR is non-Phase-2 maintenance unblocking the user from actually running the product.
+- CI gates expected green after the Prisma-generate fix lands: typecheck / lint / test / build / prettier / Playwright (chromium) / axe / Lighthouse / bundle budget / CodeQL / GitGuardian.
+- New helper added: `apps/web/src/lib/onboarding-status.ts` — call this from any RSC layout that needs to know whether the current Clerk user has finished onboarding.
+- New env-loading note in `CLAUDE.md`: monorepo apps don't read repo-root `.env`; we maintain `apps/web/.env.local → ../../.env` and `apps/api/.env → ../../.env` symlinks.
 
 ## Next task
 
-**P2-T52 (deferred to user) — `PRODUCT.md` via `$impeccable teach`.** This is the only Phase 2 task that requires interactive skill invocation; it cannot be done autonomously. The user runs `$impeccable teach` from the repo root in Claude Code, walks through the bootstrap dialog, and commits the resulting `PRODUCT.md`. After that lands, Phase 2 is officially closed and Phase 3 (Queue + Voice — BullMQ workers, Retell wiring, IVR navigation) can open.
+**Author ADR-031 — "Clerk Organizations deferred; synthetic `clerkOrgId` pattern".** The onboarding endpoint stamps `clerkOrgId = "local_<clerkUserId>"` because we explicitly do NOT use Clerk Organizations in Phase 2 (multi-seat practices land in Phase 4). The DentaBill `Organization.clerkOrgId` column is a unique key, so we need a deterministic synthetic value for single-seat orgs. ADR-031 should document: why we deferred Clerk Orgs (org-create UX is heavy + invitation flow needs work + Phase 2 customers are solo billers), the `local_<userId>` pattern, the migration path to real Clerk Org IDs in Phase 4, and the invariant that `clerkOrgId` starting with `local_` indicates a single-seat org.
 
-In the meantime: this PR (`phase-2/docs-closeout`) lands the doc closeout. After it merges, `main` is in a green steady-state ready for Phase 3 task generation.
+After ADR-031 lands, the next substantive workstream is **Phase 3 — Queue + Voice** (BullMQ workers, Retell wiring, IVR navigation per PRD §6). `docs/PHASE_PLAN.md` already sketches it; first task there will be regenerating `docs/TASKS.md` for Phase 3.
+
+P2-T52 (`PRODUCT.md` via `$impeccable teach`) is still deferred to the user — interactive skill invocation can't be done autonomously.
 
 ## Open questions / ambiguities
 
-- None blocking. The merge-commit-on-shared-`TASKS.md` pain documented in ADR-030 §5 is the one rough edge to address early in Phase 3.
+- **Clerk Organizations deferred — needs ADR-031.** The onboarding endpoint synthesises `clerkOrgId = "local_<clerkUserId>"` for the personal-org fallback. This is a deliberate choice (Clerk Org UX is heavy, single-seat customers in Phase 2) but it isn't yet documented as a decision. Phase 4 will reverse it.
+- The merge-commit-on-shared-`TASKS.md` pain documented in ADR-030 §5 is the one rough edge to address early in Phase 3.
 - Branch protection on `main` still not enabled in the GitHub UI.
 
 ## Do not forget
