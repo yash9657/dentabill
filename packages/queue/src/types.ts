@@ -39,8 +39,16 @@ export const CallJobDataSchema = z.object({
    * Idempotency key — used as BullMQ jobId — to prevent double-enqueue
    * on a UI double-click or retry. ADR-035 retains failed jobs forever,
    * so a second enqueue with the same key is a no-op.
+   *
+   * `:` is reserved by BullMQ as its Redis-key namespace separator and
+   * is rejected at job-creation time. The regex enforces that
+   * structurally so a misuse fails at the trust boundary, not deep in
+   * BullMQ.
    */
-  idempotencyKey: z.string().min(1),
+  idempotencyKey: z
+    .string()
+    .min(1)
+    .regex(/^[A-Za-z0-9_.-]+$/, 'idempotencyKey must match /^[A-Za-z0-9_.-]+$/'),
 });
 
 export type CallJobData = z.infer<typeof CallJobDataSchema>;

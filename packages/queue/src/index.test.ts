@@ -24,7 +24,7 @@ describe('CallJobDataSchema', () => {
     payerCode: 'DELTA_DENTAL_PPO',
     attemptNumber: 1,
     claimPriority: 75,
-    idempotencyKey: 'claim_xyz:1',
+    idempotencyKey: 'claim_xyz-1',
   };
 
   it('accepts a well-formed payload', () => {
@@ -47,6 +47,12 @@ describe('CallJobDataSchema', () => {
       expect(() => CallJobDataSchema.parse({ ...valid, [field]: '' })).toThrow();
     },
   );
+
+  it('rejects an idempotencyKey containing `:` (BullMQ jobId reserved char)', () => {
+    expect(() => CallJobDataSchema.parse({ ...valid, idempotencyKey: 'claim_xyz:1' })).toThrow(
+      /idempotencyKey/,
+    );
+  });
 });
 
 describe('CallJobResultSchema', () => {

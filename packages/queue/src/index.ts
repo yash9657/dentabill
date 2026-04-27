@@ -24,3 +24,17 @@ export {
   type CallJobResult,
   type QueueName,
 } from './types.js';
+export {
+  createDlqQueue,
+  DLQ_DEFAULT_JOB_OPTIONS,
+  DLQ_JOB_NAME,
+  DLQ_REASONS,
+  DlqJobDataSchema,
+  enqueueDlqJob,
+  type CreateDlqQueueOptions,
+  type DlqJobData,
+  type DlqJobName,
+  type DlqQueue,
+  type DlqReason,
+  type EnqueueDlqJobInput,
+} from './dlq.js';
