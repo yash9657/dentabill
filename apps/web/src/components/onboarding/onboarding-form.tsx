@@ -166,7 +166,6 @@ function ClerkOnboardingForm(): React.ReactElement {
         // best-effort
       }
       router.push('/dashboard/overview');
-      router.refresh();
       return;
     } catch {
       setSubmitError({
@@ -201,7 +200,6 @@ function StubOnboardingForm(): React.ReactElement {
         return;
       }
       router.push('/dashboard/overview');
-      router.refresh();
     } catch {
       setSubmitError({
         message: 'Network error reaching DentaBill. Try again in a moment.',
