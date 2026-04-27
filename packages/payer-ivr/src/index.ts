@@ -35,3 +35,27 @@ export {
 } from './agents/index.js';
 
 export { checkPayerHours, isWithinPayerHours, type PayerHoursResult } from './business-hours.js';
+
+export {
+  EndCallInputSchema,
+  RetellCallEndReason,
+  RetellEventSchema,
+  RetellWebhookEnvelopeSchema,
+  RetellWebhookParseError,
+  StartCallInputSchema,
+  StartCallResultSchema,
+  parseRetellWebhookEnvelope,
+  verifyRetellWebhookSignature,
+  type EndCallInput,
+  type RetellCallEndedEvent,
+  type RetellCallErrorEvent,
+  type RetellCallStartedEvent,
+  type RetellCallTranscriptEvent,
+  type RetellEvent,
+  type RetellEventListener,
+  type RetellPort,
+  type RetellWebhookEnvelope,
+  type StartCallInput,
+  type StartCallResult,
+  type VerifyRetellWebhookSignatureInput,
+} from './retell/index.js';
