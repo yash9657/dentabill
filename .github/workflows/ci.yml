@@ -204,13 +204,6 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm --filter @dentabill/web exec playwright install-deps chromium
 
-      # @dentabill/db is now a workspace dep of apps/web (the dashboard
-      # layout reads Prisma directly to gate onboarding). Without an
-      # explicit generate the .prisma/client client doesn't exist, and
-      # `next build` fails with "Module not found: '.prisma/client/default'".
-      - name: Generate Prisma client
-        run: pnpm --filter @dentabill/db exec prisma generate
-
       - name: Build Next.js app
         run: pnpm --filter @dentabill/web build
 
@@ -251,9 +244,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate Prisma client
-        run: pnpm --filter @dentabill/db exec prisma generate
-
       # `quality` already runs turbo build; we re-build here so the bundle
       # check sees fresh .next/ artifacts on this runner. The marketing
       # surface builds in < 30s, so the duplication is cheap.
@@ -287,9 +277,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: pnpm --filter @dentabill/db exec prisma generate
 
       - name: Build apps/web
         run: pnpm --filter @dentabill/web build

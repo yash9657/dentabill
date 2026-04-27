@@ -59,22 +59,13 @@ const config: PlaywrightTestConfig = {
 };
 
 /**
- * Web server selection:
- *   - `PLAYWRIGHT_BASE_URL` set    → assume the operator started a server
- *     elsewhere; Playwright connects directly.
- *   - CI                           → `next start` against the pre-built
- *     bundle (the `Build Next.js app` step in `.github/workflows/ci.yml`
- *     runs first). This avoids on-demand `next dev` route compilation —
- *     the dev server compiles each route on its first hit, which can
- *     take 10–30s and time out a 5s `toHaveURL`. It also matches the
- *     surface used to regenerate visual snapshots, so the production
- *     and snapshot-baseline rendering stay in lockstep.
- *   - Local (no CI)                → `next dev` for fast HMR while
- *     developing tests.
+ * Local: spin up `next dev` if no PLAYWRIGHT_BASE_URL is provided. CI
+ * uses the same dev server (the build step still runs to gate-check
+ * compilation, but Playwright runs against `pnpm dev` like local).
  */
 if (!process.env.PLAYWRIGHT_BASE_URL) {
   config.webServer = {
-    command: process.env.CI ? 'pnpm start' : 'pnpm dev',
+    command: 'pnpm dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

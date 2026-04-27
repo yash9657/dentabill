@@ -141,9 +141,6 @@ importers:
       '@dentabill/api-sdk':
         specifier: workspace:*
         version: link:../../packages/api-sdk
-      '@dentabill/db':
-        specifier: workspace:*
-        version: link:../../packages/db
       '@dentabill/types':
         specifier: workspace:*
         version: link:../../packages/types
