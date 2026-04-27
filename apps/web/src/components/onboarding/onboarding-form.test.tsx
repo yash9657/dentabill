@@ -1,8 +1,21 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OnboardingForm } from './onboarding-form.js';
+
+// Force the Clerk-aware render path under unit tests. The component
+// branches on `process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and the
+// other branch (`StubOnboardingForm`) intentionally does NOT call
+// `useAuth`/`useUser`, so the Clerk-hook assertions below would never
+// fire without this stub.
+beforeAll(() => {
+  vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_dummy_for_unit_test');
+});
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 const pushMock = vi.fn();
 const refreshMock = vi.fn();

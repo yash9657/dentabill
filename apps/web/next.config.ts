@@ -15,6 +15,16 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   transpilePackages: ['@dentabill/ui', '@dentabill/types'],
+  /**
+   * Keep `@prisma/client` out of the webpack server bundle. Prisma's
+   * library engine resolves `worker.js` and the `.node` binary by their
+   * paths inside the published package; webpack rewrites those paths
+   * into `vendor-chunks/` and the runtime then crashes with
+   * `Cannot find module '.../vendor-chunks/lib/worker.js'`. Marking the
+   * package external delegates the require to Node, which finds it in
+   * `node_modules` where the relative paths still hold.
+   */
+  serverExternalPackages: ['@prisma/client', '.prisma/client'],
   typedRoutes: true,
   /**
    * `@dentabill/ui` ships raw TypeScript and uses NodeNext-style relative

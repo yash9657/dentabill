@@ -34,6 +34,18 @@ P2-T52 (`PRODUCT.md` via `$impeccable teach`) is still deferred to the user — 
 - The merge-commit-on-shared-`TASKS.md` pain documented in ADR-030 §5 is the one rough edge to address early in Phase 3.
 - Branch protection on `main` still not enabled in the GitHub UI.
 
+## Trap to avoid
+
+Regenerating Linux visual snapshots in `mcr.microsoft.com/playwright:v1.59.1-noble`
+with `-v "$PWD:/work"` shares the host's `node_modules` with the container.
+`pnpm install` and `prisma generate` inside the container overwrite the host's
+Prisma engine (Linux replaces darwin-arm64) and `next build` leaves stale `.next/`
+artifacts. When the host dev servers restart, `apps/api` throws
+`PrismaClientInitializationError: could not locate the Query Engine for runtime
+"darwin-arm64"` and `apps/web` throws `Cannot find module './1971.js'`. Recovery:
+`pnpm --filter @dentabill/db exec prisma generate && rm -rf apps/web/.next`. Better:
+isolate the container's pnpm store with a separate volume on next snapshot run.
+
 ## Do not forget
 
 - One task at a time. Tests are part of the task, not a follow-up.

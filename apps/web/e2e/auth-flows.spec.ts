@@ -31,7 +31,7 @@ import { expect, test } from './fixtures.js';
  * surface area testable from CI.
  */
 test.describe('auth flow navigation (P2-T31)', () => {
-  test('marketing header CTAs route to /sign-in and /sign-up', async ({ page }) => {
+  test('marketing header CTAs route to /sign-in and /contact', async ({ page }) => {
     await page.goto('/');
 
     const header = page.getByRole('banner');
@@ -39,9 +39,11 @@ test.describe('auth flow navigation (P2-T31)', () => {
       'href',
       '/sign-in',
     );
-    await expect(header.getByRole('link', { name: /start free trial/i }).first()).toHaveAttribute(
+    // Self-serve sign-up is closed; the lead path is now "Request access"
+    // → /contact, where prospects request a Clerk invitation.
+    await expect(header.getByRole('link', { name: /request access/i }).first()).toHaveAttribute(
       'href',
-      '/sign-up',
+      '/contact',
     );
 
     await header.getByRole('link', { name: /^sign in$/i }).click();
@@ -68,12 +70,6 @@ test.describe('auth flow navigation (P2-T31)', () => {
     await expect(page).toHaveURL(/\/dashboard\/overview$/);
 
     expect(consoleErrors).toEqual([]);
-  });
-
-  test('onboarding "Skip for now" routes directly to /dashboard/overview', async ({ page }) => {
-    await page.goto('/onboarding');
-    await page.getByRole('link', { name: /skip for now/i }).click();
-    await expect(page).toHaveURL(/\/dashboard\/overview$/);
   });
 
   test('/dashboard/* breadcrumb trail matches the navigated route', async ({ page }) => {

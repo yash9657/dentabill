@@ -15,7 +15,7 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type UseFormReturn } from 'react-hook-form';
 
 import { useDentaBillApi } from '../../lib/api-client.js';
 import {
@@ -27,19 +27,35 @@ import {
 /**
  * `<OnboardingForm>` — the post-sign-up form rendered at /onboarding.
  *
- * Submits directly to the apps/api `POST /v1/onboarding` endpoint
- * carrying the Clerk session JWT. The endpoint creates the DentaBill
- * `Organization` + `User` rows and stamps `publicMetadata.onboarded`
- * on the Clerk user; on success we route to `/dashboard/overview`.
+ * Two render paths, picked at module load by the presence of
+ * `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`:
  *
- * The form is intentionally kept short (4 fields). Heavier
- * qualification — multi-location practices, billing-team size — is
- * collected during the demo call rather than here.
+ *   - **`<ClerkOnboardingForm>` (production).** Reads the active Clerk
+ *     session, mints an authorization header, and POSTs to the
+ *     cross-origin `apps/api` `/v1/onboarding` endpoint which creates
+ *     the `Organization` + `User` rows in the DB and stamps Clerk's
+ *     `publicMetadata.onboarded`. On success it routes to
+ *     `/dashboard/overview`; the dashboard layout's RSC onboarding gate
+ *     reads the freshly-created `User` row and lets the page render.
  *
- * Idempotency: the API endpoint is safe to retry. If the user
- * already has a DentaBill `User` row, the response is `200 +
- * alreadyOnboarded: true` and we still navigate to the dashboard.
+ *   - **`<StubOnboardingForm>` (CI / dev without Clerk keys).** Skips
+ *     all Clerk hooks (calling `useAuth()` outside `<ClerkProvider>`
+ *     throws), POSTs to the same-origin `/v1/onboarding` Next route
+ *     which validates the body and acks 204. Used by Playwright in CI
+ *     where Clerk is not provisioned.
+ *
+ * The split happens at the wrapper level, NOT inside a component that
+ * already calls hooks. Each child has a stable hook tree per render.
  */
+/**
+ * Read at render time rather than at module load so unit tests that
+ * stub the env via `vi.stubEnv` after the module has already been
+ * imported still pick up the right path.
+ */
+function hasClerkKeys(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+}
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? (typeof window === 'undefined' ? 'http://localhost:3001' : '');
 
@@ -60,13 +76,11 @@ interface ApiErrorBody {
 }
 
 export function OnboardingForm(): React.ReactElement {
-  const router = useRouter();
-  const { withAuthHeaders } = useDentaBillApi();
-  const { getToken } = useAuth();
-  const { user } = useUser();
-  const [submitError, setSubmitError] = React.useState<SubmitError | null>(null);
+  return hasClerkKeys() ? <ClerkOnboardingForm /> : <StubOnboardingForm />;
+}
 
-  const form = useForm<OnboardingFormValues>({
+function useOnboardingForm(): UseFormReturn<OnboardingFormValues> {
+  return useForm<OnboardingFormValues>({
     resolver: zodResolver(OnboardingFormSchema as never),
     mode: 'onSubmit',
     defaultValues: {
@@ -76,6 +90,15 @@ export function OnboardingForm(): React.ReactElement {
       acceptedPayers: [],
     },
   });
+}
+
+function ClerkOnboardingForm(): React.ReactElement {
+  const router = useRouter();
+  const { withAuthHeaders } = useDentaBillApi();
+  const { getToken } = useAuth();
+  const { user } = useUser();
+  const [submitError, setSubmitError] = React.useState<SubmitError | null>(null);
+  const form = useOnboardingForm();
 
   const onSubmit = async (values: OnboardingFormValues): Promise<void> => {
     setSubmitError(null);
@@ -105,10 +128,6 @@ export function OnboardingForm(): React.ReactElement {
       });
       const json = (await response.json().catch(() => ({}))) as OnboardingResponse | ApiErrorBody;
       if (!response.ok) {
-        // Map status codes to actionable copy. The 401 path is the most
-        // common real-user surprise (long idle on the form, JWT
-        // expires); we send them to /sign-in with a return URL so the
-        // form data is the only thing they lose.
         if (response.status === 401) {
           setSubmitError({
             message:
@@ -137,15 +156,9 @@ export function OnboardingForm(): React.ReactElement {
         setSubmitError({ message });
         return;
       }
-      // The dashboard layout reads the DB (`User.clerkUserId`) to gate
-      // onboarding rather than `publicMetadata.onboarded`, so we don't
-      // need to fight Clerk's JWT cache here. A soft router push works
-      // — the next request hits the dashboard layout, which finds the
-      // freshly-created `User` row and lets the page render.
-      //
-      // We still call `user.reload()` + force-refresh the token as a
-      // best-effort so any *other* code that reads publicMetadata sees
-      // the new value sooner. Failures are non-fatal.
+      // Best-effort: nudge Clerk's session cache so anything reading
+      // `publicMetadata.onboarded` sees the new value sooner. The
+      // dashboard layout reads the DB instead, so this is non-blocking.
       try {
         if (user) await user.reload();
         await getToken({ skipCache: true });
@@ -163,6 +176,53 @@ export function OnboardingForm(): React.ReactElement {
     }
   };
 
+  return <OnboardingFormShell form={form} onSubmit={onSubmit} submitError={submitError} />;
+}
+
+function StubOnboardingForm(): React.ReactElement {
+  const router = useRouter();
+  const [submitError, setSubmitError] = React.useState<SubmitError | null>(null);
+  const form = useOnboardingForm();
+
+  const onSubmit = async (values: OnboardingFormValues): Promise<void> => {
+    setSubmitError(null);
+    try {
+      const response = await fetch('/v1/onboarding', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { message?: string } | null;
+        setSubmitError({
+          message:
+            data?.message ?? 'Could not save your onboarding details. Try again in a moment.',
+        });
+        return;
+      }
+      router.push('/dashboard/overview');
+      router.refresh();
+    } catch {
+      setSubmitError({
+        message: 'Network error reaching DentaBill. Try again in a moment.',
+      });
+    }
+  };
+
+  return <OnboardingFormShell form={form} onSubmit={onSubmit} submitError={submitError} />;
+}
+
+interface OnboardingFormShellProps {
+  readonly form: UseFormReturn<OnboardingFormValues>;
+  readonly onSubmit: (values: OnboardingFormValues) => Promise<void>;
+  readonly submitError: SubmitError | null;
+}
+
+function OnboardingFormShell({
+  form,
+  onSubmit,
+  submitError,
+}: OnboardingFormShellProps): React.ReactElement {
   const isSubmitting = form.formState.isSubmitting;
 
   return (
