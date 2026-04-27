@@ -311,3 +311,115 @@ Mocking the database is forbidden in integration tests (PRD rule). Mocking exter
 8. **Keep** **inline integration tests against real Postgres** for write paths. The cross-org leak guards in `/v1/claims` and `/v1/ingest/claims` would have been impossible to verify with mocks.
 
 **Consequences:** Phase 3 (T52 PRODUCT.md follow-up + Queue + Voice) inherits a clean baseline: 7 CI gates green on every PR, 220+ tests, bundle budgets respected, visual regression baselines per OS, and the full ingestion path proven end-to-end. The merge-commit pain in §5 is the one rough edge to fix early — Phase 3 should land its in-flight PRs serially when they share `docs/TASKS.md` lines, or batch the doc updates into a final closeout.
+
+## ADR-031 — Clerk Organizations deferred; synthetic `clerkOrgId = "local_<userId>"` for single-seat orgs
+
+**Date:** 2026-04-26
+**Status:** Accepted (carry-over from Phase 2; formalised as Phase 3 opens)
+**Context:** The Phase 2 onboarding endpoint (`apps/api/src/routes/v1/onboarding.ts`) creates an `Organization` row plus a `User` row when a Clerk-authenticated user lands on `/onboarding` for the first time. `Organization.clerkOrgId` is `@unique`. Clerk Organizations (multi-seat practices, invitation flow) are not used in Phase 2 — the onboarding UX is single-seat-only — so we need a deterministic synthetic `clerkOrgId` to satisfy the unique constraint without prematurely modelling Clerk's `org_*` namespace.
+**Decision:** For single-seat orgs created by the onboarding endpoint, stamp `clerkOrgId = "local_<clerkUserId>"`. The `local_` prefix is the load-bearing invariant: any `Organization` whose `clerkOrgId` starts with `local_` is single-seat and cannot have collaborators added until it is migrated to a real Clerk Organization. Phase 4 introduces the multi-seat flow: when an admin invites their first collaborator we create a real Clerk Organization, copy the `org_*` ID into `clerkOrgId`, and audit-log the migration. Code that reads `clerkOrgId` MUST NOT assume the Clerk Org API can be queried with it; use the prefix check to short-circuit.
+**Consequences:** Phase 3's Retell webhook and call-worker can resolve `organizationId` → `clerkOrgId` the same way for both single-seat and (future) multi-seat orgs, since the column is non-null and unique throughout. The Phase 4 migration does not require a backfill — only a one-time Prisma update per org as collaborators are invited. Cross-cutting tests assert that synthesised IDs are never sent to Clerk's Org API.
+
+## ADR-032 — Retell agents: per payer (three agents in Phase 3)
+
+**Date:** 2026-04-26
+**Status:** Accepted
+**Context:** Phase 3 makes the first real payer call. Retell agents carry the LLM prompt the model uses when speaking to a human rep — the persona, the script, the information-gathering checklist (PRD §6 lines 425–434), the boundaries on what the agent will and will not say. Two structurally different options: (a) one universal agent with a payer parameter the prompt branches on, (b) one Retell agent per payer.
+**Decision:** Three Retell agents — `delta-dental-ppo`, `cigna-dental`, `metlife-dental`. Per-payer prompts ship in `packages/payer-ivr/src/agents/<payer>.ts` next to that payer's IVR map and DTMF timing rules. The agent's Retell ID is provisioned out-of-band and recorded in `.env.example` as `RETELL_AGENT_ID_DELTA_DENTAL_PPO=`, etc. The `Call.retellAgentId` column already exists in the schema — the call-job handler stamps it from the resolved agent for that payer.
+**Consequences:** Three agent IDs to keep in sync (env + Retell dashboard) instead of one. Net win: a Cigna prompt change does not require re-validating Delta or MetLife conversations; payer-specific information collection (e.g. Cigna asks for Group Number where Delta does not) lives in the payer's own prompt instead of a branching super-prompt. Adding a 4th payer in Phase 4+ is one new file in `packages/payer-ivr/src/agents/` plus one new env var.
+
+## ADR-033 — Retell SDK abstraction: `RetellPort` interface with `FakeRetell` and `LiveRetell` adapters
+
+**Date:** 2026-04-26
+**Status:** Accepted
+**Context:** The call-worker handler must place outbound calls and receive transcript/event webhooks. `retell-sdk` is the only adapter that can actually do that, but tests cannot — and must not — make real outbound phone calls in CI. Without an abstraction the handler either embeds the SDK and is therefore untestable end-to-end, or it embeds an `if (process.env.NODE_ENV === 'test')` branch that diverges the production code path.
+**Decision:** `packages/payer-ivr` exports a `RetellPort` TypeScript interface with `startCall`, `endCall`, `onWebhook` typed contracts. Two adapters implement it:
+
+1. `FakeRetell` — pure in-process state machine that consumes a payer IVR map and emits webhook events synchronously in test code. Deterministic, no network. Used by every Vitest integration test and the call-worker's full-lifecycle e2e test (P3-T15).
+2. `LiveRetell` — wraps `retell-sdk`, lazy-loaded so dev/CI without `RETELL_API_KEY` does not error on import (matches the `hasClerkKeys` pattern from ADR-024 / ADR-030). Only adapter that touches the network.
+
+The call-job handler, IVR navigator, and hold detector all depend on `RetellPort`, never on a concrete adapter. Adapter selection happens once at worker boot from a single env-driven factory.
+**Consequences:** A failing call-lifecycle test means our logic is broken, not Retell's cloud — flake in this layer is always a real bug. Swapping Retell for another voice provider in the future is a new adapter, not a rewrite. The contract test asserts both adapters honour the same interface (input → output equivalence at the port boundary).
+
+## ADR-034 — Phase 3 UI scope: Call-Now Pill, live indicator, Calls list page only
+
+**Date:** 2026-04-26
+**Status:** Accepted
+**Context:** The visible part of "the first real payer call" could be anything from a single button to a full live-transcript theatre. Building the latter in Phase 3 means designing an SSE stream, a transcript-rendering component, and a polished "live" interaction in parallel with the queue, the worker, the IVR navigator, and the webhook contract — and getting any of them wrong leaks into the others.
+**Decision:** Phase 3 ships exactly three UI surfaces:
+
+1. **"Call now" pill** on each row in `/dashboard/claims` and on the claim detail page. Uses the existing `Pill` brand primitive, mutation goes through the SDK, optimistic state, error toast.
+2. **Live status indicator** — the muted teal status accent (`oklch(0.78 0.04 200)` per `DESIGN.md`) finally activates here; lights up for `IN_QUEUE`, `CALLING`, `ON_HOLD`. Subtle pulse animation respects `prefers-reduced-motion`.
+3. **`/dashboard/calls` page** — virtualized table of `Call` rows with status, duration, payer, claim link. List updates via TanStack Query polling: 5s while any row is `CALLING`, 30s otherwise.
+
+No live transcript view, no in-progress call modal, no SSE infra. Phase 4 (when the Claude post-call summarizer produces transcript text and a structured summary) is the right time to design the live surface in one go.
+**Consequences:** A biller in Phase 3 sees a definite state machine — they fired a call, the dashboard moves through states with a visible accent, the call appears in the list when it ends. They do not see the LLM's words in real time. The polling interval is calibrated to never burn more than ~12 requests per minute per active biller; SSE in Phase 4 will replace polling for `CALLING` rows specifically.
+
+## ADR-035 — Queue topology: single `calls` queue + `calls-dlq`, retry backoff 30s/2m/8m
+
+**Date:** 2026-04-26
+**Status:** Accepted
+**Context:** BullMQ's data plane gives us many degrees of freedom — number of queues, retry policy, dead-letter routing, job priority, concurrency per worker. PRD §6 says hold times of 5–20 minutes are normal; a job runs roughly that long. The denial of service we are most exposed to is a failing payer line silently retrying forever.
+**Decision:**
+
+- **One queue: `calls`.** Sharding by payer wastes capacity; Phase 3 has three payers and one worker process. Job priority within `calls` is set from `Claim.priority` (PRD §5 formula).
+- **One DLQ: `calls-dlq`.** Reasons captured in the new `Call.dlqReason` text column (P3-T8 migration). The DLQ consumer (P3-T14) is a separate `Worker` instance.
+- **Retry policy:** `attempts: 3`, `backoff: { type: 'exponential', delay: 30_000 }` → 30s / 2m / 8m. After three failures the job is routed to `calls-dlq` and the claim transitions to `MANUAL_REVIEW`.
+- **Retention:** `removeOnComplete: { age: 86_400 }` (24h), `removeOnFail: false` (so DLQ inspection is always possible).
+- **Concurrency:** the `Worker` runs with `concurrency: 4` initially — calibrated to Retell's outbound-call limit and our Postgres connection pool; tunable via env.
+
+**Consequences:** A retell outage produces a contained DLQ buildup that ops can drain; it does not loop forever or starve the queue. Adding a 4th payer never requires a new queue. Retention keeps the BullMQ admin UI usable while preserving DLQ rows for HIPAA audit.
+
+## ADR-036 — Webhook signature: HMAC-SHA256 of raw body, constant-time compare, replay protection
+
+**Date:** 2026-04-26
+**Status:** Accepted
+**Context:** Retell delivers call lifecycle events via HTTP webhook. An unauthenticated webhook endpoint is a direct path to forging call status, denial codes, and transcript content into our DB — the highest-severity vulnerability in the Phase 3 surface area.
+**Decision:**
+
+1. Verify HMAC-SHA256 of the **raw body** (not parsed JSON) against `RETELL_WEBHOOK_SECRET` using `crypto.timingSafeEqual`. The Fastify route registers `addContentTypeParser('application/json', ..., { parseAs: 'buffer' })` so the raw bytes are available; only after verification do we `JSON.parse`.
+2. Reject with `401 ApiError code=invalid_signature` on header missing, length mismatch, or compare failure. Constant-time compare on every path so timing attacks cannot distinguish the failure modes.
+3. Replay protection: a `WebhookEvent { id PRIMARY KEY, eventId UNIQUE, receivedAt }` table records every accepted Retell `eventId`. Re-delivery returns `200 ok` (idempotent), tampered re-delivery is caught by HMAC. Old rows are pruned weekly.
+4. The route MUST log neither the secret nor the raw body. PHI redaction in `@dentabill/logger` (P3-T26) covers the parsed event shape.
+
+**Consequences:** A leaked secret is the only way an attacker can forge a Retell event; rotation is documented in `docs/RUNBOOK.md` (P3-T28). Replays are no-ops, which is the safe default for at-least-once webhook delivery. The cost is one row per webhook event — at expected volume (~100 events/call, ~50 calls/day for one practice) that is ~5k rows/day per practice, well within Postgres budgets.
+
+## ADR-037 — Business-hours guard: enforced at enqueue (API), not at worker pickup
+
+**Date:** 2026-04-26
+**Status:** Accepted
+**Context:** Calls placed outside payer business hours (PRD §6: e.g. Delta Dental PPO is 8am–5pm CT) waste a Retell call slot and produce a guaranteed voicemail. The check could live (a) at enqueue in the API, (b) at job pickup in the worker, or (c) both.
+**Decision:** Single source of truth is the API enqueue route (`POST /v1/claims/:id/calls`). It calls `isWithinPayerHours(payerCode, new Date())` from `@dentabill/payer-ivr` (P3-T4) and rejects with `409 ApiError code=outside_business_hours` if the window is closed, returning the next opening time so the UI can render an informative tooltip on the disabled "Call now" pill.
+
+The worker does NOT re-check at pickup. Rationale: a job that sits in the queue for 8 minutes (BullMQ retry backoff) and crosses a closing-time boundary is rare, and re-checking introduces a state where the API said yes and the worker says no — surface area for confusing biller UX. If the gap becomes a real issue we revisit (one ADR away), but the structural simpler choice is one check, at the front door.
+**Consequences:** Tooltip + disabled pill is the user-visible artefact when a payer's window is closed. The integration test (P3-T16) uses `vi.setSystemTime` to assert both inside-hours acceptance and outside-hours rejection. Daylight-saving transitions are handled by `Intl.DateTimeFormat`-backed timezone resolution, not manual offset arithmetic.
+
+## ADR-038 — Per-call hard cap: 15 minutes → DLQ + claim `MANUAL_REVIEW`
+
+**Date:** 2026-04-26
+**Status:** Accepted
+**Context:** Retell calls are not free and not instant. A run-away call — IVR maps a stuck voice prompt the LLM cannot handle, a payer route hangs the line, a transcript loop confuses the agent — could rack cost without producing a useful claim status. Production hold times peak at 20 minutes (Cigna upper bound, PRD §6 line 410), so 15 min is a calibrated ceiling for _active_ call duration after the IVR is navigated; expectation is that most successful calls finish in under 10 min.
+**Decision:** `MAX_CALL_DURATION_MS = 900_000` (15 minutes). The hold detector (P3-T12) and a wall-clock guard inside the call-job handler (P3-T13) both enforce this. On breach: end the Retell call, write `CallEvent type=ESCALATED` with the duration, transition the `Claim` to `MANUAL_REVIEW`, route the BullMQ job to `calls-dlq` with `dlqReason='exceeded_max_duration'`. No automatic retry of an escalated claim — a human reviews.
+**Consequences:** A pathological call costs at most 15 minutes of Retell time. Billers see escalated claims in `MANUAL_REVIEW` with the timing reason recorded. The cap is env-overridable for staging where we may want a tighter loop on long-call debugging.
+
+## ADR-039 — Hold-time policy: 10 min hold → tear down + reschedule, max 2 attempts/claim/day
+
+**Date:** 2026-04-26
+**Status:** Accepted
+**Context:** Holding for a rep that never picks up burns the same Retell budget as an active call. PRD §6 estimated holds: Delta 5–12 min, Cigna 8–20 min, MetLife 6–15 min. The 90th-percentile case is ~15 min; longer than that almost certainly indicates a saturated payer line that re-attempting later is more productive than continuing to hold.
+**Decision:** `MAX_HOLD_MS = 600_000` (10 minutes of _uninterrupted_ hold, distinct from total call time in ADR-038). The hold detector (P3-T12) tracks the most recent rep-speech timestamp via Retell's transcript stream; if the gap exceeds `MAX_HOLD_MS` and `Call.status === ON_HOLD`, the worker calls `RetellPort.endCall`, increments `Call.attemptNumber`, and re-enqueues the job at a 1-hour backoff up to a per-day cap of **2 attempts per claim per calendar day** (timezone: payer's own; see ADR-037). After two attempts the third miss escalates to `MANUAL_REVIEW`.
+**Consequences:** Worst case for a single claim on a saturated payer: 2 × ~10 min hold + tear-down per day, then human review. The 2-attempts cap is enforced by querying `Call` rows for the same `claimId` whose `createdAt` falls within the payer-local day; the read is cheap given `idx_call_session_claim_status` (P3-T8). Tunable via env for CI / staging.
+
+## ADR-040 — PHI in call audio: never downloaded, retained only by Retell under their BAA
+
+**Date:** 2026-04-26
+**Status:** Accepted
+**Context:** Retell records call audio. That audio contains PHI (subscriber names, dates of birth, member IDs spoken aloud by the rep). HIPAA requires a clear data-flow boundary: who holds PHI, under what BAA, and for how long.
+**Decision:** DentaBill never downloads, copies, or proxies Retell call audio. Recordings remain in Retell's storage under their HIPAA BAA — which we have signed before any production traffic. We persist only:
+
+1. The **structured outcome** the agent extracts (status, denial code, reference number, etc.) — this is the value the dashboard surfaces.
+2. The **transcript text** that lands via webhook — already redacted-by-policy in `@dentabill/logger` (P3-T26 adds `transcriptText` to redact paths) but stored in plain text in `CallEvent.data` for audit. PRD §5 covers this.
+3. A **link** to Retell's recording URL for human review when needed; clicked rarely and only by authenticated users with org-scoped RBAC.
+
+Storing the audio ourselves would require encrypting at rest with a managed key, a retention policy, deletion workflow, and a second BAA path (cloud storage). None of that adds value for billers; it adds cost and risk.
+**Consequences:** Retell is in our PHI inventory (`docs/SECURITY.md`). The recording-URL access is audit-logged. If we ever need to leave Retell, the migration plan involves a one-time export of historical recording URLs per claim — not a bulk audio download. Short retention windows for audio (Retell's defaults) are an explicit tradeoff: investigations beyond N days rely on transcript text, not raw audio.
