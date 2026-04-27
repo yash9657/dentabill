@@ -70,14 +70,14 @@ describe('<Button />', () => {
     expect(btn.className).toContain('bg-black');
   });
 
-  it('size="warm" applies asymmetric padding (left 1.5, right 2.5) for the warm CTA spec', () => {
+  it('size="warm" applies the warm-stone CTA padding', () => {
     render(
       <Button variant="warmStone" size="warm">
         Start trial
       </Button>,
     );
     const btn = screen.getByRole('button', { name: 'Start trial' });
-    expect(btn.className).toContain('pl-1.5');
-    expect(btn.className).toContain('pr-2.5');
+    expect(btn.className).toContain('h-10');
+    expect(btn.className).toContain('px-4');
   });
 });

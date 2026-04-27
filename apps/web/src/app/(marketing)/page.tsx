@@ -57,15 +57,15 @@ function Hero(): React.ReactElement {
       </p>
 
       <div className="flex flex-wrap items-center justify-center gap-3">
-        <Pill href="/sign-up" variant="black" withArrow>
-          Start free trial
+        <Pill href="/contact" variant="black" withArrow>
+          Request access
         </Pill>
         <Pill href="/contact" variant="warmStone" size="warm">
           Book a 20-minute demo
         </Pill>
       </div>
 
-      <div className="mt-10 w-full max-w-3xl">
+      <div className="mt-16 w-full max-w-3xl pb-4">
         <CallFlowWaveform className="h-auto w-full text-black" />
       </div>
     </section>
@@ -219,8 +219,8 @@ function ClosingCta(): React.ReactElement {
           office sleeps.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <Pill href="/sign-up" variant="black" withArrow>
-            Start free trial
+          <Pill href="/contact" variant="black" withArrow>
+            Request access
           </Pill>
           <Pill href="/contact" variant="whiteShadow">
             Book a 20-minute demo

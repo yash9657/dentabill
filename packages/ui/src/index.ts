@@ -34,3 +34,4 @@ export { HeroDisplay, type HeroDisplayProps } from './components/hero-display.js
 export { SectionDisplay, type SectionDisplayProps } from './components/section-display.js';
 export { ShadowCard, shadowCardVariants, type ShadowCardProps } from './components/shadow-card.js';
 export { StatusDot, statusDotVariants, type StatusDotProps } from './components/status-dot.js';
+export { BrandMark, type BrandMarkProps } from './components/brand-mark.js';

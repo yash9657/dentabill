@@ -117,7 +117,7 @@ export default async function RootLayout({
 }): Promise<React.ReactElement> {
   const requestId = await getServerRequestId();
   return (
-    <html lang="en" className={`${inter.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`${inter.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <head>
         {/*
          * Embed the per-request id so client-side code can read it via
@@ -128,7 +128,17 @@ export default async function RootLayout({
          */}
         <meta name={REQUEST_ID_META_NAME} content={requestId} />
       </head>
-      <body className="bg-white text-black antialiased">
+      {/*
+       * `suppressHydrationWarning` on <body>: browser extensions
+       * (ColorZilla's `cz-shortcut-listen`, Grammarly's `data-gr-*`,
+       * Dark Reader's CSS attrs, etc.) inject attributes between SSR
+       * and hydration. They don't affect React's tree — only the
+       * top-level html/body elements — and React's warning would
+       * otherwise surface in dev for any user with these extensions
+       * installed. The flag does not hide warnings for our own code
+       * because it doesn't propagate to children.
+       */}
+      <body className="bg-white text-black antialiased" suppressHydrationWarning>
         <WebVitalsReporter />
         <Providers>{children}</Providers>
       </body>

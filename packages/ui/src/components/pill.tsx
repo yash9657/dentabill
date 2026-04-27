@@ -40,10 +40,10 @@ const pillVariants = cva(
           'bg-warm-stone/80 rounded-warm-button shadow-warm hover:bg-warm-stone text-black',
       },
       size: {
-        default: 'text-button h-10 px-3.5',
-        sm: 'text-small h-8 px-2',
-        lg: 'text-button h-12 px-2.5',
-        warm: 'text-button h-11 pl-1.5 pr-2.5',
+        default: 'text-button h-10 gap-1.5 px-4',
+        sm: 'text-small h-8 gap-1.5 px-3',
+        lg: 'text-button h-11 gap-2 px-5',
+        warm: 'text-button h-10 gap-2 px-4',
       },
     },
     defaultVariants: {

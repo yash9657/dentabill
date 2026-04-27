@@ -1,28 +1,27 @@
-import { SignUp } from '@clerk/nextjs';
 import type { Metadata } from 'next';
 import * as React from 'react';
 
 import { AuthFallback } from '../../../../components/auth/index.js';
 
+import { SignUpClient } from './sign-up-client.js';
+
 /**
- * `/sign-up` — Clerk's hosted-component sign-up flow.
+ * `/sign-up` — invite-only entry point.
  *
- * Same conditional-render pattern as `/sign-in`: `<SignUp>` only
- * mounts when keys are set; otherwise the `<AuthFallback>` keeps
- * the route navigable. The catch-all segment `[[...sign-up]]` is
- * required so Clerk's sub-step routes (verify-email-address,
- * verify-phone-number) all resolve to this same page.
+ * Self-serve sign-up is closed: prospects request access through
+ * `/contact` and receive a Clerk invitation. The invitation email
+ * lands the user back here with `?__clerk_ticket=…`, at which point
+ * the Clerk `<SignUp>` component is mounted to finish the flow. The
+ * URL inspection happens in `<SignUpClient>` (Client Component) via
+ * `useSearchParams` so it reads the same source of truth Clerk's own
+ * client uses.
  *
- * Verify-email is **not** a separate page in our tree. Clerk's
- * sign-up flow renders the verification step inside the same
- * `<SignUp>` component when the URL is `/sign-up/verify-email-
- * address`; routing it through this catch-all keeps the layout
- * contiguous (same shell, same wordmark, same legal footer) and
- * avoids a hard navigation between steps.
+ * Without Clerk keys we render `<AuthFallback>` so local dev without
+ * env vars stays navigable.
  */
 export const metadata: Metadata = {
   title: 'Sign up',
-  description: 'Create a DentaBill account.',
+  description: 'DentaBill is invite-only. Request access or finish your invitation here.',
   alternates: { canonical: '/sign-up' },
   robots: { index: false, follow: true },
 };
@@ -33,15 +32,5 @@ export default function SignUpPage(): React.ReactElement {
   if (!HAS_CLERK_KEYS) {
     return <AuthFallback mode="sign-up" />;
   }
-  return (
-    <SignUp
-      appearance={{
-        elements: {
-          rootBox: 'mx-auto w-full',
-          cardBox: 'shadow-card hairline-edge rounded-[20px] bg-white',
-          card: 'shadow-none border-0 bg-transparent',
-        },
-      }}
-    />
-  );
+  return <SignUpClient />;
 }

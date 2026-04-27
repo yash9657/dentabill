@@ -38,12 +38,10 @@ const buttonVariants = cva(
         ghost: 'hover:bg-gray-light rounded-pill bg-transparent text-black',
       },
       size: {
-        default: 'text-button h-10 px-3.5',
-        sm: 'text-small h-8 px-2',
-        lg: 'text-button h-12 px-2.5',
-        // Asymmetric padding for the warm-stone signature CTA: more on the
-        // right, mirrors the original ElevenLabs treatment from DESIGN.md.
-        warm: 'text-button h-11 pl-1.5 pr-2.5',
+        default: 'text-button h-10 px-4',
+        sm: 'text-small h-8 px-3',
+        lg: 'text-button h-11 px-5',
+        warm: 'text-button h-10 px-4',
         icon: 'h-10 w-10',
       },
     },

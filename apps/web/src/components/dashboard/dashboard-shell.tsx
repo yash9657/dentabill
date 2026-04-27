@@ -1,6 +1,6 @@
 'use client';
 
-import { cn } from '@dentabill/ui';
+import { BrandMark, cn } from '@dentabill/ui';
 import { Menu, X } from 'lucide-react';
 import * as React from 'react';
 
@@ -116,11 +116,21 @@ export function DashboardShell({
           <div className="flex h-16 items-center justify-between border-b border-black/5 px-5">
             <div
               className={cn(
-                'font-display text-[18px] font-light tracking-[-0.01em] text-black',
+                'font-display inline-flex items-center gap-2 text-[18px] font-light tracking-[-0.01em] text-black',
                 collapsed && 'lg:hidden',
               )}
             >
-              DentaBill
+              <BrandMark size={28} />
+              <span>DentaBill</span>
+            </div>
+            <div
+              aria-hidden
+              className={cn(
+                'hidden text-black',
+                collapsed ? 'lg:inline-flex lg:w-full lg:items-center lg:justify-center' : '',
+              )}
+            >
+              {collapsed ? <BrandMark size={22} /> : null}
             </div>
             <button
               type="button"

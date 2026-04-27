@@ -1,5 +1,6 @@
 'use client';
 
+import { Pill } from '@dentabill/ui';
 import * as React from 'react';
 
 import type { ClaimsFilters } from '../../../lib/claims/types.js';
@@ -88,18 +89,28 @@ function AuthenticatedClaimsList(): React.ReactElement {
 
   return (
     <section className="flex flex-col gap-8" aria-labelledby="claims-heading">
-      <header className="max-w-3xl">
-        <p className="text-caption text-gray-warm mb-2 uppercase tracking-[0.14em]">Claims</p>
-        <h1
-          id="claims-heading"
-          className="font-display text-[28px] font-light leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]"
+      <header className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+        <div className="max-w-3xl">
+          <p className="text-caption text-gray-warm mb-2 uppercase tracking-[0.14em]">Claims</p>
+          <h1
+            id="claims-heading"
+            className="font-display text-[28px] font-light leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]"
+          >
+            Open claims queue
+          </h1>
+          <p className="text-body text-gray-dark mt-3 max-w-prose">
+            Every open claim, ranked by priority. Filter by status or payer, search by claim number,
+            and click any row to see the call history and next action.
+          </p>
+        </div>
+        <Pill
+          href="/dashboard/claims/import"
+          variant="black"
+          size="sm"
+          className="self-start sm:mt-1"
         >
-          Open claims queue
-        </h1>
-        <p className="text-body text-gray-dark mt-3 max-w-prose">
-          Every open claim, ranked by priority. Filter by status or payer, search by claim number,
-          and click any row to see the call history and next action.
-        </p>
+          Import claims
+        </Pill>
       </header>
 
       <ClaimsFilterBar filters={draftFilters} onChange={setDraftFilters} />

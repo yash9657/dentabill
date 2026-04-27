@@ -1,51 +1,77 @@
 import { clerkPlugin, getAuth } from '@clerk/fastify';
+import { prisma } from '@dentabill/db';
 import { ApiError } from '@dentabill/types';
-import type { FastifyInstance, FastifyRequest, preHandlerHookHandler } from 'fastify';
+import type {
+  FastifyInstance,
+  FastifyRequest,
+  preHandlerAsyncHookHandler,
+  preHandlerHookHandler,
+} from 'fastify';
 
 import { getEnv } from '../lib/env.js';
 
 /**
  * Authentication plugin for the DentaBill Fastify API.
  *
- * Two execution modes:
+ * Two preHandlers ship from this plugin:
+ *
+ *   • `requireUser` — only checks that the request carries a valid
+ *     Clerk session. Used by `/v1/onboarding`, the *first* authenticated
+ *     route a brand-new Clerk user hits, before any DentaBill records
+ *     exist.
+ *
+ *   • `requireAuth` — checks the Clerk session AND looks up the
+ *     matching DentaBill `User.clerkUserId` row to derive the
+ *     authoritative `userId` (DentaBill `User.id`) and `orgId`
+ *     (DentaBill `User.organizationId`). Throws `ONBOARDING_REQUIRED`
+ *     (403) if the Clerk user is signed in but has not yet completed
+ *     `/v1/onboarding`. Every org-scoped route uses this.
+ *
+ * Two execution modes for the Clerk session source:
  *
  *   1. **Production / staging** — Both `CLERK_SECRET_KEY` and
- *      `CLERK_PUBLISHABLE_KEY` are present. The plugin registers
- *      `@clerk/fastify`'s `clerkPlugin` so every request is decorated
- *      with Clerk session data, and exposes `requireAuth` as a
- *      preHandler that calls Clerk's `getAuth(request)` and pulls
- *      `userId` + `orgId` off the verified session. Missing session
- *      or missing `orgId` (a user not currently scoped to an
- *      organization) throws `ApiError("AUTHENTICATION_REQUIRED")`,
- *      which the global error handler in `app.ts` serialises to a
- *      401.
+ *      `CLERK_PUBLISHABLE_KEY` are present; Clerk's plugin verifies
+ *      session JWTs.
  *
- *   2. **Dev / test (no keys)** — Both env vars are absent (the
- *      vitest setup leaves them undefined; local dev without Clerk
- *      keys provisioned). The plugin skips Clerk's plugin registration
- *      entirely and `requireAuth` reads `x-test-user-id` /
- *      `x-test-org-id` request headers, attaching them as the auth
- *      identity. Same `ApiError` is thrown when those headers are
- *      missing on a protected route.
+ *   2. **Dev / test (no keys)** — Both env vars are absent. The plugin
+ *      reads `x-test-user-id` (Clerk userId stand-in) headers, and the
+ *      DB lookup proceeds the same way. The legacy `x-test-org-id`
+ *      header is no longer required: the org is always derived from
+ *      the DentaBill `User` row.
  *
- * Routes opt in to authentication by attaching `requireAuth` as a
- * `preHandler`. The plugin does NOT auto-protect every route — health
- * probes (`/healthz`, `/readyz`) and the OpenAPI spec endpoint are
- * deliberately public. P2-T38 starts wiring `requireAuth` into the
- * claims router as it lands.
- *
- * `request.auth` is decorated as `null` at registration time so the
- * field exists on every request and TypeScript can narrow safely.
- * Per-request mutation happens inside `requireAuth`.
+ * Routes opt in to authentication by attaching the appropriate
+ * preHandler. Health probes (`/healthz`, `/readyz`) and the OpenAPI
+ * spec endpoint stay public.
  */
 export interface AuthIdentity {
+  /** DentaBill `User.id` — the authoritative actor id used by audit + write middleware. */
   readonly userId: string;
+  /** DentaBill `Organization.id` — the authoritative tenant scope for every org-scoped read. */
   readonly orgId: string;
+  /** The originating Clerk userId, kept for forwarding logs / metadata. */
+  readonly clerkUserId: string;
 }
 
+export interface ClerkOnlyIdentity {
+  readonly clerkUserId: string;
+}
+
+/**
+ * `request.dentabillAuth` is the DentaBill-resolved identity (DentaBill
+ * `User.id` + `Organization.id`). It is deliberately a separate slot
+ * from Clerk's own `request.auth` decorator (added by `clerkPlugin`),
+ * which carries the raw Clerk session — the two coexist on the same
+ * request, the names cannot collide, and downstream handlers reach
+ * for whichever they need.
+ *
+ * `request.clerkAuth` carries the bare Clerk userId for the one
+ * authenticated route (`/v1/onboarding`) that runs before the
+ * DentaBill records exist.
+ */
 declare module 'fastify' {
   interface FastifyRequest {
-    auth: AuthIdentity | null;
+    dentabillAuth: AuthIdentity | null;
+    clerkAuth: ClerkOnlyIdentity | null;
   }
   interface FastifyInstance {
     auth: AuthPluginExports;
@@ -55,69 +81,131 @@ declare module 'fastify' {
 const TEST_USER_HEADER = 'x-test-user-id';
 const TEST_ORG_HEADER = 'x-test-org-id';
 
-function readTestAuth(request: FastifyRequest): AuthIdentity | null {
+function readTestClerkUserId(request: FastifyRequest): string | null {
   const userId = request.headers[TEST_USER_HEADER];
-  const orgId = request.headers[TEST_ORG_HEADER];
-  if (typeof userId !== 'string' || typeof orgId !== 'string') return null;
-  if (userId.length === 0 || orgId.length === 0) return null;
-  return { userId, orgId };
+  if (typeof userId !== 'string' || userId.length === 0) return null;
+  return userId;
 }
 
-function buildClerkRequireAuth(): preHandlerHookHandler {
+function readTestOrgIdOverride(request: FastifyRequest): string | null {
+  const orgId = request.headers[TEST_ORG_HEADER];
+  if (typeof orgId !== 'string' || orgId.length === 0) return null;
+  return orgId;
+}
+
+async function loadDentaBillUser(clerkUserId: string): Promise<AuthIdentity | null> {
+  const user = await prisma.user.findUnique({
+    where: { clerkUserId },
+    select: { id: true, organizationId: true },
+  });
+  if (!user) return null;
+  return { userId: user.id, orgId: user.organizationId, clerkUserId };
+}
+
+function buildClerkRequireUser(): preHandlerHookHandler {
   return (request, _reply, done) => {
     const session = getAuth(request);
-    if (!session.userId || !session.orgId) {
-      done(
-        new ApiError('AUTHENTICATION_REQUIRED', 'Sign in and select an organization to continue.'),
-      );
+    if (!session.userId) {
+      done(new ApiError('AUTHENTICATION_REQUIRED', 'Sign in to continue.'));
       return;
     }
-    request.auth = { userId: session.userId, orgId: session.orgId };
+    request.clerkAuth = { clerkUserId: session.userId };
     done();
   };
 }
 
-function buildTestRequireAuth(): preHandlerHookHandler {
+function buildTestRequireUser(): preHandlerHookHandler {
   return (request, _reply, done) => {
-    const identity = readTestAuth(request);
-    if (!identity) {
-      done(
-        new ApiError('AUTHENTICATION_REQUIRED', 'Sign in and select an organization to continue.'),
-      );
+    const clerkUserId = readTestClerkUserId(request);
+    if (!clerkUserId) {
+      done(new ApiError('AUTHENTICATION_REQUIRED', 'Sign in to continue.'));
       return;
     }
-    request.auth = identity;
+    request.clerkAuth = { clerkUserId };
     done();
   };
 }
+
+const buildClerkRequireAuth = (): preHandlerAsyncHookHandler => {
+  return async (request) => {
+    const session = getAuth(request);
+    if (!session.userId) {
+      throw new ApiError('AUTHENTICATION_REQUIRED', 'Sign in to continue.');
+    }
+    const identity = await loadDentaBillUser(session.userId);
+    if (!identity) {
+      throw new ApiError(
+        'FORBIDDEN',
+        'Onboarding required. Complete the practice setup before continuing.',
+      );
+    }
+    request.dentabillAuth = identity;
+    request.clerkAuth = { clerkUserId: session.userId };
+  };
+};
+
+const buildTestRequireAuth = (): preHandlerAsyncHookHandler => {
+  return async (request) => {
+    const clerkUserId = readTestClerkUserId(request);
+    if (!clerkUserId) {
+      throw new ApiError('AUTHENTICATION_REQUIRED', 'Sign in to continue.');
+    }
+    const orgIdOverride = readTestOrgIdOverride(request);
+    if (orgIdOverride) {
+      // Test bypass path: integration tests that have already seeded
+      // an Organization + User row pass both headers. The userId is
+      // the DentaBill `User.id` (not a Clerk userId) in that mode,
+      // matching how every existing test fixture uses it.
+      request.dentabillAuth = { userId: clerkUserId, orgId: orgIdOverride, clerkUserId };
+      request.clerkAuth = { clerkUserId };
+      return;
+    }
+    const identity = await loadDentaBillUser(clerkUserId);
+    if (!identity) {
+      throw new ApiError(
+        'FORBIDDEN',
+        'Onboarding required. Complete the practice setup before continuing.',
+      );
+    }
+    request.dentabillAuth = identity;
+    request.clerkAuth = { clerkUserId };
+  };
+};
 
 export interface AuthPluginExports {
-  readonly requireAuth: preHandlerHookHandler;
+  readonly requireAuth: preHandlerAsyncHookHandler;
+  readonly requireUser: preHandlerHookHandler;
   readonly hasClerkKeys: boolean;
 }
 
 /**
- * Registers the auth plugin and returns the `requireAuth` preHandler
- * that route modules can attach to the routes that need it.
- *
- * The function is async because `clerkPlugin` registration is async.
- * Callers in `app.ts` should `await` and stash the returned
- * `requireAuth` for later use, or attach it via `fastify.decorate` if
- * we ever need to access it from a per-route schema definition.
+ * Registers the auth plugin and returns the preHandlers route modules
+ * attach to gate access. `requireUser` is the bare-Clerk-session check
+ * used by `/v1/onboarding`; `requireAuth` is the org-scoped check used
+ * by every other authenticated route.
  */
 export async function registerAuthPlugin(fastify: FastifyInstance): Promise<AuthPluginExports> {
   const env = getEnv();
   const hasClerkKeys = Boolean(env.CLERK_SECRET_KEY && env.CLERK_PUBLISHABLE_KEY);
 
-  fastify.decorateRequest('auth', null);
+  fastify.decorateRequest('dentabillAuth', null);
+  fastify.decorateRequest('clerkAuth', null);
 
   if (hasClerkKeys && env.CLERK_SECRET_KEY && env.CLERK_PUBLISHABLE_KEY) {
     await fastify.register(clerkPlugin, {
       secretKey: env.CLERK_SECRET_KEY,
       publishableKey: env.CLERK_PUBLISHABLE_KEY,
     });
-    return { requireAuth: buildClerkRequireAuth(), hasClerkKeys: true };
+    return {
+      requireAuth: buildClerkRequireAuth(),
+      requireUser: buildClerkRequireUser(),
+      hasClerkKeys: true,
+    };
   }
 
-  return { requireAuth: buildTestRequireAuth(), hasClerkKeys: false };
+  return {
+    requireAuth: buildTestRequireAuth(),
+    requireUser: buildTestRequireUser(),
+    hasClerkKeys: false,
+  };
 }

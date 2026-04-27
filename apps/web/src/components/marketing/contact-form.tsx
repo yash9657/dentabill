@@ -11,6 +11,7 @@ import {
   Input,
 } from '@dentabill/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Check } from 'lucide-react';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 
@@ -50,6 +51,15 @@ const TEXTAREA_CLASS =
 export function ContactForm(): React.ReactElement {
   const [submitError, setSubmitError] = React.useState<SubmitError | null>(null);
   const [submitted, setSubmitted] = React.useState(false);
+  const successRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    if (!submitted || !successRef.current) return;
+    if (typeof successRef.current.scrollIntoView === 'function') {
+      successRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    successRef.current.focus();
+  }, [submitted]);
 
   const form = useForm<ContactFormValues>({
     resolver: zodResolver(ContactFormSchema as never),
@@ -93,13 +103,27 @@ export function ContactForm(): React.ReactElement {
 
   if (submitted) {
     return (
-      <div role="status" className="space-y-3">
-        <p className="font-display text-card-heading text-balance font-light text-black">
-          Thanks. We will be in touch within one business day.
-        </p>
-        <p className="text-body text-gray-dark">
-          You will hear from a real engineer, not a sales rep.
-        </p>
+      <div
+        ref={successRef}
+        role="status"
+        tabIndex={-1}
+        className="hairline-edge bg-stone-warm/40 flex flex-col items-start gap-4 rounded-[20px] p-8 outline-none focus-visible:ring-2 focus-visible:ring-black"
+      >
+        <span
+          aria-hidden
+          className="border-status-active text-status-active inline-flex h-10 w-10 items-center justify-center rounded-full border bg-white"
+        >
+          <Check className="h-5 w-5" />
+        </span>
+        <div className="space-y-2">
+          <p className="font-display text-card-heading text-balance font-light text-black">
+            Thanks. We will be in touch within one business day.
+          </p>
+          <p className="text-body text-gray-dark">
+            You will hear from a real engineer, not a sales rep. If you indicated you want access,
+            an invite link will follow once we confirm your practice details.
+          </p>
+        </div>
       </div>
     );
   }

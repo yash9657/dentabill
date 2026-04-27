@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuth, useUser } from '@clerk/nextjs';
 import {
   Button,
   Form,
@@ -16,6 +17,7 @@ import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 
+import { useDentaBillApi } from '../../lib/api-client.js';
 import {
   OnboardingFormSchema,
   SUPPORTED_PAYERS,
@@ -25,33 +27,43 @@ import {
 /**
  * `<OnboardingForm>` — the post-sign-up form rendered at /onboarding.
  *
- * Posts to `/v1/onboarding` (same-origin edge route, stub for now)
- * and on success pushes the router to `/dashboard/overview` —
- * matching `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL`. The real DB write
- * lives in `apps/api` and lands with P2-T37+; until then the route
- * acks 204 and the operator picks the structured log out of stdout.
+ * Submits directly to the apps/api `POST /v1/onboarding` endpoint
+ * carrying the Clerk session JWT. The endpoint creates the DentaBill
+ * `Organization` + `User` rows and stamps `publicMetadata.onboarded`
+ * on the Clerk user; on success we route to `/dashboard/overview`.
  *
- * Form chrome reuses the same `<Form>` + `<FormField>` pattern as
- * the contact form so the submit / error / message flow is
- * identical across the codebase.
+ * The form is intentionally kept short (4 fields). Heavier
+ * qualification — multi-location practices, billing-team size — is
+ * collected during the demo call rather than here.
  *
- * Field rendering notes:
- *
- *   - Practice name and zip are plain inputs.
- *   - NPI is a plain input (no auto-formatting); the schema accepts
- *     either an empty string or exactly 10 digits.
- *   - acceptedPayers renders as a fieldset of checkboxes. Plain
- *     `<input type=checkbox>` keeps the markup small — react-hook-form
- *     `register` is enough to wire array updates.
+ * Idempotency: the API endpoint is safe to retry. If the user
+ * already has a DentaBill `User` row, the response is `200 +
+ * alreadyOnboarded: true` and we still navigate to the dashboard.
  */
-const SUBMIT_ENDPOINT = '/v1/onboarding';
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? (typeof window === 'undefined' ? 'http://localhost:3001' : '');
 
 interface SubmitError {
   readonly message: string;
 }
 
+interface OnboardingResponse {
+  readonly organizationId: string;
+  readonly userId: string;
+  readonly alreadyOnboarded: boolean;
+}
+
+interface ApiErrorBody {
+  readonly error?: boolean;
+  readonly message?: string;
+  readonly code?: string;
+}
+
 export function OnboardingForm(): React.ReactElement {
   const router = useRouter();
+  const { withAuthHeaders } = useDentaBillApi();
+  const { getToken } = useAuth();
+  const { user } = useUser();
   const [submitError, setSubmitError] = React.useState<SubmitError | null>(null);
 
   const form = useForm<OnboardingFormValues>({
@@ -68,24 +80,85 @@ export function OnboardingForm(): React.ReactElement {
   const onSubmit = async (values: OnboardingFormValues): Promise<void> => {
     setSubmitError(null);
     try {
-      const response = await fetch(SUBMIT_ENDPOINT, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(values),
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { message?: string } | null;
+      const headers = await withAuthHeaders();
+      // Defensive client-side check: if Clerk's `getToken()` returned
+      // null `withAuthHeaders` produces no `authorization` header. The
+      // API will reject the request as anonymous; getting ahead of the
+      // round-trip lets us surface the real cause ("session expired")
+      // instead of a generic auth failure.
+      if (!('authorization' in headers)) {
         setSubmitError({
           message:
-            data?.message ??
-            'Something went wrong saving that. Try again or write to hello@dentabill.example.',
+            'Your sign-in session expired. Sign in again and we will pick up where you left off.',
         });
+        router.push('/sign-in?redirect_url=/onboarding');
         return;
       }
+
+      const response = await fetch(`${API_BASE_URL}/v1/onboarding`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...headers,
+        },
+        body: JSON.stringify(values),
+      });
+      const json = (await response.json().catch(() => ({}))) as OnboardingResponse | ApiErrorBody;
+      if (!response.ok) {
+        // Map status codes to actionable copy. The 401 path is the most
+        // common real-user surprise (long idle on the form, JWT
+        // expires); we send them to /sign-in with a return URL so the
+        // form data is the only thing they lose.
+        if (response.status === 401) {
+          setSubmitError({
+            message:
+              'Your sign-in session expired while you were filling this out. Sign in again to finish.',
+          });
+          router.push('/sign-in?redirect_url=/onboarding');
+          return;
+        }
+        if (response.status === 403) {
+          setSubmitError({
+            message:
+              'This account is not yet authorised. Write to hello@dentabill.example so we can sort it out.',
+          });
+          return;
+        }
+        if (response.status >= 500) {
+          setSubmitError({
+            message:
+              'Our server hit an error saving that. Try again — your form is preserved on this page.',
+          });
+          return;
+        }
+        const message =
+          (json as ApiErrorBody).message ??
+          'Could not save your onboarding details. Try again or write to hello@dentabill.example.';
+        setSubmitError({ message });
+        return;
+      }
+      // The dashboard layout reads the DB (`User.clerkUserId`) to gate
+      // onboarding rather than `publicMetadata.onboarded`, so we don't
+      // need to fight Clerk's JWT cache here. A soft router push works
+      // — the next request hits the dashboard layout, which finds the
+      // freshly-created `User` row and lets the page render.
+      //
+      // We still call `user.reload()` + force-refresh the token as a
+      // best-effort so any *other* code that reads publicMetadata sees
+      // the new value sooner. Failures are non-fatal.
+      try {
+        if (user) await user.reload();
+        await getToken({ skipCache: true });
+      } catch {
+        // best-effort
+      }
       router.push('/dashboard/overview');
+      router.refresh();
+      return;
     } catch {
       setSubmitError({
-        message: 'Network error. Try again or write to hello@dentabill.example.',
+        message:
+          'Network error reaching DentaBill. Check your connection and try again — your form is preserved on this page.',
       });
     }
   };
@@ -204,12 +277,6 @@ export function OnboardingForm(): React.ReactElement {
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Setting up' : 'Continue to dashboard'}
           </Button>
-          <a
-            href="/dashboard/overview"
-            className="text-caption text-gray-warm hover:text-black focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
-          >
-            Skip for now
-          </a>
         </div>
       </>
     </Form>

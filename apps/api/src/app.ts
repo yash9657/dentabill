@@ -20,6 +20,7 @@ import { claimsRoutes } from './routes/v1/claims.js';
 import { healthRoutes } from './routes/v1/health.js';
 import { ingestRoutes } from './routes/v1/ingest.js';
 import { meRoutes } from './routes/v1/me.js';
+import { onboardingRoutes } from './routes/v1/onboarding.js';
 
 export interface BuildServerOptions {
   /**
@@ -55,14 +56,22 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
     trustProxy: true,
   } as const;
 
-  const loggerOption = loggerConfig === false ? false : loggerConfig;
-  // Type assertion needed because of complex Fastify type internals (http2 vs http1)
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+  // Fastify v5 split the logger option: `logger` now only accepts a config
+  // object (or boolean), and a pre-built pino instance must be passed as
+  // `loggerInstance` instead. Branch on which one we have.
+  const fastifyLoggerOptions =
+    loggerConfig === false ? { logger: false } : { loggerInstance: loggerConfig };
+
+  // Type assertion needed because of complex Fastify type internals (http2 vs http1).
+  // The combined `logger | loggerInstance` shape is hard to express to Fastify's
+  // overloaded `FastifyServerOptions`; we drop to `unknown` at the boundary and
+  // cast the returned instance back to the canonical `FastifyInstance`.
+  /* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any */
   const fastify = Fastify({
     ...fastifyOptions,
-    logger: loggerOption,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...fastifyLoggerOptions,
   } as any) as unknown as FastifyInstance;
+  /* eslint-enable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any */
 
   // Register Zod type provider
   fastify.setValidatorCompiler(validatorCompiler);
@@ -115,12 +124,21 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
    */
   fastify.get('/docs/json', () => fastify.swagger());
 
-  // Register CORS
+  // Register CORS. The browser runs the dashboard at NEXT_PUBLIC_APP_URL
+  // and POSTs cross-origin to this API; we MUST echo the Authorization
+  // header back through the preflight or every request loses its bearer
+  // token before it reaches the auth plugin. `credentials: true` is
+  // defense-in-depth for the day Clerk is configured to ride cookies
+  // alongside the JWT — costs nothing today and prevents a silent
+  // breakage if that mode is ever enabled.
   const corsOrigins = env.API_CORS_ORIGINS
     ? env.API_CORS_ORIGINS.split(',').map((s) => s.trim())
     : [];
   await fastify.register(cors, {
     origin: [env.NEXT_PUBLIC_APP_URL, ...corsOrigins],
+    credentials: true,
+    allowedHeaders: ['authorization', 'content-type', 'x-request-id'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   // Register rate limiting
@@ -165,6 +183,7 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   // Register health routes
   await fastify.register(healthRoutes, { prefix: '/v1' });
   await fastify.register(meRoutes, { prefix: '/v1' });
+  await fastify.register(onboardingRoutes, { prefix: '/v1' });
   await fastify.register(claimsRoutes, { prefix: '/v1' });
   await fastify.register(ingestRoutes, { prefix: '/v1' });
 

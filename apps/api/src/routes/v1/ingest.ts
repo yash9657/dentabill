@@ -82,7 +82,7 @@ export async function ingestRoutes(fastify: FastifyInstance): Promise<void> {
       },
     },
     async (request): Promise<IngestResponse> => {
-      const auth = request.auth;
+      const auth = request.dentabillAuth;
       if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
 
       const file = await request.file();
