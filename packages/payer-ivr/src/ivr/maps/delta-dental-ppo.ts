@@ -19,6 +19,7 @@ export const DELTA_DENTAL_PPO_IVR: PayerIvrMap = {
   timezone: 'America/Chicago',
   hoursStartHour: 8,
   hoursEndHour: 17,
+  daysOfWeek: [1, 2, 3, 4, 5],
   estimatedHoldMinutes: 9, // Mid-point of PRD §6's 5–12 min range.
   notes: [
     'Calibration required: digit sequence below is structural — verify against live IVR before first production traffic.',

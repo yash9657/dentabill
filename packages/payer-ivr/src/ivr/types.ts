@@ -89,6 +89,14 @@ export const PayerIvrMapSchema = z.object({
   hoursStartHour: z.number().int().min(0).max(23),
   /** Hour-of-day (24h) the provider line closes, payer-local. */
   hoursEndHour: z.number().int().min(1).max(24),
+  /**
+   * Days of week the provider line is open, in JS `Date.getDay()`
+   * convention (0 = Sunday, 1 = Monday, …, 6 = Saturday). Phase-1
+   * dental payers all run weekdays only — Mon–Fri = `[1,2,3,4,5]`.
+   * Encoded explicitly so we never accidentally call a payer on a
+   * Saturday because we forgot to check.
+   */
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1),
   /** Mid-point of the PRD §6 hold range, used for queue priority math. */
   estimatedHoldMinutes: z.number().int().positive(),
   steps: z.array(IvrStepSchema).min(1),
