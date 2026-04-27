@@ -17,6 +17,7 @@ export const METLIFE_DENTAL_IVR: PayerIvrMap = {
   timezone: 'America/New_York',
   hoursStartHour: 8,
   hoursEndHour: 20,
+  daysOfWeek: [1, 2, 3, 4, 5],
   estimatedHoldMinutes: 10, // Mid-point of PRD §6's 6–15 min range.
   notes: [
     'Calibration required: digit sequence below is structural — verify against live IVR before first production traffic.',

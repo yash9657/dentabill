@@ -33,3 +33,5 @@ export {
   getAgentPrompt,
   type AgentPrompt,
 } from './agents/index.js';
+
+export { checkPayerHours, isWithinPayerHours, type PayerHoursResult } from './business-hours.js';
