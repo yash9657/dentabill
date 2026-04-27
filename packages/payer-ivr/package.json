@@ -16,7 +16,8 @@
     "build": "echo 'no build for stub'"
   },
   "dependencies": {
-    "@dentabill/db": "workspace:*"
+    "@dentabill/db": "workspace:*",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@dentabill/config": "workspace:*",

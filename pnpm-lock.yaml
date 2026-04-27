@@ -337,6 +337,9 @@ importers:
       '@dentabill/db':
         specifier: workspace:*
         version: link:../db
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       '@dentabill/config':
         specifier: workspace:*
