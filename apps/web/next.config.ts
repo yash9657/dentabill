@@ -16,15 +16,26 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   transpilePackages: ['@dentabill/ui', '@dentabill/types'],
   /**
-   * Keep `@prisma/client` out of the webpack server bundle. Prisma's
-   * library engine resolves `worker.js` and the `.node` binary by their
-   * paths inside the published package; webpack rewrites those paths
-   * into `vendor-chunks/` and the runtime then crashes with
-   * `Cannot find module '.../vendor-chunks/lib/worker.js'`. Marking the
-   * package external delegates the require to Node, which finds it in
-   * `node_modules` where the relative paths still hold.
+   * Externalise packages that resolve native binaries or worker files
+   * by relative path inside their own `node_modules` install. Webpack
+   * rewrites those paths into `.next/server/vendor-chunks/...` and the
+   * runtime crashes (e.g. `Cannot find module '.../lib/worker.js'`).
+   * Marking these external delegates the `require()` to Node, which
+   * finds the file in `node_modules/<pkg>/lib/worker.js` where the
+   * package authors expect it to live.
+   *
+   * - `@prisma/client` + `.prisma/client`: library engine + worker.js
+   * - `pino`: thread-stream worker thread
+   * - `pino-pretty`: pino transport, loaded via worker_threads
+   * - `thread-stream`: pino's worker harness
    */
-  serverExternalPackages: ['@prisma/client', '.prisma/client'],
+  serverExternalPackages: [
+    '@prisma/client',
+    '.prisma/client',
+    'pino',
+    'pino-pretty',
+    'thread-stream',
+  ],
   typedRoutes: true,
   /**
    * `@dentabill/ui` ships raw TypeScript and uses NodeNext-style relative
@@ -33,12 +44,43 @@ const nextConfig: NextConfig = {
    * files; this `extensionAlias` teaches it the TS resolver convention so
    * the workspace package builds without a separate compile step.
    */
-  webpack(config) {
+  webpack(config, { isServer }) {
     const resolve = (config.resolve ??= {});
     resolve.extensionAlias = {
       ...(resolve.extensionAlias ?? {}),
       '.js': ['.ts', '.tsx', '.js'],
     };
+
+    /**
+     * `serverExternalPackages` does not always traverse into packages
+     * reached via workspace symlinks (`@dentabill/db` → `@dentabill/logger`
+     * → `pino`). When pino ends up bundled, its `thread-stream` transport
+     * tries to load `lib/worker.js` from a webpack-rewritten path and the
+     * dev server / `next start` runtime crashes on every request. Adding
+     * the same set as a hard webpack externals on the server side
+     * guarantees Node resolves them at runtime where their internal
+     * relative paths still hold.
+     */
+    if (isServer) {
+      const SERVER_EXTERNALS = [
+        '@prisma/client',
+        '.prisma/client',
+        'pino',
+        'pino-pretty',
+        'thread-stream',
+      ];
+      const existing = Array.isArray(config.externals) ? config.externals : [];
+      config.externals = [
+        ...existing,
+        ({ request }: { request?: string }, callback: (err?: unknown, result?: string) => void) => {
+          if (request && SERVER_EXTERNALS.includes(request)) {
+            callback(undefined, `commonjs ${request}`);
+            return;
+          }
+          callback();
+        },
+      ];
+    }
     return config;
   },
   /**
