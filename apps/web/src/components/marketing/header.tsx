@@ -97,8 +97,8 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
           >
             Sign in
           </Link>
-          <Pill href="/sign-up" variant="black" size="sm" withArrow>
-            Start free trial
+          <Pill href="/contact" variant="black" size="sm" withArrow>
+            Request access
           </Pill>
         </div>
 
@@ -148,8 +148,8 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
               </Link>
             </li>
             <li className="px-3 pt-2">
-              <Pill href="/sign-up" variant="black" size="sm" withArrow className="w-full">
-                Start free trial
+              <Pill href="/contact" variant="black" size="sm" withArrow className="w-full">
+                Request access
               </Pill>
             </li>
           </ul>

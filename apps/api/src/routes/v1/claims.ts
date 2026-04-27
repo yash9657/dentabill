@@ -17,7 +17,7 @@ import { isValidClaimTransition } from '../../lib/claim-state.js';
  *
  * Multi-tenancy is enforced through three layers:
  *
- *   1. `requireAuth` puts `userId` + `orgId` on `request.auth`. No
+ *   1. `requireAuth` puts `userId` + `orgId` on `request.dentabillAuth`. No
  *      route handler runs without it.
  *   2. `getOrgScopedDb(orgId)` returns a Prisma client where every
  *      read on `Claim` is auto-filtered by organizationId.
@@ -252,7 +252,7 @@ export function claimsRoutes(fastify: FastifyInstance): void {
       },
     },
     async (request, reply): Promise<ClaimResponse> => {
-      const auth = request.auth;
+      const auth = request.dentabillAuth;
       if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
       const orgId = auth.orgId;
       const body = request.body as z.infer<typeof ClaimCreateSchema>;
@@ -289,7 +289,7 @@ export function claimsRoutes(fastify: FastifyInstance): void {
       },
     },
     async (request): Promise<z.infer<typeof ClaimsListResponseSchema>> => {
-      const auth = request.auth;
+      const auth = request.dentabillAuth;
       if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
       const { orgId } = auth;
       const query = request.query as ClaimsListQuery;
@@ -385,7 +385,7 @@ export function claimsRoutes(fastify: FastifyInstance): void {
       },
     },
     async (request): Promise<ClaimResponse> => {
-      const auth = request.auth;
+      const auth = request.dentabillAuth;
       if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
       const { orgId } = auth;
       const { id } = request.params as z.infer<typeof IdParamSchema>;
@@ -419,7 +419,7 @@ export function claimsRoutes(fastify: FastifyInstance): void {
       },
     },
     async (request): Promise<ClaimResponse> => {
-      const auth = request.auth;
+      const auth = request.dentabillAuth;
       if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
       const { orgId } = auth;
       const { id } = request.params as z.infer<typeof IdParamSchema>;
@@ -492,7 +492,7 @@ export function claimsRoutes(fastify: FastifyInstance): void {
       },
     },
     async (request, reply): Promise<null> => {
-      const auth = request.auth;
+      const auth = request.dentabillAuth;
       if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
       const { orgId } = auth;
       const { id } = request.params as z.infer<typeof IdParamSchema>;

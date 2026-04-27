@@ -35,3 +35,15 @@ const TEST_DEFAULTS: Readonly<Record<string, string>> = {
 for (const [key, value] of Object.entries(TEST_DEFAULTS)) {
   process.env[key] ??= value;
 }
+
+/**
+ * Clerk keys are explicitly UNSET in the test environment so the auth
+ * plugin runs in deterministic test-header-bypass mode. With keys set,
+ * `clerkPlugin` registration would attempt a network call to Clerk's
+ * JWKS endpoint, which both slows tests and fails in CI without
+ * outbound internet. Integration tests authenticate via the
+ * `x-test-user-id` header path.
+ */
+delete process.env.CLERK_SECRET_KEY;
+delete process.env.CLERK_PUBLISHABLE_KEY;
+delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;

@@ -42,6 +42,8 @@ export default function SignInPage(): React.ReactElement {
   }
   return (
     <SignIn
+      fallbackRedirectUrl="/dashboard/overview"
+      signUpUrl="/sign-up"
       appearance={{
         elements: {
           rootBox: 'mx-auto w-full',

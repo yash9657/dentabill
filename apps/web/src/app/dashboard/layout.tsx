@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import {
@@ -7,6 +8,7 @@ import {
   DashboardSidebar,
   DashboardTopbar,
 } from '../../components/dashboard/index.js';
+import { getOnboardingStatus } from '../../lib/onboarding-status.js';
 
 /**
  * Dashboard layout — wraps every `/dashboard/**` route with the
@@ -33,11 +35,19 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   readonly children: React.ReactNode;
-}): React.ReactElement {
+}): Promise<React.ReactElement> {
+  // Onboarding gate — see `lib/onboarding-status.ts` for why we read
+  // the DB instead of `sessionClaims.publicMetadata`. Middleware has
+  // already verified there's a Clerk session; here we verify the
+  // DentaBill `User` row exists.
+  const status = await getOnboardingStatus();
+  if (status.state === 'signed-out') redirect('/sign-in?redirect_url=/dashboard/overview');
+  if (status.state === 'pending') redirect('/onboarding');
+
   return (
     <DashboardShell sidebar={<DashboardSidebar />} topbar={<DashboardTopbar />}>
       <div className="px-4 pb-12 pt-6 sm:px-6 lg:px-8">

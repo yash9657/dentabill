@@ -35,9 +35,19 @@ export type Env = z.infer<typeof envSchema>;
 
 /**
  * Validates and returns environment variables. Throws if validation fails.
+ *
+ * Resolves the Clerk publishable key from either `CLERK_PUBLISHABLE_KEY`
+ * (the canonical name in this schema) OR `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+ * (the Next.js-prefixed name shared with apps/web). Publishable keys are
+ * inherently public — exposing them server-side under either name is safe.
+ * The fallback exists so a single root `.env` with the Next-style variable
+ * configures both apps without duplication.
  */
 export function loadEnv(): Env {
-  const raw = process.env;
+  const raw: Record<string, string | undefined> = { ...process.env };
+  if (!raw.CLERK_PUBLISHABLE_KEY && raw.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
+    raw.CLERK_PUBLISHABLE_KEY = raw.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  }
   const parsed = envSchema.safeParse(raw);
 
   if (!parsed.success) {

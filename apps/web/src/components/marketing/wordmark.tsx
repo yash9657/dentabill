@@ -1,21 +1,22 @@
-import { cn } from '@dentabill/ui';
+import { BrandMark, cn } from '@dentabill/ui';
 import * as React from 'react';
 
 /**
- * Wordmark — the textual DentaBill logo used in the marketing header
- * and footer. Type-set in the display family at weight 300 to match the
- * ElevenLabs-derived hierarchy (DESIGN.md §3). Kept text-only on purpose:
- * a logotype renders pixel-perfect across every device + zoom level
- * without the maintenance cost of an SVG, and lets reduced-data users
- * still see brand identity.
+ * Wordmark — DentaBill logo lockup used in the marketing chrome and the
+ * dashboard sidebar. Brand glyph (three nested arcs) sits left of the
+ * "DentaBill" wordtext at weight 300 to match the display hierarchy
+ * (DESIGN.md §3, ADR-013). The mark is `currentColor` so the lockup
+ * tints with the surrounding text utility — `text-black` on light
+ * surfaces, `text-white` on dark surfaces.
  *
- * `aria-label` is set so the wordmark — usually wrapped in a link to `/`
- * — exposes "DentaBill home" rather than the visible "DentaBill" only,
- * once nested inside an `<a>`. When used standalone (footer column
- * heading), the visible text is the accessible name.
+ * `aria-label` resolves to "DentaBill home" once nested in an `<a>`,
+ * otherwise the visible text is the accessible name. The glyph itself
+ * is decorative (`aria-hidden`) so the wordtext is the single source of
+ * the accessible name.
  */
 export interface WordmarkProps extends React.HTMLAttributes<HTMLSpanElement> {
   readonly size?: 'sm' | 'md' | 'lg';
+  readonly markOnly?: boolean;
 }
 
 const SIZE_CLASS: Record<NonNullable<WordmarkProps['size']>, string> = {
@@ -24,17 +25,29 @@ const SIZE_CLASS: Record<NonNullable<WordmarkProps['size']>, string> = {
   lg: 'text-xl',
 };
 
-export function Wordmark({ className, size = 'md', ...props }: WordmarkProps): React.ReactElement {
+const MARK_SIZE: Record<NonNullable<WordmarkProps['size']>, number> = {
+  sm: 22,
+  md: 28,
+  lg: 36,
+};
+
+export function Wordmark({
+  className,
+  size = 'md',
+  markOnly = false,
+  ...props
+}: WordmarkProps): React.ReactElement {
   return (
     <span
       className={cn(
-        'font-display font-light tracking-tight text-black',
+        'font-display inline-flex items-center gap-2 font-light tracking-tight text-black',
         SIZE_CLASS[size],
         className,
       )}
       {...props}
     >
-      DentaBill
+      <BrandMark size={MARK_SIZE[size]} />
+      {markOnly ? null : <span>DentaBill</span>}
     </span>
   );
 }

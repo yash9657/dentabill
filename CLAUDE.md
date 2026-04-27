@@ -50,6 +50,19 @@ Before ending any work session, update:
 - **Feature branches** named `phase-<n>/<short-slug>`. PR target is `main`.
 - **One task at a time.** Complete + test before starting the next.
 
+## Local env loading (monorepo gotcha)
+
+Both Next.js (`apps/web`) and `tsx` (`apps/api`) only auto-load `.env*` files from the **app's own directory**, not the repo root. The single source of truth lives at `/.env`; we symlink it into each app on first setup so both processes pick it up:
+
+```bash
+ln -sf ../../.env apps/web/.env.local
+ln -sf ../../.env apps/api/.env
+```
+
+`.env*` is gitignored, so the symlinks are not committed. If a fresh clone shows `<AuthFallback>` ("Account creation is on invite") on `/sign-up` even with valid Clerk keys in `/.env`, those symlinks are missing — that's the smoking gun.
+
+After `.env` changes, **restart** both dev processes; `NEXT_PUBLIC_*` vars are inlined at boot and don't hot-reload.
+
 ## Verification commands
 
 Run these to confirm work is correct before committing:

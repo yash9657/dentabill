@@ -1,19 +1,59 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OnboardingForm } from './onboarding-form.js';
 
+// Force the Clerk-aware render path under unit tests. The component
+// branches on `process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and the
+// other branch (`StubOnboardingForm`) intentionally does NOT call
+// `useAuth`/`useUser`, so the Clerk-hook assertions below would never
+// fire without this stub.
+beforeAll(() => {
+  vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_dummy_for_unit_test');
+});
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
+
 const pushMock = vi.fn();
+const refreshMock = vi.fn();
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: pushMock }),
+  useRouter: () => ({ push: pushMock, refresh: refreshMock }),
+}));
+
+vi.mock('../../lib/api-client.js', () => ({
+  useDentaBillApi: () => ({
+    client: null,
+    withAuthHeaders: async () => ({ authorization: 'Bearer test' }),
+  }),
+}));
+
+const reloadMock = vi.fn();
+const getTokenMock = vi.fn().mockResolvedValue('fresh-token');
+
+vi.mock('@clerk/nextjs', () => ({
+  useAuth: () => ({ getToken: getTokenMock }),
+  useUser: () => ({ user: { reload: reloadMock } }),
 }));
 
 const originalFetch = global.fetch;
+const assignMock = vi.fn();
 
 beforeEach(() => {
   pushMock.mockReset();
+  refreshMock.mockReset();
+  reloadMock.mockReset();
+  getTokenMock.mockClear();
+  assignMock.mockReset();
+  // jsdom's window.location.assign is a stub that throws "navigation not
+  // implemented"; replace with a vi.fn we can assert against.
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { ...window.location, assign: assignMock, href: '' },
+  });
 });
 
 afterEach(() => {
@@ -30,8 +70,16 @@ describe('<OnboardingForm />', () => {
     expect(await screen.findByText(/select at least one payer/i)).toBeInTheDocument();
   });
 
-  it('redirects to /dashboard/overview after a successful 204', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 204 }) as never;
+  it('redirects to /dashboard/overview after a successful 200 from the API', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        organizationId: 'org_seed',
+        userId: 'user_seed',
+        alreadyOnboarded: false,
+      }),
+    }) as never;
     const user = userEvent.setup();
     render(<OnboardingForm />);
 
@@ -44,12 +92,20 @@ describe('<OnboardingForm />', () => {
       expect(pushMock).toHaveBeenCalledWith('/dashboard/overview');
     });
 
+    // Best-effort Clerk session refresh so any post-redirect reader of
+    // publicMetadata sees the freshly-stamped value. The dashboard
+    // layout's onboarding gate reads the DB and doesn't depend on this.
+    expect(reloadMock).toHaveBeenCalled();
+    expect(getTokenMock).toHaveBeenCalledWith({ skipCache: true });
+
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    const [, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+    const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
       RequestInit,
     ];
+    expect(url).toContain('/v1/onboarding');
     expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer test');
     expect(JSON.parse(init.body as string)).toMatchObject({
       practiceName: 'Sunrise Family Dental',
       zip: '94110',

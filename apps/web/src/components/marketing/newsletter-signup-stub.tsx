@@ -56,7 +56,7 @@ export function NewsletterSignupStub({ className }: NewsletterSignupStubProps): 
       <p className="text-body-small text-gray-dark">
         Monthly notes on dental billing automation. No spam.
       </p>
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex flex-col gap-2">
         <label htmlFor={inputId} className="sr-only">
           Email address
         </label>
@@ -72,9 +72,11 @@ export function NewsletterSignupStub({ className }: NewsletterSignupStubProps): 
           }}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errorId : undefined}
-          className="flex-1"
+          className="w-full"
         />
-        <Button type="submit">Subscribe</Button>
+        <Button type="submit" className="w-full">
+          Subscribe
+        </Button>
       </div>
       {error ? (
         <p id={errorId} className="text-caption text-black" role="alert">

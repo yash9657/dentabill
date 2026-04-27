@@ -42,11 +42,11 @@ describe('HomePage (P2-T18)', () => {
     ).toBeInTheDocument();
   });
 
-  it('repeats the two CTAs in hero and closing sections, all linked correctly', () => {
+  it('repeats the two CTAs in hero and closing sections, all linked correctly (invite-only)', () => {
     render(<HomePage />);
-    const trials = screen.getAllByRole('link', { name: /start free trial/i });
-    expect(trials.length).toBeGreaterThanOrEqual(2);
-    for (const t of trials) expect(t).toHaveAttribute('href', '/sign-up');
+    const requests = screen.getAllByRole('link', { name: /request access/i });
+    expect(requests.length).toBeGreaterThanOrEqual(2);
+    for (const r of requests) expect(r).toHaveAttribute('href', '/contact');
 
     const demos = screen.getAllByRole('link', { name: /book a 20-minute demo/i });
     expect(demos.length).toBeGreaterThanOrEqual(2);

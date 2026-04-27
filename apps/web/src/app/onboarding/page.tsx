@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { Wordmark } from '../../components/marketing/wordmark.js';
 import { OnboardingForm } from '../../components/onboarding/onboarding-form.js';
+import { getOnboardingStatus } from '../../lib/onboarding-status.js';
 
 /**
  * `/onboarding` — first-login flow: collect the smallest set of
@@ -27,7 +29,15 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function OnboardingPage(): React.ReactElement {
+export default async function OnboardingPage(): Promise<React.ReactElement> {
+  // Already-onboarded users skip straight to the dashboard. We do this
+  // server-side rather than in middleware because the DB is the only
+  // source of truth — Clerk publicMetadata can lag the DB by tens of
+  // seconds after a fresh onboarding submit.
+  const status = await getOnboardingStatus();
+  if (status.state === 'signed-out') redirect('/sign-in?redirect_url=/onboarding');
+  if (status.state === 'onboarded') redirect('/dashboard/overview');
+
   return (
     <main className="bg-stone-warm/30 flex min-h-screen flex-col items-center px-4 py-10 sm:py-16">
       <Link
