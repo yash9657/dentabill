@@ -28,6 +28,12 @@ const config: PlaywrightTestConfig = {
   retries: process.env.CI ? 2 : 0,
   ...(process.env.CI && { workers: 2 }),
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
+  /**
+   * Pre-warm the routes the suite exercises so `next dev`'s lazy
+   * route compilation does not race the per-assertion timeout on
+   * slower runners. See `e2e/global-setup.ts`.
+   */
+  globalSetup: './e2e/global-setup.ts',
 
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
@@ -39,8 +45,16 @@ const config: PlaywrightTestConfig = {
   /**
    * 0.1% threshold per ADR-022. `maxDiffPixelRatio` is fraction-based;
    * `threshold` controls per-pixel similarity. Both kept tight.
+   *
+   * `expect.timeout` is bumped from the 5 s default to 15 s because
+   * `next dev` on the GHA `ubuntu-latest` runner takes longer to
+   * stream RSC payloads than a fast developer laptop — even after
+   * warming routes, a `toHaveURL` after `router.push()` can take a
+   * few seconds on first hit. 15 s keeps tests fast on a healthy
+   * machine and tolerant on a slow one.
    */
   expect: {
+    timeout: 15_000,
     toHaveScreenshot: {
       maxDiffPixelRatio: 0.001,
       threshold: 0.1,
