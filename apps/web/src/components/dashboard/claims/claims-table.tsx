@@ -11,6 +11,7 @@ import {
   type Claim,
   type ClaimStatus,
 } from '../../../lib/claims/types.js';
+import { CallNowPill } from '../calls/call-now-pill.js';
 
 export interface ClaimsTableProps {
   readonly items: readonly Claim[];
@@ -102,7 +103,7 @@ export function ClaimsTable({
         role="row"
         aria-rowindex={1}
         style={{ height: HEADER_HEIGHT }}
-        className="text-caption text-gray-warm bg-stone-warm/30 grid grid-cols-[1.4fr_1.4fr_0.9fr_1.1fr_1fr_0.6fr] items-center gap-4 px-5 uppercase tracking-[0.12em]"
+        className="text-caption text-gray-warm bg-stone-warm/30 grid grid-cols-[1.4fr_1.3fr_0.85fr_1fr_0.95fr_0.55fr_minmax(7rem,0.9fr)] items-center gap-4 px-5 uppercase tracking-[0.12em]"
       >
         <span role="columnheader">Claim</span>
         <span role="columnheader">Payer</span>
@@ -113,6 +114,9 @@ export function ClaimsTable({
         <span role="columnheader">Service date</span>
         <span role="columnheader" className="text-right">
           Priority
+        </span>
+        <span role="columnheader" className="text-right">
+          Action
         </span>
       </div>
 
@@ -162,15 +166,24 @@ function ClaimRow({
   readonly style: React.CSSProperties;
 }): React.ReactElement {
   return (
-    <div role="row" aria-rowindex={rowIndex} style={style}>
+    <div
+      role="row"
+      aria-rowindex={rowIndex}
+      style={style}
+      className={cn(
+        'group grid grid-cols-[1.4fr_1.3fr_0.85fr_1fr_0.95fr_0.55fr_minmax(7rem,0.9fr)] items-center gap-4 px-5',
+        'hover:bg-stone-warm/30 border-t border-black/5 transition-colors',
+        'focus-within:bg-stone-warm/40',
+      )}
+    >
+      {/* The first six cells are wrapped in a Link so the whole row remains
+          a single click target; the action cell is a sibling so the button
+          inside it never accidentally triggers navigation. The link spans
+          via subgrid so the column tracks stay aligned with the header. */}
       <Link
         href={`/dashboard/claims/${claim.id}`}
         prefetch={false}
-        className={cn(
-          'grid h-full grid-cols-[1.4fr_1.4fr_0.9fr_1.1fr_1fr_0.6fr] items-center gap-4 px-5',
-          'hover:bg-stone-warm/30 border-t border-black/5 transition-colors',
-          'focus-visible:bg-stone-warm/40 focus-visible:outline-none',
-        )}
+        className="col-span-6 grid h-full grid-cols-subgrid items-center focus-visible:outline-none"
       >
         <span role="gridcell" className="font-mono text-sm text-black">
           {claim.claimNumber}
@@ -192,6 +205,9 @@ function ClaimRow({
           {claim.priority}
         </span>
       </Link>
+      <span role="gridcell" className="flex items-center justify-end">
+        <CallNowPill claimId={claim.id} claimStatus={claim.status} variant="compact" />
+      </span>
     </div>
   );
 }
@@ -216,7 +232,7 @@ function TableSkeleton(): React.ReactElement {
       {Array.from({ length: 8 }, (_, i) => (
         <div
           key={i}
-          className="grid grid-cols-[1.4fr_1.4fr_0.9fr_1.1fr_1fr_0.6fr] items-center gap-4"
+          className="grid grid-cols-[1.4fr_1.3fr_0.85fr_1fr_0.95fr_0.55fr_minmax(7rem,0.9fr)] items-center gap-4"
         >
           <Skeleton className="h-4 w-3/4" />
           <Skeleton className="h-4 w-2/3" />
@@ -224,6 +240,7 @@ function TableSkeleton(): React.ReactElement {
           <Skeleton className="h-4 w-2/3" />
           <Skeleton className="h-4 w-1/2" />
           <Skeleton className="h-4 w-1/3 justify-self-end" />
+          <Skeleton className="h-7 w-20 justify-self-end" />
         </div>
       ))}
     </div>
