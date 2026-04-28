@@ -37,8 +37,10 @@ export {
 export { checkPayerHours, isWithinPayerHours, type PayerHoursResult } from './business-hours.js';
 
 export {
+  createRetellPort,
   EndCallInputSchema,
   FakeRetell,
+  LiveRetell,
   RetellCallEndReason,
   RetellEventSchema,
   RetellWebhookEnvelopeSchema,
@@ -47,8 +49,11 @@ export {
   StartCallResultSchema,
   parseRetellWebhookEnvelope,
   verifyRetellWebhookSignature,
+  type CreateRetellPortInput,
+  type CreateRetellPortResult,
   type EndCallInput,
   type FakeRetellOptions,
+  type LiveRetellOptions,
   type RetellCallEndedEvent,
   type RetellCallErrorEvent,
   type RetellCallStartedEvent,

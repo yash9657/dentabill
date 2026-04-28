@@ -337,6 +337,9 @@ importers:
       '@dentabill/db':
         specifier: workspace:*
         version: link:../db
+      retell-sdk:
+        specifier: ^5.16.0
+        version: 5.16.0
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -4798,6 +4801,9 @@ packages:
   ret@0.5.0:
     resolution: {integrity: sha512-I1XxrZSQ+oErkRR4jYbAyEEu2I0avBvvMM5JN+6EBprOGRCs63ENqZ3vjavq8fBw2+62G5LF5XelKwuJpcvcxw==}
     engines: {node: '>=10'}
+
+  retell-sdk@5.16.0:
+    resolution: {integrity: sha512-lnIc2RDeRJnL7ffVx0v/rqBGK0H1AlPTSvhR1mp0EpU9MVOzx2NwwddLtDq0mOyCWl8O+GtjGZ6mwV13eOl6tg==}
 
   reusify@1.1.0:
     resolution: {integrity: sha512-g6QUff04oZpHs0eG5p83rFLhHeV00ug/Yf9nZM6fLeUrPguBTkTQOdpAWWspMh55TZfVQDPaN3NQJfbVRAxdIw==}
@@ -10042,6 +10048,8 @@ snapshots:
       signal-exit: 4.1.0
 
   ret@0.5.0: {}
+
+  retell-sdk@5.16.0: {}
 
   reusify@1.1.0: {}
 
