@@ -1,0 +1,250 @@
+import { createHmac } from 'node:crypto';
+
+import { describe, expect, it } from 'vitest';
+
+import {
+  EndCallInputSchema,
+  parseRetellWebhookEnvelope,
+  RetellCallEndReason,
+  RetellEventSchema,
+  RetellWebhookEnvelopeSchema,
+  RetellWebhookParseError,
+  StartCallInputSchema,
+  type RetellWebhookEnvelope,
+  verifyRetellWebhookSignature,
+} from './index.js';
+
+const SECRET = 'whsec_test_dentabill_phase3_demo_only';
+
+function signPayload(secret: string, body: string): string {
+  return createHmac('sha256', secret).update(body).digest('hex');
+}
+
+describe('RetellEventSchema', () => {
+  it('accepts each event type', () => {
+    const events = [
+      {
+        type: 'call.started',
+        retellCallId: 'call_123',
+        agentId: 'agent_delta_dental_ppo',
+        toNumberE164: '+18007656003',
+        startedAt: '2026-04-28T15:00:00.000Z',
+        metadata: { practiceName: 'Sunrise Family Dental' },
+      },
+      {
+        type: 'call.transcript',
+        retellCallId: 'call_123',
+        role: 'agent',
+        text: 'Hello, this is DentaBill calling on behalf of Sunrise Family Dental.',
+        timestamp: '2026-04-28T15:00:05.000Z',
+      },
+      {
+        type: 'call.ended',
+        retellCallId: 'call_123',
+        endedAt: '2026-04-28T15:08:30.000Z',
+        durationSeconds: 510,
+        endReason: RetellCallEndReason.COMPLETED,
+        collectedInfo: { claimStatus: 'pending', referenceNumber: 'REF-9182' },
+      },
+      {
+        type: 'call.error',
+        retellCallId: 'call_123',
+        code: 'agent_disconnected',
+        message: 'Agent disconnected before call.ended fired',
+        occurredAt: '2026-04-28T15:08:45.000Z',
+      },
+    ];
+    for (const event of events) {
+      expect(() => RetellEventSchema.parse(event)).not.toThrow();
+    }
+  });
+
+  it('rejects an unknown event type', () => {
+    expect(() => RetellEventSchema.parse({ type: 'call.weird', retellCallId: 'call_x' })).toThrow();
+  });
+});
+
+describe('StartCallInputSchema', () => {
+  const valid = {
+    payerCode: 'DELTA_DENTAL_PPO',
+    agentId: 'agent_delta_dental_ppo',
+    fromNumberE164: '+15551234567',
+    toNumberE164: '+18007656003',
+    agentMetadata: {
+      practiceName: 'Sunrise Family Dental',
+      providerNpi: '1234567890',
+      subscriberId: 'SUB-001',
+      dateOfService: '2026-03-15',
+    },
+    idempotencyKey: 'claim_xyz-1',
+  };
+
+  it('accepts a well-formed payload', () => {
+    expect(() => StartCallInputSchema.parse(valid)).not.toThrow();
+  });
+
+  it('rejects a 9-digit NPI', () => {
+    expect(() =>
+      StartCallInputSchema.parse({
+        ...valid,
+        agentMetadata: { ...valid.agentMetadata, providerNpi: '123456789' },
+      }),
+    ).toThrow(/NPI/);
+  });
+
+  it('rejects a non-E.164 phone number', () => {
+    expect(() => StartCallInputSchema.parse({ ...valid, toNumberE164: '8007656003' })).toThrow();
+  });
+
+  it('rejects a malformed dateOfService', () => {
+    expect(() =>
+      StartCallInputSchema.parse({
+        ...valid,
+        agentMetadata: { ...valid.agentMetadata, dateOfService: '03/15/2026' },
+      }),
+    ).toThrow(/YYYY-MM-DD/);
+  });
+});
+
+describe('EndCallInputSchema', () => {
+  it('accepts each documented end reason', () => {
+    for (const reason of [
+      'operator_cancel',
+      'duration_cap_exceeded',
+      'hold_cap_exceeded',
+    ] as const) {
+      expect(() => EndCallInputSchema.parse({ retellCallId: 'call_1', reason })).not.toThrow();
+    }
+  });
+});
+
+describe('verifyRetellWebhookSignature', () => {
+  const body = JSON.stringify({
+    eventId: 'wh_abc',
+    deliveredAt: '2026-04-28T15:00:00.000Z',
+    event: {
+      type: 'call.started',
+      retellCallId: 'call_1',
+      agentId: 'a',
+      toNumberE164: '+1',
+      startedAt: '2026-04-28T15:00:00.000Z',
+    },
+  });
+
+  it('accepts a valid hex signature', () => {
+    const sig = signPayload(SECRET, body);
+    expect(verifyRetellWebhookSignature({ rawBody: body, signature: sig, secret: SECRET })).toBe(
+      true,
+    );
+  });
+
+  it('accepts a Buffer rawBody equivalently', () => {
+    const sig = signPayload(SECRET, body);
+    expect(
+      verifyRetellWebhookSignature({
+        rawBody: Buffer.from(body, 'utf8'),
+        signature: sig,
+        secret: SECRET,
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects a tampered body', () => {
+    const sig = signPayload(SECRET, body);
+    const tamperedBody = body.replace('call_1', 'call_2');
+    expect(
+      verifyRetellWebhookSignature({ rawBody: tamperedBody, signature: sig, secret: SECRET }),
+    ).toBe(false);
+  });
+
+  it('rejects a wrong secret', () => {
+    const sig = signPayload(SECRET, body);
+    expect(
+      verifyRetellWebhookSignature({ rawBody: body, signature: sig, secret: 'whsec_other' }),
+    ).toBe(false);
+  });
+
+  it('rejects an empty signature', () => {
+    expect(verifyRetellWebhookSignature({ rawBody: body, signature: '', secret: SECRET })).toBe(
+      false,
+    );
+  });
+
+  it('rejects an empty secret', () => {
+    expect(verifyRetellWebhookSignature({ rawBody: body, signature: 'any', secret: '' })).toBe(
+      false,
+    );
+  });
+
+  it('rejects a length-mismatched signature in constant time', () => {
+    const sig = signPayload(SECRET, body);
+    const truncated = sig.slice(0, -2);
+    expect(
+      verifyRetellWebhookSignature({ rawBody: body, signature: truncated, secret: SECRET }),
+    ).toBe(false);
+    const padded = `${sig}deadbeef`;
+    expect(verifyRetellWebhookSignature({ rawBody: body, signature: padded, secret: SECRET })).toBe(
+      false,
+    );
+  });
+});
+
+describe('parseRetellWebhookEnvelope', () => {
+  const validEnvelope: RetellWebhookEnvelope = {
+    eventId: 'wh_abc',
+    deliveredAt: '2026-04-28T15:00:00.000Z',
+    event: {
+      type: 'call.started',
+      retellCallId: 'call_1',
+      agentId: 'agent_delta_dental_ppo',
+      toNumberE164: '+18007656003',
+      startedAt: '2026-04-28T15:00:00.000Z',
+    },
+  };
+
+  it('parses a well-formed JSON body', () => {
+    const parsed = parseRetellWebhookEnvelope(JSON.stringify(validEnvelope));
+    expect(parsed).toEqual(validEnvelope);
+  });
+
+  it('parses a Buffer body identically', () => {
+    const parsed = parseRetellWebhookEnvelope(Buffer.from(JSON.stringify(validEnvelope), 'utf8'));
+    expect(parsed.eventId).toBe('wh_abc');
+  });
+
+  it('throws RetellWebhookParseError on invalid JSON', () => {
+    expect(() => parseRetellWebhookEnvelope('not json')).toThrow(RetellWebhookParseError);
+  });
+
+  it('throws RetellWebhookParseError on schema mismatch', () => {
+    expect(() =>
+      parseRetellWebhookEnvelope(
+        JSON.stringify({ ...validEnvelope, event: { type: 'call.started' } }),
+      ),
+    ).toThrow(RetellWebhookParseError);
+  });
+
+  it('throws RetellWebhookParseError on missing eventId (replay-protection invariant)', () => {
+    const { eventId: _omit, ...withoutEventId } = validEnvelope;
+    expect(() => parseRetellWebhookEnvelope(JSON.stringify(withoutEventId))).toThrow(
+      RetellWebhookParseError,
+    );
+  });
+});
+
+describe('RetellWebhookEnvelopeSchema', () => {
+  it('round-trips a complete envelope', () => {
+    const envelope: RetellWebhookEnvelope = {
+      eventId: 'wh_xyz',
+      deliveredAt: '2026-04-28T15:00:00.000Z',
+      event: {
+        type: 'call.ended',
+        retellCallId: 'call_1',
+        endedAt: '2026-04-28T15:10:00.000Z',
+        durationSeconds: 600,
+        endReason: RetellCallEndReason.COMPLETED,
+      },
+    };
+    expect(RetellWebhookEnvelopeSchema.parse(envelope)).toEqual(envelope);
+  });
+});
