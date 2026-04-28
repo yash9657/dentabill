@@ -4,6 +4,7 @@ import { createRetellPort, type RetellPort } from '@dentabill/payer-ivr';
 import { type CallsWorker, createCallsWorker, createRedisConnection } from '@dentabill/queue';
 import type { Redis } from 'ioredis';
 
+import { createDlqJobHandler, createDlqWorker, type DlqWorker } from './dlq-consumer.js';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { createCallJobHandler, type DbClient } from './handler.js';
 import { startHealthServer, type HealthServerHandle } from './health.js';
@@ -49,6 +50,7 @@ export interface CallWorkerHandle {
   readonly env: WorkerEnv;
   readonly logger: Logger;
   readonly worker: CallsWorker;
+  readonly dlqWorker: DlqWorker;
   readonly health: HealthServerHandle;
   readonly connection: Redis;
   readonly retellPort: RetellPort;
@@ -83,6 +85,25 @@ export async function bootCallWorker(
     }),
   });
 
+  // DLQ consumer (P3-T14) — runs in the same process so a single
+  // deploy unit covers both queues. Concurrency is capped at 1 to keep
+  // DB write pressure predictable; failed DLQ runs are not retried
+  // (the DLQ queue's `attempts: 1` policy in @dentabill/queue).
+  const dlqWorker = createDlqWorker({
+    connection,
+    concurrency: 1,
+    processor: createDlqJobHandler({ logger, prisma: prismaClient }),
+  });
+  dlqWorker.on('failed', (job, err) => {
+    logger.error(
+      {
+        dlqJobId: job?.id,
+        err: { message: err.message, name: err.name },
+      },
+      'dlq-worker job failed — manual recovery may be required',
+    );
+  });
+
   worker.on('failed', (job, err) => {
     logger.error(
       {
@@ -111,6 +132,11 @@ export async function bootCallWorker(
       logger.error({ err }, 'error closing BullMQ worker — continuing shutdown');
     }
     try {
+      await dlqWorker.close();
+    } catch (err) {
+      logger.error({ err }, 'error closing DLQ worker — continuing shutdown');
+    }
+    try {
       connection.disconnect();
     } catch (err) {
       logger.error({ err }, 'error disconnecting Redis — continuing shutdown');
@@ -123,7 +149,7 @@ export async function bootCallWorker(
     logger.info('call-worker shutdown complete');
   };
 
-  return { env, logger, worker, health, connection, retellPort, shutdown };
+  return { env, logger, worker, dlqWorker, health, connection, retellPort, shutdown };
 }
 
 /**

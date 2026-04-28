@@ -24,6 +24,7 @@ export type {
   UserRole,
   ClaimStatus,
   CallStatus,
+  CallDLQReason,
   PayerCode,
   NextAction,
 } from '@prisma/client';
