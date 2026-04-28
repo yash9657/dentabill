@@ -1,7 +1,7 @@
 import { audit, getOrgScopedDb, prisma } from '@dentabill/db';
 import { checkPayerHours } from '@dentabill/payer-ivr';
 import { CALL_JOB_NAME, type CallJobData } from '@dentabill/queue';
-import { ApiError } from '@dentabill/types';
+import { ApiError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@dentabill/types';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -66,6 +66,170 @@ const EnqueueCallResponseSchema = z.object({
 type EnqueueCallResponse = z.infer<typeof EnqueueCallResponseSchema>;
 
 const ENQUEUEABLE_CLAIM_STATUSES = new Set(['PENDING', 'NEEDS_INFO', 'APPEALING', 'MANUAL_REVIEW']);
+
+// ─── Calls list / detail / cancel (P3-T18 / T19 / T20) ──────────────────
+
+const CallStatusEnum = z.enum([
+  'INITIATED',
+  'NAVIGATING_IVR',
+  'ON_HOLD',
+  'HUMAN_REACHED',
+  'COLLECTING',
+  'COMPLETED',
+  'FAILED',
+  'VOICEMAIL',
+]);
+type CallStatusEnumType = z.infer<typeof CallStatusEnum>;
+
+const CallDLQReasonEnum = z.enum([
+  'EXCEEDED_MAX_ATTEMPTS',
+  'EXCEEDED_MAX_DURATION',
+  'EXCEEDED_MAX_HOLD',
+  'CANCELLED_BY_OPERATOR',
+]);
+
+const PayerCodeEnum = z.enum([
+  'DELTA_DENTAL_PPO',
+  'DELTA_DENTAL_PREMIER',
+  'CIGNA_DENTAL',
+  'METLIFE_DENTAL',
+  'AETNA_DENTAL',
+  'GUARDIAN_DENTAL',
+  'UNITED_CONCORDIA',
+  'HUMANA_DENTAL',
+  'UNKNOWN',
+]);
+
+const CallResponseSchema = z.object({
+  id: z.string(),
+  claimId: z.string(),
+  retellCallId: z.string(),
+  retellAgentId: z.string().nullable(),
+  status: CallStatusEnum,
+  attemptNumber: z.number().int().min(1).max(2),
+  ivrNavigated: z.boolean(),
+  humanReached: z.boolean(),
+  holdTimeSeconds: z.number().int().nullable(),
+  startedAt: z.iso.datetime().nullable(),
+  endedAt: z.iso.datetime().nullable(),
+  durationSeconds: z.number().int().nullable(),
+  dlqReason: CallDLQReasonEnum.nullable(),
+  createdAt: z.iso.datetime(),
+});
+type CallResponse = z.infer<typeof CallResponseSchema>;
+
+const CallEventResponseSchema = z.object({
+  id: z.string(),
+  eventType: z.string(),
+  data: z.record(z.string(), z.unknown()),
+  timestamp: z.iso.datetime(),
+});
+
+const ClaimSummarySchema = z.object({
+  id: z.string(),
+  claimNumber: z.string(),
+  payerCode: PayerCodeEnum,
+  status: z.string(),
+  priority: z.number().int(),
+  serviceDate: z.iso.datetime(),
+});
+
+const CallDetailResponseSchema = CallResponseSchema.extend({
+  events: z.array(CallEventResponseSchema),
+  claim: ClaimSummarySchema,
+});
+
+const CallsListQuerySchema = z.object({
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+  status: CallStatusEnum.optional(),
+  payer: PayerCodeEnum.optional(),
+  startedAtFrom: z.iso.datetime().optional(),
+  startedAtTo: z.iso.datetime().optional(),
+});
+type CallsListQuery = z.infer<typeof CallsListQuerySchema>;
+
+const CallsListResponseSchema = z.object({
+  items: z.array(CallResponseSchema),
+  nextCursor: z.string().nullable(),
+  hasMore: z.boolean(),
+});
+
+const CallIdParamSchema = z.object({ id: z.string().min(1) }).strict();
+
+interface CallRowForResponse {
+  id: string;
+  claimId: string;
+  retellCallId: string;
+  retellAgentId: string | null;
+  status: CallStatusEnumType;
+  attemptNumber: number;
+  ivrNavigated: boolean;
+  humanReached: boolean;
+  holdTimeSeconds: number | null;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  durationSeconds: number | null;
+  dlqReason:
+    | 'EXCEEDED_MAX_ATTEMPTS'
+    | 'EXCEEDED_MAX_DURATION'
+    | 'EXCEEDED_MAX_HOLD'
+    | 'CANCELLED_BY_OPERATOR'
+    | null;
+  createdAt: Date;
+}
+
+function toCallResponse(row: CallRowForResponse): CallResponse {
+  return {
+    id: row.id,
+    claimId: row.claimId,
+    retellCallId: row.retellCallId,
+    retellAgentId: row.retellAgentId,
+    status: row.status,
+    attemptNumber: row.attemptNumber,
+    ivrNavigated: row.ivrNavigated,
+    humanReached: row.humanReached,
+    holdTimeSeconds: row.holdTimeSeconds,
+    startedAt: row.startedAt ? row.startedAt.toISOString() : null,
+    endedAt: row.endedAt ? row.endedAt.toISOString() : null,
+    durationSeconds: row.durationSeconds,
+    dlqReason: row.dlqReason,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/**
+ * Cursor format mirrors `claims.ts`: base64url("<sortValue>|<id>"). Calls
+ * list sorts by `startedAt` desc by default with `id` tiebreaker; the
+ * cursor encodes the sort value (ISO datetime string) and the id of the
+ * last row on the page.
+ */
+function encodeCallCursor(sortValue: string, id: string): string {
+  return Buffer.from(`${sortValue}|${id}`, 'utf8').toString('base64url');
+}
+
+function nextCursorFor(row: { id: string; startedAt: Date | null } | undefined): string | null {
+  if (row === undefined) return null;
+  if (row.startedAt === null) return null;
+  return encodeCallCursor(row.startedAt.toISOString(), row.id);
+}
+
+function decodeCallCursor(cursor: string): { sortValue: string; id: string } | null {
+  try {
+    const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
+    const sep = decoded.indexOf('|');
+    if (sep < 1 || sep === decoded.length - 1) return null;
+    return { sortValue: decoded.slice(0, sep), id: decoded.slice(sep + 1) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Statuses the cancel route considers terminal — re-cancellation is a
+ * 200 idempotent no-op.
+ */
+const TERMINAL_CALL_STATUSES = new Set<CallStatusEnumType>(['COMPLETED', 'FAILED', 'VOICEMAIL']);
 
 export function callsRoutes(fastify: FastifyInstance): void {
   const { requireAuth } = fastify.auth;
@@ -217,6 +381,225 @@ export function callsRoutes(fastify: FastifyInstance): void {
         queuedAt: queuedAt.toISOString(),
         attemptNumber,
       };
+    },
+  );
+
+  // ─── GET /v1/calls — cursor-paginated list (P3-T18) ───────────────────
+  fastify.withTypeProvider().get(
+    '/calls',
+    {
+      preHandler: requireAuth,
+      schema: {
+        description:
+          'List calls for the authenticated organization with cursor pagination, filterable by status / payer / startedAt range. Sorted by `startedAt` desc with id tiebreaker.',
+        security,
+        querystring: CallsListQuerySchema,
+        response: { 200: CallsListResponseSchema },
+      },
+    },
+    async (request): Promise<z.infer<typeof CallsListResponseSchema>> => {
+      const auth = request.dentabillAuth;
+      if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
+      const { orgId } = auth;
+      const query = request.query as CallsListQuery;
+
+      const where: Record<string, unknown> = {};
+      if (query.status) where.status = query.status;
+      if (query.payer) where.claim = { payerCode: query.payer };
+      if (query.startedAtFrom !== undefined || query.startedAtTo !== undefined) {
+        const range: Record<string, Date> = {};
+        if (query.startedAtFrom !== undefined) range.gte = new Date(query.startedAtFrom);
+        if (query.startedAtTo !== undefined) range.lte = new Date(query.startedAtTo);
+        where.startedAt = range;
+      }
+
+      // Cursor decoding — descending order: prior page's last row had a
+      // smaller-or-equal startedAt; we want strictly less-than that
+      // sortValue OR (equal sortValue AND lexically lesser id).
+      let cursorPredicate: Record<string, unknown> | null = null;
+      if (query.cursor !== undefined) {
+        const decoded = decodeCallCursor(query.cursor);
+        if (decoded === null) {
+          throw new ApiError('VALIDATION_ERROR', 'cursor is malformed.');
+        }
+        const cursorDate = new Date(decoded.sortValue);
+        if (Number.isNaN(cursorDate.getTime())) {
+          throw new ApiError('VALIDATION_ERROR', 'cursor sort value is not a valid date.');
+        }
+        cursorPredicate = {
+          OR: [
+            { startedAt: { lt: cursorDate } },
+            { startedAt: cursorDate, id: { lt: decoded.id } },
+          ],
+        };
+      }
+      const finalWhere = cursorPredicate ? { AND: [where, cursorPredicate] } : where;
+
+      const db = getOrgScopedDb(orgId);
+      const rows = await db.call.findMany({
+        where: finalWhere,
+        // `startedAt` may be null for INITIATED rows that haven't started
+        // yet; Prisma sorts nulls last on desc, which is what we want
+        // (in-flight rows surface above null startedAt). Cursor pagination
+        // breaks down for null sort values — Phase 3 lists only show
+        // started calls in practice, so we filter nulls when paginating.
+        orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+        take: query.limit + 1,
+      });
+
+      const hasMore = rows.length > query.limit;
+      const items = (hasMore ? rows.slice(0, query.limit) : rows).map((row) => toCallResponse(row));
+      const lastRow = hasMore ? rows[query.limit - 1] : undefined;
+      const nextCursor = nextCursorFor(lastRow);
+
+      return { items, nextCursor, hasMore };
+    },
+  );
+
+  // ─── GET /v1/calls/:id — call detail (P3-T19) ─────────────────────────
+  fastify.withTypeProvider().get(
+    '/calls/:id',
+    {
+      preHandler: requireAuth,
+      schema: {
+        description:
+          'Fetch a single call with embedded CallEvent[] (timestamp asc) and a Claim summary. Cross-org access returns a uniform 404.',
+        security,
+        params: CallIdParamSchema,
+        response: { 200: CallDetailResponseSchema },
+      },
+    },
+    async (request): Promise<z.infer<typeof CallDetailResponseSchema>> => {
+      const auth = request.dentabillAuth;
+      if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
+      const { orgId } = auth;
+      const { id } = request.params as z.infer<typeof CallIdParamSchema>;
+
+      const db = getOrgScopedDb(orgId);
+      const row = await db.call.findFirst({
+        where: { id },
+        include: {
+          events: { orderBy: { timestamp: 'asc' } },
+          claim: {
+            select: {
+              id: true,
+              claimNumber: true,
+              payerCode: true,
+              status: true,
+              priority: true,
+              serviceDate: true,
+            },
+          },
+        },
+      });
+      if (!row) {
+        throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
+      }
+
+      await audit({
+        action: 'call.read',
+        resourceType: 'Call',
+        resourceId: id,
+        organizationId: orgId,
+        metadata: { clerkUserId: auth.userId },
+      });
+
+      return {
+        ...toCallResponse(row),
+        events: row.events.map((evt) => ({
+          id: evt.id,
+          eventType: evt.eventType,
+          // Prisma's Json column is typed as Prisma.JsonValue. Cast to a
+          // plain record for the response — Zod validates the shape on
+          // the wire side anyway.
+          data:
+            evt.data === null || typeof evt.data !== 'object' || Array.isArray(evt.data)
+              ? {}
+              : (evt.data as Record<string, unknown>),
+          timestamp: evt.timestamp.toISOString(),
+        })),
+        claim: {
+          id: row.claim.id,
+          claimNumber: row.claim.claimNumber,
+          payerCode: row.claim.payerCode,
+          status: row.claim.status,
+          priority: row.claim.priority,
+          serviceDate: row.claim.serviceDate.toISOString(),
+        },
+      };
+    },
+  );
+
+  // ─── POST /v1/calls/:id/cancel — idempotent cancel (P3-T20) ───────────
+  fastify.withTypeProvider().post(
+    '/calls/:id/cancel',
+    {
+      preHandler: requireAuth,
+      schema: {
+        description:
+          'Cancel an in-flight call. Idempotent — re-cancellation of a terminal call is a 200 no-op. Phase 3 cancellation is soft: it stamps Call.dlqReason = CANCELLED_BY_OPERATOR + flips Claim → MANUAL_REVIEW; the live Retell call continues until natural termination (true mid-call cancel lands in Phase 4 once the worker bridges a cancel channel).',
+        security,
+        params: CallIdParamSchema,
+        response: { 200: CallResponseSchema },
+      },
+    },
+    async (request): Promise<CallResponse> => {
+      const auth = request.dentabillAuth;
+      if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
+      const { orgId } = auth;
+      const { id } = request.params as z.infer<typeof CallIdParamSchema>;
+
+      const db = getOrgScopedDb(orgId);
+      const existing = await db.call.findFirst({ where: { id } });
+      if (!existing) {
+        throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
+      }
+
+      // Idempotent: terminal status → echo current state, no side effects.
+      if (TERMINAL_CALL_STATUSES.has(existing.status)) {
+        return toCallResponse(existing);
+      }
+
+      await prisma.call.updateMany({
+        where: { id, organizationId: orgId },
+        data: {
+          status: 'FAILED',
+          dlqReason: 'CANCELLED_BY_OPERATOR',
+          endedAt: new Date(),
+        },
+      });
+      await prisma.callEvent.create({
+        data: {
+          callId: id,
+          eventType: 'call.cancelled',
+          data: {
+            cancelledBy: auth.userId,
+            cancelledAt: new Date().toISOString(),
+          },
+        },
+      });
+      // Flip Claim → MANUAL_REVIEW so the dashboard reflects the
+      // operator decision. Conditional updateMany — already-MANUAL_REVIEW
+      // claims keep their updatedAt for downstream UI freshness markers.
+      await prisma.claim.updateMany({
+        where: {
+          id: existing.claimId,
+          organizationId: orgId,
+          status: { not: 'MANUAL_REVIEW' },
+        },
+        data: { status: 'MANUAL_REVIEW' },
+      });
+      await audit({
+        action: 'call.cancel',
+        resourceType: 'Call',
+        resourceId: id,
+        organizationId: orgId,
+        metadata: { clerkUserId: auth.userId, previousStatus: existing.status },
+      });
+
+      const updated = await db.call.findFirst({ where: { id } });
+      if (!updated) throw new ApiError('NOT_FOUND', 'Call not found after cancel.');
+      return toCallResponse(updated);
     },
   );
 }
