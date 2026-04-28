@@ -11,6 +11,7 @@ import {
   type ClaimStatus,
 } from '../../../lib/claims/types.js';
 import { useClaim } from '../../../lib/claims/use-claim.js';
+import { CallNowPill } from '../calls/call-now-pill.js';
 import { DashboardEmptyState } from '../dashboard-empty-state.js';
 import { SkeletonList } from '../skeleton-list.js';
 
@@ -101,6 +102,7 @@ function DetailLayout({ claim }: { readonly claim: Claim }): React.ReactElement 
       </header>
 
       <SummaryCard claim={claim} />
+      <CallNowPill claimId={claim.id} claimStatus={claim.status} variant="detail" />
       <Timeline claim={claim} />
     </section>
   );

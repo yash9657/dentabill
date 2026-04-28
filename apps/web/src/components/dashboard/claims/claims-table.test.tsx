@@ -1,4 +1,6 @@
+import { QueryProvider, createDentaBillQueryClient } from '@dentabill/ui/query';
 import { render, screen } from '@testing-library/react';
+import * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Claim } from '../../../lib/claims/types.js';
@@ -21,7 +23,22 @@ vi.mock('@tanstack/react-virtual', () => ({
   }),
 }));
 
+// The CallNowPill children use the SDK; stub the api-client so the
+// table test stays focused on row rendering and isn't dragged into
+// Clerk + TanStack Query setup. Without this, every row that renders a
+// PENDING-status pill would trip Clerk's `<ClerkProvider />` guard.
+vi.mock('../../../lib/api-client.js', () => ({
+  useDentaBillApi: () => ({
+    client: { POST: vi.fn(), GET: vi.fn(), PATCH: vi.fn() },
+    withAuthHeaders: async () => ({}),
+  }),
+}));
+
 import { ClaimsTable } from './claims-table.js';
+
+function withProviders(ui: React.ReactElement): React.ReactElement {
+  return <QueryProvider client={createDentaBillQueryClient()}>{ui}</QueryProvider>;
+}
 
 const baseClaim: Claim = {
   id: 'claim_a',
@@ -90,13 +107,15 @@ describe('<ClaimsTable />', () => {
       { ...baseClaim, id: 'b', claimNumber: 'CL-B', status: 'CALLING', payerCode: 'CIGNA_DENTAL' },
     ];
     render(
-      <ClaimsTable
-        items={items}
-        isLoading={false}
-        isFetchingMore={false}
-        hasMore={false}
-        onReachEnd={() => undefined}
-      />,
+      withProviders(
+        <ClaimsTable
+          items={items}
+          isLoading={false}
+          isFetchingMore={false}
+          hasMore={false}
+          onReachEnd={() => undefined}
+        />,
+      ),
     );
     expect(screen.getByText('CL-A')).toBeInTheDocument();
     expect(screen.getByText('CL-B')).toBeInTheDocument();
@@ -108,16 +127,39 @@ describe('<ClaimsTable />', () => {
     expect(links[1]).toHaveAttribute('href', '/dashboard/claims/b');
   });
 
+  it('renders a "Call now" button on PENDING rows but not on CALLING rows (P3-T22)', () => {
+    const items: Claim[] = [
+      { ...baseClaim, id: 'a', claimNumber: 'CL-A', status: 'PENDING' },
+      { ...baseClaim, id: 'b', claimNumber: 'CL-B', status: 'CALLING' },
+    ];
+    render(
+      withProviders(
+        <ClaimsTable
+          items={items}
+          isLoading={false}
+          isFetchingMore={false}
+          hasMore={false}
+          onReachEnd={() => undefined}
+        />,
+      ),
+    );
+    const buttons = screen.getAllByRole('button', { name: /Call now for claim/ });
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAttribute('aria-label', 'Call now for claim a');
+  });
+
   it('does not call onReachEnd when there are no more pages', () => {
     const onReachEnd = vi.fn();
     render(
-      <ClaimsTable
-        items={[{ ...baseClaim, id: 'a', claimNumber: 'CL-A' }]}
-        isLoading={false}
-        isFetchingMore={false}
-        hasMore={false}
-        onReachEnd={onReachEnd}
-      />,
+      withProviders(
+        <ClaimsTable
+          items={[{ ...baseClaim, id: 'a', claimNumber: 'CL-A' }]}
+          isLoading={false}
+          isFetchingMore={false}
+          hasMore={false}
+          onReachEnd={onReachEnd}
+        />,
+      ),
     );
     expect(onReachEnd).not.toHaveBeenCalled();
   });
