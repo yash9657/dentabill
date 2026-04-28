@@ -423,3 +423,34 @@ The worker does NOT re-check at pickup. Rationale: a job that sits in the queue 
 
 Storing the audio ourselves would require encrypting at rest with a managed key, a retention policy, deletion workflow, and a second BAA path (cloud storage). None of that adds value for billers; it adds cost and risk.
 **Consequences:** Retell is in our PHI inventory (`docs/SECURITY.md`). The recording-URL access is audit-logged. If we ever need to leave Retell, the migration plan involves a one-time export of historical recording URLs per claim — not a bulk audio download. Short retention windows for audio (Retell's defaults) are an explicit tradeoff: investigations beyond N days rely on transcript text, not raw audio.
+
+## ADR-041 — Phase 3 retrospective: lessons feeding Phase 4
+
+**Date:** 2026-04-29
+**Status:** Accepted
+**Context:** Phase 3 (Queue + Voice) shipped 31 tasks (T0 + T30) over the planned ~64-hour envelope. The platform now places real outbound calls, navigates the IVR via DTMF, persists structured `Call` + `CallEvent` rows, and surfaces the live phase to the operator through the dashboard. Phase 4 (Claude post-call summarization, Stripe billing, Clerk Organizations) starts from this baseline. This ADR captures what we'd do differently and the decisions that should not survive contact with Phase 4.
+
+### What worked (keep doing)
+
+- **Port-and-adapters for Retell (ADR-033).** `FakeRetell` paid for itself on the first day. The full lifecycle e2e (P3-T15) hits real BullMQ + real Postgres + a deterministic `FakeRetell`; flake = bug-in-our-logic, not bug-in-someone-else's-cloud. Carry this forward to the Claude summarizer in Phase 4 (`SummarizerPort` + `FakeClaude` + `LiveClaude`).
+- **Per-payer agent prompts (ADR-032).** Three agents was the right call — each prompt diverged enough that one universal prompt would have been a tangled super-prompt by the end of Phase 3. The cost (3× Retell agent management) was negligible.
+- **Single shared mapping helper for status visuals (`statusIndicatorVariant` / `callStatusIndicatorVariant`).** Centralising "what does this status look like" in one helper per resource killed an entire class of UI drift bug and made the live-indicator unlock (T23) a 30-line change instead of a whack-a-mole edit. Apply the same pattern to Phase 4's summary-confidence band visuals.
+- **Soft-cancel as a Phase 3 limitation (P3-T20).** Shipping the dashboard cancel button without a true cancel channel was the right tradeoff — operators get the marker, the dashboard reflects the decision, and the Phase 4 worker pub/sub bridge is a clean follow-on. Document limitations explicitly in ADRs and `SESSION_CONTEXT`; future-us thanks present-us.
+- **OpenAPI as the contract.** `pnpm gen:sdk` chained from Fastify swagger output was zero-friction once T21 nailed the env-stub ordering. The SDK contract test (P3-T21) catches "added a route, forgot to regen" the moment a path goes missing from the typed paths union.
+
+### What didn't work (change before Phase 4)
+
+- **Stacked-PR autoclose pain.** Multiple PRs auto-closed when their base branch was deleted on merge. Recovery (rebase onto main + force-push + reopen) added ~15 minutes per occurrence. **Decision:** Phase 4 lands feature work as squashed PRs against `main` directly — no stacking unless the dependency is genuinely sequential, and even then base on the un-merged PR's head only after explicit confirmation.
+- **Test DB concurrency between API and call-worker tests.** Both suites truncate the same Postgres test DB, so running them in parallel under turbo intermittently trips the webhook-replay test on the unique-on-`eventId` constraint. CI sidesteps this (separate jobs); local turbo doesn't. **Decision:** Phase 4 introduces per-suite schema namespaces (`SET search_path TO test_<suite>`) before any new write-heavy suites land; until then, `--concurrency=1` for the local case is acceptable.
+- **Empty-string env defaults bit twice.** `RETELL_WEBHOOK_SECRET=` (empty) in the root `.env` template slipped past `??=` first in `vitest.setup.ts`, then again in `apps/api/scripts/dump-openapi.mts`. **Decision:** the env loader (`apps/api/src/lib/env.ts`) should normalise empty strings to undefined at the boundary so consumers don't keep reinventing the same fallback. Capture as a Phase 4 cleanup ticket.
+- **`subscriberId` placeholder = `claimNumber`.** P3-T10 papered over a schema gap (no `subscriberId` column on `Claim`) by passing `claimNumber` as the agent metadata field. Most payer reps locate a claim by `claimNumber + DOS` so the agents work, but the semantic mismatch is a Phase 4 schema migration we cannot defer further — Aetna in particular requires the subscriber id verbatim.
+
+### Lessons for Phase 4
+
+- **The summarizer needs port-and-adapters from day one.** Same shape as `RetellPort`: `SummarizerPort.summarize(callId)` → structured outcome; `FakeClaude` returns deterministic per-test fixtures; `LiveClaude` wraps `@anthropic-ai/sdk`. Phase 4's ADR cluster should land this contract before any code that calls Claude.
+- **Live transcript view is now the right ergonomic add.** ADR-034 deferred it to Phase 4 because we didn't yet have transcript text to display. We do now. Build the `/dashboard/calls/[id]` transcript surface as an SSE stream — the polling cadence we shipped in T24 (5s/30s) is acceptable for the table, but the transcript itself is more like a chat surface and SSE removes the "did the operator just miss the rep speaking?" anxiety.
+- **Stripe integration cuts in cleanly along the existing audit-log spine.** Phase 3's `audit()` extension (T27) means every call that recovers $ is already keyed to org+actor+claim. Stripe billing in Phase 4 is "iterate `AuditLog` for `call.end` events whose Claim transitioned to RESOLVED in the last billing window, sum the recovered amount, post a usage record" — no new instrumentation required.
+- **Multi-seat / Clerk Organizations needs a `User → DentaBillUser` reconciliation pass** that doesn't exist today (ADR-031 tracks the deferral). Phase 4 should land that migration first, before the org-switch UI, so the billing surfaces don't ship with synthetic `clerkOrgId = "local_<userId>"` values still leaking through.
+
+**Decision:** This retrospective is the canonical hand-off from Phase 3 to Phase 4. Subsequent phases should append their own retro ADR at exit, not amend this one.
+**Consequences:** The "carry forward" items above are inputs to `docs/PHASE_PLAN.md` Phase 4 sketch (P3-T30 doc closeout). The "change before Phase 4" items file as cleanup tickets in `docs/TASKS.md` under a new `Phase 4 prep` section.
