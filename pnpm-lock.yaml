@@ -116,13 +116,47 @@ importers:
         version: 2.1.9(@types/node@20.19.39)(jsdom@29.0.2)(lightningcss@1.32.0)
 
   apps/call-worker:
+    dependencies:
+      '@dentabill/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@dentabill/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
+      '@dentabill/payer-ivr':
+        specifier: workspace:*
+        version: link:../../packages/payer-ivr
+      '@dentabill/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@dentabill/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      bullmq:
+        specifier: ^5.34.0
+        version: 5.76.2
+      ioredis:
+        specifier: ^5.4.1
+        version: 5.10.1
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       '@dentabill/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@types/node':
+        specifier: ^20.17.6
+        version: 20.19.39
+      tsx:
+        specifier: ^4.16.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
       vitest:
         specifier: ^2.1.9
-        version: 2.1.9(@types/node@25.6.0)(jsdom@29.0.2)(lightningcss@1.32.0)
+        version: 2.1.9(@types/node@20.19.39)(jsdom@29.0.2)(lightningcss@1.32.0)
 
   apps/summary-worker:
     devDependencies:
