@@ -38,6 +38,7 @@ export { checkPayerHours, isWithinPayerHours, type PayerHoursResult } from './bu
 
 export {
   EndCallInputSchema,
+  FakeRetell,
   RetellCallEndReason,
   RetellEventSchema,
   RetellWebhookEnvelopeSchema,
@@ -47,6 +48,7 @@ export {
   parseRetellWebhookEnvelope,
   verifyRetellWebhookSignature,
   type EndCallInput,
+  type FakeRetellOptions,
   type RetellCallEndedEvent,
   type RetellCallErrorEvent,
   type RetellCallStartedEvent,

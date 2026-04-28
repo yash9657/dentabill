@@ -18,6 +18,8 @@ export {
 
 export { type RetellEventListener, type RetellPort } from './port.js';
 
+export { FakeRetell, type FakeRetellOptions } from './fake.js';
+
 export {
   parseRetellWebhookEnvelope,
   RetellWebhookParseError,
