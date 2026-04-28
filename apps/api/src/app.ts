@@ -16,6 +16,8 @@ import {
 
 import { getEnv } from './lib/env.js';
 import { registerAuthPlugin } from './plugins/auth.js';
+import { registerQueuePlugin } from './plugins/queue.js';
+import { callsRoutes } from './routes/v1/calls.js';
 import { claimsRoutes } from './routes/v1/claims.js';
 import { healthRoutes } from './routes/v1/health.js';
 import { ingestRoutes } from './routes/v1/ingest.js';
@@ -180,11 +182,16 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   const authExports = await registerAuthPlugin(fastify);
   fastify.decorate('auth', authExports);
 
+  // Queue plugin (P3-T16) — lazy-connecting BullMQ queue so test bodies
+  // that never enqueue don't open a real Redis socket.
+  registerQueuePlugin(fastify, { redisUrl: env.REDIS_URL });
+
   // Register health routes
   await fastify.register(healthRoutes, { prefix: '/v1' });
   await fastify.register(meRoutes, { prefix: '/v1' });
   await fastify.register(onboardingRoutes, { prefix: '/v1' });
   await fastify.register(claimsRoutes, { prefix: '/v1' });
+  await fastify.register(callsRoutes, { prefix: '/v1' });
   await fastify.register(ingestRoutes, { prefix: '/v1' });
 
   return fastify;

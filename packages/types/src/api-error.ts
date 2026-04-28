@@ -32,6 +32,18 @@ export const API_ERROR_CODES = {
   ORG_SCOPE_MISSING: 'ORG_SCOPE_MISSING',
   ORG_SCOPE_VIOLATION: 'ORG_SCOPE_VIOLATION',
   INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
+  /**
+   * Phase 3 — payer's provider line is outside business hours. The
+   * UI uses this code to render a "Reopens at <time>" tooltip on the
+   * disabled "Call now" pill (ADR-037).
+   */
+  PAYER_HOURS_CLOSED: 'PAYER_HOURS_CLOSED',
+  /**
+   * Phase 3 — the claim's `payerCode` is not one of the three payers
+   * Phase 3 supports (Delta Dental PPO, Cigna Dental, MetLife Dental).
+   * The UI uses this code to render a "Manual review only" badge.
+   */
+  UNSUPPORTED_PAYER: 'UNSUPPORTED_PAYER',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 
@@ -48,6 +60,11 @@ const CODE_TO_STATUS: Readonly<Record<ApiErrorCode, number>> = {
   ORG_SCOPE_MISSING: 403,
   ORG_SCOPE_VIOLATION: 403,
   INVALID_STATE_TRANSITION: 409,
+  // 422 (Unprocessable Entity) — request was syntactically valid but
+  // domain rules reject it. This is the canonical status for "you
+  // can't dial right now" / "we don't support this payer yet".
+  PAYER_HOURS_CLOSED: 422,
+  UNSUPPORTED_PAYER: 422,
   INTERNAL_ERROR: 500,
 };
 
