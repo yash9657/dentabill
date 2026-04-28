@@ -82,6 +82,16 @@ enum NextAction {
   MANUAL_REVIEW
 }
 
+// Mirrors @dentabill/queue's `DLQ_REASONS` (ADR-035 / ADR-038 / ADR-039).
+// Stamped on Call.dlqReason whenever a job is routed to calls-dlq so the
+// dashboard surfaces the cause without requiring BullMQ admin access.
+enum CallDLQReason {
+  EXCEEDED_MAX_ATTEMPTS
+  EXCEEDED_MAX_DURATION
+  EXCEEDED_MAX_HOLD
+  CANCELLED_BY_OPERATOR
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────
 
 model Organization {
@@ -159,7 +169,12 @@ model Call {
   durationSeconds   Int?
   audioQualityScore Float?
   callCostCents     Int?
-  createdAt         DateTime   @default(now())
+  // Phase-3 additions (ADR-035 / ADR-038 / ADR-039).
+  // attemptNumber: per-claim, per-day attempt counter — capped at 2 by ADR-039.
+  // dlqReason:     non-null when this call was routed to calls-dlq.
+  attemptNumber     Int            @default(1)
+  dlqReason         CallDLQReason?
+  createdAt         DateTime       @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   claim        Claim        @relation(fields: [claimId], references: [id], onDelete: Cascade)
@@ -167,7 +182,18 @@ model Call {
   events       CallEvent[]
 
   @@index([organizationId])
+  // Single-column claimId index kept for backward compatibility — Postgres
+  // can use the composite below for `claimId`-only filters, but Prisma's
+  // query plans still cite it directly in some cases. Negligible overhead
+  // (one extra btree write per insert; no Call rows in prod yet).
   @@index([claimId])
+  // Phase-3 composite index — ADR-039's hold-cap policy queries by
+  // (organizationId, claimId, status) within the payer-local day; the
+  // API list route also filters by these. Leading organizationId enforces
+  // the multi-tenancy boundary at the optimizer level: even a buggy query
+  // that forgets to filter by organizationId cannot match cross-org
+  // claimId collisions.
+  @@index([organizationId, claimId, status])
 }
 
 model CallSummary {
