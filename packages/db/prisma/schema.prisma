@@ -155,14 +155,14 @@ model Claim {
 }
 
 model Call {
-  id                String     @id @default(cuid())
+  id                String         @id @default(cuid())
   organizationId    String
   claimId           String
-  retellCallId      String     @unique
+  retellCallId      String         @unique
   retellAgentId     String?
-  status            CallStatus @default(INITIATED)
-  ivrNavigated      Boolean    @default(false)
-  humanReached      Boolean    @default(false)
+  status            CallStatus     @default(INITIATED)
+  ivrNavigated      Boolean        @default(false)
+  humanReached      Boolean        @default(false)
   holdTimeSeconds   Int?
   startedAt         DateTime?
   endedAt           DateTime?
@@ -258,4 +258,27 @@ model AuditLog {
 
   @@index([organizationId, createdAt])
   @@index([userId])
+}
+
+// ─── RetellWebhookEvent ───────────────────────────────────────────────────
+//
+// Replay-protection log for Retell webhook deliveries (P3-T17 / ADR-036).
+// Each inbound webhook lands here BEFORE its body affects any other table —
+// the unique `eventId` index turns a duplicate delivery (Retell retries on
+// 5xx; misconfigured proxies can fan-out a single event) into a failed
+// INSERT, which the route handler interprets as "already processed, return
+// 200 OK as a no-op."
+//
+// Intentionally NOT multi-tenant: webhooks arrive without org context and
+// the org is derived from the linked Call row at processing time. Keeping
+// the table flat avoids forcing the route into a synthetic `organizationId`
+// before it has located the Call.
+model RetellWebhookEvent {
+  id           String   @id @default(cuid())
+  eventId      String   @unique
+  retellCallId String?
+  eventType    String
+  receivedAt   DateTime @default(now())
+
+  @@index([retellCallId])
 }

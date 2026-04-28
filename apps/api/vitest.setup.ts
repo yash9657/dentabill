@@ -30,10 +30,20 @@ const TEST_DEFAULTS: Readonly<Record<string, string>> = {
   REDIS_URL: 'redis://localhost:6379',
   NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
   NEXT_PUBLIC_API_URL: 'http://localhost:3001',
+  // P3-T17 — Retell webhook signature secret. Tests that hit the
+  // webhook route override this in beforeAll with their own value;
+  // every other test only needs the env to validate, not match.
+  RETELL_WEBHOOK_SECRET: 'test-default-retell-webhook-secret-v1',
 };
 
 for (const [key, value] of Object.entries(TEST_DEFAULTS)) {
-  process.env[key] ??= value;
+  // Empty strings from `.env` need replacing too — `dotenv` loads keys
+  // present-but-empty as `''`, which is truthy under `??=` and would
+  // bypass the default, leaving Zod's `.min(16)` checks angry.
+  const current = process.env[key];
+  if (current === undefined || current === '') {
+    process.env[key] = value;
+  }
 }
 
 /**
