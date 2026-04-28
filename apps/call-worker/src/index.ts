@@ -18,3 +18,12 @@ export {
   type ResolveHoldBreachInput,
   type ResolveHoldBreachResult,
 } from './hold-detector.js';
+export {
+  createDurationGuard,
+  resolveDurationBreach,
+  type DurationGuard,
+  type DurationGuardOptions,
+  type DurationGuardState,
+  type ResolveDurationBreachInput,
+  type ResolveDurationBreachResult,
+} from './duration-guard.js';
