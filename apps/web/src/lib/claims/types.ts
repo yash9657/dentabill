@@ -87,3 +87,52 @@ export function statusLabel(status: ClaimStatus): string {
 export function payerLabel(payer: PayerCode): string {
   return PAYER_LABELS[payer];
 }
+
+/**
+ * The exact set of `<StatusDot>` variants the design system exposes
+ * (kept in `packages/ui/src/components/status-dot.tsx`). Re-typed here
+ * so the mapping below stays a string-literal union — drift between
+ * the two surfaces fails at type-check, not at runtime.
+ */
+export type StatusIndicatorVariant =
+  | 'idle'
+  | 'pending'
+  | 'active'
+  | 'success'
+  | 'warning'
+  | 'error';
+
+const STATUS_INDICATOR_MAP: Readonly<Record<ClaimStatus, StatusIndicatorVariant>> = {
+  // Live — the muted-teal accent + status-pulse animation. ADR-013
+  // names this the *one* chromatic surface allowed in the system, and
+  // P3-T23 unlocks it for the full live phase of a call (queued →
+  // dialing → on-hold) so a user glancing at the dashboard knows
+  // *something is happening right now* without reading text.
+  IN_QUEUE: 'active',
+  CALLING: 'active',
+  // Pending — queued in the broad sense; not yet a live action.
+  PENDING: 'pending',
+  // Terminal-positive — completed/resolved/written-off all settle here.
+  // `RESOLVED` is the post-completion confirmation; `WRITTEN_OFF` is a
+  // human terminal decision.
+  COMPLETED: 'success',
+  RESOLVED: 'success',
+  WRITTEN_OFF: 'success',
+  // Needs-attention — not failing, but waiting on operator input.
+  NEEDS_INFO: 'warning',
+  APPEALING: 'warning',
+  MANUAL_REVIEW: 'warning',
+  // Terminal-negative.
+  DENIED: 'error',
+  FAILED: 'error',
+};
+
+/**
+ * Maps a `ClaimStatus` onto a `<StatusDot>` variant. Used by the
+ * claims table, claim detail card, and (Phase 3) the dashboard
+ * overview tiles — keep the mapping centralised so a status's
+ * visual identity is truly one decision.
+ */
+export function statusIndicatorVariant(status: ClaimStatus): StatusIndicatorVariant {
+  return STATUS_INDICATOR_MAP[status];
+}

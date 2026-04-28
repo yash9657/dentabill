@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import {
   payerLabel,
+  statusIndicatorVariant,
   statusLabel,
   type Claim,
   type ClaimStatus,
@@ -164,8 +165,11 @@ function FieldStatus({ status }: { readonly status: ClaimStatus }): React.ReactE
   return (
     <div className="flex flex-col gap-1">
       <dt className="text-caption text-gray-warm uppercase tracking-[0.12em]">Status</dt>
-      <dd className="text-body flex items-center gap-2 text-black">
-        <StatusDot variant={status === 'CALLING' ? 'active' : 'idle'} aria-hidden />
+      <dd
+        className="text-body flex items-center gap-2 text-black"
+        aria-label={`Status: ${statusLabel(status)}`}
+      >
+        <StatusDot variant={statusIndicatorVariant(status)} aria-hidden />
         {statusLabel(status)}
       </dd>
     </div>
