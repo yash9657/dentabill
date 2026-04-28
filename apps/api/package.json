@@ -24,6 +24,7 @@
     "@dentabill/db": "workspace:*",
     "@dentabill/logger": "workspace:*",
     "@dentabill/payer-ivr": "workspace:*",
+    "@dentabill/queue": "workspace:*",
     "@dentabill/types": "workspace:*",
     "@fastify/cors": "^11.0.0",
     "@fastify/multipart": "^9.0.1",
@@ -32,6 +33,7 @@
     "@fastify/swagger": "^9.4.0",
     "fastify": "^5.8.5",
     "fastify-type-provider-zod": "^6.1.0",
+    "ioredis": "^5.4.1",
     "papaparse": "^5.4.1",
     "pino": "^9.4.0",
     "zod": "^4.3.6"
