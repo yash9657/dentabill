@@ -9,11 +9,14 @@ describe('DashboardOverviewPage (P2-T35)', () => {
     expect(screen.getByRole('heading', { level: 1, name: /welcome back/i })).toBeInTheDocument();
   });
 
-  it('renders the four headline stats with em-dash placeholders', () => {
+  it('renders the four headline stat tiles with em-dash placeholders (unauth fallback)', () => {
+    // No Clerk env stubbed → page falls back to the static placeholder strip.
+    // P3-T25 swapped "Denials this week" for "Avg call (7d)" / "Recovered (7d)"
+    // to align with the live `/v1/calls/stats` aggregate.
     render(<DashboardOverviewPage />);
     const region = screen.getByRole('region', { name: /headline metrics/i });
     expect(region).toBeInTheDocument();
-    for (const label of ['Calls today', 'Queue depth', 'Denials this week', 'Recovered']) {
+    for (const label of ['Calls today', 'Queue depth', 'Avg call (7d)', 'Recovered (7d)']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
     expect(screen.getAllByText('—').length).toBe(4);

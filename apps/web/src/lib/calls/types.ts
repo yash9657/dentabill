@@ -7,6 +7,7 @@ import type { paths } from '@dentabill/api-sdk/types';
 type EnqueuePath = paths['/v1/claims/{id}/calls']['post'];
 type ListPath = paths['/v1/calls']['get'];
 type DetailPath = paths['/v1/calls/{id}']['get'];
+type StatsPath = paths['/v1/calls/stats']['get'];
 
 export type EnqueueCallResponse = EnqueuePath['responses'][202]['content']['application/json'];
 export type CallsListResponse = ListPath['responses'][200]['content']['application/json'];
@@ -14,6 +15,7 @@ export type CallSummary = CallsListResponse['items'][number];
 export type CallStatus = CallSummary['status'];
 export type CallDetailResponse = DetailPath['responses'][200]['content']['application/json'];
 export type CallEvent = CallDetailResponse['events'][number];
+export type CallsStatsResponse = StatsPath['responses'][200]['content']['application/json'];
 
 export type CallsListQuery = NonNullable<ListPath['parameters']['query']>;
 

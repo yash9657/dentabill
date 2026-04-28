@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { OverviewEmptySection, OverviewStatStrip } from '../../../components/dashboard/index.js';
 import type { OverviewStat } from '../../../components/dashboard/index.js';
+import { OverviewKpiTiles } from '../../../components/dashboard/overview-kpi-tiles.js';
 
 /**
  * `/dashboard/overview` — the post-sign-in landing page.
@@ -30,12 +31,21 @@ export const metadata: Metadata = {
   title: 'Overview',
 };
 
-const HEADLINE_STATS: readonly OverviewStat[] = [
-  { label: 'Calls today', value: '—', caption: 'Phase 3 lights this up' },
+/**
+ * Static placeholder strip shown when Clerk auth is unmounted (e.g.
+ * CI / preview without Clerk keys). The live `<OverviewKpiTiles>`
+ * island fetches `/v1/calls/stats` once Clerk is wired in.
+ */
+const PLACEHOLDER_STATS: readonly OverviewStat[] = [
+  { label: 'Calls today', value: '—', caption: 'Sign in to see live metrics' },
   { label: 'Queue depth', value: '—', caption: 'Pending follow-ups' },
-  { label: 'Denials this week', value: '—', caption: 'Across all payers' },
-  { label: 'Recovered', value: '—', caption: 'Lifetime, USD' },
+  { label: 'Avg call (7d)', value: '—', caption: 'Last seven days' },
+  { label: 'Recovered (7d)', value: '—', caption: 'Resolved claims, last seven days' },
 ];
+
+function hasClerkKeys(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+}
 
 export default function DashboardOverviewPage(): React.ReactElement {
   return (
@@ -50,7 +60,7 @@ export default function DashboardOverviewPage(): React.ReactElement {
         </p>
       </header>
 
-      <OverviewStatStrip stats={HEADLINE_STATS} />
+      {hasClerkKeys() ? <OverviewKpiTiles /> : <OverviewStatStrip stats={PLACEHOLDER_STATS} />}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <OverviewEmptySection

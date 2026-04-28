@@ -670,3 +670,243 @@ describe('POST /v1/calls/:id/cancel (P3-T20 — idempotent cancel)', () => {
     expect(callAfter.dlqReason).toBeNull();
   });
 });
+
+describe('GET /v1/calls/stats (P3-T25 — overview aggregates)', () => {
+  let server: FastifyInstance;
+  beforeAll(async () => {
+    delete process.env.CLERK_SECRET_KEY;
+    delete process.env.CLERK_PUBLISHABLE_KEY;
+    server = await buildServer({ logger: false });
+    await prisma.$connect();
+  });
+  afterAll(async () => {
+    await server.close();
+    await prisma.$disconnect();
+  });
+  afterEach(async () => {
+    await prisma.$executeRawUnsafe(
+      'TRUNCATE TABLE "Organization", "User", "Claim", "Call", "CallSummary", "CallEvent", "PayerConfig", "AuditLog" RESTART IDENTITY CASCADE',
+    );
+  });
+
+  it('rejects unauthenticated requests with 401', async () => {
+    const response = await server.inject({ method: 'GET', url: '/v1/calls/stats' });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('returns zeroed metrics for an org with no calls or resolved claims', async () => {
+    const org = await makeOrg('StatsEmpty');
+    const response = await server.inject({
+      method: 'GET',
+      url: '/v1/calls/stats',
+      headers: { 'x-test-user-id': 'user_x', 'x-test-org-id': org.id },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{
+      callsToday: number;
+      queueDepth: number;
+      avgCallSeconds: number | null;
+      recoveredThisWeekCents: number;
+    }>();
+    expect(body).toEqual({
+      callsToday: 0,
+      queueDepth: 0,
+      avgCallSeconds: null,
+      recoveredThisWeekCents: 0,
+    });
+  });
+
+  it('aggregates callsToday + queueDepth + avgCallSeconds + recovered$ correctly', async () => {
+    const org = await makeOrg('StatsAgg');
+    // Seed claim referenced by the calls.
+    const baseClaim = await prisma.claim.create({
+      data: {
+        organizationId: org.id,
+        patientDOBHash: 'h',
+        claimNumber: 'CL-S-1',
+        cdtCodes: ['D2740'],
+        claimAmount: '500.00',
+        payerCode: 'DELTA_DENTAL_PPO',
+        serviceDate: new Date('2026-04-15T00:00:00.000Z'),
+        status: 'CALLING',
+        priority: 80,
+      },
+    });
+    // Two calls today (UTC), one earlier this week (counts in avg only),
+    // one >7d ago (not in avg).
+    const now = new Date();
+    const startOfTodayUTC = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0),
+    );
+    const today1 = new Date(startOfTodayUTC.getTime() + 60 * 60 * 1000);
+    const today2 = new Date(startOfTodayUTC.getTime() + 4 * 60 * 60 * 1000);
+    const threeDaysAgoStart = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+    const threeDaysAgoEnd = new Date(threeDaysAgoStart.getTime() + 90 * 1000);
+    const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+
+    await prisma.call.createMany({
+      data: [
+        {
+          organizationId: org.id,
+          claimId: baseClaim.id,
+          retellCallId: 'rcid_today1',
+          status: 'COMPLETED',
+          attemptNumber: 1,
+          startedAt: today1,
+          endedAt: new Date(today1.getTime() + 60 * 1000),
+          durationSeconds: 60,
+        },
+        {
+          organizationId: org.id,
+          claimId: baseClaim.id,
+          retellCallId: 'rcid_today2',
+          status: 'COMPLETED',
+          attemptNumber: 1,
+          startedAt: today2,
+          endedAt: new Date(today2.getTime() + 120 * 1000),
+          durationSeconds: 120,
+        },
+        {
+          organizationId: org.id,
+          claimId: baseClaim.id,
+          retellCallId: 'rcid_3d',
+          status: 'COMPLETED',
+          attemptNumber: 1,
+          startedAt: threeDaysAgoStart,
+          endedAt: threeDaysAgoEnd,
+          durationSeconds: 90,
+        },
+        {
+          organizationId: org.id,
+          claimId: baseClaim.id,
+          retellCallId: 'rcid_10d',
+          status: 'COMPLETED',
+          attemptNumber: 1,
+          startedAt: tenDaysAgo,
+          endedAt: new Date(tenDaysAgo.getTime() + 999 * 1000),
+          durationSeconds: 999, // outside 7-day window — excluded from avg
+        },
+      ],
+    });
+
+    // Queue depth — three claims in queueable statuses.
+    await prisma.claim.createMany({
+      data: [
+        {
+          organizationId: org.id,
+          patientDOBHash: 'h',
+          claimNumber: 'CL-Q-1',
+          cdtCodes: ['D2740'],
+          claimAmount: '100.00',
+          payerCode: 'CIGNA_DENTAL',
+          serviceDate: new Date('2026-04-15T00:00:00.000Z'),
+          status: 'PENDING',
+          priority: 80,
+        },
+        {
+          organizationId: org.id,
+          patientDOBHash: 'h',
+          claimNumber: 'CL-Q-2',
+          cdtCodes: ['D2740'],
+          claimAmount: '200.00',
+          payerCode: 'CIGNA_DENTAL',
+          serviceDate: new Date('2026-04-15T00:00:00.000Z'),
+          status: 'IN_QUEUE',
+          priority: 80,
+        },
+      ],
+    });
+
+    // Recovered: two RESOLVED claims updated within last 7 days.
+    await prisma.claim.create({
+      data: {
+        organizationId: org.id,
+        patientDOBHash: 'h',
+        claimNumber: 'CL-R-1',
+        cdtCodes: ['D2740'],
+        claimAmount: '350.50',
+        payerCode: 'METLIFE_DENTAL',
+        serviceDate: new Date('2026-04-15T00:00:00.000Z'),
+        status: 'RESOLVED',
+        priority: 80,
+      },
+    });
+    await prisma.claim.create({
+      data: {
+        organizationId: org.id,
+        patientDOBHash: 'h',
+        claimNumber: 'CL-R-2',
+        cdtCodes: ['D2740'],
+        claimAmount: '149.50',
+        payerCode: 'METLIFE_DENTAL',
+        serviceDate: new Date('2026-04-15T00:00:00.000Z'),
+        status: 'RESOLVED',
+        priority: 80,
+      },
+    });
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/v1/calls/stats',
+      headers: { 'x-test-user-id': 'user_x', 'x-test-org-id': org.id },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{
+      callsToday: number;
+      queueDepth: number;
+      avgCallSeconds: number | null;
+      recoveredThisWeekCents: number;
+    }>();
+    expect(body.callsToday).toBe(2);
+    // 2 fresh PENDING/IN_QUEUE rows + the seedClaim's CALLING row (also queueable).
+    expect(body.queueDepth).toBe(3);
+    // Avg over 60, 120, 90 (the 999s call is outside the 7-day window).
+    expect(body.avgCallSeconds).toBe(90);
+    // 350.50 + 149.50 = 500.00 → 50000¢
+    expect(body.recoveredThisWeekCents).toBe(50000);
+  });
+
+  it('does not leak rows from another organization', async () => {
+    const orgA = await makeOrg('StatsA');
+    const orgB = await makeOrg('StatsB');
+    // Seed orgB with a stats-eligible call+claim — orgA's stats must remain zero.
+    const claim = await prisma.claim.create({
+      data: {
+        organizationId: orgB.id,
+        patientDOBHash: 'h',
+        claimNumber: 'CL-X',
+        cdtCodes: ['D2740'],
+        claimAmount: '999.99',
+        payerCode: 'DELTA_DENTAL_PPO',
+        serviceDate: new Date('2026-04-15T00:00:00.000Z'),
+        status: 'RESOLVED',
+        priority: 80,
+      },
+    });
+    await prisma.call.create({
+      data: {
+        organizationId: orgB.id,
+        claimId: claim.id,
+        retellCallId: 'rcid_b',
+        status: 'COMPLETED',
+        attemptNumber: 1,
+        startedAt: new Date(),
+        endedAt: new Date(),
+        durationSeconds: 200,
+      },
+    });
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/v1/calls/stats',
+      headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': orgA.id },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      callsToday: 0,
+      queueDepth: 0,
+      avgCallSeconds: null,
+      recoveredThisWeekCents: 0,
+    });
+  });
+});

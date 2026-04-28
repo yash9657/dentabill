@@ -157,6 +157,32 @@ const CallsListResponseSchema = z.object({
 
 const CallIdParamSchema = z.object({ id: z.string().min(1) }).strict();
 
+/**
+ * `/v1/calls/stats` (P3-T25). Aggregate metrics for the dashboard
+ * overview tiles.
+ *
+ *   - `callsToday`        — count of Call rows with `startedAt` today
+ *                           (in the API server's local time, which is
+ *                           UTC in prod). Phase 4 will move this to
+ *                           the org's locale.
+ *   - `avgCallSeconds`    — mean of `durationSeconds` across calls
+ *                           that have an `endedAt` in the last 7
+ *                           days. `null` when there are zero such
+ *                           calls (the UI renders an em-dash).
+ *   - `recoveredThisWeekCents` — sum of `claimAmount * 100` (cents)
+ *                           across `Claim`s flipped to `RESOLVED`
+ *                           in the last 7 days. Phase 4 will replace
+ *                           this with a real ledger; for now we use
+ *                           the claim amount as the proxy.
+ */
+const CallsStatsResponseSchema = z.object({
+  callsToday: z.number().int().min(0),
+  queueDepth: z.number().int().min(0),
+  avgCallSeconds: z.number().int().min(0).nullable(),
+  recoveredThisWeekCents: z.number().int().min(0),
+});
+type CallsStatsResponse = z.infer<typeof CallsStatsResponseSchema>;
+
 interface CallRowForResponse {
   id: string;
   claimId: string;
@@ -453,6 +479,76 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const nextCursor = nextCursorFor(lastRow);
 
       return { items, nextCursor, hasMore };
+    },
+  );
+
+  // ─── GET /v1/calls/stats — overview aggregates (P3-T25) ───────────────
+  // Registered before /calls/:id so the literal segment wins over the
+  // parameter route. Fastify's radix tree handles this anyway, but
+  // explicit ordering keeps the file readable.
+  fastify.withTypeProvider().get(
+    '/calls/stats',
+    {
+      preHandler: requireAuth,
+      schema: {
+        description:
+          "Aggregate call/claim metrics for the dashboard overview tiles. Org-scoped: only the authenticated tenant's rows contribute.",
+        security,
+        response: { 200: CallsStatsResponseSchema },
+      },
+    },
+    async (request): Promise<CallsStatsResponse> => {
+      const auth = request.dentabillAuth;
+      if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
+      const { orgId } = auth;
+
+      const now = new Date();
+      const startOfTodayUTC = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0),
+      );
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      // Each query is org-scoped via explicit `where.organizationId`.
+      // We don't go through `getOrgScopedDb` here because count/aggregate
+      // helpers aren't on the org-scoped wrapper's surface; the explicit
+      // filter is the established pattern for aggregates.
+      const [callsToday, queueDepth, avgRow, recoveredRows] = await Promise.all([
+        prisma.call.count({
+          where: { organizationId: orgId, startedAt: { gte: startOfTodayUTC } },
+        }),
+        prisma.claim.count({
+          where: { organizationId: orgId, status: { in: ['PENDING', 'IN_QUEUE', 'CALLING'] } },
+        }),
+        prisma.call.aggregate({
+          _avg: { durationSeconds: true },
+          where: {
+            organizationId: orgId,
+            endedAt: { gte: sevenDaysAgo },
+            durationSeconds: { not: null },
+          },
+        }),
+        prisma.claim.findMany({
+          where: {
+            organizationId: orgId,
+            status: 'RESOLVED',
+            updatedAt: { gte: sevenDaysAgo },
+          },
+          select: { claimAmount: true },
+        }),
+      ]);
+
+      const avgCallSeconds =
+        avgRow._avg.durationSeconds === null ? null : Math.round(avgRow._avg.durationSeconds);
+
+      // Prisma decimal columns come back as `Decimal | string`. We sum
+      // in cents (integer math) to avoid float drift.
+      const recoveredThisWeekCents = recoveredRows.reduce((acc, row) => {
+        const dollars = Number(row.claimAmount);
+        if (Number.isNaN(dollars)) return acc;
+        return acc + Math.round(dollars * 100);
+      }, 0);
+
+      return { callsToday, queueDepth, avgCallSeconds, recoveredThisWeekCents };
     },
   );
 
