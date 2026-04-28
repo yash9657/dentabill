@@ -37,6 +37,16 @@ export {
 export { checkPayerHours, isWithinPayerHours, type PayerHoursResult } from './business-hours.js';
 
 export {
+  createIvrNavigator,
+  DEFAULT_MISDETECT_PATTERNS,
+  type CreateIvrNavigatorInput,
+  type IvrNavigator,
+  type NavigatorAction,
+  type NavigatorOptions,
+  type NavigatorVars,
+} from './navigator/index.js';
+
+export {
   createRetellPort,
   EndCallInputSchema,
   FakeRetell,
