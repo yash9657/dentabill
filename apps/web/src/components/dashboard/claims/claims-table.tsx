@@ -7,9 +7,9 @@ import * as React from 'react';
 
 import {
   payerLabel,
+  statusIndicatorVariant,
   statusLabel,
   type Claim,
-  type ClaimStatus,
 } from '../../../lib/claims/types.js';
 import { CallNowPill } from '../calls/call-now-pill.js';
 
@@ -194,8 +194,12 @@ function ClaimRow({
         <span role="gridcell" className="text-body text-right font-medium tabular-nums text-black">
           ${claim.claimAmount}
         </span>
-        <span role="gridcell" className="flex items-center gap-2 text-sm text-black">
-          <StatusDot variant={statusDotVariantFor(claim.status)} aria-hidden />
+        <span
+          role="gridcell"
+          className="flex items-center gap-2 text-sm text-black"
+          aria-label={`Status: ${statusLabel(claim.status)}`}
+        >
+          <StatusDot variant={statusIndicatorVariant(claim.status)} aria-hidden />
           {statusLabel(claim.status)}
         </span>
         <span role="gridcell" className="text-body text-gray-warm text-sm">
@@ -210,10 +214,6 @@ function ClaimRow({
       </span>
     </div>
   );
-}
-
-function statusDotVariantFor(status: ClaimStatus): 'active' | 'idle' {
-  return status === 'CALLING' ? 'active' : 'idle';
 }
 
 function formatServiceDate(iso: string): string {
