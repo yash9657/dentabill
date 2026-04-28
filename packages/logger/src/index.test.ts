@@ -127,6 +127,21 @@ describe('createLogger', () => {
     expect(output).toContain('425.5');
   });
 
+  it.each([
+    { field: 'dtmf', value: '*123456789#' },
+    { field: 'transcriptText', value: 'Patient John Doe DOB 01/01/1990 says ...' },
+    { field: 'subscriberId', value: 'SUB-9999-X' },
+    { field: 'memberId', value: 'MBR-7777-X' },
+    { field: 'ssn', value: '987-65-4321' },
+  ])('redacts the Phase-3 voice path field $field (P3-T26)', ({ field, value }) => {
+    const { stream, chunks } = captureStream();
+    const logger = createLogger({ level: 'info', stream });
+    logger.info({ retellEvent: { [field]: value } }, 'voice event');
+    const output = chunks.join('');
+    expect(output).not.toContain(value);
+    expect(output).toContain('[Redacted]');
+  });
+
   it('respects the level option', () => {
     const { stream, chunks } = captureStream();
     const logger = createLogger({ level: 'warn', stream });
