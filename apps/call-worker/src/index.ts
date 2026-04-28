@@ -27,3 +27,11 @@ export {
   type ResolveDurationBreachInput,
   type ResolveDurationBreachResult,
 } from './duration-guard.js';
+export {
+  createDlqJobHandler,
+  createDlqWorker,
+  type CreateDlqWorkerOptions,
+  type DlqHandlerDeps,
+  type DlqProcessor,
+  type DlqWorker,
+} from './dlq-consumer.js';
