@@ -599,6 +599,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/calls/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Aggregate call/claim metrics for the dashboard overview tiles. Org-scoped: only the authenticated tenant's rows contribute. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            callsToday: number;
+                            queueDepth: number;
+                            avgCallSeconds: number | null;
+                            recoveredThisWeekCents: number;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/calls/{id}": {
         parameters: {
             query?: never;

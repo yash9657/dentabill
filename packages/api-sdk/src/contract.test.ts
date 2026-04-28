@@ -40,6 +40,7 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/claims/{id}',
   '/v1/claims/{id}/calls',
   '/v1/calls',
+  '/v1/calls/stats',
   '/v1/calls/{id}',
   '/v1/calls/{id}/cancel',
   '/v1/webhooks/retell',
