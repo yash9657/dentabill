@@ -20,6 +20,14 @@ export { type RetellEventListener, type RetellPort } from './port.js';
 
 export { FakeRetell, type FakeRetellOptions } from './fake.js';
 
+export { LiveRetell, type LiveRetellOptions } from './live.js';
+
+export {
+  createRetellPort,
+  type CreateRetellPortInput,
+  type CreateRetellPortResult,
+} from './factory.js';
+
 export {
   parseRetellWebhookEnvelope,
   RetellWebhookParseError,
