@@ -29,6 +29,17 @@ const envSchema = z.object({
   /** HTTP port for the /healthz probe. */
   WORKER_PORT: z.coerce.number().int().positive().default(3010),
 
+  /**
+   * E.164 number the worker dials FROM. Provisioned in Retell (or
+   * upstream telephony provider) and required before the first
+   * production call. Dev/test default lets the worker boot — calls
+   * resolved against FakeRetell never actually dial out.
+   */
+  WORKER_OUTBOUND_NUMBER: z
+    .string()
+    .regex(/^\+[0-9]{8,15}$/, 'expected E.164 (e.g. +15551234567)')
+    .default('+15555550100'),
+
   /** BullMQ Worker concurrency (ADR-035 default = 4). */
   QUEUE_CONCURRENCY: z.coerce.number().int().positive().max(64).default(4),
 
