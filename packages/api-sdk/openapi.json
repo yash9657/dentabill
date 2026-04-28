@@ -94,7 +94,7 @@
     },
     "/v1/me": {
       "get": {
-        "description": "Returns the userId + orgId of the current Clerk session.",
+        "description": "Returns the authenticated DentaBill User and Organization for the current Clerk session.",
         "security": [
           {
             "bearer": []
@@ -108,16 +108,158 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "userId": {
-                      "type": "string"
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "nullable": true,
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "OWNER",
+                            "ADMIN",
+                            "BILLING_STAFF"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "email",
+                        "name",
+                        "role"
+                      ],
+                      "additionalProperties": false
                     },
-                    "orgId": {
-                      "type": "string"
+                    "organization": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "npi": {
+                          "nullable": true,
+                          "type": "string"
+                        },
+                        "plan": {
+                          "type": "string",
+                          "enum": [
+                            "TRIAL",
+                            "STARTER",
+                            "PRO",
+                            "ENTERPRISE"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "npi",
+                        "plan"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
+                    "user",
+                    "organization"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/onboarding": {
+      "post": {
+        "description": "First-run onboarding for a Clerk-authenticated user. Idempotently creates the DentaBill Organization + User and stamps Clerk publicMetadata.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "practiceName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 160
+                  },
+                  "npi": {
+                    "type": "string"
+                  },
+                  "zip": {
+                    "type": "string",
+                    "pattern": "^\\d{5}$"
+                  },
+                  "acceptedPayers": {
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "Delta Dental PPO",
+                        "Cigna Dental",
+                        "MetLife Dental",
+                        "Aetna Dental",
+                        "Guardian Dental",
+                        "Humana Dental",
+                        "United Concordia",
+                        "Anthem Dental"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "practiceName",
+                  "npi",
+                  "zip",
+                  "acceptedPayers"
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "alreadyOnboarded": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organizationId",
                     "userId",
-                    "orgId"
+                    "alreadyOnboarded"
                   ],
                   "additionalProperties": false
                 }
@@ -973,6 +1115,643 @@
         }
       }
     },
+    "/v1/claims/{id}/calls": {
+      "post": {
+        "description": "Enqueue an outbound payer call for the given claim. Returns 202 with the BullMQ job id; the call lifecycle plays out in the call-worker.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "priorityOverride": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jobId": {
+                      "type": "string"
+                    },
+                    "claimId": {
+                      "type": "string"
+                    },
+                    "queuedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "attemptNumber": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2
+                    }
+                  },
+                  "required": [
+                    "jobId",
+                    "claimId",
+                    "queuedAt",
+                    "attemptNumber"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/calls": {
+      "get": {
+        "description": "List calls for the authenticated organization with cursor pagination, filterable by status / payer / startedAt range. Sorted by `startedAt` desc with id tiebreaker.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "maximum": 200
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "INITIATED",
+                "NAVIGATING_IVR",
+                "ON_HOLD",
+                "HUMAN_REACHED",
+                "COLLECTING",
+                "COMPLETED",
+                "FAILED",
+                "VOICEMAIL"
+              ]
+            },
+            "in": "query",
+            "name": "status",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DELTA_DENTAL_PPO",
+                "DELTA_DENTAL_PREMIER",
+                "CIGNA_DENTAL",
+                "METLIFE_DENTAL",
+                "AETNA_DENTAL",
+                "GUARDIAN_DENTAL",
+                "UNITED_CONCORDIA",
+                "HUMANA_DENTAL",
+                "UNKNOWN"
+              ]
+            },
+            "in": "query",
+            "name": "payer",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            },
+            "in": "query",
+            "name": "startedAtFrom",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            },
+            "in": "query",
+            "name": "startedAtTo",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "claimId": {
+                            "type": "string"
+                          },
+                          "retellCallId": {
+                            "type": "string"
+                          },
+                          "retellAgentId": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "INITIATED",
+                              "NAVIGATING_IVR",
+                              "ON_HOLD",
+                              "HUMAN_REACHED",
+                              "COLLECTING",
+                              "COMPLETED",
+                              "FAILED",
+                              "VOICEMAIL"
+                            ]
+                          },
+                          "attemptNumber": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 2
+                          },
+                          "ivrNavigated": {
+                            "type": "boolean"
+                          },
+                          "humanReached": {
+                            "type": "boolean"
+                          },
+                          "holdTimeSeconds": {
+                            "nullable": true,
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "startedAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                          },
+                          "endedAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                          },
+                          "durationSeconds": {
+                            "nullable": true,
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "dlqReason": {
+                            "nullable": true,
+                            "type": "string",
+                            "enum": [
+                              "EXCEEDED_MAX_ATTEMPTS",
+                              "EXCEEDED_MAX_DURATION",
+                              "EXCEEDED_MAX_HOLD",
+                              "CANCELLED_BY_OPERATOR"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "claimId",
+                          "retellCallId",
+                          "retellAgentId",
+                          "status",
+                          "attemptNumber",
+                          "ivrNavigated",
+                          "humanReached",
+                          "holdTimeSeconds",
+                          "startedAt",
+                          "endedAt",
+                          "durationSeconds",
+                          "dlqReason",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor",
+                    "hasMore"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/calls/{id}": {
+      "get": {
+        "description": "Fetch a single call with embedded CallEvent[] (timestamp asc) and a Claim summary. Cross-org access returns a uniform 404.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "claimId": {
+                      "type": "string"
+                    },
+                    "retellCallId": {
+                      "type": "string"
+                    },
+                    "retellAgentId": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "INITIATED",
+                        "NAVIGATING_IVR",
+                        "ON_HOLD",
+                        "HUMAN_REACHED",
+                        "COLLECTING",
+                        "COMPLETED",
+                        "FAILED",
+                        "VOICEMAIL"
+                      ]
+                    },
+                    "attemptNumber": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2
+                    },
+                    "ivrNavigated": {
+                      "type": "boolean"
+                    },
+                    "humanReached": {
+                      "type": "boolean"
+                    },
+                    "holdTimeSeconds": {
+                      "nullable": true,
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "startedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "endedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "durationSeconds": {
+                      "nullable": true,
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "dlqReason": {
+                      "nullable": true,
+                      "type": "string",
+                      "enum": [
+                        "EXCEEDED_MAX_ATTEMPTS",
+                        "EXCEEDED_MAX_DURATION",
+                        "EXCEEDED_MAX_HOLD",
+                        "CANCELLED_BY_OPERATOR"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "eventType": {
+                            "type": "string"
+                          },
+                          "data": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "timestamp": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "eventType",
+                          "data",
+                          "timestamp"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "claim": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "claimNumber": {
+                          "type": "string"
+                        },
+                        "payerCode": {
+                          "type": "string",
+                          "enum": [
+                            "DELTA_DENTAL_PPO",
+                            "DELTA_DENTAL_PREMIER",
+                            "CIGNA_DENTAL",
+                            "METLIFE_DENTAL",
+                            "AETNA_DENTAL",
+                            "GUARDIAN_DENTAL",
+                            "UNITED_CONCORDIA",
+                            "HUMANA_DENTAL",
+                            "UNKNOWN"
+                          ]
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "priority": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "serviceDate": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "claimNumber",
+                        "payerCode",
+                        "status",
+                        "priority",
+                        "serviceDate"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "claimId",
+                    "retellCallId",
+                    "retellAgentId",
+                    "status",
+                    "attemptNumber",
+                    "ivrNavigated",
+                    "humanReached",
+                    "holdTimeSeconds",
+                    "startedAt",
+                    "endedAt",
+                    "durationSeconds",
+                    "dlqReason",
+                    "createdAt",
+                    "events",
+                    "claim"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/calls/{id}/cancel": {
+      "post": {
+        "description": "Cancel an in-flight call. Idempotent — re-cancellation of a terminal call is a 200 no-op. Phase 3 cancellation is soft: it stamps Call.dlqReason = CANCELLED_BY_OPERATOR + flips Claim → MANUAL_REVIEW; the live Retell call continues until natural termination (true mid-call cancel lands in Phase 4 once the worker bridges a cancel channel).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "claimId": {
+                      "type": "string"
+                    },
+                    "retellCallId": {
+                      "type": "string"
+                    },
+                    "retellAgentId": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "INITIATED",
+                        "NAVIGATING_IVR",
+                        "ON_HOLD",
+                        "HUMAN_REACHED",
+                        "COLLECTING",
+                        "COMPLETED",
+                        "FAILED",
+                        "VOICEMAIL"
+                      ]
+                    },
+                    "attemptNumber": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2
+                    },
+                    "ivrNavigated": {
+                      "type": "boolean"
+                    },
+                    "humanReached": {
+                      "type": "boolean"
+                    },
+                    "holdTimeSeconds": {
+                      "nullable": true,
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "startedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "endedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "durationSeconds": {
+                      "nullable": true,
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "dlqReason": {
+                      "nullable": true,
+                      "type": "string",
+                      "enum": [
+                        "EXCEEDED_MAX_ATTEMPTS",
+                        "EXCEEDED_MAX_DURATION",
+                        "EXCEEDED_MAX_HOLD",
+                        "CANCELLED_BY_OPERATOR"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "claimId",
+                    "retellCallId",
+                    "retellAgentId",
+                    "status",
+                    "attemptNumber",
+                    "ivrNavigated",
+                    "humanReached",
+                    "holdTimeSeconds",
+                    "startedAt",
+                    "endedAt",
+                    "durationSeconds",
+                    "dlqReason",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/retell": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/v1/ingest/claims": {
       "post": {
         "description": "Upload a CSV export from Dentrix, Eaglesoft, or Open Dental for the authenticated organization. Returns a parse summary; bulk DB insert lands in T48.",
@@ -1059,7 +1838,7 @@
   "servers": [
     {
       "url": "http://localhost:3001",
-      "description": "development"
+      "description": "test"
     }
   ]
 }

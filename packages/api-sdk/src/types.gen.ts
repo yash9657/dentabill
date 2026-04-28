@@ -124,7 +124,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Returns the userId + orgId of the current Clerk session. */
+        /** @description Returns the authenticated DentaBill User and Organization for the current Clerk session. */
         get: {
             parameters: {
                 query?: never;
@@ -141,8 +141,20 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            userId: string;
-                            orgId: string;
+                            user: {
+                                id: string;
+                                email: string;
+                                name: string | null;
+                                /** @enum {string} */
+                                role: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                            };
+                            organization: {
+                                id: string;
+                                name: string;
+                                npi: string | null;
+                                /** @enum {string} */
+                                plan: "TRIAL" | "STARTER" | "PRO" | "ENTERPRISE";
+                            };
                         };
                     };
                 };
@@ -150,6 +162,55 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description First-run onboarding for a Clerk-authenticated user. Idempotently creates the DentaBill Organization + User and stamps Clerk publicMetadata. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        practiceName: string;
+                        npi: string;
+                        zip: string;
+                        acceptedPayers: ("Delta Dental PPO" | "Cigna Dental" | "MetLife Dental" | "Aetna Dental" | "Guardian Dental" | "Humana Dental" | "United Concordia" | "Anthem Dental")[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            organizationId: string;
+                            userId: string;
+                            alreadyOnboarded: boolean;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -419,6 +480,291 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/v1/claims/{id}/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Enqueue an outbound payer call for the given claim. Returns 202 with the BullMQ job id; the call lifecycle plays out in the call-worker. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        priorityOverride?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            jobId: string;
+                            claimId: string;
+                            /** Format: date-time */
+                            queuedAt: string;
+                            attemptNumber: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List calls for the authenticated organization with cursor pagination, filterable by status / payer / startedAt range. Sorted by `startedAt` desc with id tiebreaker. */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: string;
+                    limit?: number;
+                    status?: "INITIATED" | "NAVIGATING_IVR" | "ON_HOLD" | "HUMAN_REACHED" | "COLLECTING" | "COMPLETED" | "FAILED" | "VOICEMAIL";
+                    payer?: "DELTA_DENTAL_PPO" | "DELTA_DENTAL_PREMIER" | "CIGNA_DENTAL" | "METLIFE_DENTAL" | "AETNA_DENTAL" | "GUARDIAN_DENTAL" | "UNITED_CONCORDIA" | "HUMANA_DENTAL" | "UNKNOWN";
+                    startedAtFrom?: string;
+                    startedAtTo?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                id: string;
+                                claimId: string;
+                                retellCallId: string;
+                                retellAgentId: string | null;
+                                /** @enum {string} */
+                                status: "INITIATED" | "NAVIGATING_IVR" | "ON_HOLD" | "HUMAN_REACHED" | "COLLECTING" | "COMPLETED" | "FAILED" | "VOICEMAIL";
+                                attemptNumber: number;
+                                ivrNavigated: boolean;
+                                humanReached: boolean;
+                                holdTimeSeconds: number | null;
+                                /** Format: date-time */
+                                startedAt: string | null;
+                                /** Format: date-time */
+                                endedAt: string | null;
+                                durationSeconds: number | null;
+                                /** @enum {string|null} */
+                                dlqReason: "EXCEEDED_MAX_ATTEMPTS" | "EXCEEDED_MAX_DURATION" | "EXCEEDED_MAX_HOLD" | "CANCELLED_BY_OPERATOR" | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                            }[];
+                            nextCursor: string | null;
+                            hasMore: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calls/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Fetch a single call with embedded CallEvent[] (timestamp asc) and a Claim summary. Cross-org access returns a uniform 404. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            claimId: string;
+                            retellCallId: string;
+                            retellAgentId: string | null;
+                            /** @enum {string} */
+                            status: "INITIATED" | "NAVIGATING_IVR" | "ON_HOLD" | "HUMAN_REACHED" | "COLLECTING" | "COMPLETED" | "FAILED" | "VOICEMAIL";
+                            attemptNumber: number;
+                            ivrNavigated: boolean;
+                            humanReached: boolean;
+                            holdTimeSeconds: number | null;
+                            /** Format: date-time */
+                            startedAt: string | null;
+                            /** Format: date-time */
+                            endedAt: string | null;
+                            durationSeconds: number | null;
+                            /** @enum {string|null} */
+                            dlqReason: "EXCEEDED_MAX_ATTEMPTS" | "EXCEEDED_MAX_DURATION" | "EXCEEDED_MAX_HOLD" | "CANCELLED_BY_OPERATOR" | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            events: {
+                                id: string;
+                                eventType: string;
+                                data: {
+                                    [key: string]: unknown;
+                                };
+                                /** Format: date-time */
+                                timestamp: string;
+                            }[];
+                            claim: {
+                                id: string;
+                                claimNumber: string;
+                                /** @enum {string} */
+                                payerCode: "DELTA_DENTAL_PPO" | "DELTA_DENTAL_PREMIER" | "CIGNA_DENTAL" | "METLIFE_DENTAL" | "AETNA_DENTAL" | "GUARDIAN_DENTAL" | "UNITED_CONCORDIA" | "HUMANA_DENTAL" | "UNKNOWN";
+                                status: string;
+                                priority: number;
+                                /** Format: date-time */
+                                serviceDate: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calls/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Cancel an in-flight call. Idempotent — re-cancellation of a terminal call is a 200 no-op. Phase 3 cancellation is soft: it stamps Call.dlqReason = CANCELLED_BY_OPERATOR + flips Claim → MANUAL_REVIEW; the live Retell call continues until natural termination (true mid-call cancel lands in Phase 4 once the worker bridges a cancel channel). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            claimId: string;
+                            retellCallId: string;
+                            retellAgentId: string | null;
+                            /** @enum {string} */
+                            status: "INITIATED" | "NAVIGATING_IVR" | "ON_HOLD" | "HUMAN_REACHED" | "COLLECTING" | "COMPLETED" | "FAILED" | "VOICEMAIL";
+                            attemptNumber: number;
+                            ivrNavigated: boolean;
+                            humanReached: boolean;
+                            holdTimeSeconds: number | null;
+                            /** Format: date-time */
+                            startedAt: string | null;
+                            /** Format: date-time */
+                            endedAt: string | null;
+                            durationSeconds: number | null;
+                            /** @enum {string|null} */
+                            dlqReason: "EXCEEDED_MAX_ATTEMPTS" | "EXCEEDED_MAX_DURATION" | "EXCEEDED_MAX_HOLD" | "CANCELLED_BY_OPERATOR" | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/retell": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/ingest/claims": {
