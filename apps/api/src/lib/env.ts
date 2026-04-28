@@ -29,6 +29,16 @@ const envSchema = z.object({
    * existing fixture-driven tests keep working.
    */
   DOB_HASH_SECRET: z.string().min(16).default('dev-only-dob-hash-secret-rotate-before-production'),
+  /**
+   * Shared secret used to verify HMAC-SHA256 signatures on inbound
+   * Retell webhooks (P3-T17 / ADR-036). Required in production —
+   * the webhook route refuses to verify with an empty secret. Defaulted
+   * in dev/test so suites can craft signatures with a known value.
+   */
+  RETELL_WEBHOOK_SECRET: z
+    .string()
+    .min(16)
+    .default('dev-only-retell-webhook-secret-rotate-before-production'),
 });
 
 export type Env = z.infer<typeof envSchema>;

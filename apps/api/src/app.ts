@@ -17,12 +17,14 @@ import {
 import { getEnv } from './lib/env.js';
 import { registerAuthPlugin } from './plugins/auth.js';
 import { registerQueuePlugin } from './plugins/queue.js';
+import { registerRawBodyPlugin } from './plugins/raw-body.js';
 import { callsRoutes } from './routes/v1/calls.js';
 import { claimsRoutes } from './routes/v1/claims.js';
 import { healthRoutes } from './routes/v1/health.js';
 import { ingestRoutes } from './routes/v1/ingest.js';
 import { meRoutes } from './routes/v1/me.js';
 import { onboardingRoutes } from './routes/v1/onboarding.js';
+import { retellWebhookRoutes } from './routes/v1/retell-webhook.js';
 
 export interface BuildServerOptions {
   /**
@@ -186,12 +188,18 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   // that never enqueue don't open a real Redis socket.
   registerQueuePlugin(fastify, { redisUrl: env.REDIS_URL });
 
+  // Raw-body capture for HMAC-verified routes (P3-T17). Registered
+  // BEFORE route modules so the webhook handler can read
+  // `request.rawBody`.
+  registerRawBodyPlugin(fastify);
+
   // Register health routes
   await fastify.register(healthRoutes, { prefix: '/v1' });
   await fastify.register(meRoutes, { prefix: '/v1' });
   await fastify.register(onboardingRoutes, { prefix: '/v1' });
   await fastify.register(claimsRoutes, { prefix: '/v1' });
   await fastify.register(callsRoutes, { prefix: '/v1' });
+  await fastify.register(retellWebhookRoutes, { prefix: '/v1' });
   await fastify.register(ingestRoutes, { prefix: '/v1' });
 
   return fastify;
