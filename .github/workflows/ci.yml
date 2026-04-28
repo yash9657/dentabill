@@ -1,10 +1,23 @@
 name: CI
 
-# Phase-1 quality gate. Blocks merge to main if any job fails.
-# - quality: typecheck + lint + build + commitlint (PR only)
-# - test:    vitest with a real Postgres + Redis service container
+# Quality gates for every PR + push to main. Blocks merge if any required
+# job fails (or the gating `changes` job decides to skip a job).
 #
-# e2e job will be added in Phase 2 once apps/web exists (per ADR-005).
+# Job map:
+#   - changes:    computes which file groups changed; outputs feed `if:`
+#                 gates on the heavy jobs below
+#   - quality:    typecheck + lint + build + format + commitlint —
+#                 ALWAYS runs (cheapest source-of-truth gate)
+#   - test:       vitest with real Postgres + Redis — runs when code
+#                 changed (skipped on docs-only PRs)
+#   - e2e:        Playwright + axe + visual — runs when web surface
+#                 changed (skipped for package-only / api-only PRs)
+#   - bundle:     bundle budget — runs when web surface changed
+#   - lighthouse: perf + a11y + SEO — runs when web surface changed
+#
+# Skipped jobs report a `skipped` conclusion which GitHub branch
+# protection treats as success — required-checks stay enforced without
+# burning runner minutes on irrelevant work.
 
 on:
   pull_request:
@@ -23,6 +36,59 @@ env:
   TURBO_TELEMETRY_DISABLED: '1'
 
 jobs:
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      pull-requests: read
+      contents: read
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Compute change scope
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # `web`  → triggers e2e + bundle + lighthouse. Includes apps/web
+          #          plus everything its bundle / e2e tests depend on:
+          #          apps/api (e2e hits /v1/contact + /v1/me),
+          #          packages/{ui, types, api-sdk, config}.
+          #          NOT included: db, logger, payer-ivr, queue — those
+          #          flow through the api boundary and are caught by the
+          #          test job's real-Postgres integration suite.
+          # `code` → triggers test (any source / config / lockfile change).
+          # Workflow files are in both groups so CI changes always run
+          # end-to-end.
+          filters: |
+            web:
+              - 'apps/web/**'
+              - 'apps/api/**'
+              - 'packages/ui/**'
+              - 'packages/types/**'
+              - 'packages/api-sdk/**'
+              - 'packages/config/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+              - 'tsconfig*.json'
+              - 'turbo.json'
+              - '.github/workflows/**'
+            code:
+              - 'apps/**'
+              - 'packages/**'
+              - '**/*.{ts,tsx,js,mjs,cjs}'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+              - 'tsconfig*.json'
+              - 'turbo.json'
+              - 'vitest.config.*'
+              - 'eslint.config.*'
+              - 'prettier.config.*'
+              - '.github/workflows/**'
+
   quality:
     name: Quality (typecheck + lint + build)
     runs-on: ubuntu-latest
@@ -76,7 +142,8 @@ jobs:
   test:
     name: Test (vitest + real Postgres)
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, changes]
+    if: needs.changes.outputs.code == 'true'
     timeout-minutes: 25
     services:
       postgres:
@@ -152,7 +219,8 @@ jobs:
   e2e:
     name: E2E (Playwright + axe + visual)
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, changes]
+    if: needs.changes.outputs.web == 'true'
     timeout-minutes: 25
 
     env:
@@ -222,7 +290,8 @@ jobs:
   bundle:
     name: Bundle budget (apps/web)
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, changes]
+    if: needs.changes.outputs.web == 'true'
     timeout-minutes: 10
 
     steps:
@@ -256,7 +325,8 @@ jobs:
   lighthouse:
     name: Lighthouse (perf + a11y + SEO budgets)
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, changes]
+    if: needs.changes.outputs.web == 'true'
     timeout-minutes: 15
 
     steps:
