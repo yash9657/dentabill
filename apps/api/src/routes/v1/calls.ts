@@ -452,6 +452,22 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const lastRow = hasMore ? rows[query.limit - 1] : undefined;
       const nextCursor = nextCursorFor(lastRow);
 
+      // P3-T27 — audit every Call list read. The HIPAA review trail
+      // wants to see "who looked at the calls list when, with what
+      // filters." `resourceId='list'` mirrors the claims.ts pattern.
+      await audit({
+        action: 'call.list',
+        resourceType: 'Call',
+        resourceId: 'list',
+        organizationId: orgId,
+        metadata: {
+          clerkUserId: auth.userId,
+          count: items.length,
+          status: query.status ?? null,
+          payer: query.payer ?? null,
+        },
+      });
+
       return { items, nextCursor, hasMore };
     },
   );
