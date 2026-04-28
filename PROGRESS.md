@@ -2,22 +2,22 @@
 
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
-**Last updated:** 2026-04-26
-**Current phase:** Phase 2 — UI + API + Ingestion **(substantively complete — 54/55 tasks merged; W1 ✓ W2 ✓ W3 ✓ W4 ✓ W5 ✓ W6 ✓; W7 closeout in flight)**.
-**Next task:** **P2-T52** — `PRODUCT.md` via `$impeccable teach` (interactive; user-driven follow-up). After it lands, Phase 2 closes and Phase 3 (Queue + Voice) opens.
-**In progress:** `phase-2/docs-closeout` — DESIGN.md final pass + ADR-030 retro + this file.
+**Last updated:** 2026-04-29
+**Current phase:** Phase 3 — Queue + Voice **(complete — 31/31 tasks merged; W0 ✓ W1 ✓ W2 ✓ W3 ✓ W4 ✓ W5 ✓ W6 ✓)**.
+**Next task:** **P4-T0** — Phase 4 ADR cluster: `SummarizerPort` (mirroring `RetellPort`), Stripe billing wired off the existing `audit()` spine, Clerk Organizations migration retiring the synthetic `clerkOrgId="local_<userId>"` (ADR-031), `Claim.subscriberId` schema migration (ADR-041). After ADRs land, Phase 4 W1 opens.
+**Carry-over (deferred, user-driven):** **P2-T52** — `PRODUCT.md` via `$impeccable teach` (interactive skill — cannot be done autonomously).
 
 ---
 
 ## Phase status
 
-| Phase | Name                      | Status                                                                                                                                                      |
-| ----- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Foundations               | **Complete** (12 of 12 tasks done, merged via PRs #1–#13)                                                                                                   |
-| 2     | UI + API + Ingestion      | **Substantively complete** — 54 of 55 tasks merged (PRs #14–#64); W1–W6 ✓; W7 closeout in flight; T52 deferred to interactive `$impeccable teach` follow-up |
-| 3     | Queue + Voice             | Queued                                                                                                                                                      |
-| 4     | Intelligence + Realtime   | Queued                                                                                                                                                      |
-| 5     | Deployment + cloud target | Queued (cloud decision lives here per ADR-004)                                                                                                              |
+| Phase | Name                      | Status                                                                                                                                     |
+| ----- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1     | Foundations               | **Complete** (12 of 12 tasks done, merged via PRs #1–#13)                                                                                  |
+| 2     | UI + API + Ingestion      | **Substantively complete** — 54 of 55 tasks merged (PRs #14–#64); W1–W7 ✓; T52 still deferred to interactive `$impeccable teach` follow-up |
+| 3     | Queue + Voice             | **Complete** — 31 of 31 tasks merged (PRs #80–#99); W0–W6 ✓                                                                                |
+| 4     | Intelligence + Realtime   | Queued — starts at P4-T0 ADR cluster (Claude summarizer, Stripe usage, Clerk Orgs, `Claim.subscriberId` migration)                         |
+| 5     | Deployment + cloud target | Queued (cloud decision lives here per ADR-004)                                                                                             |
 
 ## PRD step checklist
 
@@ -27,16 +27,23 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 - [x] Step 4 — Dashboard Shell (Phase 2 — P2-T32 → P2-T36 merged; claims list T41 + claim detail T42 + import T51 layered on top)
 - [x] Step 5 — API Server (Phase 2 — Fastify scaffold T12, OpenAPI T13, auth T37, claims CRUD T38, pagination T39, state machine T40 all merged)
 - [x] Step 6 — CSV Upload (Phase 2 — P2-T43 endpoint, T44 parser, T45 DOB hash, T46 payer lookup, T47 priority, T48 bulk insert + cross-org test, T50 fixtures, T51 upload UI all merged)
-- [ ] Step 7 — Job Queue (Phase 3)
-- [ ] Step 8 — Retell Integration (Phase 3)
-- [ ] Step 9 — IVR Maps (Phase 3)
+- [x] Step 7 — Job Queue (Phase 3 — `@dentabill/queue` BullMQ v5 wiring + retry/DLQ T1/T2; call-worker bootstrap + handler T9/T10; e2e against real Redis T15)
+- [x] Step 8 — Retell Integration (Phase 3 — `RetellPort` + `FakeRetell` + `LiveRetell` adapters T5/T6/T7; HMAC-verified webhook T17; per-payer agent prompts; ADR-033/036/040)
+- [x] Step 9 — IVR Maps (Phase 3 — Delta Dental PPO / Cigna Dental / MetLife Dental DTMF maps + business-hours guard T3/T4; navigator with retry-on-misdetect + 2-failure operator fallback T11; hold detector T12; per-call cap T13; DLQ consumer T14)
 - [ ] Step 10 — Call Analysis (Phase 4)
 - [ ] Step 11 — Real-Time Updates (Phase 4)
 - [ ] Step 12 — Cloud Deployment (Phase 5; cloud target deferred per ADR-004)
 
 ## Recent activity
 
-- 2026-04-26 (late afternoon) — **Phase 2 W7 closeout (this PR).** ADR-030 retro appended (8 keep/stop bullets covering one-task-one-PR discipline, bundling co-shipped tasks, conditional Clerk gating reuse for Retell, Impeccable design laws, the merge-commit-on-shared-`TASKS.md` pain to fix in Phase 3, per-row errors over throws, client-side mirror of server-authoritative rules, and real-Postgres integration tests for write paths). DESIGN.md final pass replaced TBD font picks with the ADR-013 lock (Inter 200/300, `−0.96px` letter-spacing at 48px hero, brand-color row finalised). PROGRESS / TASKS / SESSION_CONTEXT updated to reflect 54/55. T52 (`PRODUCT.md` via `$impeccable teach`) intentionally deferred to user — interactive skill, cannot be done autonomously.
+- 2026-04-29 (autonomous burst — Phase 3 complete). 21 PRs merged (PRs #80–#99) covering all of Phase 3:
+  - **W0 / W1 / W2 (call worker spine):** ADR-cluster 031–040 (T0); BullMQ queue + retry/DLQ (T1, T2); IVR maps + business hours (T3, T4); RetellPort + FakeRetell + LiveRetell (T5, T6, T7); Prisma `Call` columns + index (T8); call-worker bootstrap + real handler (T9, T10) with the three corrections caught while testing (`findFirst` over `findUnique`, `updateMany` with composite where, serialised `waitForCallEnd` chain); IVR navigator (T11); hold detector + reschedule resolver (T12); per-call duration cap (T13); DLQ consumer (T14); full lifecycle e2e against real BullMQ + real Postgres + FakeRetell (T15).
+  - **W3 (API):** `POST /v1/claims/:id/calls` enqueue (T16); HMAC-SHA256 webhook with replay protection via unique `eventId` (T17); cursor-paginated calls list + detail + soft cancel (T18, T19, T20) — cancel is soft-only in Phase 3 (DB marker; live Retell continues until natural termination), Phase 4 needs a true cancel channel; SDK regen + contract test asserting the typed paths union covers every endpoint (T21).
+  - **W4 (UI):** Call-Now Pill on claim row + claim detail (T22); live status indicator unlocking the muted-teal accent for `IN_QUEUE` / `CALLING` (T23); virtualised `/dashboard/calls` list + detail with 5s/30s adaptive polling (T24); live overview KPI tiles via `GET /v1/calls/stats` (T25). Web-bundle invariant preserved — every UI surface consumes `@dentabill/api-sdk` only.
+  - **W5 (observability + ops):** logger redact paths for `dtmf` + `transcriptText` (T26); `audit()` extension covering Call lifecycle reads + writes (T27); `docs/RUNBOOK.md` oncall playbook with seven scenario sections including the "single claim stuck in CALLING" recovery transaction (T28).
+  - **W6 (closeout):** ADR-041 retrospective (T29); doc closeout in this PR (T30) — `PHASE_PLAN.md`, `PROGRESS.md`, `TASKS.md`, `CODEMAP.md`, `SESSION_CONTEXT.md` updated.
+  - 41 ADRs total now in `docs/DECISIONS.md` (Phase 3 added 11: ADR-031 → ADR-041).
+- 2026-04-26 (late afternoon) — **Phase 2 W7 closeout.** ADR-030 retro appended (8 keep/stop bullets covering one-task-one-PR discipline, bundling co-shipped tasks, conditional Clerk gating reuse for Retell, Impeccable design laws, the merge-commit-on-shared-`TASKS.md` pain to fix in Phase 3, per-row errors over throws, client-side mirror of server-authoritative rules, and real-Postgres integration tests for write paths). DESIGN.md final pass replaced TBD font picks with the ADR-013 lock (Inter 200/300, `−0.96px` letter-spacing at 48px hero, brand-color row finalised). PROGRESS / TASKS / SESSION_CONTEXT updated to reflect 54/55. T52 (`PRODUCT.md` via `$impeccable teach`) intentionally deferred to user — interactive skill, cannot be done autonomously.
 - 2026-04-26 (afternoon) — **Phase 2 W6 ingestion pipeline complete + W5 UI tasks (T41/T42).** 13 PRs merged (PRs #54–#64): T40 claim state machine (PR #54), T41 claims list page with TanStack-Virtual table + debounced search (PR #55), T42 `/dashboard/claims/[id]` detail with manual-edit dialog using native `<dialog>` + client-side mirror of server transitions (PR #56), T45 `hashPatientDOB` helper with `${orgId}|${iso}|${secret}` keying + ISO-strict date validation (PR #57), T46 payer-name canonicalisation with token-set + anti-token disambiguation (PR #58), T47 priority scoring per PRD §5 (PR #59), T50 Dentrix / Eaglesoft / Open Dental fixtures (PR #60), T44 streaming CSV parser with per-source 3-column header signature + per-row error returns (PR #61), T43 `POST /v1/ingest/claims` upload endpoint (PR #62), T48+T49 bundled — bulk insert with `(organizationId, claimNumber)` idempotency + DB-asserting integration tests covering cross-org isolation (PR #63), T51 `/dashboard/claims/import` drag-drop upload UI (PR #64). All 7 CI gates green on every PR.
 - 2026-04-26 (mid-day) — **Phase 2 W2/W3/W4/W5 progress.** 22 PRs merged (PRs #31–#53) covering: full marketing site (T17 chrome, T18 landing, T19 about, T20 pricing, T21 security, T22 privacy, T23 terms + ADR-029, T24 contact, T25 faq, T26 blog skeleton, T27 marketing e2e), Clerk auth flow (T28 conditional gating, T29 sign-in/up, T30 onboarding, T31 auth e2e), dashboard shell (T32 layout, T33 sidebar, T34 topbar, T35 overview, T36 page stubs), and W5 API claims domain (T37 auth plugin with test-header bypass, T38 claims CRUD with 3-layer multi-tenancy + audit on every read, T39 cursor pagination + status/payer/search/sort filters).
 - 2026-04-25 (late eve) — **Phase 2 W1 foundation gates complete (16/16).** Eight more PRs merged after the morning checkpoint:
@@ -61,7 +68,7 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 
 ## Decisions log
 
-See `docs/DECISIONS.md`. Currently **31 ADRs** — 9 from Phase 1 + ADRs 010–012 (impeccable skill, SkillUI tooling, ElevenLabs-inspired DESIGN.md) + the Phase 2 cluster ADR-013 → ADR-028 added in P2-T0 + ADR-029 (terms-template, P2-T23) + ADR-030 (Phase 2 retro, this PR).
+See `docs/DECISIONS.md`. Currently **41 ADRs** — 9 from Phase 1 + ADRs 010–012 (impeccable skill, SkillUI tooling, ElevenLabs-inspired DESIGN.md) + the Phase 2 cluster ADR-013 → ADR-028 + ADR-029 (terms-template) + ADR-030 (Phase 2 retro) + the Phase 3 cluster ADR-031 → ADR-040 (Clerk-Orgs deferral, per-payer Retell agents, RetellPort adapters, Phase 3 UI scope, queue topology, webhook HMAC, business-hours guard, per-call cap, hold policy, PHI / Retell-audio boundary) + ADR-041 (Phase 3 retrospective, P3-T29).
 
 ## Known issues / open questions
 

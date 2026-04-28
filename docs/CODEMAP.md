@@ -3,11 +3,13 @@
 Navigable index of the monorepo. Maintained by the `/codemap-update` skill —
 refresh after adding or removing a workspace.
 
-> **Phase 1 — Foundations.** All 11 workspaces scaffolded. `apps/web`,
-> `apps/api`, `apps/call-worker`, `apps/summary-worker` are stubs awaiting
-> Phase 2/3/4 implementations. `packages/db` awaits the Prisma schema
-> (P1-T4). `packages/queue`, `packages/payer-ivr`, `packages/ui` are
-> stubs awaiting Phase 2/3.
+> **Phase 3 — Queue + Voice complete (2026-04-29).** `apps/web`,
+> `apps/api`, `apps/call-worker`, `@dentabill/queue`, `@dentabill/payer-ivr`,
+> `@dentabill/api-sdk`, `@dentabill/ui`, `@dentabill/db`, `@dentabill/types`,
+> `@dentabill/logger`, `@dentabill/config` are all built out.
+> `apps/summary-worker` remains a stub awaiting Phase 4. The web bundle
+> invariant (no `@dentabill/db` imports from `apps/web`) is preserved —
+> the web tier consumes `@dentabill/api-sdk` only.
 
 ## Layout (per CLAUDE.md and PRD §3)
 
@@ -72,17 +74,46 @@ phone, address) are redacted at the top level and under `req.body` /
   **Entry:** `packages/db/src/index.ts` (currently exports `{}`).
   **Lands in:** P1-T4 (schema), P1-T4A (helpers), P1-T5 (middleware).
 
-### `@dentabill/queue` — packages/queue (stub) — Phase 3
+### `@dentabill/queue` — packages/queue
 
-**Purpose:** BullMQ job type definitions and queue setup.
+**Purpose:** BullMQ v5 wiring for the call lifecycle queue + DLQ.
 **Entry:** `packages/queue/src/index.ts`
+**Key files:** `calls.ts` (Queue/Worker/QueueEvents factories, retry policy
+per ADR-035), `dlq.ts` (separate `calls-dlq` topic), `types.ts` (Zod
+`CallJobDataSchema` validated at the dequeue trust boundary).
 
-### `@dentabill/payer-ivr` — packages/payer-ivr (stub) — Phase 3
+### `@dentabill/payer-ivr` — packages/payer-ivr
 
-**Purpose:** Insurance payer IVR navigation maps (Delta Dental PPO,
-Cigna Dental, MetLife Dental in Phase 1; Aetna, Guardian, United Concordia,
-Humana in Phase 2).
+**Purpose:** Per-payer IVR navigation maps + agent prompts + business-hours
+guard + the `RetellPort` interface and its two adapters.
 **Entry:** `packages/payer-ivr/src/index.ts`
+**Key files:**
+
+- `ivr/maps/{delta-dental-ppo,cigna-dental,metlife-dental}.ts` — declarative
+  DTMF maps respecting PRD §6 timing.
+- `agents/{delta-dental-ppo,cigna-dental,metlife-dental}.ts` — per-payer agent
+  prompts (ADR-032).
+- `business-hours.ts` — `checkPayerHours(payerCode, now)` returning a
+  discriminated tagged result; `Intl.DateTimeFormat`-driven so DST is the
+  platform's problem (ADR-037).
+- `retell-port.ts` — the contract every adapter implements: `startCall`,
+  `endCall`, `subscribe` (events), `unsubscribe`.
+- `retell-fake.ts` — deterministic in-process state machine for CI; powers
+  the lifecycle e2e (P3-T15).
+- `retell-live.ts` — wraps `retell-sdk`; only adapter that touches the
+  network; lazy-loaded + env-gated.
+- `navigator/navigator.ts` — pure-logic IVR navigator (P3-T11) reading
+  `RetellPort` events and emitting DTMF responses with retry-on-misdetect
+  - 2-failure operator fallback.
+
+### `@dentabill/api-sdk` — packages/api-sdk
+
+**Purpose:** Type-safe client for `@dentabill/api`. Generated from the
+OpenAPI spec via `pnpm gen:sdk` (chains `gen:openapi` → `gen:types`).
+**Entry:** `packages/api-sdk/src/index.ts`
+**Key files:** `openapi.json` (committed), `src/types.gen.ts` (committed),
+`src/contract.test.ts` (asserts every endpoint the SDK advertises is in
+the spec — fails at compile time if `gen:sdk` is forgotten).
 
 ### `@dentabill/ui` — packages/ui (stub) — Phase 2
 
@@ -100,10 +131,23 @@ Humana in Phase 2).
 receivers, SSE.
 **Entry:** `apps/api/src/index.ts` (Fastify scaffold lands in Phase 2 P2-T7).
 
-### `@dentabill/call-worker` — apps/call-worker (stub) — Phase 3
+### `@dentabill/call-worker` — apps/call-worker
 
-**Purpose:** BullMQ worker that drives outbound Retell AI calls.
+**Purpose:** BullMQ worker that drives the outbound Retell call lifecycle
+end-to-end. Fastify-based health probe at `:3010/healthz`.
 **Entry:** `apps/call-worker/src/index.ts`
+**Key files:**
+
+- `handler.ts` — the real call-job handler (P3-T10): claim load via
+  `getOrgScopedDb` → IVR map + agent prompt resolve → Claim → CALLING →
+  `RetellPort.startCall` → `Call`/`CallEvent` persist → `waitForCallEnd`
+  serialised chain → final state.
+- `hold-detector.ts` — `MAX_HOLD_MS=600_000`; tear-down + reschedule
+  with the 2-attempts-per-day cap (ADR-039).
+- `duration-guard.ts` — `MAX_CALL_DURATION_MS=900_000`; per-call cap →
+  DLQ + Claim → `MANUAL_REVIEW` (ADR-038).
+- `dlq-consumer.ts` — drains `calls-dlq` into Postgres `CallEvent type=DLQ`.
+- `e2e.test.ts` — full lifecycle against real BullMQ + Postgres + FakeRetell.
 
 ### `@dentabill/summary-worker` — apps/summary-worker (stub) — Phase 4
 
