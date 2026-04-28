@@ -1,4 +1,5 @@
 import {
+  audit,
   type Call,
   type ClaimStatus,
   getOrgScopedDb,
@@ -159,6 +160,22 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
       },
     });
 
+    // P3-T27 — audit Call create. The system actor (no userId) drove
+    // this write, so we tag `userId=null` and capture the originating
+    // job id + claim for the HIPAA review trail.
+    await audit({
+      action: 'call.start',
+      resourceType: 'Call',
+      resourceId: call.id,
+      organizationId: data.organizationId,
+      metadata: {
+        claimId: claim.id,
+        jobId: job.id ?? null,
+        attemptNumber: data.attemptNumber,
+        payerCode: claim.payerCode,
+      },
+    });
+
     deps.logger.info(
       {
         jobId: job.id,
@@ -199,6 +216,24 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
     await deps.prisma.claim.updateMany({
       where: { id: claim.id, organizationId: data.organizationId },
       data: { status: finalClaimStatus },
+    });
+
+    // P3-T27 — audit Call lifecycle close. Captures the final status,
+    // duration, and end reason so the review trail can answer
+    // "what was the outcome of the call DentaBill placed at <ts>?"
+    // without re-deriving it from CallEvent[].
+    await audit({
+      action: 'call.end',
+      resourceType: 'Call',
+      resourceId: call.id,
+      organizationId: data.organizationId,
+      metadata: {
+        claimId: claim.id,
+        finalCallStatus,
+        finalClaimStatus,
+        durationSeconds: ended.durationSeconds,
+        endReason: ended.endReason,
+      },
     });
 
     return {
