@@ -113,9 +113,62 @@ Rules:
 - [x] **P2-T54** Phase 2 doc closeout (PHASE_PLAN / TASKS / PROGRESS / CODEMAP / SESSION_CONTEXT) — **this PR**
 - [x] **P2-T55** Phase 2 retro ADR (ADR-030) — **this PR**
 
-## Phase 3 — Queue + Voice (queued)
+## Phase 3 — Queue + Voice (complete)
 
-## Phase 4 — Intelligence + Realtime (queued)
+> **All 31 tasks merged 2026-04-29 across PRs #80–#99.** See ADR-041 for the retrospective and `docs/RUNBOOK.md` for the oncall playbook.
+
+- [x] **P3-T0** ADR cluster 031–040
+- [x] **P3-T1** `@dentabill/queue` BullMQ wiring
+- [x] **P3-T2** `@dentabill/queue` retry/DLQ policy
+- [x] **P3-T3** `@dentabill/payer-ivr` IVR maps (Delta / Cigna / MetLife)
+- [x] **P3-T4** `@dentabill/payer-ivr` business-hours guard
+- [x] **P3-T5** `@dentabill/payer-ivr` `RetellPort` interface
+- [x] **P3-T6** `@dentabill/payer-ivr` `FakeRetell` adapter
+- [x] **P3-T7** `@dentabill/payer-ivr` `LiveRetell` adapter
+- [x] **P3-T8** Prisma migration — `Call.attemptNumber` + `dlqReason` + composite index
+- [x] **P3-T9** `apps/call-worker` bootstrap
+- [x] **P3-T10** Real call-job handler
+- [x] **P3-T11** IVR navigator (DTMF + retry-on-misdetect + operator fallback)
+- [x] **P3-T12** Hold detector + reschedule resolver
+- [x] **P3-T13** Per-call duration cap → DLQ + MANUAL_REVIEW
+- [x] **P3-T14** DLQ consumer
+- [x] **P3-T15** Full lifecycle e2e against real BullMQ + Postgres + FakeRetell
+- [x] **P3-T16** `POST /v1/claims/:id/calls` enqueue
+- [x] **P3-T17** `POST /v1/webhooks/retell` HMAC-verified
+- [x] **P3-T18** `GET /v1/calls` cursor-paginated list
+- [x] **P3-T19** `GET /v1/calls/:id` detail
+- [x] **P3-T20** `POST /v1/calls/:id/cancel` idempotent soft cancel
+- [x] **P3-T21** SDK regen + contract test
+- [x] **P3-T22** Call-Now Pill on claim row + claim detail
+- [x] **P3-T23** Live status indicator (muted-teal pulse for IN_QUEUE / CALLING)
+- [x] **P3-T24** `/dashboard/calls` virtualised list + detail
+- [x] **P3-T25** Live overview KPI tiles + `GET /v1/calls/stats`
+- [x] **P3-T26** Logger PHI redact additions (`dtmf` / `transcriptText`)
+- [x] **P3-T27** `audit()` extension covering Call lifecycle
+- [x] **P3-T28** `docs/RUNBOOK.md` oncall playbook
+- [x] **P3-T29** Phase 3 retro ADR-041
+- [x] **P3-T30** Phase 3 doc closeout — **this PR**
+
+## Phase 4 — Intelligence + Realtime + Billing (queued)
+
+> Per ADR-041 retro. Lands at P4-T0 ADR cluster.
+
+### Phase 4 prep — cleanup tickets carried over from Phase 3
+
+- [ ] **P4-prep-1** Empty-string env normalisation in `apps/api/src/lib/env.ts` so consumers don't keep reinventing the same `??=` + empty-string fallback (vitest setup, dump-openapi script).
+- [ ] **P4-prep-2** Per-suite Postgres schema namespaces so `@dentabill/api` and `@dentabill/call-worker` tests stop racing on shared tables when run in parallel under turbo.
+- [ ] **P4-prep-3** `Claim.subscriberId` schema migration retiring the `claim.claimNumber` agent-metadata placeholder.
+- [ ] **P4-prep-4** True cancel channel for in-flight calls — Redis pub/sub or `Call.cancelRequestedAt` polled by the worker.
+- [ ] **P4-prep-5** `User → DentaBillUser` reconciliation pass before the Clerk Organizations org-switch UI lands.
+
+### Phase 4 — feature work (sketch; finalised by P4-T0)
+
+- [ ] **P4-T0** ADR cluster — `SummarizerPort` + Stripe usage off the `audit()` spine + Clerk Organizations migration + `Claim.subscriberId` schema + transcript SSE.
+- [ ] summary-worker (BullMQ) → Claude → structured `CallSummary` rows.
+- [ ] `/dashboard/calls/:id` SSE transcript surface.
+- [ ] Stripe metered billing wiring + a `/dashboard/billing` surface.
+- [ ] Clerk Organizations migration + org-switch UI.
+- [ ] Resend email notifications on terminal-positive call outcomes.
 
 ## Phase 5 — Deployment & cloud target (queued)
 
