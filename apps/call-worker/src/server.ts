@@ -1,10 +1,12 @@
+import { prisma } from '@dentabill/db';
 import { createLogger, type Logger } from '@dentabill/logger';
+import { createRetellPort, type RetellPort } from '@dentabill/payer-ivr';
 import { type CallsWorker, createCallsWorker, createRedisConnection } from '@dentabill/queue';
 import type { Redis } from 'ioredis';
 
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
+import { createCallJobHandler, type DbClient } from './handler.js';
 import { startHealthServer, type HealthServerHandle } from './health.js';
-import { createStubProcessor } from './processor.js';
 
 /**
  * Boot the call-worker (P3-T9 — wiring only). P3-T10 swaps the stub
@@ -34,6 +36,13 @@ export interface BootCallWorkerOptions {
   readonly env?: WorkerEnv;
   /** Override logger (testing seam). */
   readonly logger?: Logger;
+  /** Override Prisma client (testing seam — defaults to the singleton). */
+  readonly prisma?: DbClient;
+  /**
+   * Override RetellPort. Defaults to `createRetellPort({ apiKey: env.RETELL_API_KEY })`
+   * which selects LiveRetell or FakeRetell automatically.
+   */
+  readonly retellPort?: RetellPort;
 }
 
 export interface CallWorkerHandle {
@@ -42,6 +51,7 @@ export interface CallWorkerHandle {
   readonly worker: CallsWorker;
   readonly health: HealthServerHandle;
   readonly connection: Redis;
+  readonly retellPort: RetellPort;
   /** Run the graceful shutdown sequence. Idempotent. */
   readonly shutdown: () => Promise<void>;
 }
@@ -58,10 +68,19 @@ export async function bootCallWorker(
   const connection = createRedisConnection(env.REDIS_URL, { lazyConnect: false });
   await connection.ping();
 
+  const prismaClient = options.prisma ?? prisma;
+  const retellPort = options.retellPort ?? createRetellPort({ apiKey: env.RETELL_API_KEY }).port;
+
   const worker = createCallsWorker({
     connection,
     concurrency: env.QUEUE_CONCURRENCY,
-    processor: createStubProcessor({ logger }),
+    processor: createCallJobHandler({
+      logger,
+      prisma: prismaClient,
+      retellPort,
+      env,
+      outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+    }),
   });
 
   worker.on('failed', (job, err) => {
@@ -104,7 +123,7 @@ export async function bootCallWorker(
     logger.info('call-worker shutdown complete');
   };
 
-  return { env, logger, worker, health, connection, shutdown };
+  return { env, logger, worker, health, connection, retellPort, shutdown };
 }
 
 /**
