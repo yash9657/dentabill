@@ -61,6 +61,18 @@ const PHI_REDACT_PATHS: readonly string[] = [
   '*.address',
   '*.streetAddress',
 
+  // PHI — Phase 3 voice path (P3-T26).
+  // - `dtmf` carries digit sequences sent during IVR navigation; some
+  //   payers prompt for SSN / DOB digits which must never end up in
+  //   pino lines.
+  // - `transcriptText` is the raw rep-conversation transcript captured
+  //   by Retell. By policy (ADR-040) we never log full transcripts —
+  //   summaries land structured under `Claim.notes`. The redact path
+  //   here is a defence-in-depth backstop in case a third-party SDK
+  //   serialises the field through pino's logger object.
+  '*.dtmf',
+  '*.transcriptText',
+
   // PHI — common nested under Fastify req.body
   'req.body.patientName',
   'req.body.firstName',
