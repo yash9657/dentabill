@@ -23,6 +23,7 @@ module.exports = {
         'api',
         'call-worker',
         'summary-worker',
+        'billing-worker',
         // packages
         'config',
         'db',
