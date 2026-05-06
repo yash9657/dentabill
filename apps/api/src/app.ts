@@ -19,6 +19,7 @@ import { registerAuthPlugin } from './plugins/auth.js';
 import { registerQueuePlugin } from './plugins/queue.js';
 import { registerRawBodyPlugin } from './plugins/raw-body.js';
 import { billingRoutes } from './routes/v1/billing.js';
+import { callsSseRoutes } from './routes/v1/calls-sse.js';
 import { callsRoutes } from './routes/v1/calls.js';
 import { claimsRoutes } from './routes/v1/claims.js';
 import { clerkWebhookRoutes } from './routes/v1/clerk-webhook.js';
@@ -201,6 +202,7 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(onboardingRoutes, { prefix: '/v1' });
   await fastify.register(claimsRoutes, { prefix: '/v1' });
   await fastify.register(callsRoutes, { prefix: '/v1' });
+  await fastify.register(callsSseRoutes, { prefix: '/v1' });
   await fastify.register(retellWebhookRoutes, { prefix: '/v1' });
   await fastify.register(clerkWebhookRoutes, { prefix: '/v1' });
   await fastify.register(ingestRoutes, { prefix: '/v1' });

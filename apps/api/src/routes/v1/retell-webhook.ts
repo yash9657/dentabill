@@ -134,13 +134,36 @@ export function retellWebhookRoutes(fastify: FastifyInstance): void {
       return { ok: true, ignored: 'unknown_call' };
     }
 
-    await prisma.callEvent.create({
+    const callEventRow = await prisma.callEvent.create({
       data: {
         callId: call.id,
         eventType: `webhook.${envelope.event.type}`,
         data: envelope.event as object,
       },
     });
+
+    // Best-effort SSE fan-out (ADR-046). Persistence is the durable
+    // source of truth; pub/sub is the latency optimisation. A failed
+    // publish (Redis hiccup) does not roll back the CallEvent — the
+    // SSE handler's next replay catches the missed payload.
+    try {
+      const publisher = fastify.callEventsPublisher;
+      if (publisher !== null) {
+        const channel = `call:${retellCallId}:events`;
+        await publisher.publish(
+          channel,
+          JSON.stringify({
+            type: envelope.event.type,
+            callEventId: callEventRow.id,
+            retellCallId,
+            timestamp: callEventRow.timestamp.toISOString(),
+            data: envelope.event,
+          }),
+        );
+      }
+    } catch (err) {
+      request.log.warn({ err, retellCallId }, 'sse publish failed; replay will recover');
+    }
 
     if (envelope.event.type === 'call.ended') {
       const finalStatus = endReasonToCallStatus(envelope.event.endReason);
