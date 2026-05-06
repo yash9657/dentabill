@@ -34,13 +34,52 @@ export interface VerifyRetellWebhookSignatureInput {
   secret: string;
 }
 
-export function verifyRetellWebhookSignature({
-  rawBody,
-  signature,
-  secret,
-}: VerifyRetellWebhookSignatureInput): boolean {
+/**
+ * Five-minute replay window for the SDK's `v=<ts>,d=<hex>` format,
+ * matching the upstream `retell-sdk/lib/webhook_auth.js` default. A
+ * larger window invites replay attacks; a smaller window risks
+ * rejecting legitimate deliveries that crossed a slow proxy.
+ */
+const SDK_TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000;
+
+const SDK_SIGNATURE_PATTERN = /^v=(\d+),d=([0-9a-fA-F]+)$/;
+
+export interface VerifyOptions {
+  /** Override "now" for deterministic tests. Defaults to `Date.now()`. */
+  readonly now?: number;
+}
+
+export function verifyRetellWebhookSignature(
+  input: VerifyRetellWebhookSignatureInput,
+  options: VerifyOptions = {},
+): boolean {
+  const { rawBody, signature, secret } = input;
   if (secret.length === 0) return false;
   if (signature.length === 0) return false;
+
+  // P4-T7-prep-6 — the upstream Retell SDK signs as
+  // `v=<unix_ms>,d=<hex>` where the digest is
+  // HMAC-SHA256(secret, body + timestamp). Detect that format first.
+  const sdkMatch = SDK_SIGNATURE_PATTERN.exec(signature);
+  if (sdkMatch) {
+    const timestamp = Number(sdkMatch[1]);
+    const claimedDigest = sdkMatch[2] ?? '';
+    const now = options.now ?? Date.now();
+    if (Math.abs(now - timestamp) > SDK_TIMESTAMP_TOLERANCE_MS) return false;
+    const bodyText = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
+    const expected = createHmac('sha256', secret)
+      .update(bodyText + String(timestamp))
+      .digest('hex');
+    if (expected.length !== claimedDigest.length) {
+      timingSafeEqual(Buffer.from(expected), Buffer.from(expected));
+      return false;
+    }
+    return timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(claimedDigest, 'utf8'));
+  }
+
+  // Legacy / hand-rolled path — plain hex HMAC-SHA256 of the raw body.
+  // Kept for backwards compatibility with the Phase-3 fixture suites
+  // that pre-date the SDK contract.
   const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
   if (expected.length !== signature.length) {
     // Length mismatch is a guaranteed mismatch. Run a same-length compare

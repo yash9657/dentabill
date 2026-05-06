@@ -111,6 +111,9 @@ importers:
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      retell-sdk:
+        specifier: ^5.16.0
+        version: 5.16.0
       tsx:
         specifier: ^4.16.2
         version: 4.21.0

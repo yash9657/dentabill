@@ -364,7 +364,14 @@ interface WaitForCallEndArgs {
   readonly organizationId: string;
   readonly prisma: DbClient;
   readonly logger: Logger;
+  /**
+   * Cancel-marker poll interval (ms). ADR-047. Production default 5s;
+   * tests override to keep specs fast.
+   */
+  readonly cancelPollIntervalMs?: number;
 }
+
+const CANCEL_POLL_INTERVAL_MS_DEFAULT = 5_000;
 
 function waitForCallEnd(args: WaitForCallEndArgs): Promise<RetellCallEndedEvent> {
   // Events arrive on the listener concurrently, but their DB side-effects
@@ -379,6 +386,55 @@ function waitForCallEnd(args: WaitForCallEndArgs): Promise<RetellCallEndedEvent>
     let unsubscribe = (): void => {
       /* set below */
     };
+    let cancelTimer: ReturnType<typeof setInterval> | null = null;
+    let cancelInFlight = false;
+
+    const cleanup = (): void => {
+      unsubscribe();
+      if (cancelTimer) {
+        clearInterval(cancelTimer);
+        cancelTimer = null;
+      }
+    };
+
+    // ADR-047 — Postgres-driven true cancel channel. Pub/sub has a
+    // publish-before-subscribe race that drops cancel signals received
+    // before this listener opens. The marker column survives reboots
+    // and is checked at entry + every cancelPollIntervalMs ms.
+    const checkCancelMarker = async (): Promise<void> => {
+      if (cancelInFlight) return;
+      try {
+        const row = await args.prisma.call.findUnique({
+          where: { id: args.callId },
+          select: { cancelRequestedAt: true },
+        });
+        if (row?.cancelRequestedAt) {
+          cancelInFlight = true;
+          // Tell Retell to terminate; the natural call.ended event
+          // will resolve the outer promise. Failures here are logged
+          // but do not abort the wait — Retell may have already ended
+          // the call (race), in which case we still resolve cleanly.
+          try {
+            await args.retellPort.endCall({
+              retellCallId: args.retellCallId,
+              reason: 'operator_cancel',
+            });
+            args.logger.info(
+              { retellCallId: args.retellCallId, callId: args.callId },
+              'cancel marker observed — endCall issued',
+            );
+          } catch (err) {
+            args.logger.warn(
+              { err, retellCallId: args.retellCallId },
+              'cancel marker observed — endCall failed, awaiting natural end',
+            );
+          }
+        }
+      } catch (err) {
+        args.logger.error({ err }, 'cancel marker poll failed; continuing');
+      }
+    };
+
     unsubscribe = args.retellPort.subscribe(args.retellCallId, (event) => {
       chain = chain.then(async () => {
         try {
@@ -406,15 +462,22 @@ function waitForCallEnd(args: WaitForCallEndArgs): Promise<RetellCallEndedEvent>
           });
         }
         if (event.type === 'call.ended') {
-          unsubscribe();
+          cleanup();
           resolve(event);
         }
         if (event.type === 'call.error') {
-          unsubscribe();
+          cleanup();
           reject(new Error(`Retell call.error ${event.code}: ${event.message}`));
         }
       });
     });
+
+    // Entry-time check + ongoing poll.
+    void checkCancelMarker();
+    cancelTimer = setInterval(
+      () => void checkCancelMarker(),
+      args.cancelPollIntervalMs ?? CANCEL_POLL_INTERVAL_MS_DEFAULT,
+    );
   });
 }
 

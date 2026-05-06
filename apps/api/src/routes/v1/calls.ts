@@ -799,12 +799,19 @@ export function callsRoutes(fastify: FastifyInstance): void {
         return toCallResponse(existing);
       }
 
+      // P4-T7-prep-4 / ADR-047 — stamp the durable cancel marker so the
+      // call-worker's poll loop tears the live Retell session down. The
+      // status flip below is the dashboard-visible signal; the marker is
+      // the worker-visible signal.
+      const cancelStamp = new Date();
       await prisma.call.updateMany({
         where: { id, organizationId: orgId },
         data: {
           status: 'FAILED',
           dlqReason: 'CANCELLED_BY_OPERATOR',
-          endedAt: new Date(),
+          endedAt: cancelStamp,
+          cancelRequestedAt: cancelStamp,
+          cancelRequestedBy: auth.userId,
         },
       });
       await prisma.callEvent.create({
