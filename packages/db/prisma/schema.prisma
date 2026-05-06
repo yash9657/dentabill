@@ -105,11 +105,12 @@ model Organization {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  users        User[]
-  claims       Claim[]
-  calls        Call[]
-  payerConfigs PayerConfig[]
-  auditLogs    AuditLog[]
+  users         User[]
+  claims        Claim[]
+  calls         Call[]
+  callSummaries CallSummary[]
+  payerConfigs  PayerConfig[]
+  auditLogs     AuditLog[]
 }
 
 model User {
@@ -196,9 +197,13 @@ model Call {
   @@index([organizationId, claimId, status])
 }
 
+// PHI-relevant: rawTranscript + claudeSummary may contain patient
+// names, dates of service, and denial narrative. Multi-tenancy
+// enforcement is mandatory (P4-T1A, ADR-042).
 model CallSummary {
-  id              String     @id @default(cuid())
-  callId          String     @unique
+  id              String       @id @default(cuid())
+  organizationId  String
+  callId          String       @unique
   claimStatus     String
   denialReason    String?
   denialCode      String?
@@ -207,13 +212,18 @@ model CallSummary {
   repName         String?
   referenceNumber String?
   callbackDate    DateTime?
-  amountApproved  Decimal?   @db.Decimal(10, 2)
+  amountApproved  Decimal?     @db.Decimal(10, 2)
   notes           String?
-  rawTranscript   String     @db.Text
-  claudeSummary   String     @db.Text
-  createdAt       DateTime   @default(now())
+  rawTranscript   String       @db.Text
+  claudeSummary   String       @db.Text
+  createdAt       DateTime     @default(now())
 
-  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  call         Call         @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  // Operator dashboards filter by org and order by recency. Index
+  // serves both the org-scoped read path and the per-org SLO scan.
+  @@index([organizationId, createdAt])
 }
 
 model CallEvent {

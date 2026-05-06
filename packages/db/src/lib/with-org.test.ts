@@ -133,4 +133,143 @@ describe('getOrgScopedDb()', () => {
     const logs1 = await getOrgScopedDb(org1.id).auditLog.findMany();
     expect(logs1[0]?.organizationId).toBe(org1.id);
   });
+
+  // P4-T1A — CallSummary holds PHI (rawTranscript + claudeSummary) and
+  // must be org-scoped. Regression guard: re-running these against a
+  // pre-P4-T1A build returns rows from both orgs and trips the
+  // assertions immediately.
+  it('scopes CallSummary reads', async () => {
+    const { org1, org2 } = await seedTwoOrgsWithClaims();
+    const claim1 = await prisma.claim.findFirstOrThrow({ where: { organizationId: org1.id } });
+    const claim2 = await prisma.claim.findFirstOrThrow({ where: { organizationId: org2.id } });
+    const call1 = await prisma.call.create({
+      data: {
+        organizationId: org1.id,
+        claimId: claim1.id,
+        retellCallId: 'rc_summary_org1',
+        status: 'COMPLETED',
+        attemptNumber: 1,
+      },
+    });
+    const call2 = await prisma.call.create({
+      data: {
+        organizationId: org2.id,
+        claimId: claim2.id,
+        retellCallId: 'rc_summary_org2',
+        status: 'COMPLETED',
+        attemptNumber: 1,
+      },
+    });
+    await prisma.callSummary.createMany({
+      data: [
+        {
+          organizationId: org1.id,
+          callId: call1.id,
+          claimStatus: 'RESOLVED',
+          nextAction: 'RESOLVED',
+          rawTranscript: 'transcript-org1',
+          claudeSummary: 'summary-org1',
+        },
+        {
+          organizationId: org2.id,
+          callId: call2.id,
+          claimStatus: 'RESOLVED',
+          nextAction: 'RESOLVED',
+          rawTranscript: 'transcript-org2',
+          claudeSummary: 'summary-org2',
+        },
+      ],
+    });
+
+    const summaries1 = await getOrgScopedDb(org1.id).callSummary.findMany();
+    const summaries2 = await getOrgScopedDb(org2.id).callSummary.findMany();
+
+    expect(summaries1).toHaveLength(1);
+    expect(summaries1[0]?.organizationId).toBe(org1.id);
+    expect(summaries1[0]?.rawTranscript).toBe('transcript-org1');
+    expect(summaries2).toHaveLength(1);
+    expect(summaries2[0]?.organizationId).toBe(org2.id);
+  });
+
+  it('does not leak CallSummary across orgs when caller filters by callId only', async () => {
+    const { org1, org2 } = await seedTwoOrgsWithClaims();
+    const claim2 = await prisma.claim.findFirstOrThrow({ where: { organizationId: org2.id } });
+    const call2 = await prisma.call.create({
+      data: {
+        organizationId: org2.id,
+        claimId: claim2.id,
+        retellCallId: 'rc_leak_check',
+        status: 'COMPLETED',
+        attemptNumber: 1,
+      },
+    });
+    await prisma.callSummary.create({
+      data: {
+        organizationId: org2.id,
+        callId: call2.id,
+        claimStatus: 'RESOLVED',
+        nextAction: 'RESOLVED',
+        rawTranscript: 'org2 transcript',
+        claudeSummary: 'org2 summary',
+      },
+    });
+
+    // Org 1 attempts to read org 2's summary by its callId. The scope
+    // helper must apply organizationId=org1 and return nothing, even
+    // though the underlying callId exists.
+    const result = await getOrgScopedDb(org1.id).callSummary.findFirst({
+      where: { callId: call2.id },
+    });
+    expect(result).toBeNull();
+  });
+
+  it('count() on CallSummary is org-scoped', async () => {
+    const { org1, org2 } = await seedTwoOrgsWithClaims();
+    const [claim1] = await Promise.all([
+      prisma.claim.findFirstOrThrow({ where: { organizationId: org1.id } }),
+    ]);
+    const claim2 = await prisma.claim.findFirstOrThrow({ where: { organizationId: org2.id } });
+    const [c1, c2] = await Promise.all([
+      prisma.call.create({
+        data: {
+          organizationId: org1.id,
+          claimId: claim1.id,
+          retellCallId: 'rc_count_org1',
+          status: 'COMPLETED',
+          attemptNumber: 1,
+        },
+      }),
+      prisma.call.create({
+        data: {
+          organizationId: org2.id,
+          claimId: claim2.id,
+          retellCallId: 'rc_count_org2',
+          status: 'COMPLETED',
+          attemptNumber: 1,
+        },
+      }),
+    ]);
+    await prisma.callSummary.createMany({
+      data: [
+        {
+          organizationId: org1.id,
+          callId: c1.id,
+          claimStatus: 'RESOLVED',
+          nextAction: 'RESOLVED',
+          rawTranscript: 't1',
+          claudeSummary: 's1',
+        },
+        {
+          organizationId: org2.id,
+          callId: c2.id,
+          claimStatus: 'RESOLVED',
+          nextAction: 'RESOLVED',
+          rawTranscript: 't2',
+          claudeSummary: 's2',
+        },
+      ],
+    });
+    expect(await getOrgScopedDb(org1.id).callSummary.count()).toBe(1);
+    expect(await getOrgScopedDb(org2.id).callSummary.count()).toBe(1);
+  });
 });

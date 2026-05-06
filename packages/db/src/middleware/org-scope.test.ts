@@ -263,4 +263,79 @@ describe('orgScopeWriteExtension', () => {
       expect(deleted.id).toBe(org.id);
     });
   });
+
+  // P4-T1A — write middleware enforcement extends to CallSummary, the
+  // PHI-rich row that holds raw transcripts and Claude's parsed
+  // outcome. Same gate as Claim/Call/etc.
+  describe('CallSummary write enforcement', () => {
+    it('rejects callSummary.create with no organizationId', async () => {
+      const org = await makeOrg();
+      const claim = await prisma.claim.create({
+        data: {
+          organizationId: org.id,
+          patientDOBHash: 'h',
+          claimNumber: 'CL-CS-1',
+          cdtCodes: ['D2740'],
+          claimAmount: '100.00',
+          payerCode: 'DELTA_DENTAL_PPO',
+          serviceDate: new Date(),
+        },
+      });
+      const call = await prisma.call.create({
+        data: {
+          organizationId: org.id,
+          claimId: claim.id,
+          retellCallId: 'rc_cs_no_org',
+          status: 'COMPLETED',
+          attemptNumber: 1,
+        },
+      });
+      await expect(
+        prisma.callSummary.create({
+          data: {
+            callId: call.id,
+            claimStatus: 'RESOLVED',
+            nextAction: 'RESOLVED',
+            rawTranscript: 't',
+            claudeSummary: 's',
+          } as never,
+        }),
+      ).rejects.toBeInstanceOf(MissingOrgScopeError);
+    });
+
+    it('allows callSummary.create when organizationId is present', async () => {
+      const org = await makeOrg();
+      const claim = await prisma.claim.create({
+        data: {
+          organizationId: org.id,
+          patientDOBHash: 'h',
+          claimNumber: 'CL-CS-2',
+          cdtCodes: ['D2740'],
+          claimAmount: '100.00',
+          payerCode: 'DELTA_DENTAL_PPO',
+          serviceDate: new Date(),
+        },
+      });
+      const call = await prisma.call.create({
+        data: {
+          organizationId: org.id,
+          claimId: claim.id,
+          retellCallId: 'rc_cs_ok',
+          status: 'COMPLETED',
+          attemptNumber: 1,
+        },
+      });
+      const summary = await prisma.callSummary.create({
+        data: {
+          organizationId: org.id,
+          callId: call.id,
+          claimStatus: 'RESOLVED',
+          nextAction: 'RESOLVED',
+          rawTranscript: 'transcript text',
+          claudeSummary: 'summary text',
+        },
+      });
+      expect(summary.organizationId).toBe(org.id);
+    });
+  });
 });
