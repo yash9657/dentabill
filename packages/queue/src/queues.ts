@@ -1,7 +1,15 @@
 import { Queue, QueueEvents, type DefaultJobOptions } from 'bullmq';
 import type { Redis } from 'ioredis';
 
-import { type CallJobData, type CallJobName, type CallJobResult, QUEUE_NAMES } from './types.js';
+import {
+  type CallJobData,
+  type CallJobName,
+  type CallJobResult,
+  type SummaryJobData,
+  type SummaryJobName,
+  type SummaryJobResult,
+  QUEUE_NAMES,
+} from './types.js';
 
 /**
  * Default job options for the `calls` queue (ADR-035).
@@ -35,4 +43,39 @@ export function createCallsQueue({ connection }: CreateCallsQueueOptions): Calls
 
 export function createCallsQueueEvents({ connection }: CreateCallsQueueOptions): CallsQueueEvents {
   return new QueueEvents(QUEUE_NAMES.CALLS, { connection });
+}
+
+// ─── Summaries queue (Phase 4) ─────────────────────────────────────────────
+
+/**
+ * Job options for `summaries`.
+ *
+ *   - 3 attempts; exponential backoff. The first attempt typically succeeds
+ *     in 5-15s; retries cover transient Anthropic 5xx and Postgres lock
+ *     contention.
+ *   - Completed jobs pruned after 24h.
+ *   - Failed jobs preserved indefinitely; the summary DLQ consumer (W2E)
+ *     drains them and audit-logs `summary.dlq`.
+ */
+export const SUMMARIES_DEFAULT_JOB_OPTIONS: DefaultJobOptions = {
+  attempts: 3,
+  backoff: { type: 'exponential', delay: 15_000 },
+  removeOnComplete: { age: 86_400 },
+  removeOnFail: false,
+};
+
+export type SummariesQueue = Queue<SummaryJobData, SummaryJobResult, SummaryJobName>;
+export type SummariesQueueEvents = QueueEvents;
+
+export function createSummariesQueue({ connection }: CreateCallsQueueOptions): SummariesQueue {
+  return new Queue<SummaryJobData, SummaryJobResult, SummaryJobName>(QUEUE_NAMES.SUMMARIES, {
+    connection,
+    defaultJobOptions: SUMMARIES_DEFAULT_JOB_OPTIONS,
+  });
+}
+
+export function createSummariesQueueEvents({
+  connection,
+}: CreateCallsQueueOptions): SummariesQueueEvents {
+  return new QueueEvents(QUEUE_NAMES.SUMMARIES, { connection });
 }

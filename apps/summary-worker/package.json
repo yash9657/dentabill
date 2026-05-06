@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "BullMQ worker that runs Claude post-call analysis. Lands in Phase 4.",
+  "description": "BullMQ worker that turns completed Call transcripts into structured CallSummary rows via SummarizerPort (Phase 4).",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -13,11 +13,25 @@
     "lint": "eslint . --max-warnings=0 --no-warn-ignored",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "build": "echo 'no build for stub'",
-    "dev": "echo 'apps/summary-worker — Phase 4'"
+    "build": "echo 'no build artifact for the worker — start uses tsx; tsc-emit deferred to Phase 5 cloud target'",
+    "start": "tsx src/bin.ts",
+    "dev": "tsx watch src/bin.ts"
+  },
+  "dependencies": {
+    "@dentabill/db": "workspace:*",
+    "@dentabill/logger": "workspace:*",
+    "@dentabill/payer-ivr": "workspace:*",
+    "@dentabill/queue": "workspace:*",
+    "@dentabill/summarizer": "workspace:*",
+    "bullmq": "^5.34.0",
+    "ioredis": "^5.4.1",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@dentabill/config": "workspace:*",
+    "@types/node": "^20.17.6",
+    "tsx": "^4.16.2",
+    "typescript": "^5.7.2",
     "vitest": "^2.1.9"
   }
 }
