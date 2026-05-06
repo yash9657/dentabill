@@ -223,6 +223,63 @@ describe('getOrgScopedDb()', () => {
     expect(result).toBeNull();
   });
 
+  // P4-T1B — BillingUsageRecord is the metered-billing receipt log. A
+  // cross-tenant leak here would post org A's resolved claim against
+  // org B's Stripe customer (financial-correctness bug, not just a
+  // privacy one). These tests are the regression guard.
+  it('scopes BillingUsageRecord reads', async () => {
+    const { org1, org2 } = await seedTwoOrgsWithClaims();
+    const claim1 = await prisma.claim.findFirstOrThrow({ where: { organizationId: org1.id } });
+    const claim2 = await prisma.claim.findFirstOrThrow({ where: { organizationId: org2.id } });
+    const periodStart = new Date('2026-05-01T00:00:00Z');
+    await prisma.billingUsageRecord.createMany({
+      data: [
+        {
+          organizationId: org1.id,
+          claimId: claim1.id,
+          billingPeriodStart: periodStart,
+          amountCents: 500,
+          idempotencyKey: `claim.${claim1.id}.${periodStart.toISOString()}`,
+        },
+        {
+          organizationId: org2.id,
+          claimId: claim2.id,
+          billingPeriodStart: periodStart,
+          amountCents: 750,
+          idempotencyKey: `claim.${claim2.id}.${periodStart.toISOString()}`,
+        },
+      ],
+    });
+
+    const records1 = await getOrgScopedDb(org1.id).billingUsageRecord.findMany();
+    const records2 = await getOrgScopedDb(org2.id).billingUsageRecord.findMany();
+    expect(records1).toHaveLength(1);
+    expect(records1[0]?.organizationId).toBe(org1.id);
+    expect(records1[0]?.amountCents).toBe(500);
+    expect(records2).toHaveLength(1);
+    expect(records2[0]?.amountCents).toBe(750);
+  });
+
+  it('does not leak BillingUsageRecord across orgs when caller filters by claimId only', async () => {
+    const { org1, org2 } = await seedTwoOrgsWithClaims();
+    const claim2 = await prisma.claim.findFirstOrThrow({ where: { organizationId: org2.id } });
+    const periodStart = new Date('2026-05-01T00:00:00Z');
+    await prisma.billingUsageRecord.create({
+      data: {
+        organizationId: org2.id,
+        claimId: claim2.id,
+        billingPeriodStart: periodStart,
+        amountCents: 999,
+        idempotencyKey: `claim.${claim2.id}.${periodStart.toISOString()}`,
+      },
+    });
+    // Org 1 attempts to read org 2's billing record by its claimId.
+    const result = await getOrgScopedDb(org1.id).billingUsageRecord.findFirst({
+      where: { claimId: claim2.id },
+    });
+    expect(result).toBeNull();
+  });
+
   it('count() on CallSummary is org-scoped', async () => {
     const { org1, org2 } = await seedTwoOrgsWithClaims();
     const [claim1] = await Promise.all([
