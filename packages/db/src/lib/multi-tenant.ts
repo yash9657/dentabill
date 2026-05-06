@@ -6,7 +6,14 @@
  * (P1-T5) read from this list. Adding a new multi-tenant model means
  * exactly one edit here plus the schema change.
  */
-export const MULTI_TENANT_MODELS = ['user', 'claim', 'call', 'payerConfig', 'auditLog'] as const;
+export const MULTI_TENANT_MODELS = [
+  'user',
+  'claim',
+  'call',
+  'callSummary',
+  'payerConfig',
+  'auditLog',
+] as const;
 
 export type MultiTenantModel = (typeof MULTI_TENANT_MODELS)[number];
 
