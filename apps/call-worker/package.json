@@ -15,7 +15,8 @@
     "test": "vitest run",
     "build": "echo 'no build artifact for the worker — start uses tsx; tsc-emit deferred to Phase 5 cloud target'",
     "start": "tsx src/bin.ts",
-    "dev": "tsx watch src/bin.ts"
+    "dev": "tsx watch src/bin.ts",
+    "provision:retell": "tsx scripts/provision-retell.mts"
   },
   "dependencies": {
     "@dentabill/db": "workspace:*",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@dentabill/config": "workspace:*",
     "@types/node": "^20.17.6",
+    "retell-sdk": "^5.16.0",
     "tsx": "^4.16.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.9"
