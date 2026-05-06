@@ -932,3 +932,214 @@ describe('GET /v1/calls/stats (P3-T25 — overview aggregates)', () => {
     });
   });
 });
+
+// ─── /v1/calls/:id/summary + /summary/retry (P4-T2H) ───────────────────────
+
+describe('GET /v1/calls/:id/summary + POST /v1/calls/:id/summary/retry', () => {
+  let server: FastifyInstance;
+  let summariesAddSpy: Mock<
+    (name: string, data: unknown, opts: unknown) => Promise<{ id: string }>
+  >;
+
+  beforeAll(async () => {
+    delete process.env.CLERK_SECRET_KEY;
+    delete process.env.CLERK_PUBLISHABLE_KEY;
+    server = await buildServer({ logger: false });
+    await prisma.$connect();
+    summariesAddSpy = vi.fn(async (_name, _data, opts) => ({
+      id: (opts as { jobId?: string } | undefined)?.jobId ?? 'mocked',
+    }));
+    server.summariesQueue.add = summariesAddSpy as unknown as typeof server.summariesQueue.add;
+  });
+
+  afterAll(async () => {
+    await server.close();
+    await prisma.$disconnect();
+  });
+
+  beforeEach(() => {
+    summariesAddSpy.mockClear();
+  });
+
+  afterEach(async () => {
+    await prisma.$executeRawUnsafe(
+      'TRUNCATE TABLE "Organization", "User", "Claim", "Call", "CallSummary", "CallEvent", "PayerConfig", "AuditLog", "BillingUsageRecord" RESTART IDENTITY CASCADE',
+    );
+  });
+
+  async function seedSummaryFixture(role: 'OWNER' | 'ADMIN' | 'BILLING_STAFF' = 'OWNER'): Promise<{
+    readonly orgId: string;
+    readonly callId: string;
+    readonly summaryId: string;
+    readonly clerkUserId: string;
+  }> {
+    const org = await prisma.organization.create({
+      data: { name: 'Summary Co', clerkOrgId: `clerk_${Math.random().toString(36).slice(2)}` },
+    });
+    const clerkUserId = `clerk_user_${Math.random().toString(36).slice(2)}`;
+    await prisma.user.create({
+      data: {
+        organizationId: org.id,
+        clerkUserId,
+        email: 'owner@summary.test',
+        role,
+      },
+    });
+    const claim = await prisma.claim.create({
+      data: {
+        organizationId: org.id,
+        patientDOBHash: 'h',
+        claimNumber: 'CL-SUM-1',
+        cdtCodes: ['D2740'],
+        claimAmount: '420.00',
+        payerCode: 'DELTA_DENTAL_PPO',
+        serviceDate: new Date('2026-01-15T00:00:00.000Z'),
+        status: 'COMPLETED',
+        priority: 80,
+      },
+    });
+    const call = await prisma.call.create({
+      data: {
+        organizationId: org.id,
+        claimId: claim.id,
+        retellCallId: `rc_${Math.random().toString(36).slice(2)}`,
+        status: 'COMPLETED',
+        attemptNumber: 1,
+      },
+    });
+    const summary = await prisma.callSummary.create({
+      data: {
+        organizationId: org.id,
+        callId: call.id,
+        claimStatus: 'paid',
+        nextAction: 'RESOLVED',
+        confidence: 0.97,
+        repName: 'Lisa M.',
+        referenceNumber: 'REF-1',
+        amountApproved: '240.00',
+        rawTranscript: 'transcript text',
+        claudeSummary: 'summary text',
+      },
+    });
+    return { orgId: org.id, callId: call.id, summaryId: summary.id, clerkUserId };
+  }
+
+  it('GET returns 404 when no summary exists yet', async () => {
+    const org = await makeOrg('Empty');
+    const claim = await prisma.claim.create({
+      data: {
+        organizationId: org.id,
+        patientDOBHash: 'h',
+        claimNumber: 'CL-NOSUM',
+        cdtCodes: ['D2740'],
+        claimAmount: '100.00',
+        payerCode: 'DELTA_DENTAL_PPO',
+        serviceDate: new Date(),
+        priority: 50,
+      },
+    });
+    const call = await prisma.call.create({
+      data: {
+        organizationId: org.id,
+        claimId: claim.id,
+        retellCallId: 'rc_nosum',
+        status: 'COMPLETED',
+        attemptNumber: 1,
+      },
+    });
+    const response = await server.inject({
+      method: 'GET',
+      url: `/v1/calls/${call.id}/summary`,
+      headers: { 'x-test-user-id': 'user_x', 'x-test-org-id': org.id },
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('GET returns the summary with cents-mapped amount and ISO dates', async () => {
+    const seed = await seedSummaryFixture();
+    const response = await server.inject({
+      method: 'GET',
+      url: `/v1/calls/${seed.callId}/summary`,
+      headers: { 'x-test-user-id': 'user_g', 'x-test-org-id': seed.orgId },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{
+      id: string;
+      callId: string;
+      organizationId: string;
+      amountApprovedCents: number | null;
+      nextAction: string;
+    }>();
+    expect(body.id).toBe(seed.summaryId);
+    expect(body.callId).toBe(seed.callId);
+    expect(body.organizationId).toBe(seed.orgId);
+    expect(body.amountApprovedCents).toBe(24000);
+    expect(body.nextAction).toBe('RESOLVED');
+  });
+
+  it('GET returns 404 across orgs (cross-tenant)', async () => {
+    const seedA = await seedSummaryFixture();
+    const orgB = await makeOrg('OtherOrg');
+    const response = await server.inject({
+      method: 'GET',
+      url: `/v1/calls/${seedA.callId}/summary`,
+      headers: { 'x-test-user-id': 'user_b', 'x-test-org-id': orgB.id },
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('POST retry: BILLING_STAFF gets 403', async () => {
+    const seed = await seedSummaryFixture('BILLING_STAFF');
+    const response = await server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seed.callId}/summary/retry`,
+      headers: { 'x-test-user-id': seed.clerkUserId },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(summariesAddSpy).not.toHaveBeenCalled();
+  });
+
+  it('POST retry: OWNER enqueues summary.generate with deterministic retryNumber', async () => {
+    const seed = await seedSummaryFixture('OWNER');
+    const first = await server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seed.callId}/summary/retry`,
+      headers: { 'x-test-user-id': seed.clerkUserId },
+    });
+    expect(first.statusCode).toBe(202);
+    const firstBody = first.json<{ retryNumber: number; jobId: string }>();
+    expect(firstBody.retryNumber).toBe(1);
+    expect(firstBody.jobId).toBe(`call.${seed.callId}.retry.1`);
+    expect(summariesAddSpy).toHaveBeenCalledTimes(1);
+
+    const second = await server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seed.callId}/summary/retry`,
+      headers: { 'x-test-user-id': seed.clerkUserId },
+    });
+    expect(second.statusCode).toBe(202);
+    expect(second.json<{ retryNumber: number }>().retryNumber).toBe(2);
+  });
+
+  it('POST retry: 404 when call does not belong to the caller’s org', async () => {
+    const seedA = await seedSummaryFixture('OWNER');
+    const orgB = await prisma.organization.create({
+      data: { name: 'OtherOrg', clerkOrgId: `clerk_${Math.random().toString(36).slice(2)}` },
+    });
+    const userB = await prisma.user.create({
+      data: {
+        organizationId: orgB.id,
+        clerkUserId: `clerk_user_b_${Math.random().toString(36).slice(2)}`,
+        email: 'b@b.test',
+        role: 'OWNER',
+      },
+    });
+    const response = await server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seedA.callId}/summary/retry`,
+      headers: { 'x-test-user-id': userB.clerkUserId },
+    });
+    expect(response.statusCode).toBe(404);
+    expect(summariesAddSpy).not.toHaveBeenCalled();
+  });
+});

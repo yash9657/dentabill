@@ -1,4 +1,10 @@
-import { type CallsQueue, createCallsQueue, createRedisConnection } from '@dentabill/queue';
+import {
+  type CallsQueue,
+  createCallsQueue,
+  createRedisConnection,
+  createSummariesQueue,
+  type SummariesQueue,
+} from '@dentabill/queue';
 import type { FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 
@@ -19,6 +25,7 @@ import type { Redis } from 'ioredis';
 declare module 'fastify' {
   interface FastifyInstance {
     callsQueue: CallsQueue;
+    summariesQueue: SummariesQueue;
     queueRedis: Redis | null;
   }
 }
@@ -43,18 +50,28 @@ export function registerQueuePlugin(
       },
       close: (): Promise<void> => Promise.resolve(),
     } as unknown as CallsQueue;
+    const stubSummariesQueue = {
+      add: (): never => {
+        throw new Error('summariesQueue.add called on stub — replace with a vi.fn() spy in tests.');
+      },
+      close: (): Promise<void> => Promise.resolve(),
+    } as unknown as SummariesQueue;
     fastify.decorate('callsQueue', stubQueue);
+    fastify.decorate('summariesQueue', stubSummariesQueue);
     fastify.decorate('queueRedis', null);
     return;
   }
 
   const connection = createRedisConnection(input.redisUrl, { lazyConnect: true });
   const queue = createCallsQueue({ connection });
+  const summariesQueue = createSummariesQueue({ connection });
   fastify.decorate('callsQueue', queue);
+  fastify.decorate('summariesQueue', summariesQueue);
   fastify.decorate('queueRedis', connection);
 
   fastify.addHook('onClose', async () => {
     await queue.close();
+    await summariesQueue.close();
     connection.disconnect();
   });
 }

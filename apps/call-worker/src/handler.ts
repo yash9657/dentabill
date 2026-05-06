@@ -17,7 +17,12 @@ import {
   RetellCallEndReason,
   type StartCallInput,
 } from '@dentabill/payer-ivr';
-import { CallJobDataSchema, type CallsProcessor } from '@dentabill/queue';
+import {
+  CallJobDataSchema,
+  type CallsProcessor,
+  type SummariesQueue,
+  SUMMARY_JOB_NAME,
+} from '@dentabill/queue';
 
 import type { WorkerEnv } from './env.js';
 
@@ -66,6 +71,14 @@ export interface CallJobHandlerDeps {
   readonly clock?: () => Date;
   /** Outbound caller number in E.164 (the worker's own dial-out line). */
   readonly outboundNumberE164: string;
+  /**
+   * Optional summaries queue (Phase 4 / P4-T2G). When present, the
+   * handler enqueues a `summary.generate` job after `Call.endedAt` is
+   * persisted. Absent → the handler skips emission, which is the
+   * Phase-3 behaviour and what every existing test exercises.
+   * Production wiring in `server.ts` always provides it.
+   */
+  readonly summariesQueue?: SummariesQueue;
 }
 
 export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
@@ -235,6 +248,40 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
         endReason: ended.endReason,
       },
     });
+
+    // P4-T2G — enqueue post-call summarisation. Only fired when the
+    // summaries queue is wired (production deploys + the explicit
+    // tests for this path). The job payload uses `call.<id>` as the
+    // BullMQ idempotency key so a double-finalise never produces two
+    // summary jobs.
+    if (deps.summariesQueue) {
+      try {
+        const idempotencyKey = `call.${call.id}`;
+        await deps.summariesQueue.add(
+          SUMMARY_JOB_NAME,
+          {
+            organizationId: data.organizationId,
+            callId: call.id,
+            promptVersion: 'v1',
+            idempotencyKey,
+          },
+          { jobId: idempotencyKey },
+        );
+      } catch (err) {
+        // Failure to enqueue is NOT fatal for the call lifecycle —
+        // the call is already finalised, the operator dashboard will
+        // surface the missing summary, and ops can replay via the
+        // /v1/calls/:id/summary/retry route (W2H).
+        deps.logger.error(
+          {
+            callId: call.id,
+            organizationId: data.organizationId,
+            err: err instanceof Error ? { message: err.message, name: err.name } : err,
+          },
+          'call-worker: failed to enqueue summary.generate — call lifecycle still healthy',
+        );
+      }
+    }
 
     return {
       callId: call.id,

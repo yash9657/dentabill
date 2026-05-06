@@ -1,7 +1,13 @@
 import { prisma } from '@dentabill/db';
 import { createLogger, type Logger } from '@dentabill/logger';
 import { createRetellPort, type RetellPort } from '@dentabill/payer-ivr';
-import { type CallsWorker, createCallsWorker, createRedisConnection } from '@dentabill/queue';
+import {
+  createCallsWorker,
+  createRedisConnection,
+  createSummariesQueue,
+  type CallsWorker,
+  type SummariesQueue,
+} from '@dentabill/queue';
 import type { Redis } from 'ioredis';
 
 import { createDlqJobHandler, createDlqWorker, type DlqWorker } from './dlq-consumer.js';
@@ -54,6 +60,8 @@ export interface CallWorkerHandle {
   readonly health: HealthServerHandle;
   readonly connection: Redis;
   readonly retellPort: RetellPort;
+  /** Phase 4 — fan-out queue for post-call summarisation (P4-T2G). */
+  readonly summariesQueue: SummariesQueue;
   /** Run the graceful shutdown sequence. Idempotent. */
   readonly shutdown: () => Promise<void>;
 }
@@ -72,6 +80,7 @@ export async function bootCallWorker(
 
   const prismaClient = options.prisma ?? prisma;
   const retellPort = options.retellPort ?? createRetellPort({ apiKey: env.RETELL_API_KEY }).port;
+  const summariesQueue = createSummariesQueue({ connection });
 
   const worker = createCallsWorker({
     connection,
@@ -82,6 +91,7 @@ export async function bootCallWorker(
       retellPort,
       env,
       outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+      summariesQueue,
     }),
   });
 
@@ -137,6 +147,11 @@ export async function bootCallWorker(
       logger.error({ err }, 'error closing DLQ worker — continuing shutdown');
     }
     try {
+      await summariesQueue.close();
+    } catch (err) {
+      logger.error({ err }, 'error closing summaries queue — continuing shutdown');
+    }
+    try {
       connection.disconnect();
     } catch (err) {
       logger.error({ err }, 'error disconnecting Redis — continuing shutdown');
@@ -149,7 +164,17 @@ export async function bootCallWorker(
     logger.info('call-worker shutdown complete');
   };
 
-  return { env, logger, worker, dlqWorker, health, connection, retellPort, shutdown };
+  return {
+    env,
+    logger,
+    worker,
+    dlqWorker,
+    health,
+    connection,
+    retellPort,
+    summariesQueue,
+    shutdown,
+  };
 }
 
 /**

@@ -73,6 +73,23 @@ const PHI_REDACT_PATHS: readonly string[] = [
   '*.dtmf',
   '*.transcriptText',
 
+  // PHI — Phase 4 summarizer path (P4-T2I).
+  // - `rawTranscript` / `claudeSummary` are CallSummary columns
+  //   carrying full conversation text + LLM-derived prose, both of
+  //   which routinely include patient names, dates of service, and
+  //   denial narratives.
+  // - `denialReason`, `repName`, `notes` carry incidental PHI (rep
+  //   may say a patient name in their explanation; reps occasionally
+  //   identify themselves by full name plus a payer-employee ID;
+  //   billing-team notes are free-text and sometimes paste DOB).
+  // Redacting at the field-name level catches structured-log emission
+  // even when a future code path uses pino's logger object literal.
+  '*.rawTranscript',
+  '*.claudeSummary',
+  '*.denialReason',
+  '*.repName',
+  '*.notes',
+
   // PHI — common nested under Fastify req.body
   'req.body.patientName',
   'req.body.firstName',
