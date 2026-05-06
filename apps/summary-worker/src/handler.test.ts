@@ -1,5 +1,6 @@
 import { prisma } from '@dentabill/db';
 import { createLogger } from '@dentabill/logger';
+import { FakeResend } from '@dentabill/notifier';
 import type { SummaryJobData, SummaryJobResult } from '@dentabill/queue';
 import { FakeClaude } from '@dentabill/summarizer';
 import type { Job } from 'bullmq';
@@ -254,6 +255,61 @@ describe('createSummaryJobHandler — cost guard', () => {
         }),
       ),
     ).rejects.toThrow(/lock contention/);
+  });
+});
+
+describe('createSummaryJobHandler — notifier dispatch (P4-T6)', () => {
+  it('dispatches a claim.resolved notification when notifier + recipient are wired', async () => {
+    const seeded = await seedOrgClaimCall();
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    const notifier = new FakeResend();
+
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      redis,
+      summarizer: fake,
+      env: baseEnv,
+      notifier,
+      resolveRecipient: () => Promise.resolve('owner@practice.test'),
+    });
+    await handler(
+      jobFor({
+        organizationId: seeded.orgId,
+        callId: seeded.callId,
+        promptVersion: 'v1',
+        idempotencyKey: 'sum-notify-1',
+      }),
+    );
+    expect(notifier.deliveries).toHaveLength(1);
+    expect(notifier.deliveries[0]?.template).toBe('claim.resolved');
+    expect(notifier.deliveries[0]?.to).toBe('owner@practice.test');
+  });
+
+  it('skips notification when resolveRecipient returns null', async () => {
+    const seeded = await seedOrgClaimCall();
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    const notifier = new FakeResend();
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      redis,
+      summarizer: fake,
+      env: baseEnv,
+      notifier,
+      resolveRecipient: () => Promise.resolve(null),
+    });
+    await handler(
+      jobFor({
+        organizationId: seeded.orgId,
+        callId: seeded.callId,
+        promptVersion: 'v1',
+        idempotencyKey: 'sum-notify-skip-1',
+      }),
+    );
+    expect(notifier.deliveries).toHaveLength(0);
   });
 });
 

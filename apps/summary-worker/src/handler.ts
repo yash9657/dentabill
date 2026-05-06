@@ -1,5 +1,6 @@
 import { audit, getOrgScopedDb, type CallEvent, type NextAction, type prisma } from '@dentabill/db';
 import type { Logger } from '@dentabill/logger';
+import type { NotifierPort, TemplateName, TemplateVars } from '@dentabill/notifier';
 import { SummaryJobDataSchema, type SummaryJobData, type SummaryJobResult } from '@dentabill/queue';
 import {
   SummaryValidationError,
@@ -49,6 +50,21 @@ export interface SummaryHandlerDeps {
   readonly summarizer: SummarizerPort;
   readonly env: SummaryWorkerEnv;
   readonly clock?: () => Date;
+  /**
+   * Optional notifier — when present, the handler dispatches a
+   * post-resolution event to the operator. Phase 4 wires FakeResend
+   * (which only logs to memory); the live adapter ships in 4.5. The
+   * notifier is intentionally optional: a misconfigured org without an
+   * outbound mailbox should still get summaries persisted, just no
+   * email.
+   */
+  readonly notifier?: NotifierPort;
+  /**
+   * Recipient resolver — given an org id, return the email to notify.
+   * Defaults to "skip notification" so the handler stays usable in
+   * tests that don't care.
+   */
+  readonly resolveRecipient?: (organizationId: string) => Promise<string | null>;
 }
 
 export type SummaryJobLike = Pick<Job<SummaryJobData, SummaryJobResult>, 'id' | 'data'>;
@@ -293,6 +309,32 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
         },
       });
 
+      // Optional notify. PHI-screened by the template's Zod schema —
+      // we only pass claim metadata, never patient identifiers.
+      if (deps.notifier && deps.resolveRecipient) {
+        try {
+          const to = await deps.resolveRecipient(data.organizationId);
+          if (to) {
+            await dispatchClaimNotification(deps.notifier, {
+              to,
+              organizationId: data.organizationId,
+              summaryStatus: summarizeResult.summary.claimStatus,
+              denialCode: summarizeResult.summary.denialCode,
+              claimNumber: claim.claimNumber,
+              payerCode: claim.payerCode,
+              serviceDate: claim.serviceDate,
+            });
+          }
+        } catch (err) {
+          // Notify failure is NOT fatal — the summary is persisted
+          // and audited. Log and continue.
+          deps.logger.error(
+            { err: err instanceof Error ? { message: err.message, name: err.name } : err },
+            'summary-worker: notifier dispatch failed — summary still persisted',
+          );
+        }
+      }
+
       return {
         summaryId: summary.id,
         outcome: policy.autoTransitioned ? 'AUTO_TRANSITIONED' : 'MANUAL_REVIEW',
@@ -399,4 +441,45 @@ export function applyTransitionPolicy(input: TransitionPolicyInput): TransitionP
     default:
       return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW' };
   }
+}
+
+interface DispatchInput {
+  readonly to: string;
+  readonly organizationId: string;
+  readonly summaryStatus: string;
+  readonly denialCode: string | null;
+  readonly claimNumber: string;
+  readonly payerCode: string;
+  readonly serviceDate: Date;
+}
+
+async function dispatchClaimNotification(
+  notifier: NotifierPort,
+  input: DispatchInput,
+): Promise<void> {
+  const serviceDate = input.serviceDate.toISOString().slice(0, 10);
+  const baseVars = {
+    claimNumber: input.claimNumber,
+    payerCode: input.payerCode,
+    serviceDate,
+  };
+  let template: TemplateName;
+  let vars: TemplateVars<TemplateName>;
+
+  if (input.summaryStatus === 'paid') {
+    template = 'claim.resolved';
+    vars = { ...baseVars, amountResolvedCents: 0 };
+  } else if (input.summaryStatus === 'denied' && input.denialCode) {
+    template = 'claim.denied';
+    vars = { ...baseVars, denialCode: input.denialCode };
+  } else {
+    template = 'claim.needs_info';
+    vars = { ...baseVars, hint: 'Operator review required.' };
+  }
+  await notifier.notify({
+    to: input.to,
+    template,
+    vars,
+    organizationId: input.organizationId,
+  });
 }
