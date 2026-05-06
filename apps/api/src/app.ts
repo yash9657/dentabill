@@ -18,6 +18,7 @@ import { getEnv } from './lib/env.js';
 import { registerAuthPlugin } from './plugins/auth.js';
 import { registerQueuePlugin } from './plugins/queue.js';
 import { registerRawBodyPlugin } from './plugins/raw-body.js';
+import { billingRoutes } from './routes/v1/billing.js';
 import { callsRoutes } from './routes/v1/calls.js';
 import { claimsRoutes } from './routes/v1/claims.js';
 import { healthRoutes } from './routes/v1/health.js';
@@ -201,6 +202,7 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(callsRoutes, { prefix: '/v1' });
   await fastify.register(retellWebhookRoutes, { prefix: '/v1' });
   await fastify.register(ingestRoutes, { prefix: '/v1' });
+  await fastify.register(billingRoutes, { prefix: '/v1' });
 
   return fastify;
 }
