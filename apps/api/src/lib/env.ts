@@ -58,6 +58,14 @@ export function loadEnv(): Env {
   if (!raw.CLERK_PUBLISHABLE_KEY && raw.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
     raw.CLERK_PUBLISHABLE_KEY = raw.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   }
+  // ADR-049: dotenv loads `KEY=` lines as `''`, which is truthy under
+  // `??=` and bypasses Zod defaults. Normalise empty strings to
+  // `undefined` at the loader so every consumer (test setup, dev
+  // server, prod boot) picks up defaults consistently. This is the
+  // single canonical place — no per-suite workaround required.
+  for (const key of Object.keys(raw)) {
+    if (raw[key] === '') raw[key] = undefined;
+  }
   const parsed = envSchema.safeParse(raw);
 
   if (!parsed.success) {

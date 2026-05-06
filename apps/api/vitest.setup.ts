@@ -36,14 +36,11 @@ const TEST_DEFAULTS: Readonly<Record<string, string>> = {
   RETELL_WEBHOOK_SECRET: 'test-default-retell-webhook-secret-v1',
 };
 
+// Empty-string handling now lives in src/lib/env.ts (ADR-049) — the
+// loader normalises `KEY=` to `undefined` before Zod runs, so this
+// loop only needs to fill genuinely-absent keys.
 for (const [key, value] of Object.entries(TEST_DEFAULTS)) {
-  // Empty strings from `.env` need replacing too — `dotenv` loads keys
-  // present-but-empty as `''`, which is truthy under `??=` and would
-  // bypass the default, leaving Zod's `.min(16)` checks angry.
-  const current = process.env[key];
-  if (current === undefined || current === '') {
-    process.env[key] = value;
-  }
+  process.env[key] ??= value;
 }
 
 /**

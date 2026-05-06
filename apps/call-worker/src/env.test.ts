@@ -46,4 +46,18 @@ describe('loadWorkerEnv', () => {
   it('rejects QUEUE_CONCURRENCY > 64', () => {
     expect(() => loadWorkerEnv({ ...baseValid, QUEUE_CONCURRENCY: '65' })).toThrow();
   });
+
+  // ADR-049 — empty-string normalisation. dotenv loads `KEY=` lines
+  // as `''`, which is truthy under `??=` and would bypass Zod
+  // defaults. The loader must coerce `''` → `undefined` BEFORE Zod
+  // runs so consumers see the schema-level defaults.
+  it('treats KEY="" as absent (uses Zod default)', () => {
+    const env = loadWorkerEnv({
+      ...baseValid,
+      RETELL_AGENT_ID_DELTA_DENTAL_PPO: '',
+      WORKER_OUTBOUND_NUMBER: '',
+    });
+    expect(env.RETELL_AGENT_ID_DELTA_DENTAL_PPO).toBe('');
+    expect(env.WORKER_OUTBOUND_NUMBER).toBe('+15555550100');
+  });
 });
