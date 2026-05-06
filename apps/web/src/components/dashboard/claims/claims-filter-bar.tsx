@@ -56,7 +56,7 @@ export function ClaimsFilterBar({ filters, onChange }: ClaimsFilterBarProps): Re
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-2">
       <Input
         type="search"
         inputMode="search"
@@ -66,7 +66,7 @@ export function ClaimsFilterBar({ filters, onChange }: ClaimsFilterBarProps): Re
         onChange={(event) => {
           setSearch(event.target.value);
         }}
-        className="max-w-md"
+        className="h-9 sm:max-w-xs"
       />
 
       <ChipRow label="Status">
@@ -116,6 +116,14 @@ export function ClaimsFilterBar({ filters, onChange }: ClaimsFilterBarProps): Re
   );
 }
 
+/**
+ * Two-column layout: a fixed-width label column on the left,
+ * a flex-wrap row of chips on the right. The label widths are
+ * identical across all ChipRow instances (controlled by the
+ * `[60px_…]` track), so the first chip on every row aligns
+ * vertically and overflowing chips wrap to a new line that
+ * starts directly under the first chip — never under the label.
+ */
 function ChipRow({
   label,
   children,
@@ -124,11 +132,11 @@ function ChipRow({
   readonly children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-caption text-gray-warm uppercase tracking-[0.14em]">{label}</p>
-      <div role="group" aria-label={label} className="-mx-1 flex flex-wrap gap-2 px-1">
-        {children}
-      </div>
+    <div role="group" aria-label={label} className="grid grid-cols-[60px_1fr] items-start gap-x-3">
+      <span aria-hidden className="text-caption text-gray-warm pt-1 uppercase tracking-[0.14em]">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>
   );
 }
@@ -148,8 +156,8 @@ function Chip({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        'rounded-pill h-8 px-3 text-sm font-medium transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2',
+        'rounded-pill h-7 px-2.5 text-[13px] font-medium transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-1',
         active
           ? 'bg-black text-white'
           : 'hairline-edge bg-stone-warm/40 text-gray-dark hover:bg-stone-warm/60',
