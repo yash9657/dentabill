@@ -27,6 +27,14 @@ declare module 'fastify' {
     callsQueue: CallsQueue;
     summariesQueue: SummariesQueue;
     queueRedis: Redis | null;
+    /**
+     * Dedicated Redis publisher for the SSE pub/sub bus (ADR-046).
+     * Re-uses the BullMQ Redis connection — ioredis pub/sub is on
+     * the same socket as `LPUSH` etc., and the channel namespace
+     * (`call:*:events`) does not collide with BullMQ keys.
+     * `null` in the test stub.
+     */
+    callEventsPublisher: Redis | null;
   }
 }
 
@@ -59,6 +67,7 @@ export function registerQueuePlugin(
     fastify.decorate('callsQueue', stubQueue);
     fastify.decorate('summariesQueue', stubSummariesQueue);
     fastify.decorate('queueRedis', null);
+    fastify.decorate('callEventsPublisher', null);
     return;
   }
 
@@ -68,6 +77,7 @@ export function registerQueuePlugin(
   fastify.decorate('callsQueue', queue);
   fastify.decorate('summariesQueue', summariesQueue);
   fastify.decorate('queueRedis', connection);
+  fastify.decorate('callEventsPublisher', connection);
 
   fastify.addHook('onClose', async () => {
     await queue.close();
