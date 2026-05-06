@@ -72,7 +72,7 @@ afterEach(async () => {
     workerHandle = null;
   }
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Organization", "User", "Claim", "Call", "CallSummary", "CallEvent", "PayerConfig", "AuditLog" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "Organization", "User", "Claim", "Call", "CallSummary", "CallEvent", "PayerConfig", "AuditLog", "BillingUsageRecord" RESTART IDENTITY CASCADE',
   );
   // Wipe the calls queue between tests so a stuck job from one
   // scenario can't bleed into the next.

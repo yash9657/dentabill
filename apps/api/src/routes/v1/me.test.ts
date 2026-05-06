@@ -61,7 +61,7 @@ describe('PATCH /v1/me/organization', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Organization", "User", "AuditLog" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Organization", "User", "AuditLog", "BillingUsageRecord" RESTART IDENTITY CASCADE',
     );
   });
 

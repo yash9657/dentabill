@@ -78,6 +78,7 @@ export async function bulkInsertClaims(opts: BulkInsertOptions): Promise<BulkIns
       }),
       patientDOBLast4: patientDOBLast4(row.patientDOB),
       claimNumber: row.claimNumber,
+      subscriberId: row.subscriberId,
       cdtCodes: [...row.cdtCodes],
       claimAmount: row.claimAmount,
       payerCode: row.payerCode,

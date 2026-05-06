@@ -250,6 +250,7 @@ interface BuildStartCallInputArgs {
   readonly claim: {
     readonly serviceDate: Date;
     readonly claimNumber: string;
+    readonly subscriberId: string | null;
     readonly payerCode: PayerCode;
   };
   readonly org: { readonly name: string };
@@ -270,12 +271,12 @@ function buildStartCallInput(args: BuildStartCallInputArgs): StartCallInput {
     agentMetadata: {
       practiceName: args.org.name,
       providerNpi: args.providerNpi,
-      // Phase 3 doesn't model patient subscriber IDs on Claim yet —
-      // PRD §5 stores `claimNumber` as the practice-side ID. Pass it
-      // through; payer reps frequently locate the claim by claimNumber
-      // + DOS even when the IVR menu asks for "subscriber ID".
-      // Phase 4 will replace this once subscriber IDs land on Claim.
-      subscriberId: args.claim.claimNumber,
+      // Phase 4 expand step (ADR-045 / P4-T1C). When the CSV import
+      // captured a subscriberId we pass it; otherwise we fall back to
+      // claimNumber so reps can still locate the claim by practice-
+      // side ID + DOS. Phase 5+ tightens to NOT NULL once the
+      // backfill from claim narrative completes.
+      subscriberId: args.claim.subscriberId ?? args.claim.claimNumber,
       dateOfService: args.claim.serviceDate.toISOString().slice(0, 10),
     },
     idempotencyKey: args.data.idempotencyKey,
