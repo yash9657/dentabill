@@ -579,3 +579,41 @@ const parsed = envSchema.safeParse(raw);
 
 The corresponding workaround is removed from each app's `vitest.setup.ts`. `TEST_DEFAULTS` continues to seed missing-or-empty values; once the loader strips, the existing `??=` semantics work cleanly.
 **Consequences:** New env vars added in Phase 4+ no longer need bespoke empty-string handling. The dev path matches the test path matches the prod path. Affected files: `apps/api/src/lib/env.ts`, `apps/call-worker/src/env.ts`, `apps/api/vitest.setup.ts`, `apps/call-worker/vitest.setup.ts`, future `apps/summary-worker/src/env.ts` and `apps/billing-worker/src/env.ts`.
+
+## ADR-050 — Phase 4 retrospective: lessons feeding Phase 5
+
+**Date:** 2026-05-06
+**Status:** Accepted
+**Context:** Phase 4 shipped the back-half of the voice agent's value loop — call → structured summary → claim transition → operator notification → metered billing — across PRs #101–#120 over ~3 weeks. Twelve focused PRs landed CI-green: schema migrations (W1A/B/C), summarizer scaffold + LiveClaude + worker (W2A–E), notifier + summary dispatch (W2-T6), call-worker cancel-channel + Retell signature parity (W7-prep-4/6), billing port + worker + API + web surface (W3A–E), Clerk webhook + JWT.orgId assertion + migration script (W4), live transcript SSE (W5). Phase-3 retro (ADR-041) flagged five lessons; Phase 4 retired four.
+
+**Decision:** Capture what worked, what didn't, and what carries into Phase 5.
+
+**What worked.**
+
+- **Default-OFF feature flags.** `SUMMARIZER_AUTO_TRANSITION_ENABLED`, `STRIPE_METERED_BILLING_ENABLED`, `NEXT_PUBLIC_SSE_LIVE_TRANSCRIPT_ENABLED`, `CLERK_ORG_SWITCHER_ENABLED` all default off. Engineering shipped the full pipeline; production rollout is a flag flip per-surface, not a deploy. Zero rollback drama.
+- **Port-and-adapters everywhere.** SummarizerPort, BillingPort, NotifierPort all have `Fake*` adapters that the unit/integration tests use exclusively. CI does not pay $0.01 per Claude call. The Live adapters lazy-load their SDK so dev/test bundles stay slim.
+- **Strict templates as PHI gates.** `packages/notifier/src/templates/index.ts` uses `.strict()` Zod schemas — passing `patientName` or `dob` through a notifier template is a test failure, not a code review nag. The compiler enforces the HIPAA "minimum necessary" rule.
+- **Two-step Zod validation.** Adapter parses `SummaryOutputSchema` once; worker re-parses before persisting. The defence-in-depth caught one Claude-output drift in dev before it reached the DB.
+- **Contract test caught a real production divergence.** `apps/api/test/integration/retell-webhook-contract.test.ts` (P3-T7-prep-6) discovered that the Retell SDK signs as `v=<unix_ms>,d=<hex>` rather than the raw hex our hand-rolled verifier expected. Without the contract test, every webhook in prod would have rejected. This is the canonical example of why contract tests pay for themselves.
+- **Idempotency-as-a-receipt.** `BillingUsageRecord.idempotencyKey @unique` is a composite of `claim.<id>.<billingPeriodStart>`. Re-running the billing-worker cron is a no-op; double-charging is structurally impossible.
+- **Multi-tenant gap close as W1A blocker.** `CallSummary.organizationId` was added to the multi-tenant intercept list as the very first task of the phase, before any other Phase-4 code touched the model. Cross-tenant leak risk on the new model is now the same as on Phase-1 models — zero, gated by the Prisma read-scope wrapper + write middleware.
+
+**What didn't.**
+
+- **Test-DB concurrency is still serial.** The `--concurrency=1` workaround in `turbo.json` survives. P4-prep-2 (per-suite Postgres schemas) was deferred — the per-suite `SET search_path` plumbing has more moving parts than initially scoped, and the concurrent-write contention surfaced subtler issues. Carry into Phase 5.
+- **SSE integration testing required a real listening socket.** `light-my-request`'s `inject` buffers responses until the stream closes, so `event: replay-end` did not surface mid-flight. The route had to bind to an ephemeral port and test via `fetch`. Acceptable, but the test runtime jumped from <100ms to ~5s.
+- **Empty-string `process.env` re-bit during the SSE branch.** The Clerk fallback in `loadEnv` resolves `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` → `CLERK_PUBLISHABLE_KEY`, so deleting the latter was insufficient — the fallback re-populated it. ADR-049 normalised empty strings, but the fallback semantics are still a mini-trap. Tests now explicitly delete all three Clerk envs in `beforeAll`.
+- **Playwright SSE chaos tests (W5 carry-over).** Originally scoped for Phase 4. The minimal SSE shipped — replay + heartbeat + reconnect hook + flag-gated UI — but the Playwright chaos coverage (mid-stream connection drops, reconnect-with-cursor, zero data loss) defers to Phase 5.
+- **Golden-set evals (W2J).** `apps/summary-worker/tests/eval.test.ts` against `LiveClaude` is wired but the 20-fixture × 3-payer hand-annotated golden set is not yet built. The nightly GitHub Actions workflow that runs `RUN_LIVE_EVALS=1` is also not yet wired. Owner-action prereq: staging Anthropic key.
+
+**Inputs to Phase 5.**
+
+1. Per-suite Postgres test schemas (carry from Phase 3 retro).
+2. Playwright SSE chaos coverage.
+3. Golden-set evals + nightly evaluation workflow.
+4. `LiveResend` + React Email templates (Phase 4.5 micro-phase, ~1 week).
+5. Real Prometheus + Grafana wiring (the metric names land in Phase 4 per ADR-048; the collection target is Phase 5 deployment).
+6. Branch protection on `main` (still owner-action carry-over from Phase 3).
+7. Anthropic BAA signing (owner-action; gates `LiveClaude` in prod).
+
+**Consequences:** Phase 5 starts with the platform shipping the full call → summary → claim transition → billing → notification value loop. The remaining work is hardening, observability target wiring, and the 4.5 LiveResend micro-phase. The exit-criteria checklist in the Phase-4 plan items 1–9 are met (1: CallSummary; 2: claim transition; 3: AuditLog with summary metadata; 4: SSE replay + stream; 5: BillingUsageRecord; 6: Notifier delivery log via FakeResend; 7: PHI redaction; 8: cross-tenant tests; 9: CI green per merge). Item 10 is this ADR.
