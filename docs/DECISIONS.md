@@ -454,3 +454,128 @@ Storing the audio ourselves would require encrypting at rest with a managed key,
 
 **Decision:** This retrospective is the canonical hand-off from Phase 3 to Phase 4. Subsequent phases should append their own retro ADR at exit, not amend this one.
 **Consequences:** The "carry forward" items above are inputs to `docs/PHASE_PLAN.md` Phase 4 sketch (P3-T30 doc closeout). The "change before Phase 4" items file as cleanup tickets in `docs/TASKS.md` under a new `Phase 4 prep` section.
+
+## ADR-042 — Summarizer port-and-adapters with cost-guard atomicity
+
+**Date:** 2026-05-06
+**Status:** Accepted
+**Context:** Phase 4 introduces post-call summarization via Claude. The seam needs the same isolation Phase 3 gave Retell: tests must be deterministic and free, prod must call the real model. Two extra concerns make a thin SDK wrapper insufficient. First, Claude is a token-metered cost centre — a runaway loop or unexpectedly long transcript can burn the daily budget in minutes. Second, Claude can return malformed JSON, hallucinated denial codes, or low-confidence verdicts that must not auto-resolve a claim worth thousands of dollars. ADR-033's `RetellPort` template handles isolation; cost and correctness need additional structure.
+**Decision:** New package `@dentabill/summarizer` exports `SummarizerPort` with a single `summarize(input) → SummaryOutput` method. `FakeClaude` returns deterministic fixtures keyed by `payerCode + transcript-prefix-hash`. `LiveClaude` wraps `@anthropic-ai/sdk` with prompt caching enabled (system prompt cached, transcript dynamic) and a 4000-token output cap. Output is validated against `SummaryOutputSchema` (Zod); Zod failure routes the job to DLQ + claim → MANUAL_REVIEW.
+
+Cost-guard is a Redis distributed lock per `(orgId, billingPeriod)` using `SET NX EX 86400`. The summary worker acquires the lock, re-reads `Organization.summaryTokensUsed`, estimates the call's tokens (~1.3 per word), aborts and requeues with delay if over budget, otherwise invokes Claude. Lock is released after the DB write. Concurrent jobs for the same org serialise; concurrent jobs across orgs run in parallel.
+
+Auto-transition policy is OFF by default: every summary routes Claim to MANUAL_REVIEW unless the operator explicitly enables `SUMMARIZER_AUTO_TRANSITION_ENABLED` AND the summary's `confidence ≥ 0.95` AND `nextAction ∈ {RESOLVED, NEEDS_INFO}`. Auto-DENY is never automatic in Phase 4.
+**Consequences:** Tests run for free. Cost overruns require deliberate budget changes, not a code path. A Claude hallucination cannot auto-resolve a claim until the operator opts in per-org and accepts the risk. Affected files: new `packages/summarizer/`, new `apps/summary-worker/`, `apps/call-worker/src/handler.ts` (job emission seam), `packages/db/prisma/schema.prisma` (`Organization.summaryTokensUsed`, `Organization.summaryTokensResetAt`, `Organization.featureFlags`).
+
+## ADR-043 — Stripe metered billing on the audit() spine
+
+**Date:** 2026-05-06
+**Status:** Accepted
+**Context:** Phase 3 extended the `audit()` helper to cover the entire Call lifecycle (P3-T27). Every claim transition to RESOLVED already produces an `AuditLog` row with `organizationId`, `userId`, `metadata.{from,to}`. Building Phase 4's billing on top of this avoids a parallel instrumentation system. Stripe is the chosen provider (HIPAA-acceptable when used as a payment processor without PHI in metadata; we send only `claimId` and amount, never patient details).
+**Decision:** A new `apps/billing-worker` runs as a daily BullMQ repeatable job at 02:00 UTC. It scans `AuditLog WHERE action = 'claim.transition' AND metadata->>'to' = 'RESOLVED' AND createdAt ∈ [period_start, now())`, groups by org, and for each org: lazily ensures a Stripe customer (`Organization.stripeCustomerId`), then iterates resolved claims and posts one Stripe usage record per claim with idempotency key `claim.<id>.<billingPeriodStartIso>`. Each invocation persists a `BillingUsageRecord` row (composite unique on `claimId + billingPeriodStart`) before calling Stripe; the row is the local source of truth. Stripe's idempotency window is 24 hours — beyond that, the local uniqueness constraint catches double-posts.
+
+Pricing for Phase 4 is a flat per-resolved-claim fee multiplied by the org's plan tier (`Organization.plan ∈ {TRIAL, STARTER, PRO, ENTERPRISE}`). Phase 5 may revisit with percentage-of-recovered or volume tiers once we have live usage data.
+
+Webhook surface is `POST /v1/webhooks/stripe`, signature-verified via `stripe.webhooks.constructEvent` (constant-time HMAC), replay-protected by `event.id`. Handles `invoice.payment_succeeded`, `invoice.payment_failed`, `customer.subscription.updated`. Mirrors the structural shape of `apps/api/src/routes/v1/retell-webhook.ts`.
+
+Going-live is gated by `STRIPE_METERED_BILLING_ENABLED` (default OFF). When off, the worker writes `BillingUsageRecord` rows but skips the Stripe API call — receipt-only mode for canary verification.
+**Consequences:** No new instrumentation in the call hot path. Double-charge is structurally impossible within the Stripe window (idempotency key) and the local window (composite unique). Per-org rollout is one env-var flip. Affected files: new `packages/billing/`, new `apps/billing-worker/`, new `apps/api/src/routes/v1/webhooks/stripe.ts`, new `apps/web/src/app/dashboard/settings/billing/page.tsx`, schema additions for `BillingUsageRecord` + `Organization.stripeCustomerId`.
+
+## ADR-044 — Clerk Organizations migration: idempotent reconciliation, feature-flagged switcher
+
+**Date:** 2026-05-06
+**Status:** Accepted
+**Context:** ADR-031 ships single-seat orgs with a synthetic `clerkOrgId = "local_<cuid>"`. Phase 4's billing surfaces and a future multi-seat product cannot ship with placeholder identifiers — Stripe webhooks key off `Organization.id`, but operator support keys off Clerk org id, and a synthetic id leaks into every log line, every billing event, every audit row. The migration must be reversible (we cannot lose orgs to a partial failure), idempotent (re-runnable safely), and gated behind a feature flag so the org-switcher UI only appears for orgs that have been migrated.
+**Decision:** A one-shot script `apps/api/scripts/migrate-clerk-orgs.mts` walks every `Organization` row where `clerkOrgId LIKE 'local_%'`. For each row: (1) creates a real Clerk org via `clerkClient.organizations.createOrganization({ name })`, (2) invites every `User` row with `organizationId = org.id` via `createOrganizationMembership`, (3) updates `Organization.clerkOrgId` to the real Clerk org id, (4) writes an `AuditLog` row keyed `organization.clerk-migrate`. Each org is its own transaction; partial failure of the script leaves successfully migrated orgs in their new state and unmigrated orgs untouched.
+
+A reverse-mapping JSON file is written to `/tmp/clerk-migration-<timestamp>.json` recording each `(org.id, oldClerkOrgId, newClerkOrgId)` triple, enabling a forward-then-reverse run as the rollback path.
+
+The `OrgSwitcher` UI in the dashboard shell is gated behind `CLERK_ORG_SWITCHER_ENABLED` AND `me.data.organization.clerkOrgId` not starting with `local_` — orgs that haven't been migrated never see the switcher and stay on their existing single-seat experience.
+
+The auth plugin (`apps/api/src/plugins/auth.ts`) is updated to assert `JWT.orgId === User.organizationId`; mismatch returns 401 forcing a session refresh (race window during a Clerk org-switch).
+**Consequences:** No big-bang cutover; orgs migrate at our pace. A failed migration of one org does not block others. Webhook handlers for `organizationMembership.deleted` and `organization.deleted` close the multi-seat lifecycle loop. Affected files: new `apps/api/scripts/migrate-clerk-orgs.mts`, `apps/api/src/plugins/auth.ts`, `apps/web/src/components/dashboard/dashboard-shell.tsx`, new `apps/api/src/routes/v1/webhooks/clerk.ts`.
+
+## ADR-045 — `Claim.subscriberId` schema migration: expand-then-contract over multiple phases
+
+**Date:** 2026-05-06
+**Status:** Accepted
+**Context:** Phase 3's call-worker passes `claim.claimNumber` as the agent's `subscriberId` placeholder (P3-T10) because the schema does not yet model subscriber IDs separately. Most payer reps locate a claim via `claimNumber + DOS`, so the agents work — but Aetna reps require the literal subscriber id, and the semantic mismatch makes correctness impossible to assert. Adding a NOT NULL column would break every existing row without a backfill plan. The right shape is the standard expand-and-contract migration: add nullable, populate forward, backfill historical, then tighten the constraint over multiple releases.
+**Decision:** Phase 4 ships **only** the expand step:
+
+1. Migration adds `Claim.subscriberId String?` (nullable). No backfill — historical rows stay null.
+2. CSV importer (`apps/api/src/lib/csv/parser.ts` + `normalisers.ts`) detects a subscriber-id column on each source-system layout. Open Dental and Eaglesoft surface it consistently. Dentrix is flagged as inconsistent in tests; null is the acceptable default when absent.
+3. The call-worker handler (`apps/call-worker/src/handler.ts:268`) uses `claim.subscriberId ?? claim.claimNumber` as the agent metadata `subscriberId` field, preserving Phase-3 behaviour for null rows while passing the real value when present.
+
+Phase 5+ ships the contract steps:
+
+4. Backfill historical rows opportunistically via the summary-worker reading the value from the CallSummary's parsed transcript when available.
+5. After ≥30 days where new claims always have `subscriberId` populated, switch the column to NOT NULL with a migration that fails fast if any nulls remain.
+   **Consequences:** No production data is invalidated by the Phase-4 ship. The agent's subscriberId field is correct when present and falls back to the Phase-3 behaviour otherwise — Aetna calls improve immediately for newly imported claims. Affected files: schema migration, `apps/api/src/lib/csv/parser.ts`, `apps/api/src/lib/csv/normalisers.ts`, `apps/api/src/lib/csv/types.ts`, `apps/call-worker/src/handler.ts`, importer tests.
+
+## ADR-046 — Live transcript SSE: per-client buffer, Postgres replay, JWT refresh on reconnect
+
+**Date:** 2026-05-06
+**Status:** Accepted
+**Context:** Phase 3 (T24) shipped the calls list with 5s/30s adaptive polling — fine for a table view that updates every few seconds. The transcript on `/dashboard/calls/[id]` is a chat surface where each turn matters; polling makes the operator wait up to 5s per rep utterance, and during a hot transfer or denial-code call that delay is the difference between "I caught the code" and "let me listen to the recording later". Phase 3 deferred SSE because we didn't have transcript text yet (ADR-034). Phase 3 now writes transcript events; Phase 4 surfaces them.
+**Decision:** New API route `GET /v1/calls/:id/events/stream` returns `text/event-stream`, CORS-locked to the dashboard origin. Authenticated by the existing `requireAuth` preHandler (JWT validated at connect; if the JWT expires mid-stream, the client reconnects with a fresh token).
+
+The route subscribes to a Redis pub/sub channel `call:<retellCallId>:events`. Multiple SSE connections to the same call share a single Redis subscription per fastify worker process via a per-process subscriber map. Producers (`retell-webhook.ts` and the Phase-4 `summary-worker`) publish to the channel after every `CallEvent` insert.
+
+The connection holds a per-client in-memory circular buffer of the last 1000 events. On overflow it sends a single `event: rewind` frame with the last persisted event id; the client re-fetches via Postgres (the `CallEvent_callId_timestamp_idx` makes this fast). Postgres is the source of truth — Redis pub/sub is the broadcast bus only, never the durable store. Heartbeat: `: ping\n\n` every 15s. Connection close emits an explicit `event: close` frame.
+
+The client (`apps/web/src/lib/calls/use-call-event-stream.ts`) is an EventSource wrapper with reconnect-with-backoff (1s, doubling, capped 30s). Falls back to the existing 5s polling when `SSE_LIVE_TRANSCRIPT_ENABLED` is OFF.
+
+Per-process connection cap: `SSE_MAX_CONNECTIONS_PER_PROCESS=200`. Beyond the cap returns 503; the load balancer fans out new connections across other workers (Phase-5 deployment concern).
+
+Optional `?cursor=<callEventId>` query param: if present, replay starts after that cursor; if absent, replays the last 100 events. Cursor handling is the chaos-test gate — a connection killed mid-stream and reconnected with the last-seen cursor must not drop events.
+**Consequences:** First-event P95 ≤ 500ms target. Reconnect produces zero data loss against Postgres. Misbehaving clients can't drop events for other clients (per-client buffer, not shared). Affected files: new `apps/api/src/routes/v1/calls.ts` (SSE route), `apps/api/src/routes/v1/retell-webhook.ts` (publish), new `apps/web/src/lib/calls/use-call-event-stream.ts`, new `apps/web/src/components/dashboard/calls/transcript-stream.tsx`, schema index `CallEvent_callId_timestamp_idx`, new `apps/web/e2e/transcript-sse.spec.ts`.
+
+## ADR-047 — True call cancel: Postgres marker + worker-side polling, not Redis pub/sub
+
+**Date:** 2026-05-06
+**Status:** Accepted
+**Context:** Phase 3's cancel endpoint (P3-T20) writes the DB markers (Call status, Claim → MANUAL_REVIEW, CallEvent type CANCELLED) but the live Retell call continues until natural termination because the API has no `RetellPort` handle. Two designs were considered for Phase 4: (a) Redis pub/sub topic per call that the worker subscribes to during `waitForCallEnd`, (b) a `Call.cancelRequestedAt` Postgres column the worker polls. The retro flagged option (a) but did not catch the subscribe-after-publish race: if a cancel arrives during the ~100ms window between the worker placing the call and subscribing, the message is dropped (Redis pub/sub does not buffer for late subscribers).
+**Decision:** Postgres-driven, **not** Redis pub/sub. New columns `Call.cancelRequestedAt DateTime?` and `Call.cancelRequestedBy String?`. Cancel API writes both via `updateMany` (org-scoped) before returning 202. The worker handler:
+
+1. At `waitForCallEnd` entry, checks `cancelRequestedAt` synchronously. If set, calls `retellPort.endCall()` immediately and skips the subscribe loop.
+2. Inside the `waitForCallEnd` polling loop (already running every 5s for hold detection — ADR-039), re-reads `cancelRequestedAt` from the same DB row and tears down on transition.
+
+This avoids a new coordination primitive, reuses the existing 5s poll budget, and is race-free because Postgres serialises the writes.
+**Consequences:** Cancel latency is ≤ 5s wall-clock (the poll period). Acceptable for an operator-initiated cancel — the rep is on the line; an extra 5s before hangup is not user-visible. No Redis dependency on the cancel path. Affected files: schema migration (`Call.cancelRequestedAt`, `Call.cancelRequestedBy`), `apps/call-worker/src/handler.ts`, `apps/api/src/routes/v1/calls.ts` (cancel handler).
+
+## ADR-048 — Phase 4 SLOs and error budgets
+
+**Date:** 2026-05-06
+**Status:** Accepted
+**Context:** Phase 3 shipped without explicit SLOs because the surfaces it added were either user-initiated (Call-Now Pill) or had inherent budgets defined by external systems (Retell webhook latency, payer hold timeouts). Phase 4 adds three new "always-on" surfaces — the summarizer, the SSE transcript, and the billing reconciliation — each with characteristic failure modes that must be budgeted before they ship, not after they cause an incident.
+**Decision:** Phase 4 commits to the following Service Level Objectives, measured weekly with a 28-day rolling window:
+
+| Surface                            | Indicator                                                              | Target      | Page threshold     |
+| ---------------------------------- | ---------------------------------------------------------------------- | ----------- | ------------------ |
+| Enqueue (P3)                       | P95 latency from POST `/v1/claims/:id/calls` to job ack                | ≤ 200ms     | > 500ms for 10 min |
+| Summarizer                         | success rate within 60s of call end                                    | ≥ 95%       | < 95% for 30 min   |
+| Summarizer                         | P95 latency from job pickup to `CallSummary` row                       | ≤ 60s       | > 90s for 30 min   |
+| SSE transcript                     | P95 first-event latency from connect                                   | ≤ 500ms     | > 1s for 10 min    |
+| Webhooks (Retell + Stripe + Clerk) | P99 signature verification                                             | ≤ 10ms      | > 30ms for 5 min   |
+| Billing reconciliation             | Drift between `BillingUsageRecord` and `AuditLog` resolved-claim count | ≤ 1 row/day | > 1 row/day        |
+
+Error budget: a page-threshold breach consumes one "budget event"; three budget events in a 28-day window block non-essential Phase-5 feature work until SLO is restored.
+
+Metrics emit via Prometheus naming: `dentabill_<surface>_<measure>_<unit>`. Dashboards (Grafana) and alerts (PagerDuty) are Phase 5 deployment concerns; Phase 4 instruments the metrics, lands the runbook entries, and validates the synthetic monitor against staging.
+**Consequences:** Every Phase-4 surface ships with a "what does broken look like" definition rather than a hand-wave. Affected files: `packages/logger/` (metric helpers), `docs/SLOS.md` (new), `docs/RUNBOOK.md` (per-SLO oncall entries), synthetic monitor at `apps/api/scripts/synthetic-summary-loop.mts`.
+
+## ADR-049 — Empty-string env normalization at the loader, not the test setup
+
+**Date:** 2026-05-06
+**Status:** Accepted
+**Context:** The `RETELL_WEBHOOK_SECRET=` (empty string) trap bit twice during Phase 3: once in `vitest.setup.ts` and once in `apps/api/scripts/dump-openapi.mts`. The fix in both cases was to special-case empty strings. The retro (ADR-041) flagged this as a P4-prep cleanup. The right place for the fix is the env loader itself — every consumer of `getEnv()` must already have it called, so normalising at the boundary removes the workaround forever.
+**Decision:** `apps/api/src/lib/env.ts` and `apps/call-worker/src/env.ts` strip empty-string values to `undefined` before invoking `schema.safeParse(...)`. The strip is a pre-Zod step:
+
+```ts
+const raw = { ...process.env };
+for (const k of Object.keys(raw)) if (raw[k] === '') delete raw[k];
+const parsed = envSchema.safeParse(raw);
+```
+
+The corresponding workaround is removed from each app's `vitest.setup.ts`. `TEST_DEFAULTS` continues to seed missing-or-empty values; once the loader strips, the existing `??=` semantics work cleanly.
+**Consequences:** New env vars added in Phase 4+ no longer need bespoke empty-string handling. The dev path matches the test path matches the prod path. Affected files: `apps/api/src/lib/env.ts`, `apps/call-worker/src/env.ts`, `apps/api/vitest.setup.ts`, `apps/call-worker/vitest.setup.ts`, future `apps/summary-worker/src/env.ts` and `apps/billing-worker/src/env.ts`.
