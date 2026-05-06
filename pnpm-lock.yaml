@@ -175,6 +175,9 @@ importers:
       '@dentabill/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@dentabill/notifier':
+        specifier: workspace:*
+        version: link:../../packages/notifier
       '@dentabill/payer-ivr':
         specifier: workspace:*
         version: link:../../packages/payer-ivr
@@ -408,6 +411,19 @@ importers:
       vitest:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@20.19.39)(jsdom@29.0.2)(lightningcss@1.32.0)
+
+  packages/notifier:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@dentabill/config':
+        specifier: workspace:*
+        version: link:../config
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@25.6.0)(jsdom@29.0.2)(lightningcss@1.32.0)
 
   packages/payer-ivr:
     dependencies:
