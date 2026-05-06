@@ -144,6 +144,10 @@ const CallsListQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   status: CallStatusEnum.optional(),
   payer: PayerCodeEnum.optional(),
+  // Filter to a single claim's call history. Org scoping is still
+  // enforced by `getOrgScopedDb` — passing another tenant's claimId
+  // returns an empty list, never another tenant's calls.
+  claimId: z.string().min(1).optional(),
   startedAtFrom: z.iso.datetime().optional(),
   startedAtTo: z.iso.datetime().optional(),
 });
@@ -464,6 +468,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const where: Record<string, unknown> = {};
       if (query.status) where.status = query.status;
       if (query.payer) where.claim = { payerCode: query.payer };
+      if (query.claimId) where.claimId = query.claimId;
       if (query.startedAtFrom !== undefined || query.startedAtTo !== undefined) {
         const range: Record<string, Date> = {};
         if (query.startedAtFrom !== undefined) range.gte = new Date(query.startedAtFrom);
@@ -523,6 +528,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
           count: items.length,
           status: query.status ?? null,
           payer: query.payer ?? null,
+          claimId: query.claimId ?? null,
         },
       });
 

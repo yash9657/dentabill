@@ -596,6 +596,7 @@ export interface paths {
                     limit?: number;
                     status?: "INITIATED" | "NAVIGATING_IVR" | "ON_HOLD" | "HUMAN_REACHED" | "COLLECTING" | "COMPLETED" | "FAILED" | "VOICEMAIL";
                     payer?: "DELTA_DENTAL_PPO" | "DELTA_DENTAL_PREMIER" | "CIGNA_DENTAL" | "METLIFE_DENTAL" | "AETNA_DENTAL" | "GUARDIAN_DENTAL" | "UNITED_CONCORDIA" | "HUMANA_DENTAL" | "UNKNOWN";
+                    claimId?: string;
                     startedAtFrom?: string;
                     startedAtTo?: string;
                 };
