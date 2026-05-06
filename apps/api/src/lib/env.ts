@@ -39,6 +39,14 @@ const envSchema = z.object({
     .string()
     .min(16)
     .default('dev-only-retell-webhook-secret-rotate-before-production'),
+  /**
+   * Svix-signed webhook secret used to verify inbound Clerk webhooks
+   * (organizationMembership.deleted, organization.deleted). Optional
+   * in dev / test; the route refuses to verify against an unset
+   * secret so tests deliberately omit it for the negative-path
+   * assertions.
+   */
+  CLERK_WEBHOOK_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

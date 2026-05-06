@@ -21,6 +21,7 @@ import { registerRawBodyPlugin } from './plugins/raw-body.js';
 import { billingRoutes } from './routes/v1/billing.js';
 import { callsRoutes } from './routes/v1/calls.js';
 import { claimsRoutes } from './routes/v1/claims.js';
+import { clerkWebhookRoutes } from './routes/v1/clerk-webhook.js';
 import { healthRoutes } from './routes/v1/health.js';
 import { ingestRoutes } from './routes/v1/ingest.js';
 import { meRoutes } from './routes/v1/me.js';
@@ -201,6 +202,7 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(claimsRoutes, { prefix: '/v1' });
   await fastify.register(callsRoutes, { prefix: '/v1' });
   await fastify.register(retellWebhookRoutes, { prefix: '/v1' });
+  await fastify.register(clerkWebhookRoutes, { prefix: '/v1' });
   await fastify.register(ingestRoutes, { prefix: '/v1' });
   await fastify.register(billingRoutes, { prefix: '/v1' });
 

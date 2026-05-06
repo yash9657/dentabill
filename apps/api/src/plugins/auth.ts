@@ -102,6 +102,34 @@ async function loadDentaBillUser(clerkUserId: string): Promise<AuthIdentity | nu
   return { userId: user.id, orgId: user.organizationId, clerkUserId };
 }
 
+/**
+ * Defence-in-depth check (ADR-044): when the Clerk session carries an
+ * `orgId`, the matching `Organization.clerkOrgId` MUST equal it.
+ *
+ * Without this, a stale JWT minted for the user's previous org could
+ * still be accepted because we resolve `dentabillAuth.orgId` from the
+ * DB user — bypassing whatever org-switch happened on Clerk's side.
+ *
+ * Skipped when `session.orgId` is null (single-tenant Clerk users in
+ * pre-W4-migration accounts) or when the DentaBill org still carries
+ * a synthetic `local_*` clerkOrgId — the migration script swaps
+ * those out, but until it has run for an org we cannot enforce the
+ * assertion.
+ */
+async function assertJwtOrgMatchesDbOrg(
+  sessionOrgId: string | null | undefined,
+  dbOrgId: string,
+): Promise<boolean> {
+  if (!sessionOrgId) return true;
+  const org = await prisma.organization.findUnique({
+    where: { id: dbOrgId },
+    select: { clerkOrgId: true },
+  });
+  if (!org) return false;
+  if (org.clerkOrgId.startsWith('local_')) return true;
+  return org.clerkOrgId === sessionOrgId;
+}
+
 function buildClerkRequireUser(): preHandlerHookHandler {
   return (request, _reply, done) => {
     const session = getAuth(request);
@@ -137,6 +165,17 @@ const buildClerkRequireAuth = (): preHandlerAsyncHookHandler => {
       throw new ApiError(
         'FORBIDDEN',
         'Onboarding required. Complete the practice setup before continuing.',
+      );
+    }
+    const sessionOrgId =
+      typeof (session as { orgId?: unknown }).orgId === 'string'
+        ? ((session as { orgId?: string }).orgId ?? null)
+        : null;
+    const orgMatch = await assertJwtOrgMatchesDbOrg(sessionOrgId, identity.orgId);
+    if (!orgMatch) {
+      throw new ApiError(
+        'AUTHENTICATION_REQUIRED',
+        'Session organization mismatch — please reload to refresh your session.',
       );
     }
     request.dentabillAuth = identity;
