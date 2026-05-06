@@ -35,9 +35,9 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.10.0",
+    "@axe-core/playwright": "^4.11.3",
     "@dentabill/config": "workspace:*",
-    "@lhci/cli": "^0.14.0",
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.49.0",
     "@tailwindcss/postcss": "^4.1.0",
     "@testing-library/jest-dom": "^6.9.1",
@@ -47,9 +47,9 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.0",
-    "axe-core": "^4.10.0",
-    "jsdom": "^29.0.2",
-    "postcss": "^8.4.49",
+    "axe-core": "^4.11.4",
+    "jsdom": "^29.1.1",
+    "postcss": "^8.5.14",
     "tailwindcss": "^4.1.0",
     "vitest": "^2.1.9"
   }
