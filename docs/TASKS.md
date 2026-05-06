@@ -180,27 +180,97 @@ Rules:
 
 ---
 
-## Phase 4 — Intelligence + Realtime + Billing (queued)
+## Phase 4 — Intelligence + Realtime + Billing (in progress)
 
-> Per ADR-041 retro. Lands at P4-T0 ADR cluster.
+> Plan: `/Users/yashbhalgat/.claude-premium/plans/cryptic-strolling-candle.md` (approved 2026-05-06). Workstream breakdown follows W0–W8 from that plan; each task is 1–3 hours and lands in its own commit on its workstream's PR. Feature flags default OFF: `SUMMARIZER_AUTO_TRANSITION_ENABLED`, `SSE_LIVE_TRANSCRIPT_ENABLED`, `STRIPE_METERED_BILLING_ENABLED`, `CLERK_ORG_SWITCHER_ENABLED`.
 
-### Phase 4 prep — cleanup tickets carried over from Phase 3
+### W0 — ADR cluster (gates everything else)
 
-- [ ] **P4-prep-1** Empty-string env normalisation in `apps/api/src/lib/env.ts` so consumers don't keep reinventing the same `??=` + empty-string fallback (vitest setup, dump-openapi script).
-- [ ] **P4-prep-2** Per-suite Postgres schema namespaces so `@dentabill/api` and `@dentabill/call-worker` tests stop racing on shared tables when run in parallel under turbo.
-- [ ] **P4-prep-3** `Claim.subscriberId` schema migration retiring the `claim.claimNumber` agent-metadata placeholder.
-- [ ] **P4-prep-4** True cancel channel for in-flight calls — Redis pub/sub or `Call.cancelRequestedAt` polled by the worker.
-- [ ] **P4-prep-5** `User → DentaBillUser` reconciliation pass before the Clerk Organizations org-switch UI lands.
-- [ ] **P4-prep-6** Retell webhook signature contract test. Add `retell-sdk` as a `devDependency` of `apps/api` and write `apps/api/test/integration/retell-webhook-contract.test.ts` that uses `Retell.verify()` (or the SDK's signing helper) to sign a fixture payload, then runs it through our hand-rolled `verifyRetellWebhookSignature` in `packages/payer-ivr/src/retell/webhook.ts` and asserts it passes. Locks the signing-scheme contract at the test boundary so any future Retell SDK upgrade fails CI loudly if they change format. Keeps the SDK out of the API request hot path (preserves ADR-033 isolation).
+- [x] **P4-T0** ADRs 042–049 land in `docs/DECISIONS.md` (this PR).
+- [ ] **P4-T0a** TASKS.md + SESSION_CONTEXT.md + PHASE_PLAN.md updated to point at Phase 4 (this PR).
 
-### Phase 4 — feature work (sketch; finalised by P4-T0)
+### W1 — Schema + DB foundations
 
-- [ ] **P4-T0** ADR cluster — `SummarizerPort` + Stripe usage off the `audit()` spine + Clerk Organizations migration + `Claim.subscriberId` schema + transcript SSE.
-- [ ] summary-worker (BullMQ) → Claude → structured `CallSummary` rows.
-- [ ] `/dashboard/calls/:id` SSE transcript surface.
-- [ ] Stripe metered billing wiring + a `/dashboard/billing` surface.
-- [ ] Clerk Organizations migration + org-switch UI.
-- [ ] Resend email notifications on terminal-positive call outcomes.
+- [ ] **P4-T1A** Multi-tenancy gap close — `CallSummary.organizationId` (nullable → backfill from `Call.organizationId` → NOT NULL) + register `callSummary` in `packages/db/src/lib/with-org.ts` + `packages/db/src/middleware/org-scope.ts`.
+- [ ] **P4-T1B** Phase-4 new tables — `BillingUsageRecord` (composite-unique on `claimId + billingPeriodStart`) + `Organization.featureFlags Json` + `Organization.summaryTokensUsed/ResetAt` + `Organization.stripeCustomerId` + `Call.cancelRequestedAt/By` + `CallEvent_callId_timestamp_idx`.
+- [ ] **P4-T1C** `Claim.subscriberId String?` migration (expand-only per ADR-045) + CSV importer detection on Open Dental + Eaglesoft + Dentrix layouts + tests.
+- [ ] **P4-T1D** `with-org.test.ts` cross-tenant isolation tests for `CallSummary`, `BillingUsageRecord`.
+
+### W2 — Summarizer + summary-worker (depends on W1)
+
+- [ ] **P4-T2A** `packages/summarizer` scaffold — `SummarizerPort`, `SummaryOutputSchema` (Zod), `FakeClaude` deterministic fixture map.
+- [ ] **P4-T2B** `LiveClaude` wrapper — `@anthropic-ai/sdk` + prompt caching + 4000-token output cap + structured-output tool-call shape.
+- [ ] **P4-T2C** Versioned prompts (`packages/summarizer/src/prompts/v1.ts`) + denial-code allow-list cross-checked against `packages/payer-ivr/src/denial-codes.ts`.
+- [ ] **P4-T2D** `apps/summary-worker` scaffold (BullMQ + healthz + graceful drain), mirrors `apps/call-worker`.
+- [ ] **P4-T2E** `summary-worker` handler — Redis distributed lock (`summarize:<orgId>:<period>`, TTL 86400, `SET NX`) + budget check + `SummarizerPort.summarize` + Zod validation + DLQ on schema fail.
+- [ ] **P4-T2F** Claim auto-transition policy — gated by `SUMMARIZER_AUTO_TRANSITION_ENABLED` AND `confidence >= 0.95` AND `nextAction in {RESOLVED, NEEDS_INFO}`; everything else → MANUAL_REVIEW. Audit `claim.transition` with `summaryId + confidence + nextAction + prompt` version.
+- [ ] **P4-T2G** Job-emission seam in `apps/call-worker/src/handler.ts` — enqueue `summary.generate` after `Call.endedAt` write.
+- [ ] **P4-T2H** API endpoints — `GET /v1/calls/:id/summary` + `POST /v1/calls/:id/summary/retry` (audit-logged, OWNER/ADMIN-gated).
+- [ ] **P4-T2I** Logger redaction extension — add `claudeSummary`, `rawTranscript`, `denialReason`, `repName`, `notes` to `PHI_REDACT_PATHS`; tests in `packages/logger/src/index.test.ts`.
+- [ ] **P4-T2J** Golden-set evals — 20 transcript fixtures × 3 payers in `apps/summary-worker/tests/fixtures/eval-set.json`. CI always-on against `FakeClaude`. Nightly `LiveClaude` evals gated by `RUN_LIVE_EVALS=1` + staging Anthropic key.
+
+### W3 — Stripe metered billing (depends on W2)
+
+- [ ] **P4-T3A** `packages/billing` — `BillingPort` + `FakeStripe` (in-memory idempotency log) + `LiveStripe` wrapper.
+- [ ] **P4-T3B** `apps/billing-worker` — daily 02:00 UTC repeatable job; scans `AuditLog` for resolved-claim transitions.
+- [ ] **P4-T3C** `BillingUsageRecord` write before Stripe call; idempotency key `claim.<id>.<billingPeriodStart>`.
+- [ ] **P4-T3D** `POST /v1/webhooks/stripe` handler — `stripe.webhooks.constructEvent` + replay protection on `event.id` + handlers for `invoice.payment_*`, `customer.subscription.updated`.
+- [ ] **P4-T3E** `GET /v1/billing/usage` API surface returning current + last-3-month aggregate + Stripe Customer Portal session URL.
+- [ ] **P4-T3F** `/dashboard/settings/billing` page — usage card + plan tier + "Manage billing" CTA to Stripe Customer Portal.
+- [ ] **P4-T3G** Idempotency + double-charge prevention test suite — same Stripe event posted twice → only one record; billing-worker run twice for same `(claimId, period)` → one Stripe POST.
+
+### W4 — Clerk Organizations migration (parallel with W2)
+
+- [ ] **P4-T4A** Reconciliation script `apps/api/scripts/migrate-clerk-orgs.mts` — idempotent, per-row commit, reverse-map JSON saved to `/tmp/clerk-migration-<timestamp>.json`.
+- [ ] **P4-T4B** Auth plugin update — assert `JWT.orgId === User.organizationId`; respond 401 on mismatch (forces session refresh).
+- [ ] **P4-T4C** `OrgSwitcher` component in dashboard shell — gated by `CLERK_ORG_SWITCHER_ENABLED` AND non-synthetic `clerkOrgId`.
+- [ ] **P4-T4D** `POST /v1/webhooks/clerk` for `organizationMembership.deleted` + `organization.deleted`.
+
+### W5 — Live transcript SSE (parallel with W3)
+
+- [ ] **P4-T5A** `GET /v1/calls/:id/events/stream` SSE route — `text/event-stream` + `requireAuth` + per-process Redis subscriber map + heartbeat 15s.
+- [ ] **P4-T5B** Per-client circular buffer (1000 events) + `event: rewind` overflow signal + Postgres replay via `CallEvent_callId_timestamp_idx`.
+- [ ] **P4-T5C** Cursor query param (`?cursor=<callEventId>`) for replay-from-position.
+- [ ] **P4-T5D** Producer hooks — `retell-webhook.ts` publishes after every CallEvent insert; `summary-worker` publishes `summary.created` event.
+- [ ] **P4-T5E** Web hook `useCallEventStream(callId)` — EventSource with reconnect-with-backoff (1s → 30s capped) + status enum + auto-fallback to polling when flag is off.
+- [ ] **P4-T5F** `<TranscriptStream />` component on `/dashboard/calls/[id]` — chat-bubble layout matching Phase-3 detail page + `aria-live="polite"` + connection-status indicator (muted-teal when streaming).
+- [ ] **P4-T5G** Playwright SSE chaos test — drop connection at 100ms / 500ms / 2000ms; verify reconnect + replay-from-cursor + zero data loss.
+- [ ] **P4-T5H** OpenAPI annotation for SSE route — manual `produces: ['text/event-stream']` schema since `@fastify/swagger` doesn't auto-handle SSE.
+
+### W6 — Notifications (depends on W2; live impl deferred to Phase 4.5)
+
+- [ ] **P4-T6A** `packages/notifier` — `NotifierPort` + `FakeResend` + template-input shapes (no PHI in template vars).
+- [ ] **P4-T6B** `summary-worker` calls `notifier.notify({template: 'claim.<status>', vars})` post-transition.
+- [ ] **P4-T6C** `LiveResend` placeholder — throws NotImplementedError if `RESEND_API_KEY` is set in Phase 4 (filled in Phase 4.5).
+
+### W7 — Cleanup carryover (parallel with anything)
+
+- [ ] **P4-prep-1** Empty-string env normalization — strip pre-Zod in `apps/api/src/lib/env.ts` + `apps/call-worker/src/env.ts`; remove the workaround from each app's `vitest.setup.ts`. (ADR-049.)
+- [ ] **P4-prep-2** Per-suite Postgres test schemas — `SET search_path TO test_<suite>` in each app's vitest setup; remove `--concurrency=1` from `turbo.json` once green.
+- [ ] **P4-prep-4** True cancel channel — `Call.cancelRequestedAt` checked at `waitForCallEnd` entry + polled every 5s during the call. (ADR-047.)
+- [ ] **P4-prep-6** Retell webhook signature contract test — `apps/api/test/integration/retell-webhook-contract.test.ts` using `Retell.verify()` against our hand-rolled verifier.
+
+### W8 — SLOs, observability, runbook (exit gate)
+
+- [ ] **P4-T8A** Prometheus metric helpers in `packages/logger` — counters/histograms/gauges per ADR-048 naming.
+- [ ] **P4-T8B** `docs/SLOS.md` (new) — SLOs + error-budget policy per ADR-048.
+- [ ] **P4-T8C** `docs/RUNBOOK.md` Phase-4 entries — summarizer DLQ growth, cost-guard lock contention, Stripe webhook lag, SSE connection storm, Clerk migration partial failure.
+- [ ] **P4-T8D** Synthetic monitor `apps/api/scripts/synthetic-summary-loop.mts` — daily on staging.
+- [ ] **P4-T8E** Phase-4 retro ADR (ADR-050+) appended to `docs/DECISIONS.md`.
+
+### Exit criteria (all must pass before Phase 4 declared complete)
+
+- [ ] A completed call writes a `CallSummary` (with `organizationId`).
+- [ ] Claim auto-transitions on confidence ≥ 0.95 + safe `nextAction` (when flag on); else MANUAL_REVIEW.
+- [ ] AuditLog row stamped `summaryId + confidence + nextAction + prompt` version.
+- [ ] `/dashboard/calls/[id]` SSE replays from connect + streams updates + reconnects without data loss.
+- [ ] `BillingUsageRecord` row within 24h of RESOLVED transition; Stripe usage record posted iff flag on.
+- [ ] Notifier delivery log records the post-resolution event (FakeResend in Phase 4).
+- [ ] Pino redaction tests green for all new PHI-rich fields.
+- [ ] Cross-tenant isolation tests green for `CallSummary`, `BillingUsageRecord`.
+- [ ] CI green: Quality, Test, E2E (incl. SSE chaos), Bundle, Lighthouse.
+- [ ] Phase-4 retro ADR merged.
+- [ ] Staging canary (5% orgs) ran 7 days with no SLO page.
 
 ## Phase 5 — Deployment & cloud target (queued)
 
