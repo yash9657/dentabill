@@ -115,7 +115,7 @@ Rules:
 
 ## Phase 3 — Queue + Voice (complete)
 
-> **All 31 tasks merged 2026-04-29 across PRs #80–#99.** See ADR-041 for the retrospective and `docs/RUNBOOK.md` for the oncall playbook.
+> **All 31 tasks merged 2026-04-28/29 across PRs #80–#100.** See ADR-041 for the retrospective and `docs/RUNBOOK.md` for the oncall playbook.
 
 - [x] **P3-T0** ADR cluster 031–040
 - [x] **P3-T1** `@dentabill/queue` BullMQ wiring
@@ -147,7 +147,38 @@ Rules:
 - [x] **P3-T27** `audit()` extension covering Call lifecycle
 - [x] **P3-T28** `docs/RUNBOOK.md` oncall playbook
 - [x] **P3-T29** Phase 3 retro ADR-041
-- [x] **P3-T30** Phase 3 doc closeout — **this PR**
+- [x] **P3-T30** Phase 3 doc closeout (PR #100)
+
+---
+
+## Needs your attention (blockers + decisions only you can make)
+
+> These do **not** block writing code, but they do block taking Phase 3 to a real production phone line, and they need to be queued before Phase 4 lights up Stripe + Clerk Orgs.
+
+### Hard blockers for Phase 3 going live
+
+- [ ] **Sign the Retell BAA** before any real outbound call. ADR-040 makes this load-bearing — Retell holds PHI in their recordings under their BAA, and we never copy audio out. No BAA → no production traffic.
+- [ ] **Provision real Retell credentials** in the prod env: `RETELL_API_KEY` (live adapter), `RETELL_WEBHOOK_SECRET` (≥16 chars, used by HMAC verify). Until both land in the prod env, the call-worker is `FakeRetell`-only and the webhook will reject every signature in constant time.
+- [ ] **Provision a Retell outbound number + provider NPI** for each org. The handler reads `PayerConfig.providerNpi` first, falling back to `Organization.npi`; both must be populated for Phase 3 dialling to succeed.
+- [ ] **Enable branch protection on `main`** in the GitHub UI (per `docs/SECURITY.md`). Auto-merge is currently working PR-by-PR rather than rule-bound — a force-push to `main` is technically possible today.
+
+### Phase 4 unblockers (need your call before P4-T0 lands)
+
+- [ ] **Anthropic API key** for the Claude summarizer (`ANTHROPIC_API_KEY`). Phase 4 W1 touches this on day one.
+- [ ] **Stripe account + product/price IDs** for metered billing. The retro decided to wire usage off the existing `audit()` spine — it's plumbing-only once the IDs exist.
+- [ ] **Clerk Organizations enablement** in the Clerk dashboard. ADR-031's synthetic `clerkOrgId="local_<userId>"` is the placeholder; switching it on requires choosing whether existing single-seat users keep their data on a renamed org or migrate.
+- [ ] **Resend account + verified sending domain** for the post-call notifications.
+- [ ] **Phase 4 priority call** — three workstreams (summarizer, billing, Clerk Orgs) are roughly independent. Default order in ADR-041 is summarizer → SSE → Stripe → Clerk Orgs; tell me if you want it different.
+
+### Phase 2 carry-over (still deferred to you)
+
+- [ ] **P2-T52** `PRODUCT.md` via `$impeccable teach` — interactive skill, cannot be done autonomously. Run `$impeccable teach` in a session and walk through the prompts.
+
+### Optional housekeeping
+
+- [ ] `sudo chown -R "$(id -un):staff" ~/.npm` — fully fixes the root-owned npm cache that broke ccstatusline today. Already worked around in `~/.claude/settings.json` (env-var override pointing at `~/.npm-claude-cache/`), so this is only if you want plain `npm`/`npx` outside Claude to work cleanly again.
+
+---
 
 ## Phase 4 — Intelligence + Realtime + Billing (queued)
 
@@ -160,6 +191,7 @@ Rules:
 - [ ] **P4-prep-3** `Claim.subscriberId` schema migration retiring the `claim.claimNumber` agent-metadata placeholder.
 - [ ] **P4-prep-4** True cancel channel for in-flight calls — Redis pub/sub or `Call.cancelRequestedAt` polled by the worker.
 - [ ] **P4-prep-5** `User → DentaBillUser` reconciliation pass before the Clerk Organizations org-switch UI lands.
+- [ ] **P4-prep-6** Retell webhook signature contract test. Add `retell-sdk` as a `devDependency` of `apps/api` and write `apps/api/test/integration/retell-webhook-contract.test.ts` that uses `Retell.verify()` (or the SDK's signing helper) to sign a fixture payload, then runs it through our hand-rolled `verifyRetellWebhookSignature` in `packages/payer-ivr/src/retell/webhook.ts` and asserts it passes. Locks the signing-scheme contract at the test boundary so any future Retell SDK upgrade fails CI loudly if they change format. Keeps the SDK out of the API request hot path (preserves ADR-033 isolation).
 
 ### Phase 4 — feature work (sketch; finalised by P4-T0)
 
