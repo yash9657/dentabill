@@ -23,7 +23,7 @@
     "gen:types": "openapi-typescript ./openapi.json -o ./src/types.gen.ts"
   },
   "dependencies": {
-    "openapi-fetch": "^0.13.0"
+    "openapi-fetch": "^0.17.0"
   },
   "devDependencies": {
     "@dentabill/config": "workspace:*",
