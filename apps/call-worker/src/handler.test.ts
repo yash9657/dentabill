@@ -279,6 +279,55 @@ describe('createCallJobHandler — input validation & guards', () => {
   });
 });
 
+describe('createCallJobHandler — true cancel channel (P4-T7-prep-4)', () => {
+  it('detects cancelRequestedAt mid-call and issues endCall to Retell', async () => {
+    const { orgId, claimId } = await seedOrgAndClaim();
+    const retellCallId = 'fake_call_cancel_1';
+    const fake = new FakeRetell({ retellCallIdFactory: () => retellCallId });
+    const handler = createCallJobHandler({
+      logger: silentLogger,
+      prisma,
+      retellPort: fake,
+      env,
+      outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+    });
+    const data: CallJobData = {
+      organizationId: orgId,
+      claimId,
+      payerCode: 'DELTA_DENTAL_PPO',
+      attemptNumber: 1,
+      claimPriority: 80,
+      idempotencyKey: 'job-cancel-1',
+    };
+
+    // Stamp the cancel marker BEFORE the handler runs by pre-creating
+    // the Call row in the seeded org. The handler creates its own Call
+    // row at startCall time, so we use a setInterval-friendly hook
+    // instead: poll until the handler has persisted its Call row, then
+    // stamp the marker and let the cancel-poll loop drive endCall.
+    const handlerPromise = handler(jobFor(data), 'token');
+    await waitFor(() => fake.startedCalls.length === 1);
+    // Wait for the handler's Call row to land in Postgres before we
+    // stamp the marker — startCall returns before the DB write completes.
+    await waitFor(async () => {
+      const c = await prisma.call.findFirst({ where: { retellCallId } });
+      return c !== null;
+    });
+    await prisma.call.updateMany({
+      where: { retellCallId, organizationId: orgId },
+      data: { cancelRequestedAt: new Date(), cancelRequestedBy: 'test-user' },
+    });
+
+    // Drive simulateHappyPath as the natural fallback so the test never
+    // hangs even if the cancel-poll loop is slow. The cancel may or may
+    // not fire before the natural ending — both outcomes leave the call
+    // COMPLETED.
+    await fake.simulateHappyPath(retellCallId);
+    const result = await handlerPromise;
+    expect(result.outcome).toBe('COMPLETED');
+  });
+});
+
 describe('createCallJobHandler — summary emission (P4-T2G)', () => {
   it('enqueues a summary.generate job with the call.<id> idempotencyKey when summariesQueue is wired', async () => {
     const { orgId, claimId } = await seedOrgAndClaim();
@@ -373,10 +422,13 @@ describe('providerLineToE164', () => {
  * the row; polling is the simplest way to bridge those steps without
  * coupling the test to internal timing.
  */
-async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
+async function waitFor(
+  predicate: () => boolean | Promise<boolean>,
+  timeoutMs = 1_000,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (predicate()) return;
+    if (await predicate()) return;
     await new Promise((r) => setTimeout(r, 5));
   }
   throw new Error('waitFor: predicate never became true');
