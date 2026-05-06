@@ -84,6 +84,24 @@ function jobFor(data: CallJobData): Parameters<ReturnType<typeof createCallJobHa
   return { id: 'job_test_1', data } as Parameters<ReturnType<typeof createCallJobHandler>>[0];
 }
 
+// P4-T2G — minimal stub for the SummariesQueue so the handler's
+// emission seam can be exercised without booting BullMQ. The real
+// queue is exercised in `apps/summary-worker` integration tests.
+function createFakeSummariesQueue(): {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  add: (name: string, data: unknown, opts?: unknown) => Promise<any>;
+  readonly added: readonly { name: string; data: unknown; opts?: unknown }[];
+} {
+  const added: { name: string; data: unknown; opts?: unknown }[] = [];
+  return {
+    added,
+    add: (name, data, opts) => {
+      added.push({ name, data, opts });
+      return Promise.resolve({ id: `fake-${String(added.length)}` });
+    },
+  };
+}
+
 describe('createCallJobHandler — happy path', () => {
   it('drives PENDING → CALLING → COMPLETED, persists Call + CallEvent rows', async () => {
     const { orgId, claimId } = await seedOrgAndClaim();
@@ -258,6 +276,78 @@ describe('createCallJobHandler — input validation & guards', () => {
     };
     await expect(handler(jobFor(data), 'token')).rejects.toThrow(/provider NPI/);
     expect(fake.startedCalls).toHaveLength(0);
+  });
+});
+
+describe('createCallJobHandler — summary emission (P4-T2G)', () => {
+  it('enqueues a summary.generate job with the call.<id> idempotencyKey when summariesQueue is wired', async () => {
+    const { orgId, claimId } = await seedOrgAndClaim();
+    const retellCallId = 'fake_call_emit_1';
+    const fake = new FakeRetell({ retellCallIdFactory: () => retellCallId });
+    const summariesQueue = createFakeSummariesQueue();
+    const handler = createCallJobHandler({
+      logger: silentLogger,
+      prisma,
+      retellPort: fake,
+      env,
+      outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      summariesQueue: summariesQueue as any,
+    });
+    const data: CallJobData = {
+      organizationId: orgId,
+      claimId,
+      payerCode: 'DELTA_DENTAL_PPO',
+      attemptNumber: 1,
+      claimPriority: 80,
+      idempotencyKey: 'job-emit-1',
+    };
+    const handlerPromise = handler(jobFor(data), 'token');
+    await waitFor(() => fake.startedCalls.length === 1);
+    await fake.simulateHappyPath(retellCallId);
+    const result = await handlerPromise;
+
+    expect(summariesQueue.added).toHaveLength(1);
+    const enqueued = summariesQueue.added[0];
+    expect(enqueued?.name).toBe('summary.generate');
+    expect(enqueued?.data).toMatchObject({
+      organizationId: orgId,
+      callId: result.callId,
+      promptVersion: 'v1',
+      idempotencyKey: `call.${result.callId}`,
+    });
+    expect(enqueued?.opts).toMatchObject({ jobId: `call.${result.callId}` });
+  });
+
+  it('does not throw when summariesQueue.add fails — call lifecycle stays healthy', async () => {
+    const { orgId, claimId } = await seedOrgAndClaim();
+    const retellCallId = 'fake_call_emit_fail_1';
+    const fake = new FakeRetell({ retellCallIdFactory: () => retellCallId });
+    const failingQueue = {
+      add: () => Promise.reject(new Error('Redis unreachable')),
+    };
+    const handler = createCallJobHandler({
+      logger: silentLogger,
+      prisma,
+      retellPort: fake,
+      env,
+      outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      summariesQueue: failingQueue as any,
+    });
+    const data: CallJobData = {
+      organizationId: orgId,
+      claimId,
+      payerCode: 'DELTA_DENTAL_PPO',
+      attemptNumber: 1,
+      claimPriority: 80,
+      idempotencyKey: 'job-emit-fail-1',
+    };
+    const handlerPromise = handler(jobFor(data), 'token');
+    await waitFor(() => fake.startedCalls.length === 1);
+    await fake.simulateHappyPath(retellCallId);
+    const result = await handlerPromise;
+    expect(result.outcome).toBe('COMPLETED');
   });
 });
 

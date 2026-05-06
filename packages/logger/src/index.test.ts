@@ -142,6 +142,22 @@ describe('createLogger', () => {
     expect(output).toContain('[Redacted]');
   });
 
+  // P4-T2I — Phase-4 summarizer-path redaction.
+  it.each([
+    { field: 'rawTranscript', value: 'Hi this is the agent. Is patient John Doe a member?' },
+    { field: 'claudeSummary', value: 'Claim CL-1 paid in full per rep Lisa M.' },
+    { field: 'denialReason', value: 'patient John Doe ineligible — out of network' },
+    { field: 'repName', value: 'Lisa Martinez (Aetna employee badge 4321)' },
+    { field: 'notes', value: 'pt DOB 01/01/1990 mentioned during call' },
+  ])('redacts the Phase-4 summarizer field $field', ({ field, value }) => {
+    const { stream, chunks } = captureStream();
+    const logger = createLogger({ level: 'info', stream });
+    logger.info({ summary: { [field]: value } }, 'summary persisted');
+    const output = chunks.join('');
+    expect(output).not.toContain(value);
+    expect(output).toContain('[Redacted]');
+  });
+
   it('respects the level option', () => {
     const { stream, chunks } = captureStream();
     const logger = createLogger({ level: 'warn', stream });

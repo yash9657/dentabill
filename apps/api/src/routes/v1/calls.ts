@@ -1,6 +1,11 @@
 import { audit, getOrgScopedDb, prisma } from '@dentabill/db';
 import { checkPayerHours } from '@dentabill/payer-ivr';
-import { CALL_JOB_NAME, type CallJobData } from '@dentabill/queue';
+import {
+  CALL_JOB_NAME,
+  type CallJobData,
+  SUMMARY_JOB_NAME,
+  type SummaryJobData,
+} from '@dentabill/queue';
 import { ApiError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@dentabill/types';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -160,6 +165,90 @@ const CallsListResponseSchema = z.object({
 });
 
 const CallIdParamSchema = z.object({ id: z.string().min(1) }).strict();
+
+// ─── Phase-4 summary surfaces (P4-T2H) ────────────────────────────────────
+
+const NextActionEnum = z.enum([
+  'RESUBMIT',
+  'APPEAL',
+  'SUBMIT_DOCS',
+  'CALL_BACK',
+  'WRITE_OFF',
+  'RESOLVED',
+  'MANUAL_REVIEW',
+]);
+
+const CallSummaryResponseSchema = z.object({
+  id: z.string(),
+  callId: z.string(),
+  organizationId: z.string(),
+  claimStatus: z.string(),
+  denialReason: z.string().nullable(),
+  denialCode: z.string().nullable(),
+  nextAction: NextActionEnum,
+  confidence: z.number().min(0).max(1).nullable(),
+  repName: z.string().nullable(),
+  referenceNumber: z.string().nullable(),
+  callbackDate: z.iso.datetime().nullable(),
+  amountApprovedCents: z.number().int().min(0).nullable(),
+  notes: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+
+const SummaryRetryResponseSchema = z.object({
+  jobId: z.string(),
+  callId: z.string(),
+  retryNumber: z.number().int().min(1),
+  queuedAt: z.iso.datetime(),
+});
+
+interface CallSummaryRowForResponse {
+  id: string;
+  callId: string;
+  organizationId: string;
+  claimStatus: string;
+  denialReason: string | null;
+  denialCode: string | null;
+  nextAction:
+    | 'RESUBMIT'
+    | 'APPEAL'
+    | 'SUBMIT_DOCS'
+    | 'CALL_BACK'
+    | 'WRITE_OFF'
+    | 'RESOLVED'
+    | 'MANUAL_REVIEW';
+  confidence: number | null;
+  repName: string | null;
+  referenceNumber: string | null;
+  callbackDate: Date | null;
+  amountApproved: { toString: () => string } | null;
+  notes: string | null;
+  createdAt: Date;
+}
+
+function toCallSummaryResponse(
+  row: CallSummaryRowForResponse,
+): z.infer<typeof CallSummaryResponseSchema> {
+  return {
+    id: row.id,
+    callId: row.callId,
+    organizationId: row.organizationId,
+    claimStatus: row.claimStatus,
+    denialReason: row.denialReason,
+    denialCode: row.denialCode,
+    nextAction: row.nextAction,
+    confidence: row.confidence,
+    repName: row.repName,
+    referenceNumber: row.referenceNumber,
+    callbackDate: row.callbackDate ? row.callbackDate.toISOString() : null,
+    amountApprovedCents:
+      row.amountApproved === null
+        ? null
+        : Math.round(Number.parseFloat(row.amountApproved.toString()) * 100),
+    notes: row.notes,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
 
 /**
  * `/v1/calls/stats` (P3-T25). Aggregate metrics for the dashboard
@@ -750,6 +839,125 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const updated = await db.call.findFirst({ where: { id } });
       if (!updated) throw new ApiError('NOT_FOUND', 'Call not found after cancel.');
       return toCallResponse(updated);
+    },
+  );
+
+  // ─── GET /v1/calls/:id/summary — fetch CallSummary (P4-T2H) ───────────
+  fastify.withTypeProvider().get(
+    '/calls/:id/summary',
+    {
+      preHandler: requireAuth,
+      schema: {
+        description:
+          'Fetch the structured CallSummary for a Call, if one exists. Returns 404 when the Call is not found in the caller’s org OR no summary has been persisted yet (the dashboard polls for both states with the same handler).',
+        security,
+        params: CallIdParamSchema,
+        response: { 200: CallSummaryResponseSchema },
+      },
+    },
+    async (request): Promise<z.infer<typeof CallSummaryResponseSchema>> => {
+      const auth = request.dentabillAuth;
+      if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
+      const { orgId } = auth;
+      const { id } = request.params as z.infer<typeof CallIdParamSchema>;
+
+      const db = getOrgScopedDb(orgId);
+      const call = await db.call.findFirst({ where: { id } });
+      if (!call) {
+        throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
+      }
+      const summary = await db.callSummary.findFirst({ where: { callId: id } });
+      if (!summary) {
+        throw new ApiError('NOT_FOUND', 'No summary has been generated for this call yet.');
+      }
+
+      // Audit the PHI read — rawTranscript + claudeSummary count as PHI.
+      // The redact list (P4-T2I) keeps these out of pino logs even if
+      // the audit metadata bag accidentally serialises a payload field.
+      await audit({
+        action: 'callSummary.read',
+        resourceType: 'CallSummary',
+        resourceId: summary.id,
+        organizationId: orgId,
+        metadata: { clerkUserId: auth.userId, callId: id },
+      });
+
+      return toCallSummaryResponse(summary);
+    },
+  );
+
+  // ─── POST /v1/calls/:id/summary/retry — re-enqueue (P4-T2H) ───────────
+  fastify.withTypeProvider().post(
+    '/calls/:id/summary/retry',
+    {
+      preHandler: requireAuth,
+      schema: {
+        description:
+          'OWNER/ADMIN-gated retry of summary generation for a Call. Re-enqueues a `summary.generate` job onto the summaries queue. Idempotent on the BullMQ side — the jobId is `call.<id>.retry.<n>` derived from existing audit history.',
+        security,
+        params: CallIdParamSchema,
+        response: { 202: SummaryRetryResponseSchema },
+      },
+    },
+    async (request, reply): Promise<z.infer<typeof SummaryRetryResponseSchema>> => {
+      const auth = request.dentabillAuth;
+      if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
+      const { orgId } = auth;
+      const { id } = request.params as z.infer<typeof CallIdParamSchema>;
+
+      // OWNER/ADMIN gate — billing-staff must escalate.
+      const actor = await prisma.user.findUnique({
+        where: { id: auth.userId },
+        select: { role: true },
+      });
+      if (!actor || (actor.role !== 'OWNER' && actor.role !== 'ADMIN')) {
+        throw new ApiError('FORBIDDEN', 'Only OWNER or ADMIN may retry summary generation.');
+      }
+
+      const db = getOrgScopedDb(orgId);
+      const call = await db.call.findFirst({ where: { id } });
+      if (!call) {
+        throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
+      }
+
+      // Derive a deterministic retry key from the count of past
+      // retry-audit rows on this call. BullMQ collapses duplicate jobIds
+      // so a UI double-click never enqueues twice.
+      const previousRetries = await prisma.auditLog.count({
+        where: {
+          organizationId: orgId,
+          action: 'callSummary.retry',
+          resourceType: 'Call',
+          resourceId: id,
+        },
+      });
+      const retryNumber = previousRetries + 1;
+      const idempotencyKey = `call.${id}.retry.${String(retryNumber)}`;
+      const data: SummaryJobData = {
+        organizationId: orgId,
+        callId: id,
+        promptVersion: 'v1',
+        idempotencyKey,
+      };
+      const job = await fastify.summariesQueue.add(SUMMARY_JOB_NAME, data, {
+        jobId: idempotencyKey,
+      });
+
+      await audit({
+        action: 'callSummary.retry',
+        resourceType: 'Call',
+        resourceId: id,
+        organizationId: orgId,
+        metadata: { clerkUserId: auth.userId, jobId: job.id ?? idempotencyKey, retryNumber },
+      });
+
+      reply.code(202);
+      return {
+        jobId: job.id ?? idempotencyKey,
+        callId: id,
+        retryNumber,
+        queuedAt: new Date().toISOString(),
+      };
     },
   );
 }
