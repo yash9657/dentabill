@@ -1,0 +1,27 @@
+{
+  "name": "@dentabill/summarizer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Port + adapters for converting a completed call transcript into a structured CallSummary. FakeClaude for tests/CI; LiveClaude wraps @anthropic-ai/sdk.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings=0 --no-warn-ignored",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build": "echo 'no build for stub'"
+  },
+  "dependencies": {
+    "@dentabill/db": "workspace:*",
+    "@dentabill/payer-ivr": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@dentabill/config": "workspace:*",
+    "vitest": "^2.1.9"
+  }
+}

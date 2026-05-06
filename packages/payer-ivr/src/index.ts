@@ -76,3 +76,5 @@ export {
   type StartCallResult,
   type VerifyRetellWebhookSignatureInput,
 } from './retell/index.js';
+
+export { DENIAL_CODES, isKnownDenialCode, type DenialCode } from './denial-codes.js';

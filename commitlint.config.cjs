@@ -30,6 +30,9 @@ module.exports = {
         'types',
         'queue',
         'payer-ivr',
+        'summarizer',
+        'billing',
+        'notifier',
         'ui',
         // cross-cutting
         'monorepo',
