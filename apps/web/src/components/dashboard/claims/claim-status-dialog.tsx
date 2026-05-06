@@ -73,7 +73,11 @@ export function ClaimStatusDialog({ claim }: ClaimStatusDialogProps): React.Reac
       <dialog
         ref={dialogRef}
         aria-labelledby="claim-status-dialog-title"
-        className="hairline-edge rounded-card shadow-card w-full max-w-md bg-white p-6 backdrop:bg-black/40"
+        // Native <dialog> centres via `margin: auto` on the UA stylesheet;
+        // Tailwind's preflight zeroes that, so we centre explicitly with
+        // a fixed translate. `inset-auto` neutralises Tailwind's `inset-0`
+        // bleed on `:modal` so the translate maths stay correct.
+        className="hairline-edge rounded-card shadow-card fixed inset-auto left-1/2 top-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 bg-white p-6 backdrop:bg-black/40"
       >
         <header className="flex flex-col gap-1">
           <p className="text-caption text-gray-warm uppercase tracking-[0.14em]">
