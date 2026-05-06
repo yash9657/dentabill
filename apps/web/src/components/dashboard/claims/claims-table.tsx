@@ -210,7 +210,12 @@ function ClaimRow({
         </span>
       </Link>
       <span role="gridcell" className="flex items-center justify-end">
-        <CallNowPill claimId={claim.id} claimStatus={claim.status} variant="compact" />
+        <CallNowPill
+          claimId={claim.id}
+          claimStatus={claim.status}
+          payerCode={claim.payerCode}
+          variant="compact"
+        />
       </span>
     </div>
   );

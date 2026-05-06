@@ -44,6 +44,14 @@ export const API_ERROR_CODES = {
    * The UI uses this code to render a "Manual review only" badge.
    */
   UNSUPPORTED_PAYER: 'UNSUPPORTED_PAYER',
+  /**
+   * Phase 3 — Organization.npi (and the per-payer override on
+   * PayerConfig.providerNpi) are both empty. The call worker would
+   * fail with the same condition; we pre-flight at the API so the UI
+   * can surface a deep link to /dashboard/settings/organization
+   * instead of letting a job die in the DLQ.
+   */
+  MISSING_PROVIDER_NPI: 'MISSING_PROVIDER_NPI',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 
@@ -65,6 +73,7 @@ const CODE_TO_STATUS: Readonly<Record<ApiErrorCode, number>> = {
   // can't dial right now" / "we don't support this payer yet".
   PAYER_HOURS_CLOSED: 422,
   UNSUPPORTED_PAYER: 422,
+  MISSING_PROVIDER_NPI: 422,
   INTERNAL_ERROR: 500,
 };
 

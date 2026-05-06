@@ -168,6 +168,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/organization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Update the current organization. Restricted to OWNER + ADMIN. NPI is required for payer dialling — empty values are accepted but block the Call Now action. */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        npi?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            npi: string | null;
+                            /** @enum {string} */
+                            plan: "TRIAL" | "STARTER" | "PRO" | "ENTERPRISE";
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/v1/onboarding": {
         parameters: {
             query?: never;

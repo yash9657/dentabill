@@ -65,18 +65,39 @@ const PayerEnum = z.enum([
   'Anthem Dental',
 ]);
 
-const OnboardingBodySchema = z.object({
-  practiceName: z.string().trim().min(2).max(160),
-  npi: z
-    .string()
-    .trim()
-    .refine((v) => v === '' || /^\d{10}$/.test(v), 'NPI must be 10 digits or empty.'),
-  zip: z
-    .string()
-    .trim()
-    .regex(/^\d{5}$/, 'Zip must be 5 digits.'),
-  acceptedPayers: z.array(PayerEnum).min(1).max(8),
-});
+// Mirrors apps/web/src/lib/onboarding-schema.ts NPI_REQUIRED_PAYERS.
+// Server-side enforcement is independent of the client to defend
+// against forged or out-of-date client requests.
+const NPI_REQUIRED_PAYERS: ReadonlySet<z.infer<typeof PayerEnum>> = new Set([
+  'Delta Dental PPO',
+  'Cigna Dental',
+  'MetLife Dental',
+]);
+
+const OnboardingBodySchema = z
+  .object({
+    practiceName: z.string().trim().min(2).max(160),
+    npi: z
+      .string()
+      .trim()
+      .refine((v) => v === '' || /^\d{10}$/.test(v), 'NPI must be 10 digits or empty.'),
+    zip: z
+      .string()
+      .trim()
+      .regex(/^\d{5}$/, 'Zip must be 5 digits.'),
+    acceptedPayers: z.array(PayerEnum).min(1).max(8),
+  })
+  .superRefine((data, ctx) => {
+    const requiresNpi = data.acceptedPayers.some((p) => NPI_REQUIRED_PAYERS.has(p));
+    if (requiresNpi && data.npi.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['npi'],
+        message:
+          'NPI is required when accepting Delta Dental PPO, Cigna Dental, or MetLife Dental.',
+      });
+    }
+  });
 
 const OnboardingResponseSchema = z.object({
   organizationId: z.string(),

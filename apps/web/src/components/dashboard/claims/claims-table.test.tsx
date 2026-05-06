@@ -121,7 +121,11 @@ describe('<ClaimsTable />', () => {
     expect(screen.getByText('CL-B')).toBeInTheDocument();
     expect(screen.getByText('Delta Dental PPO')).toBeInTheDocument();
     expect(screen.getByText('Cigna Dental')).toBeInTheDocument();
-    expect(screen.getByText('Calling')).toBeInTheDocument();
+    // "Calling" appears in two cells per row when CALLING — once in
+    // the status column (gridcell with the StatusDot), once in the
+    // action column (the NoActionBadge). Both are intended.
+    expect(screen.getByLabelText(/Status: Calling/)).toBeInTheDocument();
+    expect(screen.getByTestId('call-now-pill-no-action')).toHaveTextContent(/Calling/);
     const links = screen.getAllByRole('link');
     expect(links[0]).toHaveAttribute('href', '/dashboard/claims/a');
     expect(links[1]).toHaveAttribute('href', '/dashboard/claims/b');

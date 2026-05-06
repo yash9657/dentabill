@@ -103,7 +103,12 @@ function DetailLayout({ claim }: { readonly claim: Claim }): React.ReactElement 
       </header>
 
       <SummaryCard claim={claim} />
-      <CallNowPill claimId={claim.id} claimStatus={claim.status} variant="detail" />
+      <CallNowPill
+        claimId={claim.id}
+        claimStatus={claim.status}
+        payerCode={claim.payerCode}
+        variant="detail"
+      />
       <Timeline claim={claim} />
     </section>
   );

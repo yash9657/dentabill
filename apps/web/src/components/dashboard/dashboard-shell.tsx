@@ -108,7 +108,7 @@ export function DashboardShell({
           data-collapsed={collapsed ? 'true' : 'false'}
           className={cn(
             'border-black/6 fixed inset-y-0 left-0 z-50 flex w-[240px] -translate-x-full flex-col border-r bg-white transition-[transform,width] duration-200 ease-out',
-            'lg:relative lg:translate-x-0',
+            'lg:sticky lg:inset-y-auto lg:top-0 lg:h-screen lg:translate-x-0 lg:self-start',
             drawerOpen && 'translate-x-0',
             collapsed && 'lg:w-[72px]',
           )}

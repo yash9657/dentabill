@@ -14,15 +14,19 @@ import { z } from 'zod';
  *
  *   - practiceName — required, the legal practice name. Used as
  *     the Clerk org display name and the DentaBill `Organization.name`.
- *   - npi — optional, 10-digit National Provider Identifier. Skip
- *     allowed because solo practices may not have one filed yet,
- *     and the IVR maps in `packages/payer-ivr` use it where
- *     available but fall back to TIN/zip.
+ *   - npi — 10-digit National Provider Identifier. Operationally
+ *     required for any payer the call worker can dial: the rep
+ *     uses it to look up the claim. Conditionally required at
+ *     onboarding (see refinement below) when the user accepts any
+ *     of the Phase-3 dialable payers; otherwise empty is allowed
+ *     (an evaluator who only accepts non-dialable payers can
+ *     onboard without an NPI). The /dashboard/settings/organization
+ *     page is the canonical surface for editing it post-onboarding.
  *   - zip — 5-digit US zip code. Drives payer-region routing and
  *     time-zone-of-day call windows.
  *   - acceptedPayers — at least one. Determines which IVR navigators
- *     the call worker loads for this org's claims. Can be edited in
- *     /dashboard/settings/organization once that ships.
+ *     the call worker loads for this org's claims. Editable later
+ *     in /dashboard/settings/organization.
  *
  * The payer list is the same one the call worker will support in
  * Phase 1+. P2-T46 owns the canonical lookup table; until then this
@@ -41,26 +45,50 @@ export const SUPPORTED_PAYERS = [
 
 export type SupportedPayer = (typeof SUPPORTED_PAYERS)[number];
 
-export const OnboardingFormSchema = z.object({
-  practiceName: z
-    .string()
-    .trim()
-    .min(2, 'Tell us the practice name.')
-    .max(160, 'Practice name is too long.'),
-  npi: z
-    .string()
-    .trim()
-    .refine((value) => value === '' || /^\d{10}$/.test(value), {
-      message: 'NPI is 10 digits, or leave blank to skip.',
-    }),
-  zip: z
-    .string()
-    .trim()
-    .regex(/^\d{5}$/, 'Use a 5-digit US zip code.'),
-  acceptedPayers: z
-    .array(z.enum(SUPPORTED_PAYERS))
-    .min(1, 'Select at least one payer.')
-    .max(SUPPORTED_PAYERS.length, 'You picked more payers than exist.'),
-});
+/**
+ * Payers the Phase-3 call worker can actually dial. Selecting any of
+ * these requires an NPI at onboarding, since the call enqueue route
+ * pre-flights NPI presence and a missing one leaves the user staring
+ * at the missing-NPI banner the moment they try to call.
+ */
+export const NPI_REQUIRED_PAYERS: ReadonlySet<SupportedPayer> = new Set([
+  'Delta Dental PPO',
+  'Cigna Dental',
+  'MetLife Dental',
+]);
+
+export const OnboardingFormSchema = z
+  .object({
+    practiceName: z
+      .string()
+      .trim()
+      .min(2, 'Tell us the practice name.')
+      .max(160, 'Practice name is too long.'),
+    npi: z
+      .string()
+      .trim()
+      .refine((value) => value === '' || /^\d{10}$/.test(value), {
+        message: 'NPI is 10 digits, or leave blank to skip.',
+      }),
+    zip: z
+      .string()
+      .trim()
+      .regex(/^\d{5}$/, 'Use a 5-digit US zip code.'),
+    acceptedPayers: z
+      .array(z.enum(SUPPORTED_PAYERS))
+      .min(1, 'Select at least one payer.')
+      .max(SUPPORTED_PAYERS.length, 'You picked more payers than exist.'),
+  })
+  .superRefine((data, ctx) => {
+    const requiresNpi = data.acceptedPayers.some((p) => NPI_REQUIRED_PAYERS.has(p));
+    if (requiresNpi && data.npi.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['npi'],
+        message:
+          'NPI is required when accepting Delta Dental, Cigna, or MetLife — the rep needs it to look up the claim.',
+      });
+    }
+  });
 
 export type OnboardingFormValues = z.infer<typeof OnboardingFormSchema>;

@@ -312,6 +312,38 @@ export function callsRoutes(fastify: FastifyInstance): void {
         );
       }
 
+      // Pre-flight NPI check — mirrors the call-worker's hard requirement
+      // (apps/call-worker/src/handler.ts) so the failure surfaces as a
+      // typed 422 the UI can deep-link to /dashboard/settings/organization,
+      // instead of letting the job die in the DLQ with a generic Error.
+      // Per-payer override on PayerConfig wins; falls back to Organization.npi.
+      //
+      // Order: NPI runs BEFORE the business-hours guard. NPI absence is a
+      // permanent data-state error the operator can fix immediately; an
+      // out-of-hours response is a transient time-state error that asks
+      // them to come back later. Surfacing the actionable error first
+      // respects the operator's time and avoids the "wait until 8am" →
+      // "now fix your NPI" two-step.
+      const [orgRow, payerConfigRow] = await Promise.all([
+        prisma.organization.findUnique({
+          where: { id: orgId },
+          select: { npi: true },
+        }),
+        prisma.payerConfig.findUnique({
+          where: {
+            organizationId_payerCode: { organizationId: orgId, payerCode: claim.payerCode },
+          },
+          select: { providerNpi: true },
+        }),
+      ]);
+      const resolvedNpi = payerConfigRow?.providerNpi ?? orgRow?.npi ?? null;
+      if (resolvedNpi === null || resolvedNpi.length === 0) {
+        throw new ApiError(
+          'MISSING_PROVIDER_NPI',
+          'Add your practice NPI in Settings before placing calls. The payer rep needs it to look up the claim.',
+        );
+      }
+
       // ADR-037 — business-hours guard at enqueue, not worker pickup.
       const hours = checkPayerHours(claim.payerCode, new Date());
       if (hours.state === 'closed') {

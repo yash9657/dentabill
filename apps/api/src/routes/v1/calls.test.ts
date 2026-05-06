@@ -153,6 +153,28 @@ describe('POST /v1/claims/:id/calls (P3-T16)', () => {
     expect(bodyAsError(response).code).toBe('INVALID_STATE_TRANSITION');
   });
 
+  it('rejects 422 MISSING_PROVIDER_NPI when the org has no NPI and no per-payer override', async () => {
+    const org = await prisma.organization.create({
+      data: {
+        name: 'No-NPI Practice',
+        clerkOrgId: `clerk_${Math.random().toString(36).slice(2)}`,
+        npi: null,
+      },
+    });
+    const claim = await makeClaim(org.id);
+    const headers = { 'x-test-user-id': 'user_no_npi', 'x-test-org-id': org.id };
+    const response = await server.inject({
+      method: 'POST',
+      url: `/v1/claims/${claim.id}/calls`,
+      headers,
+      payload: {},
+    });
+    expect(response.statusCode).toBe(422);
+    expect(bodyAsError(response).code).toBe('MISSING_PROVIDER_NPI');
+    expect(bodyAsError(response).message).toMatch(/NPI/i);
+    expect(queueAddSpy).not.toHaveBeenCalled();
+  });
+
   it('rejects 422 UNSUPPORTED_PAYER for a Phase-3-unsupported payer', async () => {
     const org = await makeOrg('A');
     const claim = await makeClaim(org.id, { payerCode: 'AETNA_DENTAL' });

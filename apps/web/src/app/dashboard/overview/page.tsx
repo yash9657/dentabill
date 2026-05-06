@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { OverviewEmptySection, OverviewStatStrip } from '../../../components/dashboard/index.js';
 import type { OverviewStat } from '../../../components/dashboard/index.js';
+import { MissingNpiBanner } from '../../../components/dashboard/missing-npi-banner.js';
 import { OverviewKpiTiles } from '../../../components/dashboard/overview-kpi-tiles.js';
 
 /**
@@ -59,6 +60,8 @@ export default function DashboardOverviewPage(): React.ReactElement {
           claims start moving through the queue.
         </p>
       </header>
+
+      {hasClerkKeys() ? <MissingNpiBanner /> : null}
 
       {hasClerkKeys() ? <OverviewKpiTiles /> : <OverviewStatStrip stats={PLACEHOLDER_STATS} />}
 
