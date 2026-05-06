@@ -60,7 +60,15 @@ const envSchema = z.object({
 export type WorkerEnv = z.infer<typeof envSchema>;
 
 export function loadWorkerEnv(raw: NodeJS.ProcessEnv = process.env): WorkerEnv {
-  const parsed = envSchema.safeParse(raw);
+  // ADR-049: dotenv loads `KEY=` lines as `''`, which is truthy under
+  // `??=` and bypasses Zod defaults. Normalise empty strings to
+  // `undefined` at the loader.
+  const normalised: Record<string, string | undefined> = {};
+  for (const key of Object.keys(raw)) {
+    const value = raw[key];
+    normalised[key] = value === '' ? undefined : value;
+  }
+  const parsed = envSchema.safeParse(normalised);
   if (!parsed.success) {
     const errors = parsed.error.issues
       .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
