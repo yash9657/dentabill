@@ -113,6 +113,33 @@ P1,"Sample",1990-05-12,Some Indie BCBS,CL-X,D2740,500.00,2026-01-08,,Pending
     expect(result.rows[0]?.payerLabel).toBe('Some Indie BCBS');
   });
 
+  // P4-T1C / ADR-045 — subscriberId is the optional expand-step column.
+  // Open Dental + Eaglesoft surface it on most layouts; Dentrix often
+  // omits it. Parser must tolerate both shapes; absent header => null,
+  // empty cell => null, present cell => trimmed string.
+  it('extracts subscriberId from Open Dental when the header is present', () => {
+    const csv = `PatNum,LName,FName,Birthdate,InsCarrier,ClaimIdent,ProcCodes,ClaimFee,ProcDate,DateSent,SubscriberID
+1001,Smith,Alpha,1990-05-12,Delta Dental PPO,OD-1,D2740,1240.00,2026-01-08,2026-01-09,SUB-12345
+1002,Smith,Beta,1985-11-30,Cigna Dental,OD-2,D0150,200.00,2026-02-01,,
+`;
+    const result = parseClaimsCSV(Buffer.from(csv, 'utf8'));
+    expect(result.rows[0]?.subscriberId).toBe('SUB-12345');
+    expect(result.rows[1]?.subscriberId).toBeNull();
+  });
+
+  it('returns null subscriberId when the source layout omits the column', () => {
+    const result = parseClaimsCSV(Buffer.from(DENTRIX_CSV, 'utf8'));
+    expect(result.rows.every((r) => r.subscriberId === null)).toBe(true);
+  });
+
+  it('extracts subscriberId from Eaglesoft', () => {
+    const csv = `PtID,PtFirstName,PtLastName,PtBirthDate,Carrier,ClaimNum,ADACodes,Amount,DOS,SubmittedOn,SubscriberID
+EG001,Alpha,Smith,5/12/1990,DELTA PPO,EGS-1,D2740,$1240.00,01/08/2026,01/09/2026,EG-SUB-9999
+`;
+    const result = parseClaimsCSV(Buffer.from(csv, 'utf8'));
+    expect(result.rows[0]?.subscriberId).toBe('EG-SUB-9999');
+  });
+
   it('deduplicates procedure codes within a row', () => {
     const csv = `Patient ID,Patient Name,DOB,Insurance Carrier,Claim #,Procedure Codes,Charge,Service Date,Submission Date,Status
 P1,"Sample",1990-05-12,Delta PPO,CL-D,"D2740,d2740,D0150",500.00,2026-01-08,,Pending

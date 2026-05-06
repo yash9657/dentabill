@@ -30,6 +30,10 @@ const COLUMN_MAPS: Readonly<Record<CsvSource, Readonly<Record<string, ColumnRole
     charge: 'amount',
     'service date': 'serviceDate',
     'submission date': 'submittedDate',
+    // Dentrix doesn't always surface a subscriber-id column on every
+    // export layout; when missing we fall back to claimNumber at the
+    // call site. ADR-045.
+    'subscriber id': 'subscriberId',
   },
   EAGLESOFT: {
     ptid: 'patientId',
@@ -40,6 +44,7 @@ const COLUMN_MAPS: Readonly<Record<CsvSource, Readonly<Record<string, ColumnRole
     amount: 'amount',
     dos: 'serviceDate',
     submittedon: 'submittedDate',
+    subscriberid: 'subscriberId',
   },
   OPEN_DENTAL: {
     patnum: 'patientId',
@@ -50,6 +55,7 @@ const COLUMN_MAPS: Readonly<Record<CsvSource, Readonly<Record<string, ColumnRole
     claimfee: 'amount',
     procdate: 'serviceDate',
     datesent: 'submittedDate',
+    subscriberid: 'subscriberId',
   },
 };
 
@@ -61,7 +67,8 @@ type ColumnRole =
   | 'cdtCodes'
   | 'amount'
   | 'serviceDate'
-  | 'submittedDate';
+  | 'submittedDate'
+  | 'subscriberId';
 
 const CODE_SEPARATORS: Readonly<Record<CsvSource, readonly string[]>> = {
   DENTRIX: [',', ';'],
@@ -69,14 +76,10 @@ const CODE_SEPARATORS: Readonly<Record<CsvSource, readonly string[]>> = {
   OPEN_DENTAL: [' ', ',', ';'],
 };
 
-const REQUIRED_FIELDS: readonly Exclude<ColumnRole, 'patientId' | 'submittedDate'>[] = [
-  'dob',
-  'carrier',
-  'claimNumber',
-  'cdtCodes',
-  'amount',
-  'serviceDate',
-];
+const REQUIRED_FIELDS: readonly Exclude<
+  ColumnRole,
+  'patientId' | 'submittedDate' | 'subscriberId'
+>[] = ['dob', 'carrier', 'claimNumber', 'cdtCodes', 'amount', 'serviceDate'];
 
 /**
  * Parse a CSV buffer (UTF-8) into canonical claim rows. The parser
@@ -160,6 +163,13 @@ function normaliseRow(args: {
   const carrierRaw = get('carrier');
   const payer = resolvePayerCode(carrierRaw);
 
+  // Subscriber ID is optional — Dentrix layouts often omit it. Empty
+  // string and absent header both normalise to null so downstream
+  // can do `subscriberId ?? claimNumber` without an extra check.
+  const subscriberHeader = roleToHeader.subscriberId;
+  const subscriberRaw = subscriberHeader ? (raw[subscriberHeader] ?? '').trim() : '';
+  const subscriberId = subscriberRaw.length > 0 ? subscriberRaw : null;
+
   return {
     rowIndex,
     patientDOB: dob,
@@ -168,6 +178,7 @@ function normaliseRow(args: {
     cdtCodes,
     serviceDate,
     submittedDate,
+    subscriberId,
     payerCode: payer.code,
     payerLabel: payer.label,
   };

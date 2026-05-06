@@ -40,6 +40,13 @@ export interface CanonicalClaimRow {
   /** Submission date as ISO `YYYY-MM-DD`, or null when blank. */
   readonly submittedDate: string | null;
   /**
+   * Insurance subscriber ID — the policy-side identifier the IVR
+   * usually requests. Optional because some source systems (Dentrix)
+   * don't surface it on every claim layout; the agent's metadata
+   * falls back to `claimNumber` when this is null. (ADR-045 expand)
+   */
+  readonly subscriberId: string | null;
+  /**
    * The mapped `PayerCode` enum value. `UNKNOWN` when no rule
    * matched — the original free-text label is preserved on
    * `payerLabel` so the import summary can show "we didn't

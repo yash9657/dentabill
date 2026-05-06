@@ -110,7 +110,7 @@ describe('POST /v1/webhooks/retell (P3-T17)', () => {
 
   afterEach(async () => {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "Organization", "User", "Claim", "Call", "CallSummary", "CallEvent", "PayerConfig", "AuditLog", "RetellWebhookEvent" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "Organization", "User", "Claim", "Call", "CallSummary", "CallEvent", "PayerConfig", "AuditLog", "BillingUsageRecord", "RetellWebhookEvent" RESTART IDENTITY CASCADE',
     );
   });
 
