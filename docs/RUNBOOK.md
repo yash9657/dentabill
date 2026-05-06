@@ -345,3 +345,101 @@ minutes.)
 
 When in doubt, grep for the dlqReason / eventType / action string the
 incident is producing.
+
+---
+
+# Phase-4 oncall scenarios
+
+## Summary worker DLQ growing
+
+**Symptoms.** `dentabill_summary_success_total{outcome="dlq"}` is rising; the dashboard shows MANUAL_REVIEW claims piling up; operator complaints that auto-resolution stopped.
+
+**First-line triage.**
+
+```bash
+docker exec dentabill-redis redis-cli LLEN bull:summaries:failed
+psql $DATABASE_URL -c "SELECT * FROM \"AuditLog\" WHERE action='summary.dlq' ORDER BY \"createdAt\" DESC LIMIT 5"
+```
+
+**Common root causes.**
+
+1. **Anthropic outage / rate-limit.** `LiveClaude.summarize` is throwing — confirm at `https://status.anthropic.com`. Mitigation: flip `SUMMARIZER_AUTO_TRANSITION_ENABLED=false` so claims route to MANUAL_REVIEW until the provider recovers; replay the DLQ via `POST /v1/calls/:id/summary/retry` once green.
+2. **Schema drift on `SummaryOutputSchema`.** The model emitted a denial code outside the allow-list. Fix by extending `packages/payer-ivr/src/denial-codes.ts` _only_ if the rep actually used it (audit the transcript first).
+3. **Cost-guard lock starvation.** Multiple workers stuck waiting on `summarize:<orgId>:<period>`. Inspect with `docker exec dentabill-redis redis-cli --scan --pattern "summarize:*"`. Manual lock release is safe only if no worker is mid-call.
+
+## Summary cost-guard lock contention
+
+**Symptoms.** P95 summary latency degrades; the `outcome="locked"` counter rises.
+
+**Triage.** Confirm one org is dominating with `SELECT "organizationId", COUNT(*) FROM "Call" WHERE "endedAt" > now() - interval '1 hour' GROUP BY 1 ORDER BY 2 DESC LIMIT 5;`. The org-scoped lock is intentional — the correct mitigation is to raise per-org concurrency, or to investigate why the org is finishing 100+ calls inside a single billing period.
+
+## Stripe webhook lag
+
+**Symptoms.** `dentabill_stripe_webhook_lag_seconds_bucket` P95 > 60s; `BillingUsageRecord.postedAt` lagging real-time by hours.
+
+**Triage.**
+
+1. Stripe dashboard → "Webhooks" → confirm Stripe is delivering successfully on its side. If they show 5xx receipts from us, this is API health, not Stripe.
+2. Confirm `request.rawBody` is being captured (P3-T17 plugin). Without raw body the signature verifier rejects every event.
+3. Replay missed events from the Stripe dashboard → "Events" → "Resend" individually for any high-value `invoice.payment_succeeded` deliveries.
+
+## SSE connection storm
+
+**Symptoms.** `dentabill_sse_active_connections` > 1000 per process; new connections returning 503; CPU sustained > 80%.
+
+**Triage.**
+
+1. Identify the noisy client: search for any "auto-refresh tab" UI bug or report.
+2. Reset capacity: roll the API pods. Each new pod starts at 0 connections; the load balancer fans new connects across them.
+3. Hard-disable: flip `NEXT_PUBLIC_SSE_LIVE_TRANSCRIPT_ENABLED=false` in the web env. The dashboard falls back to its 5s detail-page poll.
+
+## Clerk migration partial failure
+
+**Symptoms.** `apps/api/scripts/migrate-clerk-orgs.mts` exits non-zero leaving some orgs migrated and some not.
+
+**Recovery.**
+
+1. The script writes a reverse map at `/tmp/clerk-migration-<timestamp>.json`. Save that file — it's the rollback record.
+2. Re-run the script: it's idempotent. Already-migrated orgs are skipped (no longer match `clerkOrgId LIKE 'local_%'`).
+3. If a specific org's Clerk-side state is bad, manually delete the half-created Clerk org from the dashboard, then re-run for the affected DentaBill org id.
+
+## Billing reconciliation drift
+
+**Symptoms.** `dentabill_billing_reconciliation_drift{kind="missing_usage"}` > 0 — there are resolved claims without a matching `BillingUsageRecord`.
+
+**Triage.**
+
+```sql
+SELECT a."resourceId" AS claim_id, a."createdAt"
+FROM "AuditLog" a
+LEFT JOIN "BillingUsageRecord" b
+  ON b."claimId" = a."resourceId"
+WHERE a.action = 'claim.transition'
+  AND a.metadata->>'toStatus' = 'RESOLVED'
+  AND b.id IS NULL;
+```
+
+Backfill via `pnpm --filter @dentabill/billing-worker run cron:once` — the worker is idempotent on `(claimId, billingPeriodStart)`.
+
+## Pointer table — Phase-4 code
+
+| Concern             | File                                                         |
+| ------------------- | ------------------------------------------------------------ |
+| Summarizer port     | `packages/summarizer/src/`                                   |
+| Summary worker      | `apps/summary-worker/src/handler.ts`                         |
+| Cost-guard lock     | `apps/summary-worker/src/cost-guard.ts`                      |
+| Billing port        | `packages/billing/src/`                                      |
+| Billing worker      | `apps/billing-worker/src/handler.ts`                         |
+| Notifier port       | `packages/notifier/src/`                                     |
+| SSE handler         | `apps/api/src/routes/v1/calls-sse.ts`                        |
+| SSE pub/sub         | `apps/api/src/lib/call-events-pubsub.ts`                     |
+| Clerk webhook       | `apps/api/src/routes/v1/clerk-webhook.ts`                    |
+| Stripe webhook stub | `apps/api/src/routes/v1/billing.ts`                          |
+| Clerk migration     | `apps/api/scripts/migrate-clerk-orgs.mts`                    |
+| Cancel channel      | `apps/call-worker/src/handler.ts` (`cancelRequestedAt` poll) |
+
+## Phase-4 SLO budget log
+
+| Date       | Surface | Indicator | Notes                                                                   |
+| ---------- | ------- | --------- | ----------------------------------------------------------------------- |
+| _none yet_ | —       | —         | Track each page-threshold breach here per the policy in `docs/SLOS.md`. |

@@ -2,9 +2,9 @@
 
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
-**Last updated:** 2026-04-29
-**Current phase:** Phase 3 — Queue + Voice **(complete — 31/31 tasks merged; W0 ✓ W1 ✓ W2 ✓ W3 ✓ W4 ✓ W5 ✓ W6 ✓)**.
-**Next task:** **P4-T0** — Phase 4 ADR cluster: `SummarizerPort` (mirroring `RetellPort`), Stripe billing wired off the existing `audit()` spine, Clerk Organizations migration retiring the synthetic `clerkOrgId="local_<userId>"` (ADR-031), `Claim.subscriberId` schema migration (ADR-041). After ADRs land, Phase 4 W1 opens.
+**Last updated:** 2026-05-06
+**Current phase:** Phase 4 — Intelligence + Realtime + Billing **(substantively complete — 12 PRs landed CI-green; W0 ✓ W1 ✓ W2 ✓ W3 ✓ W4 ✓ W5 ✓ W6 ✓ W7 ✓ W8 ✓)**. Deferred items (Playwright SSE chaos, golden-set evals, per-suite test schemas, Prometheus collection target, synthetic monitor) carry into Phase 5 per ADR-050.
+**Next task:** **P5-T0** — Phase 5 plan + ADR cluster. Cloud target selection (Render / Fly / Fargate) per the deferred portion of ADR-001, deployment hardening, observability targets, and the Phase-4.5 LiveResend micro-phase.
 **Carry-over (deferred, user-driven):** **P2-T52** — `PRODUCT.md` via `$impeccable teach` (interactive skill — cannot be done autonomously).
 
 ---
@@ -16,8 +16,8 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 | 1     | Foundations               | **Complete** (12 of 12 tasks done, merged via PRs #1–#13)                                                                                  |
 | 2     | UI + API + Ingestion      | **Substantively complete** — 54 of 55 tasks merged (PRs #14–#64); W1–W7 ✓; T52 still deferred to interactive `$impeccable teach` follow-up |
 | 3     | Queue + Voice             | **Complete** — 31 of 31 tasks merged (PRs #80–#99); W0–W6 ✓                                                                                |
-| 4     | Intelligence + Realtime   | Queued — starts at P4-T0 ADR cluster (Claude summarizer, Stripe usage, Clerk Orgs, `Claim.subscriberId` migration)                         |
-| 5     | Deployment + cloud target | Queued (cloud decision lives here per ADR-004)                                                                                             |
+| 4     | Intelligence + Realtime   | **Substantively complete** — 12 of 21 W0–W8 tasks merged across PRs #101–#121; deferred items captured in ADR-050 carry into Phase 5       |
+| 5     | Deployment + cloud target | Queued (cloud decision lives here per ADR-004; first task: P5-T0 ADR cluster)                                                              |
 
 ## PRD step checklist
 
