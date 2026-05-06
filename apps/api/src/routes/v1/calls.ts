@@ -144,6 +144,10 @@ const CallsListQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   status: CallStatusEnum.optional(),
   payer: PayerCodeEnum.optional(),
+  // Filter to a single claim's call history. Org scoping is still
+  // enforced by `getOrgScopedDb` — passing another tenant's claimId
+  // returns an empty list, never another tenant's calls.
+  claimId: z.string().min(1).optional(),
   startedAtFrom: z.iso.datetime().optional(),
   startedAtTo: z.iso.datetime().optional(),
 });
@@ -312,6 +316,38 @@ export function callsRoutes(fastify: FastifyInstance): void {
         );
       }
 
+      // Pre-flight NPI check — mirrors the call-worker's hard requirement
+      // (apps/call-worker/src/handler.ts) so the failure surfaces as a
+      // typed 422 the UI can deep-link to /dashboard/settings/organization,
+      // instead of letting the job die in the DLQ with a generic Error.
+      // Per-payer override on PayerConfig wins; falls back to Organization.npi.
+      //
+      // Order: NPI runs BEFORE the business-hours guard. NPI absence is a
+      // permanent data-state error the operator can fix immediately; an
+      // out-of-hours response is a transient time-state error that asks
+      // them to come back later. Surfacing the actionable error first
+      // respects the operator's time and avoids the "wait until 8am" →
+      // "now fix your NPI" two-step.
+      const [orgRow, payerConfigRow] = await Promise.all([
+        prisma.organization.findUnique({
+          where: { id: orgId },
+          select: { npi: true },
+        }),
+        prisma.payerConfig.findUnique({
+          where: {
+            organizationId_payerCode: { organizationId: orgId, payerCode: claim.payerCode },
+          },
+          select: { providerNpi: true },
+        }),
+      ]);
+      const resolvedNpi = payerConfigRow?.providerNpi ?? orgRow?.npi ?? null;
+      if (resolvedNpi === null || resolvedNpi.length === 0) {
+        throw new ApiError(
+          'MISSING_PROVIDER_NPI',
+          'Add your practice NPI in Settings before placing calls. The payer rep needs it to look up the claim.',
+        );
+      }
+
       // ADR-037 — business-hours guard at enqueue, not worker pickup.
       const hours = checkPayerHours(claim.payerCode, new Date());
       if (hours.state === 'closed') {
@@ -432,6 +468,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const where: Record<string, unknown> = {};
       if (query.status) where.status = query.status;
       if (query.payer) where.claim = { payerCode: query.payer };
+      if (query.claimId) where.claimId = query.claimId;
       if (query.startedAtFrom !== undefined || query.startedAtTo !== undefined) {
         const range: Record<string, Date> = {};
         if (query.startedAtFrom !== undefined) range.gte = new Date(query.startedAtFrom);
@@ -491,6 +528,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
           count: items.length,
           status: query.status ?? null,
           payer: query.payer ?? null,
+          claimId: query.claimId ?? null,
         },
       });
 

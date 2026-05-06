@@ -19,6 +19,7 @@ import { useForm, type UseFormReturn } from 'react-hook-form';
 
 import { useDentaBillApi } from '../../lib/api-client.js';
 import {
+  NPI_REQUIRED_PAYERS,
   OnboardingFormSchema,
   SUPPORTED_PAYERS,
   type OnboardingFormValues,
@@ -222,6 +223,8 @@ function OnboardingFormShell({
   submitError,
 }: OnboardingFormShellProps): React.ReactElement {
   const isSubmitting = form.formState.isSubmitting;
+  const watchedPayers = form.watch('acceptedPayers');
+  const npiRequired = watchedPayers.some((p) => NPI_REQUIRED_PAYERS.has(p));
 
   return (
     <Form
@@ -254,7 +257,7 @@ function OnboardingFormShell({
           <FormField<OnboardingFormValues, 'npi'> name="npi">
             {({ field }) => (
               <FormItem>
-                <FormLabel>NPI (optional)</FormLabel>
+                <FormLabel>NPI {npiRequired ? '(required)' : '(optional)'}</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
@@ -264,6 +267,7 @@ function OnboardingFormShell({
                     placeholder="10-digit NPI"
                     autoComplete="off"
                     disabled={isSubmitting}
+                    aria-required={npiRequired}
                   />
                 </FormControl>
                 <FormMessage />

@@ -54,6 +54,21 @@ export const PAYER_OPTIONS = [
   'UNKNOWN',
 ] as const satisfies readonly PayerCode[];
 
+/**
+ * Payers the Phase-3 call worker can actually dial. Mirrors
+ * `PHASE_3_PAYERS_SET` in `apps/api/src/routes/v1/calls.ts` — keep in
+ * sync. The UI uses this to gate the Call-Now affordance: claims for
+ * any other payer (including `UNKNOWN` rows from CSVs whose payer
+ * column couldn't be canonicalised) get a "Manual review only" badge
+ * instead of a clickable button, per the comment in
+ * `packages/types/src/api-error.ts` on `UNSUPPORTED_PAYER`.
+ */
+export const PHASE_3_DIALABLE_PAYERS: ReadonlySet<PayerCode> = new Set<PayerCode>([
+  'DELTA_DENTAL_PPO',
+  'CIGNA_DENTAL',
+  'METLIFE_DENTAL',
+]);
+
 const STATUS_LABELS: Readonly<Record<ClaimStatus, string>> = {
   PENDING: 'Pending',
   IN_QUEUE: 'In queue',

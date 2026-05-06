@@ -60,7 +60,10 @@ export function useEnqueueCall(): UseMutationResult<EnqueueCallResponse, Error, 
               ? (result.error.message ?? 'This payer is not yet supported by the call worker.')
               : code === 'INVALID_STATE_TRANSITION'
                 ? (result.error.message ?? 'This claim cannot be queued from its current status.')
-                : (result.error.message ?? 'Failed to queue the call.');
+                : code === 'MISSING_PROVIDER_NPI'
+                  ? (result.error.message ??
+                    'Add your practice NPI in Settings before placing calls.')
+                  : (result.error.message ?? 'Failed to queue the call.');
         const err = new Error(friendly);
         if (code) (err as Error & { code?: string }).code = code;
         throw err;

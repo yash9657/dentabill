@@ -4,6 +4,8 @@ import { Skeleton, StatusDot } from '@dentabill/ui';
 import Link from 'next/link';
 import * as React from 'react';
 
+import { callStatusLabel, type CallSummary } from '../../../lib/calls/types.js';
+import { useClaimCalls } from '../../../lib/calls/use-claim-calls.js';
 import {
   payerLabel,
   statusIndicatorVariant,
@@ -103,7 +105,12 @@ function DetailLayout({ claim }: { readonly claim: Claim }): React.ReactElement 
       </header>
 
       <SummaryCard claim={claim} />
-      <CallNowPill claimId={claim.id} claimStatus={claim.status} variant="detail" />
+      <CallNowPill
+        claimId={claim.id}
+        claimStatus={claim.status}
+        payerCode={claim.payerCode}
+        variant="detail"
+      />
       <Timeline claim={claim} />
     </section>
   );
@@ -177,6 +184,34 @@ function FieldStatus({ status }: { readonly status: ClaimStatus }): React.ReactE
 }
 
 function Timeline({ claim }: { readonly claim: Claim }): React.ReactElement {
+  const calls = useClaimCalls(claim.id);
+
+  // Derive entries from claim + call lifecycle. We deliberately stop
+  // short of fanning out to per-Call CallEvent detail (the worker
+  // writes IVR_NAVIGATED, REP_REACHED, etc. as discrete CallEvents,
+  // surfaced via /v1/calls/{id}); the booleans `ivrNavigated` /
+  // `humanReached` already convey those checkpoints at the call level
+  // without an N+1 fetch. Phase 4's transcript-SSE work expands this
+  // to render the per-event stream inline.
+  const entries: TimelineEntry[] = [];
+  entries.push({
+    timestamp: claim.createdAt,
+    title: 'Claim ingested',
+    body: 'Imported from a CSV upload.',
+  });
+  if (claim.updatedAt !== claim.createdAt) {
+    entries.push({
+      timestamp: claim.updatedAt,
+      title: 'Status updated',
+      body: `Now ${statusLabel(claim.status)}.`,
+    });
+  }
+  for (const call of calls.data?.items ?? []) {
+    for (const e of derivedEntriesForCall(call)) entries.push(e);
+  }
+  // Newest first — the operator's eye lands on what just happened.
+  entries.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+
   return (
     <article aria-labelledby="claim-history-heading" className="flex flex-col gap-4">
       <header>
@@ -186,23 +221,102 @@ function Timeline({ claim }: { readonly claim: Claim }): React.ReactElement {
         </h2>
       </header>
       <ol className="hairline-edge rounded-card flex flex-col gap-0 bg-white">
-        <Entry
-          when={formatDateTime(claim.updatedAt)}
-          title="Last updated"
-          body={`Status currently ${statusLabel(claim.status)}.`}
-        />
-        <Entry
-          when={formatDateTime(claim.createdAt)}
-          title="Claim ingested"
-          body="Imported from a CSV upload. Call activity from the Retell worker will appear here."
-        />
+        {entries.map((entry) => (
+          <Entry
+            key={`${entry.title}-${entry.timestamp}`}
+            when={formatDateTime(entry.timestamp)}
+            title={entry.title}
+            body={entry.body}
+          />
+        ))}
       </ol>
-      <p className="text-caption text-gray-warm">
-        Real call events (CALL_STARTED, IVR_NAVIGATED, REP_REACHED, …) will populate this timeline
-        once the Phase 3 call worker ships.
-      </p>
+      {calls.isError ? (
+        <p className="text-caption text-gray-warm" role="alert">
+          Could not load call history. {calls.error.message}
+        </p>
+      ) : null}
     </article>
   );
+}
+
+interface TimelineEntry {
+  readonly timestamp: string;
+  readonly title: string;
+  readonly body: string;
+}
+
+function derivedEntriesForCall(call: CallSummary): TimelineEntry[] {
+  const out: TimelineEntry[] = [];
+  // Call rows always have a `createdAt` (queued moment); `startedAt`
+  // and `endedAt` are nullable depending on lifecycle phase.
+  out.push({
+    timestamp: call.createdAt,
+    title: `Call queued · attempt ${String(call.attemptNumber)}`,
+    body: `Outbound call placed in the queue (call id ${shortId(call.id)}).`,
+  });
+  if (call.startedAt) {
+    out.push({
+      timestamp: call.startedAt,
+      title: 'Call started',
+      body: call.retellAgentId
+        ? `Dialled out via Retell agent ${shortId(call.retellAgentId)}.`
+        : 'Dialled out via Retell.',
+    });
+  }
+  // IVR + human-reached are point-in-time checkpoints we don't have
+  // discrete timestamps for at the Call-row level — synthesise their
+  // ordering from `startedAt` so they render between start and end.
+  // The granular timestamps live on CallEvent rows; surfaced once
+  // the Phase 4 transcript view lands.
+  if (call.ivrNavigated && call.startedAt) {
+    out.push({
+      timestamp: addMs(call.startedAt, 1),
+      title: 'IVR navigated',
+      body: 'Reached the live-rep queue past the menu tree.',
+    });
+  }
+  if (call.humanReached && call.startedAt) {
+    out.push({
+      timestamp: addMs(call.startedAt, 2),
+      title: 'Representative reached',
+      body:
+        call.holdTimeSeconds !== null
+          ? `Connected after ${formatSeconds(call.holdTimeSeconds)} on hold.`
+          : 'Connected to a payer rep.',
+    });
+  }
+  if (call.endedAt) {
+    out.push({
+      timestamp: call.endedAt,
+      title: `Call ended · ${callStatusLabel(call.status)}`,
+      body:
+        call.durationSeconds !== null
+          ? `Total duration ${formatSeconds(call.durationSeconds)}.${
+              call.dlqReason ? ` Reason: ${call.dlqReason}.` : ''
+            }`
+          : call.dlqReason
+            ? `Reason: ${call.dlqReason}.`
+            : 'Call complete.',
+    });
+  }
+  return out;
+}
+
+function shortId(id: string): string {
+  return id.length > 8 ? `${id.slice(0, 8)}…` : id;
+}
+
+function formatSeconds(total: number): string {
+  if (total < 60) return `${String(total)}s`;
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return s === 0 ? `${String(m)}m` : `${String(m)}m ${String(s)}s`;
+}
+
+function addMs(iso: string, deltaMs: number): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return iso;
+  return new Date(t + deltaMs).toISOString();
 }
 
 function Entry({

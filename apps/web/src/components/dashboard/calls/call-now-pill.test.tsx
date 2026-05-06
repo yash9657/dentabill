@@ -41,13 +41,14 @@ function renderPill(props: {
 }
 
 describe('CallNowPill (P3-T22)', () => {
-  it('renders nothing when the claim status is not queue-eligible', () => {
-    const { container } = render(
+  it('renders a quiet "Completed" badge (no button) when the claim is past its lifecycle', () => {
+    render(
       <QueryProvider client={createDentaBillQueryClient()}>
         <CallNowPill claimId="claim_a" claimStatus="COMPLETED" />
       </QueryProvider>,
     );
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByTestId('call-now-pill-no-action')).toHaveTextContent(/Completed/);
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   it('renders the Pill for PENDING claims with an explicit aria-label', () => {
@@ -56,37 +57,124 @@ describe('CallNowPill (P3-T22)', () => {
     expect(button).toBeEnabled();
   });
 
-  it('renders the Pill for NEEDS_INFO and FAILED (operator can retry)', () => {
-    const { unmount } = render(
+  it('renders the Pill for NEEDS_INFO (operator can retry after gathering info)', () => {
+    render(
       <QueryProvider client={createDentaBillQueryClient()}>
         <CallNowPill claimId="claim_a" claimStatus="NEEDS_INFO" />
       </QueryProvider>,
     );
     expect(screen.getByRole('button', { name: /Call now for claim/ })).toBeEnabled();
+  });
+
+  it('renders the Pill for APPEALING and MANUAL_REVIEW with a "Retry call" label', () => {
+    const { unmount } = render(
+      <QueryProvider client={createDentaBillQueryClient()}>
+        <CallNowPill claimId="claim_a" claimStatus="MANUAL_REVIEW" />
+      </QueryProvider>,
+    );
+    const manualReviewBtn = screen.getByRole('button', { name: /Call now for claim/ });
+    expect(manualReviewBtn).toBeEnabled();
+    expect(manualReviewBtn).toHaveTextContent(/Retry call/);
     unmount();
 
+    render(
+      <QueryProvider client={createDentaBillQueryClient()}>
+        <CallNowPill claimId="claim_a" claimStatus="APPEALING" />
+      </QueryProvider>,
+    );
+    expect(screen.getByRole('button', { name: /Call now for claim/ })).toHaveTextContent(
+      /Retry call/,
+    );
+  });
+
+  it('renders a non-action "Failed" badge for FAILED — the API rejects FAILED → IN_QUEUE, manual status edit is the path back', () => {
     render(
       <QueryProvider client={createDentaBillQueryClient()}>
         <CallNowPill claimId="claim_a" claimStatus="FAILED" />
       </QueryProvider>,
     );
+    const badge = screen.getByTestId('call-now-pill-no-action');
+    expect(badge).toHaveTextContent(/Failed/);
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('renders "Manual review only" badge for non-Phase-3 payers (e.g. UNKNOWN)', () => {
+    render(
+      <QueryProvider client={createDentaBillQueryClient()}>
+        <CallNowPill claimId="claim_a" claimStatus="PENDING" payerCode="UNKNOWN" />
+      </QueryProvider>,
+    );
+    const badge = screen.getByTestId('call-now-pill-manual-review');
+    expect(badge).toHaveTextContent(/Manual review only/);
+    // Non-interactive — must NOT render as a button or link.
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('renders the badge for AETNA / GUARDIAN / DELTA_DENTAL_PREMIER (not Phase-3 dialable)', () => {
+    const { unmount } = render(
+      <QueryProvider client={createDentaBillQueryClient()}>
+        <CallNowPill claimId="claim_a" claimStatus="PENDING" payerCode="AETNA_DENTAL" />
+      </QueryProvider>,
+    );
+    expect(screen.getByTestId('call-now-pill-manual-review')).toBeInTheDocument();
+    unmount();
+
+    render(
+      <QueryProvider client={createDentaBillQueryClient()}>
+        <CallNowPill claimId="claim_a" claimStatus="PENDING" payerCode="DELTA_DENTAL_PREMIER" />
+      </QueryProvider>,
+    );
+    expect(screen.getByTestId('call-now-pill-manual-review')).toBeInTheDocument();
+  });
+
+  it('renders the call button for Phase-3 dialable payers (Delta PPO / Cigna / MetLife)', () => {
+    const { unmount } = render(
+      <QueryProvider client={createDentaBillQueryClient()}>
+        <CallNowPill claimId="claim_a" claimStatus="PENDING" payerCode="DELTA_DENTAL_PPO" />
+      </QueryProvider>,
+    );
+    expect(screen.getByRole('button', { name: /Call now for claim/ })).toBeEnabled();
+    expect(screen.queryByTestId('call-now-pill-manual-review')).toBeNull();
+    unmount();
+
+    render(
+      <QueryProvider client={createDentaBillQueryClient()}>
+        <CallNowPill claimId="claim_a" claimStatus="PENDING" payerCode="METLIFE_DENTAL" />
+      </QueryProvider>,
+    );
     expect(screen.getByRole('button', { name: /Call now for claim/ })).toBeEnabled();
   });
 
-  it('hides for IN_QUEUE / CALLING (call is already in flight)', () => {
-    const { container, rerender } = render(
+  it('renders a live "Queued" / "Calling" badge for IN_QUEUE / CALLING (call is in flight)', () => {
+    const { rerender } = render(
       <QueryProvider client={createDentaBillQueryClient()}>
         <CallNowPill claimId="claim_a" claimStatus="IN_QUEUE" />
       </QueryProvider>,
     );
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByTestId('call-now-pill-no-action')).toHaveTextContent(/Queued/);
+    expect(screen.queryByRole('button')).toBeNull();
 
     rerender(
       <QueryProvider client={createDentaBillQueryClient()}>
         <CallNowPill claimId="claim_a" claimStatus="CALLING" />
       </QueryProvider>,
     );
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByTestId('call-now-pill-no-action')).toHaveTextContent(/Calling/);
+  });
+
+  it('renders a quiet status badge for terminal states (COMPLETED / RESOLVED / DENIED) — no empty cells', () => {
+    const states = ['COMPLETED', 'RESOLVED', 'DENIED', 'WRITTEN_OFF'] as const;
+    for (const status of states) {
+      const { unmount } = render(
+        <QueryProvider client={createDentaBillQueryClient()}>
+          <CallNowPill claimId="claim_a" claimStatus={status} />
+        </QueryProvider>,
+      );
+      expect(screen.getByTestId('call-now-pill-no-action')).toBeInTheDocument();
+      expect(screen.queryByRole('button')).toBeNull();
+      unmount();
+    }
   });
 
   it('on click, POSTs to /v1/claims/:id/calls and shows a success message', async () => {
@@ -159,5 +247,35 @@ describe('CallNowPill (P3-T22)', () => {
     const icon = button.querySelector('svg');
     expect(icon).toBeTruthy();
     expect(icon?.getAttribute('class') ?? '').toMatch(/h-3\.5/);
+  });
+
+  it('compact: on MISSING_PROVIDER_NPI replaces the button with a deep link to settings', async () => {
+    postMock.mockResolvedValueOnce({
+      error: {
+        code: 'MISSING_PROVIDER_NPI',
+        message: 'Add your practice NPI in Settings before placing calls.',
+      },
+    });
+    const { user } = renderPill({ claimStatus: 'PENDING', variant: 'compact' });
+    await user.click(screen.getByRole('button', { name: /Call now for claim/ }));
+    const link = await screen.findByRole('link', { name: /Add practice NPI/ });
+    expect(link).toHaveAttribute('href', '/dashboard/settings/organization?focus=npi');
+    // The original button is gone — replaced with the link.
+    expect(screen.queryByRole('button', { name: /Call now for claim/ })).toBeNull();
+  });
+
+  it('detail: on MISSING_PROVIDER_NPI shows the message AND a deep link to settings', async () => {
+    postMock.mockResolvedValueOnce({
+      error: {
+        code: 'MISSING_PROVIDER_NPI',
+        message: 'Add your practice NPI in Settings before placing calls.',
+      },
+    });
+    const { user } = renderPill({ claimStatus: 'PENDING' });
+    await user.click(screen.getByRole('button', { name: /Call now for claim/ }));
+    const error = await screen.findByTestId('call-now-pill-error');
+    expect(error).toHaveTextContent(/Add your practice NPI/);
+    const link = screen.getByRole('link', { name: /Add NPI in settings/ });
+    expect(link).toHaveAttribute('href', '/dashboard/settings/organization?focus=npi');
   });
 });

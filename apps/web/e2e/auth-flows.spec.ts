@@ -66,6 +66,10 @@ test.describe('auth flow navigation (P2-T31)', () => {
     await page.getByLabel(/practice name/i).fill('Sunrise Family Dental');
     await page.getByLabel(/zip code/i).fill('94110');
     await page.getByRole('checkbox', { name: /delta dental ppo/i }).check();
+    // Delta is a Phase-3 dialable payer — onboarding now conditionally
+    // requires the practice NPI when any dialable payer is accepted
+    // (matches the API enforcement in apps/api/src/routes/v1/onboarding.ts).
+    await page.getByLabel(/npi/i).fill('1234567890');
     await page.getByRole('button', { name: /continue to dashboard/i }).click();
     await expect(page).toHaveURL(/\/dashboard\/overview$/);
 

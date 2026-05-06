@@ -70,6 +70,42 @@ describe('<OnboardingForm />', () => {
     expect(await screen.findByText(/select at least one payer/i)).toBeInTheDocument();
   });
 
+  it('flips the NPI label between optional and required based on payer selection (Phase B)', async () => {
+    const user = userEvent.setup();
+    render(<OnboardingForm />);
+
+    // Default: no payers selected, NPI is optional.
+    expect(screen.getByLabelText(/^npi \(optional\)/i)).toBeInTheDocument();
+
+    // Tick a non-dialable payer (Aetna) — still optional.
+    await user.click(screen.getByRole('checkbox', { name: /aetna dental/i }));
+    expect(screen.getByLabelText(/^npi \(optional\)/i)).toBeInTheDocument();
+
+    // Tick Delta Dental PPO — flips to required.
+    await user.click(screen.getByRole('checkbox', { name: /delta dental ppo/i }));
+    expect(screen.getByLabelText(/^npi \(required\)/i)).toBeInTheDocument();
+
+    // Untick Delta — back to optional (Aetna alone is fine).
+    await user.click(screen.getByRole('checkbox', { name: /delta dental ppo/i }));
+    expect(screen.getByLabelText(/^npi \(optional\)/i)).toBeInTheDocument();
+  });
+
+  it('blocks submit with empty NPI when a dialable payer is selected (Phase B)', async () => {
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy as never;
+    const user = userEvent.setup();
+    render(<OnboardingForm />);
+
+    await user.type(screen.getByLabelText(/practice name/i), 'Sunrise Family Dental');
+    await user.click(screen.getByRole('checkbox', { name: /delta dental ppo/i }));
+    await user.type(screen.getByLabelText(/zip code/i), '94110');
+    // NPI left blank.
+    await user.click(screen.getByRole('button', { name: /continue to dashboard/i }));
+
+    expect(await screen.findByText(/NPI is required when accepting/i)).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('redirects to /dashboard/overview after a successful 200 from the API', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -84,8 +120,9 @@ describe('<OnboardingForm />', () => {
     render(<OnboardingForm />);
 
     await user.type(screen.getByLabelText(/practice name/i), 'Sunrise Family Dental');
-    await user.type(screen.getByLabelText(/zip code/i), '94110');
     await user.click(screen.getByRole('checkbox', { name: /delta dental ppo/i }));
+    await user.type(screen.getByLabelText(/^npi/i), '1234567890');
+    await user.type(screen.getByLabelText(/zip code/i), '94110');
     await user.click(screen.getByRole('button', { name: /continue to dashboard/i }));
 
     await waitFor(() => {
@@ -123,8 +160,9 @@ describe('<OnboardingForm />', () => {
     render(<OnboardingForm />);
 
     await user.type(screen.getByLabelText(/practice name/i), 'Sunrise Family Dental');
-    await user.type(screen.getByLabelText(/zip code/i), '94110');
     await user.click(screen.getByRole('checkbox', { name: /cigna dental/i }));
+    await user.type(screen.getByLabelText(/^npi/i), '1234567890');
+    await user.type(screen.getByLabelText(/zip code/i), '94110');
     await user.click(screen.getByRole('button', { name: /continue to dashboard/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/server says no/i);

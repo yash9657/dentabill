@@ -36,6 +36,9 @@ test.describe('onboarding (P2-T30)', () => {
     await page.getByLabel(/zip code/i).fill('94110');
     await page.getByRole('checkbox', { name: /delta dental ppo/i }).check();
     await page.getByRole('checkbox', { name: /cigna dental/i }).check();
+    // Both Delta and Cigna are Phase-3 dialable; the form now requires
+    // a 10-digit NPI when any dialable payer is accepted.
+    await page.getByLabel(/npi/i).fill('1234567890');
 
     const apiResponse = page.waitForResponse(
       (r) => r.url().endsWith('/v1/onboarding') && r.request().method() === 'POST',
