@@ -1,7 +1,15 @@
 import { Worker, type Processor, type WorkerOptions } from 'bullmq';
 import type { Redis } from 'ioredis';
 
-import { type CallJobData, type CallJobName, type CallJobResult, QUEUE_NAMES } from './types.js';
+import {
+  type CallJobData,
+  type CallJobName,
+  type CallJobResult,
+  type SummaryJobData,
+  type SummaryJobName,
+  type SummaryJobResult,
+  QUEUE_NAMES,
+} from './types.js';
 
 export type CallsWorker = Worker<CallJobData, CallJobResult, CallJobName>;
 
@@ -27,4 +35,31 @@ export function createCallsWorker({
     concurrency: concurrency ?? 4,
     ...options,
   });
+}
+
+// ─── Summaries worker (Phase 4) ────────────────────────────────────────────
+
+export type SummariesWorker = Worker<SummaryJobData, SummaryJobResult, SummaryJobName>;
+
+export type SummariesProcessor = Processor<SummaryJobData, SummaryJobResult, SummaryJobName>;
+
+export interface CreateSummariesWorkerOptions {
+  connection: Redis;
+  /** Default 4; override via QUEUE_CONCURRENCY in summary-worker bootstrap. */
+  concurrency?: number;
+  processor: SummariesProcessor;
+  options?: Partial<Omit<WorkerOptions, 'connection' | 'concurrency'>>;
+}
+
+export function createSummariesWorker({
+  connection,
+  concurrency,
+  processor,
+  options,
+}: CreateSummariesWorkerOptions): SummariesWorker {
+  return new Worker<SummaryJobData, SummaryJobResult, SummaryJobName>(
+    QUEUE_NAMES.SUMMARIES,
+    processor,
+    { connection, concurrency: concurrency ?? 4, ...options },
+  );
 }

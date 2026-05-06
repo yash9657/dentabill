@@ -7,12 +7,21 @@ export {
   type CallsQueue,
   type CallsQueueEvents,
   type CreateCallsQueueOptions,
+  SUMMARIES_DEFAULT_JOB_OPTIONS,
+  createSummariesQueue,
+  createSummariesQueueEvents,
+  type SummariesQueue,
+  type SummariesQueueEvents,
 } from './queues.js';
 export {
   createCallsWorker,
   type CallsProcessor,
   type CallsWorker,
   type CreateCallsWorkerOptions,
+  createSummariesWorker,
+  type SummariesProcessor,
+  type SummariesWorker,
+  type CreateSummariesWorkerOptions,
 } from './worker.js';
 export {
   CALL_JOB_NAME,
@@ -23,6 +32,12 @@ export {
   type CallJobName,
   type CallJobResult,
   type QueueName,
+  SUMMARY_JOB_NAME,
+  SummaryJobDataSchema,
+  SummaryJobResultSchema,
+  type SummaryJobData,
+  type SummaryJobName,
+  type SummaryJobResult,
 } from './types.js';
 export {
   createDlqQueue,

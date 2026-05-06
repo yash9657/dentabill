@@ -10,6 +10,10 @@ import { z } from 'zod';
 export const QUEUE_NAMES = {
   CALLS: 'calls',
   CALLS_DLQ: 'calls-dlq',
+  // Phase 4 (ADR-042): post-call summarisation. The call-worker enqueues
+  // one `summary.generate` job per Call.endedAt — see W2G.
+  SUMMARIES: 'summaries',
+  SUMMARIES_DLQ: 'summaries-dlq',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -66,3 +70,52 @@ export const CallJobResultSchema = z.object({
 });
 
 export type CallJobResult = z.infer<typeof CallJobResultSchema>;
+
+// ─── Summary queue (Phase 4) ──────────────────────────────────────────────
+
+/** Canonical job name in the `summaries` queue. */
+export const SUMMARY_JOB_NAME = 'summary.generate' as const;
+export type SummaryJobName = typeof SUMMARY_JOB_NAME;
+
+/**
+ * Payload for a `summary.generate` job. Same trust-boundary rules as
+ * `CallJobData` — validated at enqueue (call-worker) and again at
+ * dequeue (summary-worker).
+ *
+ * `callId` is the DentaBill `Call.id`. The worker re-loads the Call
+ * with `getOrgScopedDb(organizationId)` so cross-tenant routing is
+ * impossible even with a forged job. `promptVersion` allows the
+ * call-worker to pin a specific prompt at enqueue time (default
+ * `v1`); the audit log records what the worker actually used.
+ */
+export const SummaryJobDataSchema = z.object({
+  organizationId: z.string().min(1),
+  callId: z.string().min(1),
+  /** Audit + diagnostics — surfaces in `metadata.prompt`. */
+  promptVersion: z.string().min(1).default('v1'),
+  /**
+   * Idempotency key — used as BullMQ jobId — to prevent double-enqueue.
+   * Same rules as CallJobData.idempotencyKey.
+   */
+  idempotencyKey: z
+    .string()
+    .min(1)
+    .regex(/^[A-Za-z0-9_.-]+$/, 'idempotencyKey must match /^[A-Za-z0-9_.-]+$/'),
+});
+
+export type SummaryJobData = z.infer<typeof SummaryJobDataSchema>;
+
+export const SummaryJobResultSchema = z.object({
+  summaryId: z.string().min(1).nullable(),
+  /**
+   * `RESOLVED` / `MANUAL_REVIEW` / `DLQ` describe what the worker did
+   * with the Claim transition; `BUDGET_EXCEEDED` is the cost-guard
+   * abort. `DLQ` returns instead of throwing because retrying a
+   * Zod-validation failure won't change the outcome.
+   */
+  outcome: z.enum(['AUTO_TRANSITIONED', 'MANUAL_REVIEW', 'BUDGET_EXCEEDED', 'DLQ']),
+  tokensUsed: z.number().int().min(0),
+  promptVersion: z.string().min(1),
+});
+
+export type SummaryJobResult = z.infer<typeof SummaryJobResultSchema>;
