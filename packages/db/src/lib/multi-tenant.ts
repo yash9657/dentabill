@@ -13,6 +13,7 @@ export const MULTI_TENANT_MODELS = [
   'callSummary',
   'payerConfig',
   'auditLog',
+  'billingUsageRecord',
 ] as const;
 
 export type MultiTenantModel = (typeof MULTI_TENANT_MODELS)[number];

@@ -107,6 +107,18 @@ export function getOrgScopedDb(orgId: string) {
         aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
         groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
       },
+      // Phase 4 — billing usage receipts (ADR-043). One row per
+      // (claim, billingPeriod). Cross-tenant isolation is critical here:
+      // a leak would post org A's resolved claim against org B's Stripe
+      // customer — a financial-correctness bug, not just a privacy one.
+      billingUsageRecord: {
+        findMany: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirst: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirstOrThrow: ({ args, query }) => query(injectOrg(args, orgId)),
+        count: ({ args, query }) => query(injectOrg(args, orgId)),
+        aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
+        groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
+      },
     },
   });
 }

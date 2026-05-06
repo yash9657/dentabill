@@ -102,15 +102,30 @@ model Organization {
   plan       Plan     @default(TRIAL)
   callsUsed  Int      @default(0)
   settings   Json     @default("{}")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  // Phase 4: per-org feature flag overrides on top of process-level env
+  // flags (ADR-042..049). Flag service is intentionally absent in Phase 4 —
+  // env wins by default; this column is the targeted-rollout escape hatch.
+  featureFlags         Json      @default("{}")
+  // Phase 4 cost-guard: rolling token budget for SummarizerPort calls.
+  // Reset window is per-org (calendar day in `summaryTokensResetAt`'s
+  // timezone — UTC for Phase 4). Updated inside the Redis distributed
+  // lock to make the read-then-spend race impossible.
+  summaryTokensUsed    Int       @default(0)
+  summaryTokensResetAt DateTime?
+  // Phase 4 billing: filled lazily by `BillingPort.ensureCustomer`. NULL
+  // until the org has its first resolved claim or visits the billing
+  // page — avoids creating empty Stripe customers for trial orgs.
+  stripeCustomerId     String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  users         User[]
-  claims        Claim[]
-  calls         Call[]
-  callSummaries CallSummary[]
-  payerConfigs  PayerConfig[]
-  auditLogs     AuditLog[]
+  users               User[]
+  claims              Claim[]
+  calls               Call[]
+  callSummaries       CallSummary[]
+  payerConfigs        PayerConfig[]
+  auditLogs           AuditLog[]
+  billingUsageRecords BillingUsageRecord[]
 }
 
 model User {
@@ -175,6 +190,13 @@ model Call {
   // dlqReason:     non-null when this call was routed to calls-dlq.
   attemptNumber     Int            @default(1)
   dlqReason         CallDLQReason?
+  // Phase 4 true cancel channel (ADR-047). Postgres-driven, NOT Redis
+  // pub/sub — pub/sub has a publish-before-subscribe race that drops
+  // cancel signals received before waitForCallEnd() opens its
+  // subscription. The call-worker checks this column at waitForCallEnd
+  // entry and again every 5s during the call.
+  cancelRequestedAt DateTime?
+  cancelRequestedBy String?
   createdAt         DateTime       @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -236,6 +258,10 @@ model CallEvent {
   call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
 
   @@index([callId])
+  // SSE replay-from-cursor reads the most-recent N events for a call
+  // ordered by timestamp; ADR-046 makes this index the durable store
+  // for transcript replay (Redis pub/sub is broadcast-only).
+  @@index([callId, timestamp])
 }
 
 model PayerConfig {
@@ -268,6 +294,40 @@ model AuditLog {
 
   @@index([organizationId, createdAt])
   @@index([userId])
+}
+
+// ─── BillingUsageRecord ────────────────────────────────────────────────────
+//
+// Phase 4 metered-billing receipt log (ADR-043). One row per
+// (claim, billingPeriodStart) — composite uniqueness gates double-charge
+// even if the daily billing-worker runs twice or Stripe's 24-hour
+// idempotency window has expired.
+//
+// `stripeUsageRecordId` is NULL when STRIPE_METERED_BILLING_ENABLED=off
+// (receipt-only "shadow" mode for staging) or when the post fails. The
+// daily reconciliation job retries NULL rows with the same idempotency
+// key, so a later success collapses to one Stripe record.
+model BillingUsageRecord {
+  id                  String    @id @default(cuid())
+  organizationId      String
+  claimId             String
+  stripeUsageRecordId String?
+  billingPeriodStart  DateTime
+  amountCents         Int
+  // Stripe idempotency key — `claim.<id>.<billingPeriodStart>`. The
+  // 24-hour Stripe window is shorter than our reconciliation interval,
+  // so this column is the durable backstop.
+  idempotencyKey      String    @unique
+  postedAt            DateTime?
+  createdAt           DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Composite uniqueness — one row per claim per billing period. This is
+  // the actual double-charge guard; the idempotency key is the
+  // belt-and-braces.
+  @@unique([claimId, billingPeriodStart])
+  @@index([organizationId, billingPeriodStart])
 }
 
 // ─── RetellWebhookEvent ───────────────────────────────────────────────────

@@ -338,4 +338,60 @@ describe('orgScopeWriteExtension', () => {
       expect(summary.organizationId).toBe(org.id);
     });
   });
+
+  // P4-T1B — BillingUsageRecord enforcement. Same gate as Claim/Call —
+  // refusing a write without organizationId protects the financial
+  // integrity of the receipt log.
+  describe('BillingUsageRecord write enforcement', () => {
+    it('rejects billingUsageRecord.create with no organizationId', async () => {
+      const org = await makeOrg();
+      const claim = await prisma.claim.create({
+        data: {
+          organizationId: org.id,
+          patientDOBHash: 'h',
+          claimNumber: 'CL-BUR-1',
+          cdtCodes: ['D2740'],
+          claimAmount: '100.00',
+          payerCode: 'DELTA_DENTAL_PPO',
+          serviceDate: new Date(),
+        },
+      });
+      await expect(
+        prisma.billingUsageRecord.create({
+          data: {
+            claimId: claim.id,
+            billingPeriodStart: new Date('2026-05-01T00:00:00Z'),
+            amountCents: 500,
+            idempotencyKey: `claim.${claim.id}.no-org`,
+          } as never,
+        }),
+      ).rejects.toBeInstanceOf(MissingOrgScopeError);
+    });
+
+    it('allows billingUsageRecord.create when organizationId is present', async () => {
+      const org = await makeOrg();
+      const claim = await prisma.claim.create({
+        data: {
+          organizationId: org.id,
+          patientDOBHash: 'h',
+          claimNumber: 'CL-BUR-2',
+          cdtCodes: ['D2740'],
+          claimAmount: '100.00',
+          payerCode: 'DELTA_DENTAL_PPO',
+          serviceDate: new Date(),
+        },
+      });
+      const periodStart = new Date('2026-05-01T00:00:00Z');
+      const record = await prisma.billingUsageRecord.create({
+        data: {
+          organizationId: org.id,
+          claimId: claim.id,
+          billingPeriodStart: periodStart,
+          amountCents: 500,
+          idempotencyKey: `claim.${claim.id}.${periodStart.toISOString()}`,
+        },
+      });
+      expect(record.organizationId).toBe(org.id);
+    });
+  });
 });
