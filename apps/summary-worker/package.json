@@ -24,7 +24,7 @@
     "@dentabill/payer-ivr": "workspace:*",
     "@dentabill/queue": "workspace:*",
     "@dentabill/summarizer": "workspace:*",
-    "bullmq": "^5.34.0",
+    "bullmq": "^5.76.7",
     "ioredis": "^5.4.1",
     "zod": "^3.24.1"
   },
