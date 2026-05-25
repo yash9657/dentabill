@@ -24,14 +24,14 @@
     "@dentabill/payer-ivr": "workspace:*",
     "@dentabill/queue": "workspace:*",
     "@dentabill/types": "workspace:*",
-    "bullmq": "^5.34.0",
+    "bullmq": "^5.77.3",
     "ioredis": "^5.4.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@dentabill/config": "workspace:*",
     "@types/node": "^20.17.6",
-    "retell-sdk": "^5.16.0",
+    "retell-sdk": "^5.28.0",
     "tsx": "^4.16.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.9"
