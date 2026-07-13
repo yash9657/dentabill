@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@dentabill/db": "workspace:*",
-    "retell-sdk": "^5.16.0",
+    "retell-sdk": "^5.45.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
