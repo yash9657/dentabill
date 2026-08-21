@@ -2,9 +2,9 @@
 
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
-**Last updated:** 2026-05-06
-**Current phase:** Phase 4 — Intelligence + Realtime + Billing **(substantively complete — 12 PRs landed CI-green; W0 ✓ W1 ✓ W2 ✓ W3 ✓ W4 ✓ W5 ✓ W6 ✓ W7 ✓ W8 ✓)**. Deferred items (Playwright SSE chaos, golden-set evals, per-suite test schemas, Prometheus collection target, synthetic monitor) carry into Phase 5 per ADR-050.
-**Next task:** **P5-T0** — Phase 5 plan + ADR cluster. Cloud target selection (Render / Fly / Fargate) per the deferred portion of ADR-001, deployment hardening, observability targets, and the Phase-4.5 LiveResend micro-phase.
+**Last updated:** 2026-08-21
+**Current phase:** Phase 5 — Go-live for investor demo (**plan complete, execution next**). Full plan with all decisions taken: `docs/GOLIVE_PLAN.md` (ADR-051). Headlines: Railway + Vercel; free-forever pivot (billing dormant, pricing rewritten, billing → usage); `DEMO_AUTOPILOT` simulated telephony through the real pipeline; new `/dashboard/reports` + audit-log viewer; anti-slop UI token sweep. Audit 2026-08-21 confirmed repo is green (typecheck ✓, api 133/133 ✓, web 267/267 ✓; lint red only from stale untracked duplicates slated for deletion in G-A1).
+**Next task:** Execute `docs/GOLIVE_PLAN.md` — Track A first, then B/C/D/E in parallel workflows, F last. Owner actions in plan §10 (Railway/Vercel access, Clerk dev keys, optional `ANTHROPIC_API_KEY`).
 **Carry-over (deferred, user-driven):** **P2-T52** — `PRODUCT.md` via `$impeccable teach` (interactive skill — cannot be done autonomously).
 
 ---
@@ -71,6 +71,8 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 See `docs/DECISIONS.md`. Currently **41 ADRs** — 9 from Phase 1 + ADRs 010–012 (impeccable skill, SkillUI tooling, ElevenLabs-inspired DESIGN.md) + the Phase 2 cluster ADR-013 → ADR-028 + ADR-029 (terms-template) + ADR-030 (Phase 2 retro) + the Phase 3 cluster ADR-031 → ADR-040 (Clerk-Orgs deferral, per-payer Retell agents, RetellPort adapters, Phase 3 UI scope, queue topology, webhook HMAC, business-hours guard, per-call cap, hold policy, PHI / Retell-audio boundary) + ADR-041 (Phase 3 retrospective, P3-T29).
 
 ## Known issues / open questions
+
+- **Live-call wiring gap (2026-08-21, see `docs/GOLIVE_PLAN.md` §1a):** the IVR navigator, hold detector, and per-call duration cap exist as tested modules but are not wired into the production call handler; `RetellPort` cannot send DTMF, so IVR maps never execute; Retell agent IDs are placeholders. No real call has ever been placed. Demo is unaffected (autopilot/simulation mode); real telephony go-live needs its own engineering phase.
 
 - Branch-protection rules still need enabling in the GitHub UI per the checklist in `docs/SECURITY.md`. Auto-merge is working on PRs but enforcement is per-PR rather than rule-bound.
 - No external service credentials yet (Clerk / Retell / Anthropic / Resend / Stripe / Telnyx) — `.env.example` placeholders ready, populate as tasks activate them.

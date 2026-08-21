@@ -272,9 +272,64 @@ Rules:
 - [x] Phase-4 retro ADR (ADR-050) merged.
 - [ ] Staging canary (5% orgs) ran 7 days with no SLO page. _Deferred — Phase 5 deployment prereq._
 
-## Phase 5 — Deployment & cloud target (queued)
+## Phase 5 — Go-live for investor demo (active 2026-08-21)
 
-The cloud target decision lands here (per ADR-004): Railway vs AWS, Dockerfiles, secret-store wiring, Sentry DSN.
+> Plan: `docs/GOLIVE_PLAN.md` (ADR-051 cluster — all decisions taken; overrides ADR-004's open cloud question: **Railway + Vercel**). Tasks below mirror the plan's IDs; full specs + acceptance live in the plan. Branch: `phase-5/golive-demo`, one PR (D8). Cut-line: MUST = A, B, E, C9–C10, D3–D4.
+
+### Track A — Stabilize (MUST)
+
+- [ ] **G-A1** Delete 7 stale untracked duplicate files → lint fully green
+- [ ] **G-A2** Branch `phase-5/golive-demo`
+
+### Track B — Demo data engine (MUST)
+
+- [ ] **G-B1** `apps/api/scripts/lib/demo-builders.mts`
+- [ ] **G-B2** `demo-seed.mts` — "Bright Smile Dental", ~40 claims/30 days, summaries, non-zero KPIs
+- [ ] **G-B3** `simulate-live-call.mts` — scripted CallEvents + Redis publish, paced
+- [ ] **G-B4** `seed:demo` / `demo:call` scripts + `DEMO.md`
+- [ ] **G-B5** FakeRetell `DEMO_AUTOPILOT` mode (time-driven ~75s scenario; guard: only when `RETELL_API_KEY` empty)
+- [ ] **G-B6** Local end-to-end proof + timings
+
+### Track C — Anti-slop UI sweep (C9–C10 MUST, rest SHOULD)
+
+- [ ] **G-C1** `<DashboardPageHeading>` + replace ~15 sites
+- [ ] **G-C2** `<StatTile>` unification
+- [ ] **G-C3** `rounded-[20px]` → `rounded-card-large` (13 files)
+- [ ] **G-C4** `border-black/5|6|8` → `border-border-subtle` (~30 sites)
+- [ ] **G-C5** Named warmStone opacity tokens
+- [ ] **G-C6** Typography sizes/tracking/leading to DESIGN.md spec
+- [ ] **G-C7** Focus-ring + interactive-opacity standardization
+- [ ] **G-C8** Card padding rule (p-6 / p-4 / p-8)
+- [ ] **G-C9** Remove all user-facing "Phase N" copy; roadmap-polish stubs (MUST)
+- [ ] **G-C10** OverviewKpiTiles error state + OrganizationSettingsForm loading/error (MUST)
+- [ ] **G-C11** `impeccable` audit → polish pass; regenerate visual baselines once
+
+### Track D — New surfaces + free pivot (D3–D4 MUST)
+
+- [ ] **G-D1a** `GET /v1/reports/summary` + tests + SDK regen
+- [ ] **G-D1b** `/dashboard/reports` UI (dataviz skill, budget-respecting)
+- [ ] **G-D2** `/dashboard/settings/audit-log` viewer
+- [ ] **G-D3** `/pricing` → "Free for practices. Forever." + landing/FAQ updates (MUST)
+- [ ] **G-D4** Billing → Usage rename + redirect + portal CTA removal (MUST)
+- [ ] **G-D5** Team/integrations/notifications roadmap polish (with G-C9)
+
+### Track E — Deploy (MUST; E3+ needs owner credentials)
+
+- [ ] **G-E1** Real `/v1/readyz` (SELECT 1 + PING, 800ms, 503)
+- [ ] **G-E2** Dockerfiles (api multi-stage; call/summary workers) + `.dockerignore`; local builds green
+- [ ] **G-E3** Railway: PG16 + Redis7 + 3 services + healthchecks + env (plan §7)
+- [ ] **G-E4** `prisma migrate deploy` + `seed:demo` against Railway PG
+- [ ] **G-E5** Vercel web + Clerk allowed origin
+- [ ] **G-E6** Prod smoke; verify SSE auth/CORS/streaming Vercel→Railway (riskiest point)
+- [ ] **G-E7** Full autopilot call on production; deploy freeze
+
+### Track F — Verify + rehearse (MUST, last)
+
+- [ ] **G-F1** Full local gates incl. Playwright + bundle budget + build
+- [ ] **G-F2** `/security-check` + security-reviewer over diff
+- [ ] **G-F3** Adversarial code-review workflow over branch diff
+- [ ] **G-F4** PR → CI green → squash → deploy → docs closeout
+- [ ] **G-F5** Two timed rehearsals of the demo script (plan §9)
 
 ---
 

@@ -617,3 +617,21 @@ The corresponding workaround is removed from each app's `vitest.setup.ts`. `TEST
 7. Anthropic BAA signing (owner-action; gates `LiveClaude` in prod).
 
 **Consequences:** Phase 5 starts with the platform shipping the full call → summary → claim transition → billing → notification value loop. The remaining work is hardening, observability target wiring, and the 4.5 LiveResend micro-phase. The exit-criteria checklist in the Phase-4 plan items 1–9 are met (1: CallSummary; 2: claim transition; 3: AuditLog with summary metadata; 4: SSE replay + stream; 5: BillingUsageRecord; 6: Notifier delivery log via FakeResend; 7: PHI redaction; 8: cross-tenant tests; 9: CI green per merge). Item 10 is this ADR.
+
+## ADR-051 — Go-live plan for the investor demo: cloud target, free-forever pivot, simulated telephony, demo scope
+
+**Date:** 2026-08-21. **Status:** accepted. **Full plan:** `docs/GOLIVE_PLAN.md` (this ADR records the decisions; the plan carries the task specs).
+
+**Context.** An investor demo on a production URL is due within hours. Phases 1–4 are complete and green; deployment infra, demo data, and several dashboard surfaces are not. Real telephony is hard-blocked on the Retell BAA (owner action). Product direction pivots to free-forever — no paywall for practices.
+
+**Decisions.**
+
+1. **Cloud target (closes the deferred half of ADR-001/ADR-004):** Railway for api + call-worker + summary-worker + Postgres 16 + Redis 7; Vercel for web. billing-worker is not deployed.
+2. **Free-forever pivot:** Stripe/billing code stays in-tree but permanently dormant (`STRIPE_API_KEY` empty, flag false). `/pricing` rewritten to free positioning; `/dashboard/settings/billing` renamed to usage with the portal CTA removed. Excise-vs-keep revisited post-demo.
+3. **Simulated telephony through the real pipeline:** new `DEMO_AUTOPILOT=true` env makes FakeRetell time-driven (~75s scripted scenario) so Call Now exercises the production path end-to-end (worker → CallEvents → Redis → SSE → summarizer → transition → audit). Guard: only active when `RETELL_API_KEY` is empty. The demo explicitly discloses simulation mode — simulated audio is never presented as a live payer call.
+4. **Summarizer:** `LiveClaude` iff `ANTHROPIC_API_KEY` provided — demo data is fully synthetic, so no PHI exists and the Anthropic BAA is not a demo prerequisite. `SUMMARIZER_AUTO_TRANSITION_ENABLED=true` for the demo only.
+5. **Demo scope:** build `/dashboard/reports` (new org-scoped `GET /v1/reports/summary`) and the `/settings/audit-log` viewer; polish (not build) team/integrations/notifications as roadmap states; remove all user-facing "Phase N" copy.
+6. **Auth:** Clerk development-instance keys for the demo deployment; synthetic `local_*` org ids remain; production Clerk instance + `migrate-clerk-orgs.mts` stay post-demo.
+7. **Process exception:** single branch `phase-5/golive-demo` with per-task conventional commits and one squash-merged PR, instead of one-PR-per-task — justified by the timeline, not a precedent.
+
+**Consequences.** The demo is honest (real pipeline, disclosed simulation), reversible (no billing code deleted, all flags env-scoped), and leaves a recorded post-demo hardening backlog (plan §11): Retell/Anthropic BAAs, Clerk prod migration, observability wiring, evals, chaos tests, compiled workers, backups.
