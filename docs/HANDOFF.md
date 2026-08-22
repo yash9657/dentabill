@@ -330,6 +330,21 @@ pnpm --filter @dentabill/call-worker run provision:retell -- \
   `redis.railway.internal` threw `ENOTFOUND` for ~3s after a region-move restart
   before resolving on its own. Treat early connection errors as a startup race
   until they persist past readiness.
+- **`~/.npm/_cacache` is polluted with root-owned files** — 1,116 of them, from
+  some earlier `sudo npm`. Any `npx` package not already cached dies with
+  `EACCES ... rename` (this is what blocked `npx vercel` twice). Work around it
+  per-command with a writable cache, which is what the Vercel commands here use:
+  `npm_config_cache=<scratch>/npm-cache npx --yes vercel@latest …`. The real fix
+  is `sudo chown -R $(whoami) ~/.npm`, an owner action nobody has run yet.
+- **In demo mode the transcript wording _is_ the summary.**
+  `deriveSummaryFromTranscript` is a phrase matcher, not a model, so rewording a
+  scripted line changes the summary shown next to it. `denied`/`approved` decide
+  the outcome, the first `$n` becomes the approved amount, and `denialCode` is
+  validated against the allow-list in `packages/payer-ivr/src/denial-codes.ts` —
+  an invented code makes `SummaryOutputSchema.parse` throw and the summary job
+  dead-letter, so the call shows no summary at all. Guarded by
+  `packages/summarizer/src/demo-scenarios.contract.test.ts`; run it after any
+  script edit.
 - **Never `railway up` before every required env var is set** — the api
   crash-looped on a missing `NEXT_PUBLIC_APP_URL`. Required vars per service are
   the ones in `env.ts` with neither `.default()` nor `.optional()`.

@@ -51,10 +51,34 @@ Remaining after the deploy session — full detail in `docs/HANDOFF.md` §3:
    on the api service but **verified not to run** on this Railway plan — after
    any schema change, apply the migration by hand with the `railway ssh` command
    in `docs/HANDOFF.md` §7.
-2. Vercel (not started), then the SSE cross-origin check (G-E6, riskiest).
+2. **Vercel** — blocked only on an owner login. The CLI works once npm points at
+   a writable cache (npm trap in `docs/HANDOFF.md` §8). Then the SSE cross-origin
+   check (G-E6, riskiest) and `NEXT_PUBLIC_SSE_LIVE_TRANSCRIPT_ENABLED=true` —
+   without it the transcript panel renders a disabled placeholder, not the live
+   stream the demo film is built around.
 3. Track F: security check, adversarial review, Playwright baselines, PR.
 4. Real telephony: wire the guards, then compile the IVR maps into Retell
    `press_digit` tools + states.
+
+## Demo film work (this session)
+
+Decision: the demo video shows **simulated** calls, clearly labelled, aimed at
+dental-practice prospects. Real IVR navigation is not built (§5 of the handoff),
+so the alternative was a week-plus of telephony work plus per-payer calibration.
+
+Shipped (`27c1619`): a six-scenario demo call library
+(`packages/payer-ivr/src/retell/demo-scenarios.ts`) replacing the autopilot's two
+inline outcomes, so concurrent demo calls read as six different conversations
+across three payers. Fixed three defects found on the way — inverted Retell
+speaker roles, `pickRole` mapping every `user` turn to `agent`, and a transcript
+UI that rendered no speaker at all. `QUEUE_CONCURRENCY=6` set on the Railway
+call-worker so six calls genuinely run in parallel.
+
+Shooting script (7 beats, VO, capture runbook, 58s cutdown):
+<https://claude.ai/code/artifact/cf2412ac-9c50-4526-98eb-06c49010cb9d>
+
+Open question for the owner: the script leaves every statistic blank
+(`‹your figure›`) rather than inventing hold-time or hours-saved numbers.
 
 Superseded ordering from the planning session:
 
