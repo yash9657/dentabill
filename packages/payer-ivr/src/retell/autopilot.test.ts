@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RetellEvent, StartCallInput } from './index.js';
-import { DemoAutopilot, FakeRetell } from './index.js';
+import { DEMO_SCENARIOS, DemoAutopilot, FakeRetell } from './index.js';
 
 type SetTimeoutFn = (
   callback: () => void,
@@ -96,7 +96,19 @@ describe('DemoAutopilot', () => {
           expect(endedEvent.collectedInfo).toBeDefined();
           // The outcome should be happy path (based on idempotencyKey).
           expect(endedEvent.collectedInfo?.claimStatus).toBe('approved');
-          expect(endedEvent.collectedInfo?.amountApprovedCents).toBe(34_500);
+
+          // Assert against the scenario the library actually selected rather
+          // than a literal amount. The autopilot now draws from a six-entry
+          // library, so hard-coding one scenario's figures makes this test
+          // break whenever the library is edited or reordered — which says
+          // nothing about whether the autopilot works.
+          const scenarioId = endedEvent.collectedInfo?.scenarioId;
+          const selected = DEMO_SCENARIOS.find((s) => s.id === scenarioId);
+          expect(selected).toBeDefined();
+          expect(endedEvent.collectedInfo?.amountApprovedCents).toBe(
+            selected?.outcome.amountApprovedCents,
+          );
+          expect(endedEvent.collectedInfo?.referenceNumber).toBe(selected?.outcome.referenceNumber);
         }
 
         // Should have multiple transcript events before the end.

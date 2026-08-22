@@ -373,7 +373,14 @@ function transcriptFromEvents(events: readonly CallEvent[]): readonly Transcript
 
 function pickRole(data: Record<string, unknown> | null): TranscriptTurn['role'] {
   const raw = typeof data?.role === 'string' ? data.role.toLowerCase() : '';
-  if (raw === 'representative' || raw === 'rep' || raw === 'human') return 'representative';
+  // `user` is Retell's own wire vocabulary for the human on the far end of the
+  // call — the payer representative. Without it here the fallthrough labelled
+  // every rep line `agent`, so the transcript handed to the summarizer (and
+  // the `rawTranscript` persisted alongside the summary) attributed the
+  // payer's words to our own agent.
+  if (raw === 'representative' || raw === 'rep' || raw === 'human' || raw === 'user') {
+    return 'representative';
+  }
   if (raw === 'system') return 'system';
   return 'agent';
 }

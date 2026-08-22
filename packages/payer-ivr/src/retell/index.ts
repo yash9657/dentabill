@@ -31,6 +31,16 @@ export {
 export { DemoAutopilot, type DemoAutopilotOptions } from './autopilot.js';
 
 export {
+  DEMO_SCENARIOS,
+  renderTurnText,
+  selectDemoScenario,
+  type DemoOutcome,
+  type DemoScenario,
+  type DemoTurn,
+  type DemoTurnRole,
+} from './demo-scenarios.js';
+
+export {
   parseRetellWebhookEnvelope,
   RetellWebhookParseError,
   verifyRetellWebhookSignature,
