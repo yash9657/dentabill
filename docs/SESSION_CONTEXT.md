@@ -38,12 +38,17 @@ Four further defects were invisible to any static check and are recorded as **AD
 > where `GOLIVE_PLAN.md` is now wrong, and the traps that cost this session real
 > time. Read it before touching anything. In particular: **Railway's edge range is
 > unreachable from the owner's home network** — a failing local `curl` against
-> `*.up.railway.app` does not mean the deploy is broken.
+> `*.up.railway.app` does not mean the deploy is broken. This was retested after
+> the region move and is **not** region-related; verify from inside the container
+> via `railway ssh` instead.
 
 Remaining after the deploy session — full detail in `docs/HANDOFF.md` §3:
 
-1. **Migrations have not run; the Railway database is empty.** Nothing in the
-   deployed app works until they do.
+1. ~~Migrations~~ **DONE.** All six migrations applied and `seed:demo` run against
+   the Railway database; `/v1/readyz` reports postgres + redis ok and the org,
+   40 claims, 25 calls and 25 summaries are queryable in the deployed DB. All
+   five services now run in `us-west2`. A pre-deploy migrate step is configured
+   on the api service but **has not executed yet** — confirm it on the next deploy.
 2. Vercel (not started), then the SSE cross-origin check (G-E6, riskiest).
 3. Track F: security check, adversarial review, Playwright baselines, PR.
 4. Real telephony: wire the guards, then compile the IVR maps into Retell

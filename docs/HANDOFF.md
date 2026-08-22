@@ -21,6 +21,21 @@ So: **`curl` against `*.up.railway.app` failing locally does NOT mean the deploy
 is broken.** Verify from a different network, or via an external checker, before
 touching anything. Hours went into this; do not repeat it.
 
+**Update (2026-08-22, later session): this is NOT region-related.** The earlier
+guess that it might be tied to EU-West was tested and disproved — after moving
+every service to `us-west2`, the public hostname still resolves to the same
+anycast edge `69.46.46.17` and still refuses 443 from this machine. Railway's
+edge address does not change with service region, so moving regions can never
+fix it. Do not re-investigate this angle.
+
+**The reliable workaround is to verify from inside Railway**, which needs no
+external network at all:
+
+```bash
+railway ssh --service api -- sh -lc \
+  'node -e "require(\"http\").get(\"http://127.0.0.1:3001/v1/readyz\",r=>{let b=\"\";r.on(\"data\",d=>b+=d);r.on(\"end\",()=>console.log(r.statusCode,b))})"'
+```
+
 ---
 
 ## 2. What is live right now
@@ -39,8 +54,23 @@ Railway project **`dentabill-demo`** — `09670b28-7237-4ba8-ba93-6a5a484a281d`
 Public API: `https://api-production-1a46.up.railway.app` (port 3001), domain
 `ACTIVE`. `/v1/healthz` and `/v1/readyz` both answer from outside.
 
-Region is **EU West (Amsterdam)** — Railway's default, probably wrong for a US
-demo. Worth moving; it also may relate to §1.
+Region is **US West (`us-west2`)** as of the 2026-08-22 follow-up session. All
+five services were moved off `ams` with `railway service scale`; Railway migrated
+the Postgres and Redis volumes automatically (`volumeMigrating` → READY, and the
+Postgres volume was empty at the time, so nothing was at risk). This did **not**
+change edge reachability — see §1.
+
+Note the region-name trap: `railway service scale` accepts both friendly names
+and region IDs, and they are not interchangeable. The services were in `ams`, but
+passing `eu-west=0` silently targeted `europe-west4-drams3a` and **added** a
+replica instead of moving one. Read the actual region ID out of
+`railway service list --json` and use that.
+
+**Database access is now solved.** An SSH key (`dentabill-dev`,
+`~/.ssh/id_ed25519.pub`) is registered on the owner's Railway account, so
+`railway ssh` works non-interactively. First connect needs Railway's host key
+pinned once — `ssh-keyscan -t ed25519 ssh.railway.com >> ~/.ssh/known_hosts`;
+without it every command dies with a bare `Host key verification failed.`
 
 ### Env deliberately set on Railway
 
@@ -64,13 +94,26 @@ it off until §5 is done.
 
 ## 3. What remains, in order
 
-1. **Migrations have not run — the Railway database is empty.** Nothing works in
-   the deployed app until this happens. Two routes:
-   - `railway ssh keys add` (owner action, one-time), then
-     `railway ssh --service api -- sh -lc './packages/db/node_modules/.bin/prisma migrate deploy --schema packages/db/prisma/schema.prisma'`
-   - or add a **pre-deploy step** on the api service in the dashboard (the
-     setting exists) running the same command. This is the cleaner long-term fix.
-     Then `seed:demo` the same way.
+1. ~~**Migrations have not run — the Railway database is empty.**~~ **DONE**
+   (2026-08-22 follow-up). All six migrations applied via `railway ssh`, and
+   `seed:demo` ran against the deployed database. Verified from inside the
+   container, not asserted:
+   - `/v1/readyz` → `{"ready":true,"postgres":{"ok":true},"redis":{"ok":true}}`
+   - row counts → `{orgs:1, claims:40, calls:25, summaries:25, payers:3}`
+
+   **Migrations are now automatic.** A pre-deploy command is set on the api
+   service instance, so every future deploy migrates before booting:
+
+   ```
+   ./packages/db/node_modules/.bin/prisma migrate deploy --schema packages/db/prisma/schema.prisma
+   ```
+
+   It was set through the GraphQL API rather than the dashboard, which means it
+   is **not** in version control — re-read it with the query in §7 before
+   assuming it survived any service recreation. **Still unverified:** no deploy
+   has run since it was set, so the step has never actually executed. Confirm it
+   on the next `railway up` / `railway redeploy` rather than trusting it.
+
 2. **Vercel** — not started. Root `apps/web`, build `pnpm --filter web build`,
    env per `docs/DEPLOY.md`. Then add the Vercel origin to Clerk allowed origins
    and set `API_CORS_ORIGINS` + `NEXT_PUBLIC_APP_URL` on the api.
@@ -199,6 +242,22 @@ npx --yes @railway/cli@latest status --json
 npx --yes @railway/cli@latest logs --service api
 npx --yes @railway/cli@latest up --service api --ci
 
+# Region + replica state for every service, one line each
+npx --yes @railway/cli@latest service list --json | python3 -c "
+import json,sys
+for s in json.load(sys.stdin):
+    r=','.join(f\"{x['name']}={x['configured']}\" for x in s.get('regions') or [])
+    print(s['name'], r, (s.get('replicas') or {}).get('running'), s.get('volumeMigrating'))"
+
+# Run anything against the deployed database (migrations, seed, probes)
+npx --yes @railway/cli@latest ssh --service api -- sh -lc '<command>'
+
+# Read back the pre-deploy command (it lives in Railway, not in this repo)
+npx --yes @railway/cli@latest api \
+  'query($id:String!,$env:String!){serviceInstance(serviceId:$id,environmentId:$env){preDeployCommand}}' \
+  --raw-var id=28b06f19-387f-4246-a843-35cbff5984c2 \
+  --raw-var env=f79b8c70-7a99-41c8-a1be-e72d7d0457fe
+
 # Retell (read-only preview, writes nothing)
 pnpm --filter @dentabill/call-worker run provision:retell -- \
   --webhook-url https://api-production-1a46.up.railway.app/v1/webhooks/retell --dry-run
@@ -242,6 +301,8 @@ In `/.env` (never printed, never committed): `RETELL_API_KEY`, all three
 `RETELL_AGENT_ID_*`, `RETELL_WEBHOOK_SECRET`, `WORKER_OUTBOUND_NUMBER`,
 `CLERK_SECRET_KEY` (`sk_test_…`), `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (`pk_test_…`).
 
-Railway CLI is authenticated as the owner. **Still needed:** a Vercel login, and
-either an SSH key on Railway or a pre-deploy step for migrations. `ANTHROPIC_API_KEY`
-remains optional — without it the summarizer uses the transcript-derived fallback.
+Railway CLI is authenticated as the owner. SSH key `dentabill-dev` is registered
+on the Railway account and Railway's host key is pinned in `~/.ssh/known_hosts`,
+so `railway ssh` works non-interactively; the pre-deploy migration step is set.
+**Still needed:** a Vercel login. `ANTHROPIC_API_KEY` remains optional — without
+it the summarizer uses the transcript-derived fallback.
