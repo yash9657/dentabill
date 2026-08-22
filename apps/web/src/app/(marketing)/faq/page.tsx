@@ -98,22 +98,24 @@ const FAQ_CATEGORIES: readonly FaqCategory[] = [
   {
     id: 'pricing',
     eyebrow: 'Pricing',
-    heading: 'How DentaBill charges, and what it does not charge for.',
+    heading: 'Cost and value.',
     items: [
       {
-        q: 'Is there a free tier?',
-        a: 'Yes. Starter is free for the first 50 follow-up calls a month. Above that, the per-call fee applies. There is no per-seat fee at any tier.',
+        q: 'Is DentaBill really free?',
+        a: 'Yes. DentaBill is free for all practices, forever. No tiers, no paywalls, no "upgrade to unlock" prompts. Every practice gets full access to all features.',
       },
       {
-        q: 'Do I pay for time on hold?',
-        a: 'No. Hold time is on us. Long holds are a payer problem, not a customer problem.',
+        q: 'Are there hidden costs or per-seat fees?',
+        a: 'No. No setup fees, no per-seat charges, no hold-time surcharges, no surprise invoices. You sign up, you use it. That is it.',
       },
       {
-        q: 'Where do I see the full pricing breakdown?',
+        q: 'How is this free and sustainable?',
         a: (
           <>
-            On the <a href="/pricing">pricing page</a>. The inline FAQ there covers per-call billing
-            semantics, the 250-call Professional minimum, and DSO multi-location billing.
+            Great question. Read the full story on the <a href="/pricing">pricing page</a>. In
+            short: we are exploring partnerships with DSOs, practice management systems, and other
+            players in the dental ecosystem who benefit from claim follow-up automation. Until those
+            mature, we are funding this ourselves because the problem is real.
           </>
         ),
       },

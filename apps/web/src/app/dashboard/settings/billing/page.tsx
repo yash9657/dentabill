@@ -1,10 +1,5 @@
-import type { Metadata } from 'next';
-import * as React from 'react';
+import { redirect } from 'next/navigation';
 
-import { BillingSettingsPage } from '../../../../components/dashboard/settings/billing-settings-page.js';
-
-export const metadata: Metadata = { title: 'Billing · Settings' };
-
-export default function SettingsBillingPage(): React.ReactElement {
-  return <BillingSettingsPage />;
+export default function SettingsBillingPage(): never {
+  redirect('/dashboard/settings/usage');
 }

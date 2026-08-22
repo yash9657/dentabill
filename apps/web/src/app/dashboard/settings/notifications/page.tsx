@@ -10,7 +10,7 @@ export default function SettingsNotificationsPage(): React.ReactElement {
     <DashboardEmptyState
       eyebrow="Notifications"
       title="Choose what to be alerted on"
-      body="Per-event email and in-app notification preferences for call completions, denials, and high-priority follow-ups. Notification channels light up in Phase 3 alongside the call worker."
+      body="Per-event email and in-app notification preferences for call completions, denials, and high-priority follow-ups are coming soon."
       previewChildren={<SkeletonForm fields={4} />}
       primaryCta={{ label: 'Open overview', href: '/dashboard/overview' }}
     />

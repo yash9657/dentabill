@@ -16,6 +16,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
+    "seed:demo": "tsx scripts/demo-seed.mts",
+    "demo:call": "tsx scripts/simulate-live-call.mts",
     "gen:openapi": "tsx scripts/dump-openapi.mts"
   },
   "dependencies": {

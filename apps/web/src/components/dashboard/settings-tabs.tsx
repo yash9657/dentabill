@@ -27,7 +27,7 @@ import * as React from 'react';
 export const SETTINGS_TABS: readonly { readonly href: string; readonly label: string }[] = [
   { href: '/dashboard/settings/organization', label: 'Organization' },
   { href: '/dashboard/settings/team', label: 'Team' },
-  { href: '/dashboard/settings/billing', label: 'Billing' },
+  { href: '/dashboard/settings/usage', label: 'Usage' },
   { href: '/dashboard/settings/integrations', label: 'Integrations' },
   { href: '/dashboard/settings/notifications', label: 'Notifications' },
   { href: '/dashboard/settings/audit-log', label: 'Audit log' },

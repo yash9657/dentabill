@@ -39,8 +39,8 @@ export function DashboardNotifications(): React.ReactElement {
           Notifications
         </h2>
         <p className="text-body text-gray-dark mb-4">
-          Real-time alerts for call completions, denials, and high-priority follow-ups land in Phase
-          3 once the call worker is wired up.
+          Real-time alerts for call completions, denials, and high-priority follow-ups are coming
+          soon.
         </p>
         <div className="flex justify-end">
           <button

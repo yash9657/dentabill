@@ -13,8 +13,7 @@ import * as React from 'react';
  * Each stat carries:
  *   • `label` — short noun phrase, capitalised once. The eyebrow.
  *   • `value` — the headline number. Em-dash placeholder when empty
- *     so the layout does not jump when real numbers land in P2-T41
- *     (claims) and Phase 3 (calls).
+ *     so the layout does not jump when real numbers arrive.
  *   • `caption` — small contextual line under the value (delta,
  *     period, or cohort reference). Optional.
  *

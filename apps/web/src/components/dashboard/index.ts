@@ -17,6 +17,7 @@ export {
   type OverviewStat,
   type OverviewStatStripProps,
 } from './overview-stat-strip.js';
+export { ReportsPage } from './reports/reports-page.js';
 export { SETTINGS_TABS, SettingsTabs } from './settings-tabs.js';
 export { SkeletonForm } from './skeleton-form.js';
 export { SkeletonList } from './skeleton-list.js';

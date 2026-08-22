@@ -18,6 +18,7 @@ import { getEnv } from './lib/env.js';
 import { registerAuthPlugin } from './plugins/auth.js';
 import { registerQueuePlugin } from './plugins/queue.js';
 import { registerRawBodyPlugin } from './plugins/raw-body.js';
+import { auditLogsRoutes } from './routes/v1/audit-logs.js';
 import { billingRoutes } from './routes/v1/billing.js';
 import { callsSseRoutes } from './routes/v1/calls-sse.js';
 import { callsRoutes } from './routes/v1/calls.js';
@@ -27,6 +28,7 @@ import { healthRoutes } from './routes/v1/health.js';
 import { ingestRoutes } from './routes/v1/ingest.js';
 import { meRoutes } from './routes/v1/me.js';
 import { onboardingRoutes } from './routes/v1/onboarding.js';
+import { reportsRoutes } from './routes/v1/reports.js';
 import { retellWebhookRoutes } from './routes/v1/retell-webhook.js';
 
 export interface BuildServerOptions {
@@ -207,6 +209,8 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(clerkWebhookRoutes, { prefix: '/v1' });
   await fastify.register(ingestRoutes, { prefix: '/v1' });
   await fastify.register(billingRoutes, { prefix: '/v1' });
+  await fastify.register(reportsRoutes, { prefix: '/v1' });
+  await fastify.register(auditLogsRoutes, { prefix: '/v1' });
 
   return fastify;
 }

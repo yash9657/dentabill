@@ -215,12 +215,12 @@ function ClosingCta(): React.ReactElement {
           Give your front desk back the morning.
         </h2>
         <p className="text-body text-gray-dark max-w-xl text-balance">
-          Free for the first 50 claims. No card required. Claim follow-up that runs while your
-          office sleeps.
+          Free forever. No card required. Unlimited claim follow-up that runs while your office
+          sleeps.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <Pill href="/contact" variant="black" withArrow>
-            Request access
+          <Pill href="/sign-up" variant="black" withArrow>
+            Get started free
           </Pill>
           <Pill href="/contact" variant="whiteShadow">
             Book a 20-minute demo

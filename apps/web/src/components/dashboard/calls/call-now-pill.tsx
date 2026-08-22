@@ -106,7 +106,7 @@ export function CallNowPill({
   // detail variant has room for the fuller phrasing. The full
   // explanation lives in the title attribute on both.
   if (payerCode !== undefined && !PHASE_3_DIALABLE_PAYERS.has(payerCode)) {
-    const tooltip = 'Phase 3 only dials Delta Dental PPO, Cigna Dental, and MetLife Dental.';
+    const tooltip = 'DentaBill currently dials Delta Dental PPO, Cigna Dental, and MetLife Dental.';
     if (compact) {
       return (
         <span

@@ -28,6 +28,8 @@ export {
   type CreateRetellPortResult,
 } from './factory.js';
 
+export { DemoAutopilot, type DemoAutopilotOptions } from './autopilot.js';
+
 export {
   parseRetellWebhookEnvelope,
   RetellWebhookParseError,

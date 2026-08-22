@@ -17,6 +17,7 @@ describe('loadWorkerEnv', () => {
     expect(env.MAX_CALL_DURATION_MS).toBe(900_000);
     expect(env.MAX_HOLD_MS).toBe(600_000);
     expect(env.RETELL_API_KEY).toBe('');
+    expect(env.DEMO_AUTOPILOT).toBe('false');
   });
 
   it('coerces numeric overrides from string', () => {
@@ -59,5 +60,28 @@ describe('loadWorkerEnv', () => {
     });
     expect(env.RETELL_AGENT_ID_DELTA_DENTAL_PPO).toBe('');
     expect(env.WORKER_OUTBOUND_NUMBER).toBe('+15555550100');
+  });
+
+  it('parses DEMO_AUTOPILOT as true or false', () => {
+    const envTrue = loadWorkerEnv({
+      ...baseValid,
+      DEMO_AUTOPILOT: 'true',
+    });
+    expect(envTrue.DEMO_AUTOPILOT).toBe('true');
+
+    const envFalse = loadWorkerEnv({
+      ...baseValid,
+      DEMO_AUTOPILOT: 'false',
+    });
+    expect(envFalse.DEMO_AUTOPILOT).toBe('false');
+  });
+
+  it('rejects invalid DEMO_AUTOPILOT values', () => {
+    expect(() =>
+      loadWorkerEnv({
+        ...baseValid,
+        DEMO_AUTOPILOT: 'maybe',
+      }),
+    ).toThrow(/DEMO_AUTOPILOT/);
   });
 });

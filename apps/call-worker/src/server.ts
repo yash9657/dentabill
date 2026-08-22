@@ -79,7 +79,12 @@ export async function bootCallWorker(
   await connection.ping();
 
   const prismaClient = options.prisma ?? prisma;
-  const retellPort = options.retellPort ?? createRetellPort({ apiKey: env.RETELL_API_KEY }).port;
+  const retellPort =
+    options.retellPort ??
+    createRetellPort({
+      apiKey: env.RETELL_API_KEY,
+      demoAutopilot: env.DEMO_AUTOPILOT === 'true',
+    }).port;
   const summariesQueue = createSummariesQueue({ connection });
 
   const worker = createCallsWorker({

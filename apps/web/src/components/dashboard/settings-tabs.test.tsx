@@ -16,9 +16,9 @@ describe('<SettingsTabs />', () => {
   });
 
   it('marks the matching tab with aria-current', () => {
-    vi.mocked(usePathname).mockReturnValue('/dashboard/settings/billing');
+    vi.mocked(usePathname).mockReturnValue('/dashboard/settings/usage');
     render(<SettingsTabs />);
-    expect(screen.getByRole('link', { name: 'Billing' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Organization' })).not.toHaveAttribute('aria-current');
   });
 

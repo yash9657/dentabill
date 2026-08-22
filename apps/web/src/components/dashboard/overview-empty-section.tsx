@@ -8,9 +8,8 @@ import * as React from 'react';
  * Used twice on /dashboard/overview ("Recent claims" and "Recent
  * calls"). Both panels share the same chrome so the eye reads them
  * as a pair without our having to maintain two near-identical
- * components. When real data arrives in P2-T41 (claims) and Phase 3
- * (calls), each panel swaps its body with a list — the headline,
- * eyebrow, and CTA stay in place.
+ * components. When data arrives, each panel swaps its body with a
+ * list — the headline, eyebrow, and CTA stay in place.
  *
  * The empty body is a single sentence plus a CTA Pill, never a
  * giant illustration: ElevenLabs's dashboards do the same thing,

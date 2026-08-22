@@ -85,7 +85,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Readiness probe — server is ready to handle traffic. Phase 2B will add DB/Redis checks. */
+        /** @description Readiness probe — server is ready to handle traffic. Tests Postgres and Redis readiness with 800ms timeout each. */
         get: {
             parameters: {
                 query?: never;
@@ -104,6 +104,30 @@ export interface paths {
                         "application/json": {
                             ready: boolean;
                             timestamp: string;
+                            postgres: {
+                                ok: boolean;
+                            };
+                            redis: {
+                                ok: boolean;
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ready: boolean;
+                            timestamp: string;
+                            postgres: {
+                                ok: boolean;
+                            };
+                            redis: {
+                                ok: boolean;
+                            };
                         };
                     };
                 };
@@ -925,7 +949,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/calls/{id}/events/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Live call event stream (Server-Sent Events). Replays persisted CallEvent rows on connect, then streams new events via Redis pub/sub. Heartbeat every 15s; closes on server shutdown or auth expiry. See ADR-046. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/retell": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/clerk": {
         parameters: {
             query?: never;
             header?: never;
@@ -1123,6 +1216,127 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reports/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Aggregate metrics for the dashboard overview: recovered claims by week, denial reasons, claim aging, payer outcomes, and call volume. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            recoveredByWeek: {
+                                weekStart: string;
+                                recoveredCents: number;
+                                claimCount: number;
+                            }[];
+                            denialReasons: {
+                                code: string;
+                                label: string;
+                                count: number;
+                            }[];
+                            claimAging: {
+                                /** @enum {string} */
+                                bucket: "0-7" | "8-14" | "15-30" | "31-60" | "60+";
+                                count: number;
+                            }[];
+                            payerOutcomes: {
+                                payer: string;
+                                callCount: number;
+                                resolvedCount: number;
+                                avgDurationSeconds: number | null;
+                                recoveredCents: number;
+                            }[];
+                            callVolume: {
+                                day: string;
+                                callCount: number;
+                                avgDurationSeconds: number | null;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List audit logs for the authenticated organization with cursor pagination. Sorted by `createdAt` desc with id tiebreaker. */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: string;
+                    limit?: number;
+                    resourceType?: string;
+                    action?: string;
+                    from?: string;
+                    to?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                id: string;
+                                createdAt: string;
+                                action: string;
+                                resourceType: string;
+                                resourceId: string;
+                                userId: string | null;
+                                metadata: {
+                                    [key: string]: unknown;
+                                };
+                            }[];
+                            nextCursor: string | null;
+                            hasMore: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

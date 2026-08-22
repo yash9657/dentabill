@@ -79,8 +79,8 @@ export function DashboardSearch(): React.ReactElement {
           Search and shortcuts
         </h2>
         <p className="text-body text-gray-dark mb-4">
-          A working command palette ships in a later phase. The keyboard binding (⌘K) is already
-          live so muscle memory works the moment actions are wired up.
+          A working command palette is coming soon. The keyboard binding (⌘K) is already live so
+          muscle memory works the moment actions are wired up.
         </p>
         <div className="flex justify-end">
           <button
