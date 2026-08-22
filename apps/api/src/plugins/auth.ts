@@ -227,6 +227,24 @@ export async function registerAuthPlugin(fastify: FastifyInstance): Promise<Auth
   const env = getEnv();
   const hasClerkKeys = Boolean(env.CLERK_SECRET_KEY && env.CLERK_PUBLISHABLE_KEY);
 
+  // Without Clerk keys the fallback accepts an `x-test-user-id` header as proof
+  // of identity. That is fine on a laptop and essential for the integration
+  // suite, but on a reachable host it is a total authentication bypass: anyone
+  // who guesses or reads a clerkUserId gets full org-scoped access to that
+  // org's claims. Refusing to boot is the only safe behaviour — a warning is
+  // not enough, because the warning scrolls past and the server keeps serving.
+  //
+  // `env.ts` has long claimed server.ts enforced this at boot. It did not; the
+  // startup path only logged `auth mode: test-header-bypass` and carried on.
+  if (env.NODE_ENV === 'production' && !hasClerkKeys) {
+    throw new Error(
+      'Refusing to start: NODE_ENV=production requires CLERK_SECRET_KEY and ' +
+        'CLERK_PUBLISHABLE_KEY (or NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY). Without them the ' +
+        'API would accept the x-test-user-id header as authentication, which is a ' +
+        'complete auth bypass on any reachable host.',
+    );
+  }
+
   fastify.decorateRequest('dentabillAuth', null);
   fastify.decorateRequest('clerkAuth', null);
 
