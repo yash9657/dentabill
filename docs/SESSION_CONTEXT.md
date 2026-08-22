@@ -48,7 +48,9 @@ Remaining after the deploy session — full detail in `docs/HANDOFF.md` §3:
    the Railway database; `/v1/readyz` reports postgres + redis ok and the org,
    40 claims, 25 calls and 25 summaries are queryable in the deployed DB. All
    five services now run in `us-west2`. A pre-deploy migrate step is configured
-   on the api service but **has not executed yet** — confirm it on the next deploy.
+   on the api service but **verified not to run** on this Railway plan — after
+   any schema change, apply the migration by hand with the `railway ssh` command
+   in `docs/HANDOFF.md` §7.
 2. Vercel (not started), then the SSE cross-origin check (G-E6, riskiest).
 3. Track F: security check, adversarial review, Playwright baselines, PR.
 4. Real telephony: wire the guards, then compile the IVR maps into Retell

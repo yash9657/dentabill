@@ -101,18 +101,34 @@ it off until §5 is done.
    - `/v1/readyz` → `{"ready":true,"postgres":{"ok":true},"redis":{"ok":true}}`
    - row counts → `{orgs:1, claims:40, calls:25, summaries:25, payers:3}`
 
-   **Migrations are now automatic.** A pre-deploy command is set on the api
-   service instance, so every future deploy migrates before booting:
+   **Migrations are NOT automatic — do not assume they are.** A pre-deploy
+   command _is_ set on the api service instance and reads back correctly:
 
    ```
    ./packages/db/node_modules/.bin/prisma migrate deploy --schema packages/db/prisma/schema.prisma
    ```
 
-   It was set through the GraphQL API rather than the dashboard, which means it
-   is **not** in version control — re-read it with the query in §7 before
-   assuming it survived any service recreation. **Still unverified:** no deploy
-   has run since it was set, so the step has never actually executed. Confirm it
-   on the next `railway up` / `railway redeploy` rather than trusting it.
+   **It does not run.** This was tested, not guessed: the command was temporarily
+   wrapped in `echo PREDEPLOY_MARKER_START` / `..._DONE`, the api was redeployed
+   (`67fd8784`, SUCCESS), and neither marker appears anywhere in either the
+   deploy (`-d`) or build (`-b`) log stream. The container goes straight from
+   `Starting Container` to `Server listening` in about one second — no room for a
+   migrate run. The markers have since been removed; the plain command is left in
+   place so it starts working if the plan changes.
+
+   **Most likely cause:** pre-deploy commands are a Railway paid-plan feature and
+   this workspace is on the free tier — `me.workspaces[].subscriptionModel` is
+   `USER`, not usage-based. Railway accepts and stores the field either way and
+   ignores it silently, which is why it looks configured but never fires. Confirm
+   against Railway's current plan matrix before spending time debugging the
+   command itself.
+
+   **So: after adding any migration, apply it by hand**, using the `railway ssh`
+   command in §7. With six stable migrations and a demo deadline this is fine;
+   the alternatives, if deploys get frequent, are to upgrade the plan or to move
+   `migrate deploy` into the container entrypoint — the latter contradicts the
+   deliberate note at the top of `apps/api/Dockerfile` and is only safe while the
+   service runs a single replica.
 
 2. **Vercel** — not started. Root `apps/web`, build `pnpm --filter web build`,
    env per `docs/DEPLOY.md`. Then add the Vercel origin to Clerk allowed origins
@@ -252,6 +268,15 @@ for s in json.load(sys.stdin):
 # Run anything against the deployed database (migrations, seed, probes)
 npx --yes @railway/cli@latest ssh --service api -- sh -lc '<command>'
 
+# Apply a new migration by hand — REQUIRED after every schema change, because
+# the pre-deploy step does not fire on this plan (§3.1)
+npx --yes @railway/cli@latest ssh --service api -- sh -lc \
+  './packages/db/node_modules/.bin/prisma migrate deploy --schema packages/db/prisma/schema.prisma'
+
+# Deployment IDs. Use THIS, not `service list` — that command's deploymentId
+# field lags and will hand you the previous container's logs.
+npx --yes @railway/cli@latest deployment list --service api --json
+
 # Read back the pre-deploy command (it lives in Railway, not in this repo)
 npx --yes @railway/cli@latest api \
   'query($id:String!,$env:String!){serviceInstance(serviceId:$id,environmentId:$env){preDeployCommand}}' \
@@ -289,6 +314,22 @@ pnpm --filter @dentabill/call-worker run provision:retell -- \
   lint/test commands to changed files.
 - **The pre-commit hook exceeds a 10-minute tool timeout** on large diffs
   (eslint --fix over 60 files). Run `git commit` with `run_in_background`.
+- **`railway service list --json` reports a stale `deploymentId`.** It kept
+  pointing at the previous container after a redeploy, so `railway logs <thatId>`
+  returned the _old_ container's output — including a burst of
+  `ENOTFOUND redis.railway.internal` that looked like a live outage and was
+  actually a resolved startup race from an earlier restart. Get deployment IDs
+  from `railway deployment list --service <svc> --json` instead, and sanity-check
+  the timestamps of any log window before drawing conclusions from it.
+- **Railway silently accepts settings your plan does not honour.**
+  `preDeployCommand` stores and reads back perfectly on the free tier and simply
+  never executes (§3.1). A successful `serviceInstanceUpdate` proves the field
+  was saved, not that the feature works. Prove behaviour with a marker echo and a
+  real deploy.
+- **Private-network DNS is not ready the instant a container boots.**
+  `redis.railway.internal` threw `ENOTFOUND` for ~3s after a region-move restart
+  before resolving on its own. Treat early connection errors as a startup race
+  until they persist past readiness.
 - **Never `railway up` before every required env var is set** — the api
   crash-looped on a missing `NEXT_PUBLIC_APP_URL`. Required vars per service are
   the ones in `env.ts` with neither `.default()` nor `.optional()`.
