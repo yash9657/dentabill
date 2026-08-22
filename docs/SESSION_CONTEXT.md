@@ -33,7 +33,23 @@ Four further defects were invisible to any static check and are recorded as **AD
 
 ## Next task
 
-**Track F, then E3–E7.** In order:
+> **Start at `docs/HANDOFF.md`.** It supersedes this section: it records what is
+> actually deployed on Railway, the five verified gaps blocking real telephony,
+> where `GOLIVE_PLAN.md` is now wrong, and the traps that cost this session real
+> time. Read it before touching anything. In particular: **Railway's edge range is
+> unreachable from the owner's home network** — a failing local `curl` against
+> `*.up.railway.app` does not mean the deploy is broken.
+
+Remaining after the deploy session — full detail in `docs/HANDOFF.md` §3:
+
+1. **Migrations have not run; the Railway database is empty.** Nothing in the
+   deployed app works until they do.
+2. Vercel (not started), then the SSE cross-origin check (G-E6, riskiest).
+3. Track F: security check, adversarial review, Playwright baselines, PR.
+4. Real telephony: wire the guards, then compile the IVR maps into Retell
+   `press_digit` tools + states.
+
+Superseded ordering from the planning session:
 
 1. `/security-check` + security-reviewer over the branch diff (new endpoints, new scripts, three demo flags).
 2. Adversarial code review over the full diff; fix confirmed findings only.
