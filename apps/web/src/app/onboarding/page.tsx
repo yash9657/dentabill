@@ -39,16 +39,12 @@ export default async function OnboardingPage(): Promise<React.ReactElement> {
   if (status.state === 'onboarded') redirect('/dashboard/overview');
 
   return (
-    <main className="bg-stone-warm/30 flex min-h-screen flex-col items-center px-4 py-10 sm:py-16">
-      <Link
-        href="/"
-        aria-label="DentaBill home"
-        className="mb-10 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
-      >
+    <main className="bg-warm-stone/30 flex min-h-screen flex-col items-center px-4 py-10 sm:py-16">
+      <Link href="/" aria-label="DentaBill home" className="mb-10 rounded-sm">
         <Wordmark />
       </Link>
 
-      <div className="hairline-edge shadow-card w-full max-w-2xl rounded-[20px] bg-white px-6 py-10 sm:px-10 sm:py-12">
+      <div className="hairline-edge shadow-card rounded-card-large w-full max-w-2xl bg-white px-6 py-10 sm:px-10 sm:py-12">
         <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">
           One quick step
         </p>

@@ -62,7 +62,7 @@ export function AuditLogTable({
 
   if (errorMessage) {
     return (
-      <div role="alert" className="hairline-edge rounded-card text-body bg-stone-warm/30 px-5 py-4">
+      <div role="alert" className="hairline-edge rounded-card text-body bg-warm-stone/30 px-5 py-4">
         <p className="text-black">Couldn&apos;t load audit logs</p>
         <p className="text-gray-warm mt-1 text-sm">{errorMessage}</p>
       </div>
@@ -98,7 +98,7 @@ export function AuditLogTable({
           role="row"
           aria-rowindex={1}
           style={{ height: HEADER_HEIGHT }}
-          className="text-caption text-gray-warm bg-stone-warm/30 grid grid-cols-[2fr_1.2fr_1.2fr_1.2fr_1fr] items-center gap-4 px-5 uppercase tracking-[0.12em]"
+          className="text-caption text-gray-warm bg-warm-stone/30 grid grid-cols-[2fr_1.2fr_1.2fr_1.2fr_1fr] items-center gap-4 px-5 uppercase tracking-[0.12em]"
         >
           <span role="columnheader">Timestamp</span>
           <span role="columnheader">Actor</span>
@@ -140,7 +140,7 @@ export function AuditLogTable({
             })}
           </div>
           {isFetchingMore ? (
-            <div className="text-caption text-gray-warm absolute bottom-0 left-0 right-0 border-t border-black/5 bg-white/95 px-5 py-2">
+            <div className="text-caption text-gray-warm border-border-subtle absolute bottom-0 left-0 right-0 border-t bg-white/95 px-5 py-2">
               Loading more…
             </div>
           ) : null}
@@ -185,7 +185,7 @@ function AuditLogRow({
       className={cn(
         'group grid grid-cols-[2fr_1.2fr_1.2fr_1.2fr_1fr] items-center gap-4 px-5',
         'w-full',
-        'hover:bg-stone-warm/30 border-t border-black/5 transition-colors',
+        'hover:bg-warm-stone/30 border-border-subtle border-t transition-colors',
       )}
     >
       <span role="gridcell" className="text-body text-gray-dark text-sm">
@@ -208,7 +208,7 @@ function AuditLogRow({
       <span role="gridcell" className="flex items-center justify-end">
         <button
           onClick={onToggleExpand}
-          className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="rounded-standard text-gray-dark px-2 py-1 text-xs font-medium hover:text-black"
           aria-pressed={isExpanded}
         >
           {isExpanded ? 'Hide' : 'Show'}

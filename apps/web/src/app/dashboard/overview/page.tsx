@@ -1,3 +1,4 @@
+import { DashboardPageHeading } from '@dentabill/ui';
 import type { Metadata } from 'next';
 import * as React from 'react';
 
@@ -50,15 +51,10 @@ function hasClerkKeys(): boolean {
 export default function DashboardOverviewPage(): React.ReactElement {
   return (
     <div className="flex flex-col gap-8">
-      <header className="max-w-3xl">
-        <h1 className="font-display text-[28px] font-light leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]">
-          Welcome back
-        </h1>
-        <p className="text-body text-gray-dark mt-2">
-          A snapshot of what DentaBill is doing for your practice today. Numbers fill in the moment
-          claims start moving through the queue.
-        </p>
-      </header>
+      <DashboardPageHeading
+        title="Welcome back"
+        description="A snapshot of what DentaBill is doing for your practice today. Numbers fill in the moment claims start moving through the queue."
+      />
 
       {hasClerkKeys() ? <MissingNpiBanner /> : null}
 

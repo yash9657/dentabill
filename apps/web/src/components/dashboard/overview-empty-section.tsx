@@ -39,7 +39,7 @@ export function OverviewEmptySection({
   return (
     <section
       aria-labelledby={`${eyebrow.replace(/\s+/g, '-').toLowerCase()}-heading`}
-      className="hairline-edge shadow-card rounded-[20px] bg-white p-6 sm:p-8"
+      className="hairline-edge shadow-card rounded-card-large bg-white p-6 sm:p-8"
     >
       <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">{eyebrow}</p>
       <h2

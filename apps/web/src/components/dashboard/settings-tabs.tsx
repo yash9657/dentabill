@@ -43,7 +43,7 @@ export function SettingsTabs(): React.ReactElement {
   return (
     <nav
       aria-label="Settings sections"
-      className="-mx-4 mb-8 border-b border-black/5 sm:-mx-6 lg:-mx-8"
+      className="border-border-subtle -mx-4 mb-8 border-b sm:-mx-6 lg:-mx-8"
     >
       <ul className="flex gap-1 overflow-x-auto px-4 sm:px-6 lg:px-8">
         {SETTINGS_TABS.map(({ href, label }) => {
@@ -55,7 +55,6 @@ export function SettingsTabs(): React.ReactElement {
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'text-body inline-flex items-center border-b-2 px-3 py-3 font-medium transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black',
                   active
                     ? 'border-black text-black'
                     : 'text-gray-warm border-transparent hover:text-black',

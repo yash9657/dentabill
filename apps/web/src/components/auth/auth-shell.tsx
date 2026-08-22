@@ -42,12 +42,8 @@ export function AuthShell({
   pageDescription,
 }: AuthShellProps): React.ReactElement {
   return (
-    <main className="bg-stone-warm/40 flex min-h-screen flex-col items-center justify-start px-4 py-10 sm:py-16">
-      <Link
-        href="/"
-        aria-label="DentaBill home"
-        className="mb-10 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
-      >
+    <main className="bg-warm-stone/40 flex min-h-screen flex-col items-center justify-start px-4 py-10 sm:py-16">
+      <Link href="/" aria-label="DentaBill home" className="mb-10 rounded-sm">
         <Wordmark />
       </Link>
 

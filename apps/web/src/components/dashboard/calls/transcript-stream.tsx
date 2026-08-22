@@ -95,7 +95,7 @@ export function TranscriptStream({ callId, bearerToken, baseUrl }: Props): React
         <button
           type="button"
           onClick={reconnect}
-          className="text-caption text-gray-dark hairline-edge rounded-card bg-stone-warm/30 self-start px-3 py-2"
+          className="text-caption text-gray-dark hairline-edge rounded-card bg-warm-stone/30 self-start px-3 py-2"
         >
           Reconnect
         </button>

@@ -56,10 +56,17 @@ In the Railway web dashboard:
 1. Click **+ New** → **Service from repo** (or **GitHub repo**)
 2. Select the `dentabill` repo, branch `phase-5/golive-demo`
 3. Set:
-   - **Root directory:** `apps/api`
-   - **Dockerfile:** `./Dockerfile`
+   - **Root directory:** `/` — the **repository root**, NOT `apps/api`
+   - **Dockerfile path:** `apps/api/Dockerfile`
    - **Port:** 3001
 4. Click **Deploy**
+
+> **The root directory must stay `/`.** Railway's root-directory setting _is_ the
+> Docker build context. These are monorepo Dockerfiles — they `COPY
+pnpm-workspace.yaml`, `pnpm-lock.yaml` and the whole `packages/` tree, and they
+> run `pnpm --filter @dentabill/db exec prisma generate`. Pointing the root at
+> `apps/api` shrinks the context to that one directory and every such `COPY`
+> fails with "not found". Same rule for both workers below.
 
 #### Configure environment variables
 
@@ -77,6 +84,7 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = <your-clerk-publishable-key>
 DOB_HASH_SECRET = <generate-32-random-chars>
 RETELL_WEBHOOK_SECRET = <generate-32-random-chars>
 RETELL_API_KEY = (leave empty for FakeRetell)
+DEMO_IGNORE_PAYER_HOURS = true   # payer lines are closed evenings/weekends; else Call Now 422s
 STRIPE_SECRET_KEY = (leave empty for free pivot)
 API_CORS_ORIGINS = https://<vercel-app-url>
 ```
@@ -96,8 +104,8 @@ Wait for the build to complete. You'll see a Railway domain like `api-demo.railw
 
 1. Click **+ New** → **Service from repo**
 2. Same repo + branch, but:
-   - **Root directory:** `apps/call-worker`
-   - **Dockerfile:** `./Dockerfile`
+   - **Root directory:** `/` (repository root — see the note under 1c)
+   - **Dockerfile path:** `apps/call-worker/Dockerfile`
 3. Set environment variables:
 
 ```
@@ -124,8 +132,8 @@ QUEUE_CONCURRENCY = 2
 
 1. Click **+ New** → **Service from repo**
 2. Same repo + branch:
-   - **Root directory:** `apps/summary-worker`
-   - **Dockerfile:** `./Dockerfile`
+   - **Root directory:** `/` (repository root — see the note under 1c)
+   - **Dockerfile path:** `apps/summary-worker/Dockerfile`
 3. Set environment variables:
 
 ```
@@ -134,6 +142,7 @@ DATABASE_URL = <shared Postgres>
 REDIS_URL = <shared Redis>
 WORKER_PORT = 3011
 ANTHROPIC_API_KEY = (empty → FakeClaude; set if you have the key)
+DEMO_SUMMARIZER_FALLBACK = true   # required when ANTHROPIC_API_KEY is empty, else no summary is ever produced
 SUMMARIZER_AUTO_TRANSITION_ENABLED = true
 SUMMARIZER_MAX_OUTPUT_TOKENS = 4000
 SUMMARIZER_DAILY_TOKEN_BUDGET = 1000000
@@ -215,12 +224,9 @@ CLERK_SECRET_KEY="<your-secret>" \
 pnpm --filter @dentabill/api exec tsx scripts/demo-seed.mts
 ```
 
-Or run the API endpoint:
-
-```bash
-curl -X POST https://<railway-api-url>/v1/admin/seed/demo \
-  -H "Authorization: Bearer <clerk-token>"
-```
+There is no seed-over-HTTP endpoint — seeding is a script run against the
+database URL, deliberately, so demo data can never be created by a request to
+the live API.
 
 ---
 
@@ -231,7 +237,8 @@ curl -X POST https://<railway-api-url>/v1/admin/seed/demo \
 ```bash
 # API readiness
 curl https://<railway-api-url>/v1/readyz
-# Expected: {"ready": true}
+# Expected 200: {"ready":true,"timestamp":"…","postgres":{"ok":true},"redis":{"ok":true}}
+# Returns 503 with the same shape if either dependency fails or exceeds its 800ms probe.
 
 # Call-worker healthz
 curl https://<railway-call-worker-url>/healthz
@@ -301,6 +308,8 @@ Full matrix from `docs/GOLIVE_PLAN.md` §7:
 | `RETELL_WEBHOOK_SECRET`                   | ✓          | —           | —              | —          |
 | `RETELL_API_KEY`                          | —          | empty       | —              | —          |
 | `DEMO_AUTOPILOT`                          | —          | **true**    | —              | —          |
+| `DEMO_IGNORE_PAYER_HOURS`                 | **true**   | —           | —              | —          |
+| `DEMO_SUMMARIZER_FALLBACK`                | —          | —           | **true**       | —          |
 | `ANTHROPIC_API_KEY`                       | —          | —           | if available   | —          |
 | `SUMMARIZER_AUTO_TRANSITION_ENABLED`      | —          | —           | **true**       | —          |
 | `NEXT_PUBLIC_SSE_LIVE_TRANSCRIPT_ENABLED` | —          | —           | —              | **true**   |

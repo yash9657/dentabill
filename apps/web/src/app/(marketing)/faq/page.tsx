@@ -42,7 +42,7 @@ function Header(): React.ReactElement {
   return (
     <section className="mx-auto max-w-3xl px-4 pb-16 pt-24 sm:px-6 sm:pt-32 lg:px-8">
       <p className="text-caption text-gray-warm mb-4 uppercase tracking-[0.14em]">FAQ</p>
-      <h1 className="font-display mb-6 text-balance text-[40px] font-extralight leading-[1.08] tracking-[-0.02em] text-black sm:text-[52px]">
+      <h1 className="font-display text-hero mb-6 text-balance font-extralight text-black">
         Questions we hear most from billing leads.
       </h1>
       <p className="text-body-large text-gray-dark max-w-2xl">
@@ -190,8 +190,8 @@ interface CategoryProps {
 function Category({ category, surface }: CategoryProps): React.ReactElement {
   const surfaceClass =
     surface === 'light'
-      ? 'bg-gray-light border-t border-black/5'
-      : 'border-t border-black/5 bg-white';
+      ? 'bg-gray-light border-t border-border-subtle'
+      : 'border-t border-border-subtle bg-white';
   return (
     <section aria-labelledby={`${category.id}-heading`} className={surfaceClass}>
       <div className="mx-auto max-w-5xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
@@ -205,7 +205,7 @@ function Category({ category, surface }: CategoryProps): React.ReactElement {
           {category.heading}
         </h2>
 
-        <ul className="divide-y divide-black/10 border-y border-black/10">
+        <ul className="divide-border-subtle border-border-subtle divide-y border-y">
           {category.items.map((qa) => (
             <li key={qa.q}>
               <details className="group">
@@ -230,7 +230,7 @@ function Category({ category, surface }: CategoryProps): React.ReactElement {
 
 function ClosingCta(): React.ReactElement {
   return (
-    <section aria-label="Get in touch" className="bg-warm-stone/40 border-t border-black/5">
+    <section aria-label="Get in touch" className="bg-warm-stone/40 border-border-subtle border-t">
       <div className="mx-auto flex max-w-3xl flex-col items-start gap-6 px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
         <h2 className="font-display text-section-heading text-balance font-light text-black">
           Still have a question?

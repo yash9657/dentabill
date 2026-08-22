@@ -55,7 +55,7 @@ export function DashboardEmptyState({
 
       <div
         aria-hidden
-        className="hairline-edge bg-stone-warm/20 pointer-events-none rounded-[20px] p-6 opacity-70 sm:p-8"
+        className="hairline-edge bg-warm-stone/20 rounded-card-large pointer-events-none p-6 opacity-70 sm:p-8"
       >
         {previewChildren}
       </div>

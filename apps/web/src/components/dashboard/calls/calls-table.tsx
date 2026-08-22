@@ -61,7 +61,7 @@ export function CallsTable({
 
   if (errorMessage) {
     return (
-      <div role="alert" className="hairline-edge rounded-card text-body bg-stone-warm/30 px-5 py-4">
+      <div role="alert" className="hairline-edge rounded-card text-body bg-warm-stone/30 px-5 py-4">
         <p className="text-black">Couldn’t load calls</p>
         <p className="text-gray-warm mt-1 text-sm">{errorMessage}</p>
       </div>
@@ -95,7 +95,7 @@ export function CallsTable({
         role="row"
         aria-rowindex={1}
         style={{ height: HEADER_HEIGHT }}
-        className="text-caption text-gray-warm bg-stone-warm/30 grid grid-cols-[1.4fr_1.2fr_0.7fr_0.7fr_0.9fr] items-center gap-4 px-5 uppercase tracking-[0.12em]"
+        className="text-caption text-gray-warm bg-warm-stone/30 grid grid-cols-[1.4fr_1.2fr_0.7fr_0.7fr_0.9fr] items-center gap-4 px-5 uppercase tracking-[0.12em]"
       >
         <span role="columnheader">Started</span>
         <span role="columnheader">Status</span>
@@ -137,7 +137,7 @@ export function CallsTable({
           })}
         </div>
         {isFetchingMore ? (
-          <div className="text-caption text-gray-warm absolute bottom-0 left-0 right-0 border-t border-black/5 bg-white/95 px-5 py-2">
+          <div className="text-caption text-gray-warm border-border-subtle absolute bottom-0 left-0 right-0 border-t bg-white/95 px-5 py-2">
             Loading more…
           </div>
         ) : null}
@@ -162,8 +162,8 @@ function CallRow({
         prefetch={false}
         className={cn(
           'grid h-full grid-cols-[1.4fr_1.2fr_0.7fr_0.7fr_0.9fr] items-center gap-4 px-5',
-          'hover:bg-stone-warm/30 border-t border-black/5 transition-colors',
-          'focus-visible:bg-stone-warm/40 focus-visible:outline-none',
+          'hover:bg-warm-stone/30 border-border-subtle border-t transition-colors',
+          'focus-visible:bg-warm-stone/40 focus-visible:outline-none',
         )}
       >
         <span role="gridcell" className="text-body text-sm tabular-nums text-black">

@@ -41,7 +41,7 @@ function Header(): React.ReactElement {
   return (
     <section className="mx-auto max-w-3xl px-4 pb-16 pt-24 sm:px-6 sm:pt-32 lg:px-8">
       <p className="text-caption text-gray-warm mb-4 uppercase tracking-[0.14em]">Pricing</p>
-      <h1 className="font-display mb-6 text-balance text-[40px] font-extralight leading-[1.08] tracking-[-0.02em] text-black sm:text-[52px]">
+      <h1 className="font-display text-hero mb-6 text-balance font-extralight text-black">
         Free for practices. Forever.
       </h1>
       <p className="text-body-large text-gray-dark max-w-2xl">
@@ -55,7 +55,10 @@ function Header(): React.ReactElement {
 
 function Included(): React.ReactElement {
   return (
-    <section aria-labelledby="included-heading" className="bg-gray-light border-t border-black/5">
+    <section
+      aria-labelledby="included-heading"
+      className="bg-gray-light border-border-subtle border-t"
+    >
       <div className="mx-auto max-w-3xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
         <h2
           id="included-heading"
@@ -180,7 +183,10 @@ function Included(): React.ReactElement {
 
 function Sustainability(): React.ReactElement {
   return (
-    <section aria-labelledby="sustainability-heading" className="border-t border-black/5 bg-white">
+    <section
+      aria-labelledby="sustainability-heading"
+      className="border-border-subtle border-t bg-white"
+    >
       <div className="mx-auto max-w-3xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
         <h2
           id="sustainability-heading"
@@ -211,7 +217,7 @@ function Sustainability(): React.ReactElement {
 
 function ClosingCta(): React.ReactElement {
   return (
-    <section aria-label="Get started" className="bg-warm-stone/40 border-t border-black/5">
+    <section aria-label="Get started" className="bg-warm-stone/40 border-border-subtle border-t">
       <div className="mx-auto flex max-w-3xl flex-col items-center gap-8 px-4 py-24 text-center sm:px-6 sm:py-32 lg:px-8">
         <h2 className="font-display text-section-heading text-balance font-light text-black">
           No card required. No trial period. Just log in and use it.

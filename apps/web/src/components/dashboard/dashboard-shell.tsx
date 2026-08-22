@@ -101,19 +101,19 @@ export function DashboardShell({
 
   return (
     <DashboardShellProvider value={ctx}>
-      <div className="bg-stone-warm/30 flex min-h-screen flex-col lg:flex-row">
+      <div className="flex min-h-screen flex-col bg-white lg:flex-row">
         <aside
           id={SIDEBAR_ID}
           aria-label="Dashboard navigation"
           data-collapsed={collapsed ? 'true' : 'false'}
           className={cn(
-            'border-black/6 fixed inset-y-0 left-0 z-50 flex w-[240px] -translate-x-full flex-col border-r bg-white transition-[transform,width] duration-200 ease-out',
+            'border-border-subtle fixed inset-y-0 left-0 z-50 flex w-[240px] -translate-x-full flex-col border-r bg-white transition-[transform,width] duration-200 ease-out',
             'lg:sticky lg:inset-y-auto lg:top-0 lg:h-screen lg:translate-x-0 lg:self-start',
             drawerOpen && 'translate-x-0',
             collapsed && 'lg:w-[72px]',
           )}
         >
-          <div className="flex h-16 items-center justify-between border-b border-black/5 px-5">
+          <div className="border-border-subtle flex h-16 items-center justify-between border-b px-5">
             <div
               className={cn(
                 'font-display inline-flex items-center gap-2 text-[18px] font-light tracking-[-0.01em] text-black',
@@ -138,7 +138,7 @@ export function DashboardShell({
               onClick={() => {
                 setDrawerOpen(false);
               }}
-              className="hover:bg-stone-warm/60 inline-flex h-9 w-9 items-center justify-center rounded-md text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black lg:hidden"
+              className="hover:bg-stone-warm/60 inline-flex h-9 w-9 items-center justify-center rounded-md text-black lg:hidden"
             >
               <X className="h-5 w-5" />
             </button>
@@ -162,7 +162,7 @@ export function DashboardShell({
         <div className="flex min-w-0 flex-1 flex-col">
           <header
             role="banner"
-            className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-black/5 bg-white px-4 sm:px-6"
+            className="border-border-subtle sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b bg-white px-4 sm:px-6"
           >
             <button
               type="button"
@@ -172,7 +172,7 @@ export function DashboardShell({
               onClick={() => {
                 setDrawerOpen(true);
               }}
-              className="hover:bg-stone-warm/60 inline-flex h-10 w-10 items-center justify-center rounded-md text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black lg:hidden"
+              className="hover:bg-stone-warm/60 inline-flex h-10 w-10 items-center justify-center rounded-md text-black lg:hidden"
             >
               <Menu className="h-5 w-5" />
             </button>

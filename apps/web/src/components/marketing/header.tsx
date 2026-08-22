@@ -62,16 +62,12 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
     <header
       role="banner"
       className={cn(
-        'sticky top-0 z-40 w-full border-b border-black/5 bg-white/85 backdrop-blur',
+        'border-border-subtle sticky top-0 z-40 w-full border-b bg-white/85 backdrop-blur',
         className,
       )}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <Link
-          href="/"
-          aria-label="DentaBill home"
-          className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
-        >
+        <Link href="/" aria-label="DentaBill home" className="rounded-sm">
           <Wordmark />
         </Link>
 
@@ -79,10 +75,7 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
           <ul className="flex items-center gap-7">
             {MARKETING_NAV_LINKS.map(({ href, label }) => (
               <li key={href}>
-                <Link
-                  href={href}
-                  className="text-body text-gray-dark hover:text-black focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
-                >
+                <Link href={href} className="text-body text-gray-dark hover:text-black">
                   {label}
                 </Link>
               </li>
@@ -91,10 +84,7 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
         </nav>
 
         <div className="hidden items-center gap-3 lg:flex">
-          <Link
-            href="/sign-in"
-            className="text-body text-gray-dark hover:text-black focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
-          >
+          <Link href="/sign-in" className="text-body text-gray-dark hover:text-black">
             Sign in
           </Link>
           <Pill href="/contact" variant="black" size="sm" withArrow>
@@ -110,7 +100,7 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
           onClick={() => {
             setMobileOpen((v) => !v);
           }}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-black hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black lg:hidden"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-black hover:bg-black/5 lg:hidden"
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
@@ -119,7 +109,7 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
       <div
         id={drawerId}
         hidden={!mobileOpen}
-        className="border-t border-black/5 bg-white lg:hidden"
+        className="border-border-subtle border-t bg-white lg:hidden"
       >
         <nav aria-label="Mobile primary" className="mx-auto max-w-6xl px-4 py-4 sm:px-6">
           <ul className="flex flex-col gap-1">
@@ -130,19 +120,19 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
                   onClick={() => {
                     setMobileOpen(false);
                   }}
-                  className="text-body text-gray-dark hover:bg-gray-light/50 block rounded-md px-3 py-2 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
+                  className="text-body text-gray-dark hover:bg-gray-light/50 block rounded-md px-3 py-2 hover:text-black"
                 >
                   {label}
                 </Link>
               </li>
             ))}
-            <li className="mt-2 border-t border-black/5 pt-3">
+            <li className="border-border-subtle mt-2 border-t pt-3">
               <Link
                 href="/sign-in"
                 onClick={() => {
                   setMobileOpen(false);
                 }}
-                className="text-body text-gray-dark hover:bg-gray-light/50 block rounded-md px-3 py-2 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
+                className="text-body text-gray-dark hover:bg-gray-light/50 block rounded-md px-3 py-2 hover:text-black"
               >
                 Sign in
               </Link>

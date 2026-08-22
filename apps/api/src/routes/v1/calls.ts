@@ -10,6 +10,8 @@ import { ApiError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@dentabill/types';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { payerHoursOverridden } from '../../lib/env.js';
+
 /**
  * `/v1/claims/:id/calls` — enqueue an outbound call (P3-T16).
  *
@@ -440,10 +442,20 @@ export function callsRoutes(fastify: FastifyInstance): void {
       // ADR-037 — business-hours guard at enqueue, not worker pickup.
       const hours = checkPayerHours(claim.payerCode, new Date());
       if (hours.state === 'closed') {
-        throw new ApiError(
-          'PAYER_HOURS_CLOSED',
-          `${claim.payerCode} provider line is closed (${hours.reason}). Next opening: ${hours.nextOpeningAt.toISOString()}.`,
-        );
+        // The demo override is interlocked against RETELL_API_KEY (see
+        // payerHoursOverridden), so a real deployment can never dial a closed
+        // line. Logged at warn so it is never a silent bypass.
+        if (payerHoursOverridden()) {
+          request.log.warn(
+            { payerCode: claim.payerCode, reason: hours.reason },
+            'DEMO_IGNORE_PAYER_HOURS: enqueuing against a closed payer line',
+          );
+        } else {
+          throw new ApiError(
+            'PAYER_HOURS_CLOSED',
+            `${claim.payerCode} provider line is closed (${hours.reason}). Next opening: ${hours.nextOpeningAt.toISOString()}.`,
+          );
+        }
       }
       if (hours.state === 'unsupported_payer') {
         throw new ApiError(

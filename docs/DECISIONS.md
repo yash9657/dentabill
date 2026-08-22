@@ -635,3 +635,25 @@ The corresponding workaround is removed from each app's `vitest.setup.ts`. `TEST
 7. **Process exception:** single branch `phase-5/golive-demo` with per-task conventional commits and one squash-merged PR, instead of one-PR-per-task — justified by the timeline, not a precedent.
 
 **Consequences.** The demo is honest (real pipeline, disclosed simulation), reversible (no billing code deleted, all flags env-scoped), and leaves a recorded post-demo hardening backlog (plan §11): Retell/Anthropic BAAs, Clerk prod migration, observability wiring, evals, chaos tests, compiled workers, backups.
+
+## ADR-052 — Executing the go-live plan: four demo-blocking gaps that only running the thing revealed
+
+**Date:** 2026-08-22. **Status:** accepted. **Supersedes nothing; extends ADR-051.**
+
+**Context.** ADR-051 and `docs/GOLIVE_PLAN.md` were authored from a static audit — reading code, running typecheck and the unit suites. Execution of tracks A–E surfaced four defects that every green gate had missed, because each one only manifests when a real request travels the real pipeline. All four would have fired live, during the demo.
+
+**What the static audit could not see.**
+
+1. **The business-hours guard closes the demo.** ADR-037 blocks enqueue when the payer line is shut. Correct for production — dialling a closed line burns a call. But payer lines are closed evenings and weekends, so `POST /v1/claims/:id/calls` returned `422 PAYER_HOURS_CLOSED` on a Saturday, which is precisely when a demo runs. **Decision:** `DEMO_IGNORE_PAYER_HOURS`, interlocked against `RETELL_API_KEY` — a real telephony key restores the guard regardless of the flag, and the bypass logs at `warn`. Never a silent override.
+
+2. **`FakeClaude` cannot carry a live run.** It is fixture-driven: it throws unless a test pre-registered an output keyed by payer + transcript snippet. ADR-051 D4 treated it as the graceful fallback when `ANTHROPIC_API_KEY` is absent, but a genuine call registers no fixture, so summarization failed, retried, and dead-lettered — no summary, no claim transition, no audit entry. This is the exact shape of the FakeRetell problem G-B5 was written to fix; the same flaw existed one stage downstream and went unnoticed. **Decision:** an opt-in `deriveWhenUnregistered` mode that reads the transcript and produces a summary consistent with it, wired through `DEMO_SUMMARIZER_FALLBACK`. Default off, because for tests the throw is the point.
+
+3. **`Call.retellCallId` is UNIQUE and `FakeRetell`'s counter restarts per process.** `fake_call_1`, `fake_call_2`, … begin again at 1 on every boot, so a restarted worker collided with rows the previous process wrote and every job died on a unique-constraint violation. Any worker restart — or any redeploy — broke the next call. **Decision:** `createRetellPort` namespaces the generator per process. Tests constructing `FakeRetell` directly keep the deterministic counter.
+
+4. **`node dist/server.js` is unreachable in this workspace.** All seven workspace packages declare `"main": "./src/index.ts"` with no JS-emitting build, so even a fully compiled `apps/api/dist` would `import '@dentabill/db'` and resolve it to TypeScript. Shipping compiled output is a seven-package refactor, not a Dockerfile change. **Decision:** all three services run under `tsx`, extending the tradeoff the plan already accepted for the workers. Recorded in `docs/DEPLOY.md` with what compiling would actually require.
+
+**Consequences.**
+
+- Three demo-only flags now exist, each interlocked so it cannot weaken production: `DEMO_AUTOPILOT` and `DEMO_IGNORE_PAYER_HOURS` are inert once `RETELL_API_KEY` is set; `DEMO_SUMMARIZER_FALLBACK` is inert once `ANTHROPIC_API_KEY` is set. The safety property is that configuring the real dependency always wins over the demo flag.
+- The demo pipeline is proven, not asserted: enqueue → autopilot call (42s, 16 events) → summary (confidence 0.88) → claim transition → audit row carrying `summaryId` + `confidence` + `promptVersion`.
+- **Process lesson, and the reason this ADR exists:** every one of these four passed typecheck, lint, and 828 unit tests. Fakes built for tests are driven _by_ tests; they do not spontaneously work when a real job arrives. Any future "fake adapter" must be exercised by an actual end-to-end run before it is called done, and a phase is not complete because its gates are green — only because its path has been walked.

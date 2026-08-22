@@ -58,7 +58,7 @@ export function MetadataDrawer({ entry, onClose }: MetadataDrawerProps): React.R
 
       {/* Drawer */}
       <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-auto bg-white shadow-lg">
-        <div className="bg-stone-warm/30 sticky top-0 flex items-center justify-between border-b border-black/5 px-6 py-4">
+        <div className="bg-warm-stone/30 border-border-subtle sticky top-0 flex items-center justify-between border-b px-6 py-4">
           <div>
             <h2 className="font-display text-lg font-light text-black">Audit Details</h2>
             <p className="text-gray-warm mt-1 text-xs">
@@ -87,31 +87,31 @@ export function MetadataDrawer({ entry, onClose }: MetadataDrawerProps): React.R
           (entry.metadata.summaryId ||
             entry.metadata.confidence ||
             entry.metadata.promptVersion) ? (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-              <h3 className="font-display mb-3 text-sm font-medium text-blue-900">
+            <div className="rounded-standard border-border-subtle bg-warm-stone/20 border p-4">
+              <h3 className="font-display mb-3 text-sm font-medium text-black">
                 AI Decision Parameters
               </h3>
               <div className="space-y-2">
                 {entry.metadata.summaryId ? (
                   <div>
-                    <span className="text-xs font-medium text-blue-800">Summary ID</span>
-                    <p className="mt-1 break-all font-mono text-xs text-blue-700">
+                    <span className="text-gray-dark text-xs font-medium">Summary ID</span>
+                    <p className="text-gray-dark mt-1 break-all font-mono text-xs">
                       {formatUnknown(entry.metadata.summaryId)}
                     </p>
                   </div>
                 ) : null}
                 {entry.metadata.confidence ? (
                   <div>
-                    <span className="text-xs font-medium text-blue-800">Confidence</span>
-                    <p className="mt-1 font-mono text-xs text-blue-700">
+                    <span className="text-gray-dark text-xs font-medium">Confidence</span>
+                    <p className="text-gray-dark mt-1 font-mono text-xs">
                       {(Number(entry.metadata.confidence) * 100).toFixed(1)}%
                     </p>
                   </div>
                 ) : null}
                 {entry.metadata.promptVersion ? (
                   <div>
-                    <span className="text-xs font-medium text-blue-800">Prompt Version</span>
-                    <p className="mt-1 font-mono text-xs text-blue-700">
+                    <span className="text-gray-dark text-xs font-medium">Prompt Version</span>
+                    <p className="text-gray-dark mt-1 font-mono text-xs">
                       {formatUnknown(entry.metadata.promptVersion)}
                     </p>
                   </div>
@@ -164,18 +164,18 @@ export function MetadataDrawer({ entry, onClose }: MetadataDrawerProps): React.R
             <h3 className="text-caption text-gray-warm mb-3 font-medium uppercase tracking-[0.12em]">
               Full Metadata
             </h3>
-            <pre className="max-h-96 overflow-auto rounded-lg border border-black/5 bg-gray-50 p-4 font-mono text-xs text-black/80">
+            <pre className="rounded-standard border-border-subtle bg-gray-light max-h-96 overflow-auto border p-4 font-mono text-xs text-black/80">
               {JSON.stringify(entry.metadata, null, 2)}
             </pre>
           </div>
 
           {/* Raw entry (for debugging) */}
-          <div className="border-t border-black/5 pt-4">
+          <div className="border-border-subtle border-t pt-4">
             <details className="cursor-pointer">
               <summary className="text-gray-warm text-xs font-medium uppercase tracking-[0.12em] hover:text-black">
                 Raw Entry (debugging)
               </summary>
-              <pre className="mt-2 max-h-64 overflow-auto rounded-lg border border-black/5 bg-gray-50 p-3 font-mono text-xs text-black/60">
+              <pre className="rounded-standard border-border-subtle bg-gray-light mt-2 max-h-64 overflow-auto border p-3 font-mono text-xs text-black/60">
                 {JSON.stringify(
                   {
                     id: entry.id,
@@ -193,10 +193,10 @@ export function MetadataDrawer({ entry, onClose }: MetadataDrawerProps): React.R
           </div>
         </div>
 
-        <div className="bg-stone-warm/30 sticky bottom-0 border-t border-black/5 p-4">
+        <div className="bg-warm-stone/30 border-border-subtle sticky bottom-0 border-t p-4">
           <button
             onClick={onClose}
-            className="w-full rounded-[9999px] bg-black px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-black/90"
+            className="rounded-pill w-full bg-black px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-black/90"
           >
             Close
           </button>

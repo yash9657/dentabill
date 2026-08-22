@@ -107,7 +107,7 @@ export function ContactForm(): React.ReactElement {
         ref={successRef}
         role="status"
         tabIndex={-1}
-        className="hairline-edge bg-stone-warm/40 flex flex-col items-start gap-4 rounded-[20px] p-8 outline-none focus-visible:ring-2 focus-visible:ring-black"
+        className="hairline-edge bg-warm-stone/40 rounded-card-large focus-visible:ring-ring-blue flex flex-col items-start gap-4 p-8 outline-none focus-visible:ring-2"
       >
         <span
           aria-hidden

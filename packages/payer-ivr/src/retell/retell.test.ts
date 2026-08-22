@@ -3,6 +3,7 @@ import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import {
+  createRetellPort,
   EndCallInputSchema,
   parseRetellWebhookEnvelope,
   RetellCallEndReason,
@@ -246,5 +247,52 @@ describe('RetellWebhookEnvelopeSchema', () => {
       },
     };
     expect(RetellWebhookEnvelopeSchema.parse(envelope)).toEqual(envelope);
+  });
+});
+
+describe('createRetellPort — retellCallId uniqueness across processes', () => {
+  // `Call.retellCallId` is UNIQUE. FakeRetell's default generator is a
+  // per-instance counter that restarts at 1 every process, so two separately
+  // constructed ports used to hand out the same `fake_call_1` and the second
+  // worker's first job died on a unique-constraint violation. A restart or a
+  // redeploy was enough to break the next call.
+  const startInput = {
+    payerCode: 'CIGNA_DENTAL',
+    idempotencyKey: 'idem-1',
+    agentId: 'agent_test',
+    toNumberE164: '+15555550100',
+    fromNumberE164: '+15555550199',
+    agentMetadata: {
+      subscriberId: 'SUB-1',
+      providerNpi: '9999999999',
+      dateOfService: '2026-08-01',
+      practiceName: 'Bright Smile Dental',
+    },
+  };
+
+  it('does not reuse ids between two independently created ports', async () => {
+    const a = createRetellPort({ apiKey: '' });
+    const b = createRetellPort({ apiKey: '' });
+
+    const first = await a.port.startCall(startInput);
+    const second = await b.port.startCall(startInput);
+
+    expect(first.retellCallId).not.toBe(second.retellCallId);
+  });
+
+  it('still increments within a single port', async () => {
+    const { port } = createRetellPort({ apiKey: '' });
+    const first = await port.startCall(startInput);
+    const second = await port.startCall({ ...startInput, idempotencyKey: 'idem-2' });
+
+    expect(first.retellCallId).not.toBe(second.retellCallId);
+  });
+
+  it('keeps idempotency within a port — same key returns the same id', async () => {
+    const { port } = createRetellPort({ apiKey: '' });
+    const first = await port.startCall(startInput);
+    const repeat = await port.startCall(startInput);
+
+    expect(repeat.retellCallId).toBe(first.retellCallId);
   });
 });

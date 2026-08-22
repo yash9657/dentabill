@@ -12,7 +12,7 @@ export function MissingNpiBanner(): React.ReactElement | null {
   return (
     <div
       role="status"
-      className="hairline-edge rounded-card bg-stone-warm/40 flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+      className="hairline-edge rounded-card bg-warm-stone/40 flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <p className="text-body text-gray-dark">
         <span className="text-black">NPI is missing.</span> Calls to Delta Dental, Cigna, and
@@ -20,7 +20,7 @@ export function MissingNpiBanner(): React.ReactElement | null {
       </p>
       <Link
         href="/dashboard/settings/organization?focus=npi"
-        className="text-caption hairline-edge rounded-pill duration-standard ease-calm inline-flex h-8 shrink-0 items-center px-3 font-medium text-black transition-colors hover:bg-black hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-1"
+        className="text-caption hairline-edge rounded-pill duration-standard ease-calm inline-flex h-8 shrink-0 items-center px-3 font-medium text-black transition-colors hover:bg-black hover:text-white"
       >
         Add NPI in settings →
       </Link>

@@ -107,7 +107,7 @@ function HipaaStance(): React.ReactElement {
 
 function Baa(): React.ReactElement {
   return (
-    <section aria-labelledby="baa-heading" className="bg-gray-light border-t border-black/5">
+    <section aria-labelledby="baa-heading" className="bg-gray-light border-border-subtle border-t">
       <div className="mx-auto max-w-3xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
         <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">
           Business associate agreement
@@ -165,7 +165,10 @@ const SUB_PROCESSORS: readonly SubProcessor[] = [
 
 function SubProcessors(): React.ReactElement {
   return (
-    <section aria-labelledby="subprocessors-heading" className="border-t border-black/5 bg-white">
+    <section
+      aria-labelledby="subprocessors-heading"
+      className="border-border-subtle border-t bg-white"
+    >
       <div className="mx-auto max-w-5xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
         <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">
           Sub-processors
@@ -190,7 +193,7 @@ function SubProcessors(): React.ReactElement {
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-black/10">
+              <tr className="border-border-light border-b">
                 <th
                   scope="col"
                   className="text-caption text-gray-warm py-3 pr-6 font-medium uppercase tracking-[0.14em]"
@@ -213,7 +216,10 @@ function SubProcessors(): React.ReactElement {
             </thead>
             <tbody>
               {SUB_PROCESSORS.map((p) => (
-                <tr key={p.name} className="border-b border-black/5 align-baseline last:border-0">
+                <tr
+                  key={p.name}
+                  className="border-border-subtle border-b align-baseline last:border-0"
+                >
                   <td className="text-body py-4 pr-6 font-medium text-black">{p.name}</td>
                   <td className="text-body text-gray-dark py-4 pr-6">{p.purpose}</td>
                   <td className="text-body text-gray-dark whitespace-nowrap py-4">{p.region}</td>
@@ -229,7 +235,10 @@ function SubProcessors(): React.ReactElement {
 
 function Disclosure(): React.ReactElement {
   return (
-    <section aria-labelledby="disclosure-heading" className="bg-gray-light border-t border-black/5">
+    <section
+      aria-labelledby="disclosure-heading"
+      className="bg-gray-light border-border-subtle border-t"
+    >
       <div className="mx-auto max-w-3xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
         <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">
           Vulnerability disclosure
@@ -271,7 +280,10 @@ function Disclosure(): React.ReactElement {
 
 function ComplianceRoadmap(): React.ReactElement {
   return (
-    <section aria-labelledby="compliance-heading" className="border-t border-black/5 bg-white">
+    <section
+      aria-labelledby="compliance-heading"
+      className="border-border-subtle border-t bg-white"
+    >
       <div className="mx-auto max-w-3xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
         <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">Compliance</p>
         <h2
@@ -298,7 +310,7 @@ function ComplianceRoadmap(): React.ReactElement {
 
 function ClosingCta(): React.ReactElement {
   return (
-    <section aria-label="Get in touch" className="bg-warm-stone/40 border-t border-black/5">
+    <section aria-label="Get in touch" className="bg-warm-stone/40 border-border-subtle border-t">
       <div className="mx-auto flex max-w-3xl flex-col items-start gap-6 px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
         <h2 className="font-display text-section-heading text-balance font-light text-black">
           If you are a security reviewer, ask us anything.

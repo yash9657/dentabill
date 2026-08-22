@@ -57,7 +57,7 @@ export default function AboutPage(): React.ReactElement {
 
       <section
         aria-labelledby="principles-heading"
-        className="bg-gray-light border-t border-black/5"
+        className="bg-gray-light border-border-subtle border-t"
       >
         <div className="mx-auto max-w-5xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
           <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">
@@ -89,7 +89,7 @@ export default function AboutPage(): React.ReactElement {
         </div>
       </section>
 
-      <section aria-label="Get in touch" className="bg-warm-stone/40 border-t border-black/5">
+      <section aria-label="Get in touch" className="bg-warm-stone/40 border-border-subtle border-t">
         <div className="mx-auto flex max-w-3xl flex-col items-start gap-6 px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
           <h2 className="font-display text-section-heading text-balance font-light text-black">
             If your practice is on hold right now, we would like to talk.

@@ -157,10 +157,9 @@ function Chip({
       onClick={onClick}
       className={cn(
         'rounded-pill h-7 px-2.5 text-[13px] font-medium transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-1',
         active
           ? 'bg-black text-white'
-          : 'hairline-edge bg-stone-warm/40 text-gray-dark hover:bg-stone-warm/60',
+          : 'hairline-edge bg-warm-stone/40 text-gray-dark hover:bg-warm-stone/60',
       )}
     >
       {children}

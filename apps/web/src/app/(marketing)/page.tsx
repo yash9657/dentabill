@@ -78,7 +78,7 @@ function LiveStatusStrip(): React.ReactElement {
       aria-label="Live call indicator example"
       className="mx-auto max-w-5xl px-4 pb-24 sm:px-6 lg:px-8"
     >
-      <div className="hairline-edge flex flex-col gap-4 rounded-[20px] bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+      <div className="hairline-edge rounded-card-large flex flex-col gap-4 bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
         <div className="flex items-center gap-3">
           <StatusDot variant="active" />
           <span className="font-body text-body-standard text-black">
@@ -116,7 +116,7 @@ function HowItWorks(): React.ReactElement {
   return (
     <section
       aria-labelledby="how-it-works-heading"
-      className="bg-gray-light border-t border-black/5"
+      className="bg-gray-light border-border-subtle border-t"
     >
       <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
         <div className="mb-16 max-w-2xl">
@@ -154,7 +154,10 @@ function HowItWorks(): React.ReactElement {
 
 function Capabilities(): React.ReactElement {
   return (
-    <section aria-labelledby="capabilities-heading" className="border-t border-black/5 bg-white">
+    <section
+      aria-labelledby="capabilities-heading"
+      className="border-border-subtle border-t bg-white"
+    >
       <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
         <h2 id="capabilities-heading" className="sr-only">
           Capabilities
@@ -209,7 +212,7 @@ function CapabilityRow({
 
 function ClosingCta(): React.ReactElement {
   return (
-    <section aria-label="Get started" className="bg-warm-stone/40 border-t border-black/5">
+    <section aria-label="Get started" className="bg-warm-stone/40 border-border-subtle border-t">
       <div className="mx-auto flex max-w-3xl flex-col items-center gap-8 px-4 py-24 text-center sm:px-6 sm:py-32 lg:px-8">
         <h2 className="font-display text-section-heading text-balance font-light text-black">
           Give your front desk back the morning.

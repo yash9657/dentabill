@@ -50,7 +50,10 @@ export default function BlogIndexPage(): React.ReactElement {
 
 function EmptyState(): React.ReactElement {
   return (
-    <section aria-labelledby="empty-blog-heading" className="bg-gray-light border-t border-black/5">
+    <section
+      aria-labelledby="empty-blog-heading"
+      className="bg-gray-light border-border-subtle border-t"
+    >
       <div className="mx-auto grid max-w-5xl gap-12 px-4 py-24 sm:px-6 sm:py-32 lg:grid-cols-12 lg:gap-16 lg:px-8">
         <div className="lg:col-span-5">
           <h2
@@ -77,17 +80,20 @@ interface PostListProps {
 
 function PostList({ posts }: PostListProps): React.ReactElement {
   return (
-    <section aria-labelledby="post-list-heading" className="bg-gray-light border-t border-black/5">
+    <section
+      aria-labelledby="post-list-heading"
+      className="bg-gray-light border-border-subtle border-t"
+    >
       <h2 id="post-list-heading" className="sr-only">
         Posts
       </h2>
       <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
-        <ul className="divide-y divide-black/10 border-y border-black/10">
+        <ul className="divide-border-subtle border-border-subtle divide-y border-y">
           {posts.map((post) => (
             <li key={post.slug}>
               <a
                 href={`/blog/${post.slug}`}
-                className="block py-8 hover:bg-white/40 focus-visible:rounded-md focus-visible:bg-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
+                className="focus-visible:ring-ring-blue block py-8 hover:bg-white/40 focus-visible:rounded-md focus-visible:bg-white/40 focus-visible:outline-none focus-visible:ring-2"
               >
                 <p className="text-caption text-gray-warm mb-2 uppercase tracking-[0.14em]">
                   {post.publishedAt} · {String(post.minutesToRead)} min

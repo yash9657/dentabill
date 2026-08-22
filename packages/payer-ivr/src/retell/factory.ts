@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { DemoAutopilot } from './autopilot.js';
 import { FakeRetell } from './fake.js';
 import { LiveRetell } from './live.js';
@@ -35,7 +37,19 @@ export function createRetellPort(input: CreateRetellPortInput): CreateRetellPort
     return { port: new LiveRetell({ apiKey }), mode: 'live' };
   }
 
-  const fakePort = new FakeRetell();
+  // FakeRetell's default id generator is a per-instance counter — `fake_call_1`,
+  // `fake_call_2`, … — which restarts from 1 with every new process. `Call.retellCallId`
+  // is UNIQUE, so a restarted worker collides with rows the previous process wrote
+  // and every job dies on `Unique constraint failed on (retellCallId)`. Any worker
+  // restart or redeploy would break the next call.
+  //
+  // Namespacing by process keeps ids unique across restarts. Tests that construct
+  // `new FakeRetell()` directly are untouched and keep the tidy counter.
+  const processTag = randomUUID().slice(0, 8);
+  let sequence = 0;
+  const fakePort = new FakeRetell({
+    retellCallIdFactory: (): string => `fake_${processTag}_${String(++sequence)}`,
+  });
 
   if (input.demoAutopilot === true) {
     const autopilot = new DemoAutopilot({ port: fakePort, enabled: true });

@@ -62,7 +62,7 @@ export function AuditLogPage(): React.ReactElement {
                   resourceType: e.target.value || undefined,
                 }));
               }}
-              className="mt-2 w-full rounded-lg border border-black/5 bg-white px-4 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="rounded-standard border-border-subtle mt-2 w-full border bg-white px-4 py-2 text-sm text-black"
             >
               <option value="">All Resources</option>
               {AUDIT_RESOURCE_TYPES.map((type) => (
@@ -91,7 +91,7 @@ export function AuditLogPage(): React.ReactElement {
                   from: e.target.value || undefined,
                 }));
               }}
-              className="mt-2 w-full rounded-lg border border-black/5 bg-white px-4 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="rounded-standard border-border-subtle mt-2 w-full border bg-white px-4 py-2 text-sm text-black"
             />
           </div>
 
@@ -113,7 +113,7 @@ export function AuditLogPage(): React.ReactElement {
                   to: e.target.value || undefined,
                 }));
               }}
-              className="mt-2 w-full rounded-lg border border-black/5 bg-white px-4 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="rounded-standard border-border-subtle mt-2 w-full border bg-white px-4 py-2 text-sm text-black"
             />
           </div>
         </div>

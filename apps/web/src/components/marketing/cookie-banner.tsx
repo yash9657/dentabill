@@ -67,7 +67,7 @@ export function CookieBanner({ storage }: CookieBannerProps = {}): React.ReactEl
     <div
       role="region"
       aria-label="Cookie notice"
-      className="shadow-card fixed bottom-4 left-1/2 z-50 w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-black/10 bg-white p-4 sm:p-5"
+      className="shadow-card border-border-subtle fixed bottom-4 left-1/2 z-50 w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border bg-white p-4 sm:p-5"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-body-small text-gray-dark text-balance">
@@ -75,7 +75,7 @@ export function CookieBanner({ storage }: CookieBannerProps = {}): React.ReactEl
           pages perform. See our{' '}
           <Link
             href="/privacy"
-            className="text-black underline underline-offset-2 hover:no-underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
+            className="text-black underline underline-offset-2 hover:no-underline"
           >
             privacy policy
           </Link>

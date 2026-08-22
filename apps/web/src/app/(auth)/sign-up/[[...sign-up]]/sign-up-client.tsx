@@ -55,7 +55,7 @@ export function SignUpClient(): React.ReactElement {
       appearance={{
         elements: {
           rootBox: 'mx-auto w-full',
-          cardBox: 'shadow-card hairline-edge rounded-[20px] bg-white',
+          cardBox: 'shadow-card hairline-edge rounded-card-large bg-white',
           card: 'shadow-none border-0 bg-transparent',
         },
       }}
@@ -65,7 +65,7 @@ export function SignUpClient(): React.ReactElement {
 
 function InviteOnlyPanel(): React.ReactElement {
   return (
-    <div className="hairline-edge shadow-card rounded-[20px] bg-white p-8 sm:p-10">
+    <div className="hairline-edge shadow-card rounded-card-large bg-white p-8 sm:p-10">
       <div className="space-y-3">
         <p className="text-caption text-gray-warm uppercase tracking-[0.14em]">
           By invitation only

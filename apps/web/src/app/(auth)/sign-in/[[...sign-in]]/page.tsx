@@ -47,7 +47,7 @@ export default function SignInPage(): React.ReactElement {
       appearance={{
         elements: {
           rootBox: 'mx-auto w-full',
-          cardBox: 'shadow-card hairline-edge rounded-[20px] bg-white',
+          cardBox: 'shadow-card hairline-edge rounded-card-large bg-white',
           card: 'shadow-none border-0 bg-transparent',
         },
       }}

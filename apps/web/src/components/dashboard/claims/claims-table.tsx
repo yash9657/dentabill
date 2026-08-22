@@ -69,7 +69,7 @@ export function ClaimsTable({
 
   if (errorMessage) {
     return (
-      <div role="alert" className="hairline-edge rounded-card text-body bg-stone-warm/30 px-5 py-4">
+      <div role="alert" className="hairline-edge rounded-card text-body bg-warm-stone/30 px-5 py-4">
         <p className="text-black">Couldn’t load claims</p>
         <p className="text-gray-warm mt-1 text-sm">{errorMessage}</p>
       </div>
@@ -103,7 +103,7 @@ export function ClaimsTable({
         role="row"
         aria-rowindex={1}
         style={{ height: HEADER_HEIGHT }}
-        className="text-caption text-gray-warm bg-stone-warm/30 grid grid-cols-[1.4fr_1.3fr_0.85fr_1fr_0.95fr_0.55fr_minmax(7rem,0.9fr)] items-center gap-4 px-5 uppercase tracking-[0.12em]"
+        className="text-caption text-gray-warm bg-warm-stone/30 grid grid-cols-[1.4fr_1.3fr_0.85fr_1fr_0.95fr_0.55fr_minmax(7rem,0.9fr)] items-center gap-4 px-5 uppercase tracking-[0.12em]"
       >
         <span role="columnheader">Claim</span>
         <span role="columnheader">Payer</span>
@@ -147,7 +147,7 @@ export function ClaimsTable({
           })}
         </div>
         {isFetchingMore ? (
-          <div className="text-caption text-gray-warm absolute bottom-0 left-0 right-0 border-t border-black/5 bg-white/95 px-5 py-2">
+          <div className="text-caption text-gray-warm border-border-subtle absolute bottom-0 left-0 right-0 border-t bg-white/95 px-5 py-2">
             Loading more…
           </div>
         ) : null}
@@ -172,8 +172,8 @@ function ClaimRow({
       style={style}
       className={cn(
         'group grid grid-cols-[1.4fr_1.3fr_0.85fr_1fr_0.95fr_0.55fr_minmax(7rem,0.9fr)] items-center gap-4 px-5',
-        'hover:bg-stone-warm/30 border-t border-black/5 transition-colors',
-        'focus-within:bg-stone-warm/40',
+        'hover:bg-warm-stone/30 border-border-subtle border-t transition-colors',
+        'focus-within:bg-warm-stone/40',
       )}
     >
       {/* The first six cells are wrapped in a Link so the whole row remains

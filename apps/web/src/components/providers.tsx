@@ -39,9 +39,9 @@ const CLERK_APPEARANCE = {
   },
   elements: {
     formButtonPrimary: 'rounded-pill bg-black text-white hover:bg-black/90 font-body font-medium',
-    card: 'shadow-card hairline-edge rounded-[20px]',
+    card: 'shadow-card hairline-edge rounded-card-large',
     headerTitle: 'font-display font-light text-black',
-    socialButtonsBlockButton: 'rounded-pill border-black/10',
+    socialButtonsBlockButton: 'rounded-pill border-border-light',
   },
 } as const;
 

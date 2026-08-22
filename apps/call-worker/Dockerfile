@@ -60,7 +60,7 @@ COPY --from=deps --chown=appuser:appuser /build ./
 USER appuser
 
 ENV NODE_ENV=production
-ENV HEALTH_PORT=3010
+ENV WORKER_PORT=3010
 
 EXPOSE 3010
 

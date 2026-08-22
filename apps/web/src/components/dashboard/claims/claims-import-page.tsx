@@ -167,7 +167,7 @@ function DropZone(props: DropZoneProps): React.ReactElement {
         aria-label="CSV upload"
         className={cn(
           'rounded-card hairline-edge flex flex-col items-center gap-3 bg-white px-6 py-12 text-center transition-colors',
-          dragActive ? 'bg-stone-warm/40' : '',
+          dragActive ? 'bg-warm-stone/40' : '',
         )}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
@@ -289,7 +289,7 @@ function Stat({
 
 function ErrorList({ errors }: { readonly errors: ImportSummary['errors'] }): React.ReactElement {
   return (
-    <details className="rounded-card bg-stone-warm/30 px-5 py-4">
+    <details className="rounded-card bg-warm-stone/30 px-5 py-4">
       <summary className="text-body cursor-pointer text-sm font-medium text-black">
         {errors.length} {errors.length === 1 ? 'row was' : 'rows were'} skipped due to validation
         errors

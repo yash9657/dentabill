@@ -76,10 +76,9 @@ export function DashboardSidebar(): React.ReactElement {
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'group flex items-center gap-3 rounded-md px-3 py-2 transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black',
                   active
-                    ? 'bg-stone-warm/70 text-black'
-                    : 'text-gray-dark hover:bg-stone-warm/50 hover:text-black',
+                    ? 'bg-warm-stone/80 text-black'
+                    : 'text-gray-dark hover:bg-warm-stone/60 hover:text-black',
                   collapsed && 'lg:justify-center lg:px-2',
                 )}
               >
@@ -93,15 +92,14 @@ export function DashboardSidebar(): React.ReactElement {
         })}
       </ul>
 
-      <div className="mt-auto hidden border-t border-black/5 pt-3 lg:block">
+      <div className="border-border-subtle mt-auto hidden border-t pt-3 lg:block">
         <button
           type="button"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-pressed={collapsed}
           onClick={toggleCollapsed}
           className={cn(
-            'text-gray-warm hover:bg-stone-warm/50 flex w-full items-center gap-3 rounded-md px-3 py-2 transition-colors hover:text-black',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black',
+            'text-gray-warm hover:bg-warm-stone/60 flex w-full items-center gap-3 rounded-md px-3 py-2 transition-colors hover:text-black',
             collapsed && 'justify-center px-2',
           )}
         >

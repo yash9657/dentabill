@@ -52,7 +52,7 @@ function AuthenticatedCallDetail({ id }: { readonly id: string }): React.ReactEl
         <BackLink />
         <div
           role="alert"
-          className="hairline-edge rounded-card text-body bg-stone-warm/30 px-5 py-4"
+          className="hairline-edge rounded-card text-body bg-warm-stone/30 px-5 py-4"
         >
           <p className="text-black">Couldn’t load this call</p>
           <p className="text-gray-warm mt-1 text-sm">
@@ -206,7 +206,7 @@ function Entry({
   readonly body: string;
 }): React.ReactElement {
   return (
-    <li className="grid grid-cols-[140px_1fr] gap-6 border-b border-black/5 px-5 py-4 last:border-b-0">
+    <li className="border-border-subtle grid grid-cols-[140px_1fr] gap-6 border-b px-5 py-4 last:border-b-0">
       <span className="text-caption text-gray-warm uppercase tabular-nums tracking-[0.12em]">
         {when}
       </span>

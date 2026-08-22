@@ -53,11 +53,11 @@ export function DashboardSearch(): React.ReactElement {
         type="button"
         aria-label="Open command palette (Cmd+K)"
         onClick={open}
-        className="text-gray-warm hover:bg-stone-warm/60 hairline-edge hidden h-9 min-w-[180px] items-center gap-2 rounded-md bg-white px-3 transition-colors hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black sm:inline-flex"
+        className="text-gray-warm hover:bg-warm-stone/60 hairline-edge hidden h-9 min-w-[180px] items-center gap-2 rounded-md bg-white px-3 transition-colors hover:text-black sm:inline-flex"
       >
         <Search className="h-4 w-4 shrink-0" aria-hidden />
         <span className="text-caption flex-1 text-left">Search</span>
-        <kbd className="text-caption text-gray-warm border-black/8 hidden rounded border px-1.5 py-0.5 font-sans md:inline">
+        <kbd className="text-caption text-gray-warm border-border-subtle hidden rounded border px-1.5 py-0.5 font-sans md:inline">
           ⌘K
         </kbd>
       </button>
@@ -65,7 +65,7 @@ export function DashboardSearch(): React.ReactElement {
         type="button"
         aria-label="Open command palette (Cmd+K)"
         onClick={open}
-        className="hover:bg-stone-warm/60 inline-flex h-9 w-9 items-center justify-center rounded-md text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black sm:hidden"
+        className="hover:bg-warm-stone/60 inline-flex h-9 w-9 items-center justify-center rounded-md text-black sm:hidden"
       >
         <Search className="h-4 w-4" aria-hidden />
       </button>
@@ -73,9 +73,9 @@ export function DashboardSearch(): React.ReactElement {
       <dialog
         ref={dialogRef}
         aria-label="Command palette"
-        className="hairline-edge shadow-card w-full max-w-lg rounded-[20px] bg-white p-6 backdrop:bg-black/30"
+        className="hairline-edge shadow-card rounded-card-large w-full max-w-lg bg-white p-6 backdrop:bg-black/30"
       >
-        <h2 className="font-display mb-2 text-[20px] font-light leading-[1.2] tracking-[-0.005em] text-black">
+        <h2 className="font-display text-body-large mb-2 font-light text-black">
           Search and shortcuts
         </h2>
         <p className="text-body text-gray-dark mb-4">
@@ -86,7 +86,7 @@ export function DashboardSearch(): React.ReactElement {
           <button
             type="button"
             onClick={close}
-            className="text-body text-gray-dark hover:bg-stone-warm/60 inline-flex h-9 items-center rounded-md px-3 transition-colors hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
+            className="text-body text-gray-dark hover:bg-warm-stone/60 inline-flex h-9 items-center rounded-md px-3 transition-colors hover:text-black"
           >
             Close
           </button>

@@ -35,7 +35,7 @@ export function OverviewStatStrip({ stats }: OverviewStatStripProps): React.Reac
   return (
     <section
       aria-label="Headline metrics"
-      className="hairline-edge bg-stone-warm/30 grid grid-cols-2 gap-px overflow-hidden rounded-[20px] md:grid-cols-4"
+      className="hairline-edge bg-warm-stone/30 rounded-card-large grid grid-cols-2 gap-px overflow-hidden md:grid-cols-4"
     >
       {stats.map((stat) => (
         <div key={stat.label} className="bg-white px-5 py-5 sm:px-6 sm:py-6">

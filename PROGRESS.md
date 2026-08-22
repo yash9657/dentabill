@@ -2,9 +2,10 @@
 
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
-**Last updated:** 2026-08-21
-**Current phase:** Phase 5 — Go-live for investor demo (**plan complete, execution next**). Full plan with all decisions taken: `docs/GOLIVE_PLAN.md` (ADR-051). Headlines: Railway + Vercel; free-forever pivot (billing dormant, pricing rewritten, billing → usage); `DEMO_AUTOPILOT` simulated telephony through the real pipeline; new `/dashboard/reports` + audit-log viewer; anti-slop UI token sweep. Audit 2026-08-21 confirmed repo is green (typecheck ✓, api 133/133 ✓, web 267/267 ✓; lint red only from stale untracked duplicates slated for deletion in G-A1).
-**Next task:** Execute `docs/GOLIVE_PLAN.md` — Track A first, then B/C/D/E in parallel workflows, F last. Owner actions in plan §10 (Railway/Vercel access, Clerk dev keys, optional `ANTHROPIC_API_KEY`).
+**Last updated:** 2026-08-22
+**Current phase:** Phase 5 — Go-live for investor demo (**tracks A–E2 executed; deploy + telephony next**). Plan: `docs/GOLIVE_PLAN.md` (ADR-051); execution findings: **ADR-052**. All gates green: typecheck 16/16 packages, ESLint 0 errors, **1,006 tests passing**, three Docker images building, api image verified booting and serving `/v1/readyz` 200 with live Postgres + Redis probes.
+**Proven end-to-end, not asserted:** one real enqueue drove `PENDING→CALLING→DENIED→MANUAL_REVIEW`, a 42s call with 16 CallEvents, a CallSummary at 0.88 confidence, and an audit row carrying `summaryId` + `confidence` + `promptVersion` — demo-script step 7 working for real.
+**Next task:** Deploy to Railway + Vercel (E3–E7), then real telephony. Retell is further along than the docs claimed: the API key works, all three payer agents already exist in the account, and the outbound number + agent IDs are configured. The remaining telephony gap is that the agents carry only an `end_call` tool — **no `press_digit`** — so they can talk to a rep but cannot navigate an IVR. Fix is a compiler from `packages/payer-ivr/src/ivr/maps/*` (already a `WAIT`/`DTMF`/`COLLECT_VOICE_INPUT`/`WAIT_FOR_HUMAN` step machine) into Retell `press_digit` tools + states. The hold detector, duration guard and a `waitForCallEnd` timeout also remain unwired — no real call should be placed until they are.
 **Carry-over (deferred, user-driven):** **P2-T52** — `PRODUCT.md` via `$impeccable teach` (interactive skill — cannot be done autonomously).
 
 ---

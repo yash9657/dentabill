@@ -53,14 +53,10 @@ export function MarketingFooter(): React.ReactElement {
   const year = new Date().getFullYear();
 
   return (
-    <footer role="contentinfo" className="border-t border-black/5 bg-white">
+    <footer role="contentinfo" className="border-border-subtle border-t bg-white">
       <div className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.5fr_2fr_1fr] lg:gap-16 lg:px-8">
         <div className="space-y-4">
-          <Link
-            href="/"
-            aria-label="DentaBill home"
-            className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
-          >
+          <Link href="/" aria-label="DentaBill home" className="rounded-sm">
             <Wordmark size="lg" />
           </Link>
           <p className="text-body text-gray-dark max-w-sm text-balance">
@@ -78,10 +74,7 @@ export function MarketingFooter(): React.ReactElement {
               <ul className="space-y-2">
                 {links.map(({ href, label }) => (
                   <li key={`${heading}-${href}-${label}`}>
-                    <Link
-                      href={href}
-                      className="text-body text-gray-dark hover:text-black focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
-                    >
+                    <Link href={href} className="text-body text-gray-dark hover:text-black">
                       {label}
                     </Link>
                   </li>
@@ -99,7 +92,7 @@ export function MarketingFooter(): React.ReactElement {
         </div>
       </div>
 
-      <div className="border-t border-black/5">
+      <div className="border-border-subtle border-t">
         <div className="text-caption text-gray-warm mx-auto flex max-w-6xl flex-col items-start gap-2 px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <p>© {year} DentaBill. All rights reserved.</p>
           <p>HIPAA-aware by design. BAA available on request.</p>

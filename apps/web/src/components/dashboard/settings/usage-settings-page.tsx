@@ -1,5 +1,6 @@
 'use client';
 
+import { StatTile } from '@dentabill/ui';
 import * as React from 'react';
 
 import {
@@ -50,22 +51,14 @@ export function UsageSettingsPage(): React.ReactElement {
       </div>
 
       <div className="hairline-edge rounded-card grid grid-cols-1 gap-4 bg-white p-6 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <span className="text-caption text-gray-warm uppercase tracking-[0.12em]">
-            This month
-          </span>
-          <span className="font-display text-[28px] font-light leading-[1.1] tracking-[-0.01em] text-black">
-            {usage.isPending ? '—' : formatCents(usage.data?.currentMonthCents ?? 0)}
-          </span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-caption text-gray-warm uppercase tracking-[0.12em]">
-            Last 90 days
-          </span>
-          <span className="font-display text-[28px] font-light leading-[1.1] tracking-[-0.01em] text-black">
-            {usage.isPending ? '—' : formatCents(usage.data?.last90DaysCents ?? 0)}
-          </span>
-        </div>
+        <StatTile
+          label="This month"
+          value={usage.isPending ? '—' : formatCents(usage.data?.currentMonthCents ?? 0)}
+        />
+        <StatTile
+          label="Last 90 days"
+          value={usage.isPending ? '—' : formatCents(usage.data?.last90DaysCents ?? 0)}
+        />
       </div>
 
       <div className="flex flex-col gap-3">

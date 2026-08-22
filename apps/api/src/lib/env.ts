@@ -47,6 +47,25 @@ const envSchema = z.object({
    * assertions.
    */
   CLERK_WEBHOOK_SECRET: z.string().optional(),
+  /**
+   * Telephony vendor key. The api never places calls itself; it reads this
+   * only to know whether real telephony is configured, which gates the
+   * demo-only overrides below.
+   */
+  RETELL_API_KEY: z.string().optional(),
+  /**
+   * Demo-only: skip the ADR-037 payer business-hours guard at enqueue.
+   *
+   * The guard is correct for production — dialling a closed payer line burns
+   * a call and annoys a practice. But it also means "Call Now" returns 422
+   * every evening and all weekend, which is exactly when a demo is likely to
+   * run. This lets the demo work at 9pm on a Saturday without pretending the
+   * payer is open.
+   *
+   * Ignored unless `RETELL_API_KEY` is empty, so it can never suppress the
+   * guard once real telephony is wired up. See `payerHoursOverridden`.
+   */
+  DEMO_IGNORE_PAYER_HOURS: z.enum(['true', 'false']).optional().default('false'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -104,4 +123,18 @@ export function getEnv(): Env {
 export function initEnv(): Env {
   env = loadEnv();
   return env;
+}
+
+/**
+ * Whether the payer business-hours guard is currently overridden for the demo.
+ *
+ * Two conditions, both required: the operator opted in with
+ * `DEMO_IGNORE_PAYER_HOURS=true`, AND no `RETELL_API_KEY` is configured. The
+ * second is the safety interlock — the moment real telephony credentials
+ * exist, the guard comes back regardless of the flag, so this can never cause
+ * a real out-of-hours dial.
+ */
+export function payerHoursOverridden(candidate: Env = getEnv()): boolean {
+  const hasRealTelephony = Boolean(candidate.RETELL_API_KEY && candidate.RETELL_API_KEY.length > 0);
+  return candidate.DEMO_IGNORE_PAYER_HOURS === 'true' && !hasRealTelephony;
 }
