@@ -53,3 +53,25 @@ export {
   type DlqReason,
   type EnqueueDlqJobInput,
 } from './dlq.js';
+export {
+  createBullMqJobDispatcher,
+  JOB_DISPATCH_MODES,
+  parseJobDispatchMode,
+  type CreateBullMqJobDispatcherOptions,
+  type DispatchCallOptions,
+  type JobDispatcher,
+  type JobDispatchMode,
+} from './dispatcher.js';
+export {
+  asBullMqJob,
+  computeBackoffMs,
+  createInlineJobDispatcher,
+  INTERNAL_JOB_ROUTES,
+  INTERNAL_JOB_SECRET_HEADER,
+  runInlineJob,
+  type CreateInlineJobDispatcherOptions,
+  type InlineJob,
+  type InlineJobKind,
+  type InlineJobOutcome,
+  type RunInlineJobOptions,
+} from './inline.js';
