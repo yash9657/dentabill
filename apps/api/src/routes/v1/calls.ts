@@ -1,11 +1,6 @@
 import { audit, getOrgScopedDb, prisma } from '@dentabill/db';
 import { checkPayerHours } from '@dentabill/payer-ivr';
-import {
-  CALL_JOB_NAME,
-  type CallJobData,
-  SUMMARY_JOB_NAME,
-  type SummaryJobData,
-} from '@dentabill/queue';
+import type { CallJobData, SummaryJobData } from '@dentabill/queue';
 import { ApiError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@dentabill/types';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -508,11 +503,10 @@ export function callsRoutes(fastify: FastifyInstance): void {
       });
 
       try {
-        await fastify.callsQueue.add(CALL_JOB_NAME, data, {
-          jobId: idempotencyKey,
+        await fastify.jobDispatcher.dispatchCall(data, {
           // Higher claimPriority → lower BullMQ priority value (BullMQ
           // is min-first). Map [0..100] → [101..1] so 100 priority
-          // dials before 0.
+          // dials before 0. Inline dispatch ignores priority.
           priority: 101 - data.claimPriority,
         });
       } catch (err) {
@@ -958,21 +952,19 @@ export function callsRoutes(fastify: FastifyInstance): void {
         promptVersion: 'v1',
         idempotencyKey,
       };
-      const job = await fastify.summariesQueue.add(SUMMARY_JOB_NAME, data, {
-        jobId: idempotencyKey,
-      });
+      const jobId = await fastify.jobDispatcher.dispatchSummary(data);
 
       await audit({
         action: 'callSummary.retry',
         resourceType: 'Call',
         resourceId: id,
         organizationId: orgId,
-        metadata: { clerkUserId: auth.userId, jobId: job.id ?? idempotencyKey, retryNumber },
+        metadata: { clerkUserId: auth.userId, jobId, retryNumber },
       });
 
       reply.code(202);
       return {
-        jobId: job.id ?? idempotencyKey,
+        jobId,
         callId: id,
         retryNumber,
         queuedAt: new Date().toISOString(),

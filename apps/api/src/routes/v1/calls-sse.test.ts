@@ -10,6 +10,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { buildServer } from '../../app.js';
+import { initEnv } from '../../lib/env.js';
 
 interface Seeded {
   orgId: string;
@@ -18,7 +19,7 @@ interface Seeded {
   retellCallId: string;
 }
 
-async function seedCall(): Promise<Seeded> {
+async function seedCall(callStatus: 'COMPLETED' | 'NAVIGATING_IVR' = 'COMPLETED'): Promise<Seeded> {
   const slug = Math.random().toString(36).slice(2);
   const org = await prisma.organization.create({
     data: { name: `Org ${slug}`, clerkOrgId: `clerk_${slug}` },
@@ -50,7 +51,7 @@ async function seedCall(): Promise<Seeded> {
       organizationId: org.id,
       claimId: claim.id,
       retellCallId: `retell_${slug}`,
-      status: 'COMPLETED',
+      status: callStatus,
       startedAt: new Date(),
     },
   });
@@ -170,6 +171,149 @@ describe('GET /v1/calls/:id/events/stream (P4-T5)', () => {
       // Give the server a tick to clean up so afterEach truncate
       // doesn't race with the route's audit write.
       await new Promise((r) => setTimeout(r, 100));
+    }
+  });
+});
+
+/**
+ * ADR-053 — without REDIS_URL the live phase tails Postgres instead of
+ * subscribing to pub/sub, and the stream closes itself once the call is
+ * terminal (or at the max-duration cut, without `close`, so the client
+ * reconnects).
+ */
+describe('GET /v1/calls/:id/events/stream — Postgres polling (no Redis)', () => {
+  const saved: Record<string, string | undefined> = {};
+  const overrides: Record<string, string | undefined> = {
+    REDIS_URL: undefined,
+    JOB_DISPATCH_MODE: 'inline',
+    INTERNAL_JOB_SECRET: 'sse-poll-test-internal-secret-0123456789',
+    SSE_POLL_INTERVAL_MS: '50',
+    SSE_MAX_STREAM_MS: undefined,
+  };
+
+  const applyEnv = (extra: Record<string, string | undefined> = {}): void => {
+    for (const [key, value] of Object.entries({ ...overrides, ...extra })) {
+      if (!(key in saved)) saved[key] = process.env[key];
+      if (value === undefined) Reflect.deleteProperty(process.env, key);
+      else process.env[key] = value;
+    }
+    initEnv();
+  };
+
+  beforeAll(async () => {
+    delete process.env.CLERK_SECRET_KEY;
+    delete process.env.CLERK_PUBLISHABLE_KEY;
+    delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    await prisma.$connect();
+  });
+
+  afterAll(async () => {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) Reflect.deleteProperty(process.env, key);
+      else process.env[key] = value;
+    }
+    initEnv();
+    await prisma.$disconnect();
+  });
+
+  afterEach(async () => {
+    await prisma.$executeRawUnsafe(
+      'TRUNCATE TABLE "Call", "CallEvent", "Claim", "Organization", "User", "AuditLog" RESTART IDENTITY CASCADE',
+    );
+  });
+
+  async function openStream(
+    server: FastifyInstance,
+    seeded: Seeded,
+  ): Promise<{
+    read: (until: (s: string) => boolean, ms?: number) => Promise<{ text: string; done: boolean }>;
+    abort: () => void;
+  }> {
+    const url = await server.listen({ port: 0, host: '127.0.0.1' });
+    const controller = new AbortController();
+    const response = await fetch(`${url}/v1/calls/${seeded.callId}/events/stream`, {
+      headers: { 'x-test-user-id': seeded.userId, 'x-test-org-id': seeded.orgId },
+      signal: controller.signal,
+    });
+    expect(response.status).toBe(200);
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('no response body');
+    const decoder = new TextDecoder();
+    let text = '';
+    let done = false;
+    const read = async (
+      until: (s: string) => boolean,
+      ms = 4_000,
+    ): Promise<{ text: string; done: boolean }> => {
+      const deadline = Date.now() + ms;
+      while (!done && !until(text) && Date.now() < deadline) {
+        const chunk = await reader.read();
+        if (chunk.done) {
+          done = true;
+          break;
+        }
+        text += decoder.decode(chunk.value as Uint8Array, { stream: true });
+      }
+      return { text, done };
+    };
+    return {
+      read,
+      abort: () => {
+        controller.abort();
+      },
+    };
+  }
+
+  it('streams rows inserted after replay, then closes when the call ends', async () => {
+    applyEnv();
+    const server = await buildServer({ logger: false });
+    const seeded = await seedCall('NAVIGATING_IVR');
+    const stream = await openStream(server, seeded);
+    try {
+      await stream.read((t) => t.includes('event: replay-end'));
+
+      const live = await prisma.callEvent.create({
+        data: {
+          callId: seeded.callId,
+          eventType: 'call.transcript',
+          data: { type: 'call.transcript', text: 'rep picks up' },
+        },
+      });
+      const afterLive = await stream.read((t) => t.includes(live.id));
+      expect(afterLive.text).toContain('event: call.event');
+      expect(afterLive.text).toContain(live.id);
+
+      await prisma.call.updateMany({
+        where: { id: seeded.callId, organizationId: seeded.orgId },
+        data: { status: 'COMPLETED', endedAt: new Date() },
+      });
+      const end = await stream.read(() => false);
+      expect(end.done).toBe(true);
+      expect(end.text).toContain('event: close');
+      expect(end.text).toContain('call_ended');
+      // Each event goes out exactly once across replay + polling.
+      expect(end.text.split(live.id).length - 1).toBe(1);
+    } finally {
+      stream.abort();
+      await new Promise((r) => setTimeout(r, 100));
+      await server.close();
+    }
+  });
+
+  it('ends without a close event at the max-duration cut so the client reconnects', async () => {
+    applyEnv({ SSE_MAX_STREAM_MS: '300' });
+    const server = await buildServer({ logger: false });
+    const seeded = await seedCall('NAVIGATING_IVR');
+    const stream = await openStream(server, seeded);
+    try {
+      const end = await stream.read(() => false);
+      expect(end.done).toBe(true);
+      expect(end.text).toContain('event: replay-end');
+      expect(end.text).not.toContain('event: close');
+    } finally {
+      stream.abort();
+      await new Promise((r) => setTimeout(r, 100));
+      await server.close();
     }
   });
 });

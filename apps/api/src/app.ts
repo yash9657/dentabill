@@ -14,7 +14,7 @@ import {
   validatorCompiler,
 } from 'fastify-type-provider-zod';
 
-import { getEnv } from './lib/env.js';
+import { getEnv, resolveInternalApiBaseUrl } from './lib/env.js';
 import { registerAuthPlugin } from './plugins/auth.js';
 import { registerQueuePlugin } from './plugins/queue.js';
 import { registerRawBodyPlugin } from './plugins/raw-body.js';
@@ -26,6 +26,7 @@ import { claimsRoutes } from './routes/v1/claims.js';
 import { clerkWebhookRoutes } from './routes/v1/clerk-webhook.js';
 import { healthRoutes } from './routes/v1/health.js';
 import { ingestRoutes } from './routes/v1/ingest.js';
+import { internalJobsRoutes } from './routes/v1/internal-jobs.js';
 import { meRoutes } from './routes/v1/me.js';
 import { onboardingRoutes } from './routes/v1/onboarding.js';
 import { reportsRoutes } from './routes/v1/reports.js';
@@ -189,9 +190,22 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   const authExports = await registerAuthPlugin(fastify);
   fastify.decorate('auth', authExports);
 
-  // Queue plugin (P3-T16) — lazy-connecting BullMQ queue so test bodies
-  // that never enqueue don't open a real Redis socket.
-  registerQueuePlugin(fastify, { redisUrl: env.REDIS_URL });
+  // Queue plugin (P3-T16, ADR-053) — job dispatcher + lazily-connected
+  // Redis so test bodies that never enqueue don't open a real socket.
+  registerQueuePlugin(fastify, {
+    redisUrl: env.REDIS_URL,
+    mode: env.JOB_DISPATCH_MODE,
+    ...(env.JOB_DISPATCH_MODE === 'inline' &&
+      env.INTERNAL_JOB_SECRET !== undefined && {
+        inline: {
+          baseUrl: resolveInternalApiBaseUrl(env),
+          secret: env.INTERNAL_JOB_SECRET,
+          ...(env.VERCEL_AUTOMATION_BYPASS_SECRET !== undefined && {
+            headers: { 'x-vercel-protection-bypass': env.VERCEL_AUTOMATION_BYPASS_SECRET },
+          }),
+        },
+      }),
+  });
 
   // Raw-body capture for HMAC-verified routes (P3-T17). Registered
   // BEFORE route modules so the webhook handler can read
@@ -211,6 +225,10 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(billingRoutes, { prefix: '/v1' });
   await fastify.register(reportsRoutes, { prefix: '/v1' });
   await fastify.register(auditLogsRoutes, { prefix: '/v1' });
+  // ADR-053 — inline job execution. Registered in every mode; the route
+  // refuses all requests unless INTERNAL_JOB_SECRET is configured.
+  fastify.decorate('inlineJobRuntime', null);
+  await fastify.register(internalJobsRoutes, { prefix: '/v1' });
 
   return fastify;
 }

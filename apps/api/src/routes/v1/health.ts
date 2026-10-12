@@ -14,7 +14,8 @@ const ReadyzResponseSchema = z.object({
   ready: z.boolean(),
   timestamp: z.string(),
   postgres: z.object({ ok: z.boolean() }),
-  redis: z.object({ ok: z.boolean() }),
+  /** `skipped` = Redis is not configured (inline / no-Redis deployments, ADR-053). */
+  redis: z.object({ ok: z.boolean(), skipped: z.boolean().optional() }),
 });
 
 type ReadyzResponse = z.infer<typeof ReadyzResponseSchema>;
@@ -86,9 +87,11 @@ export function healthRoutes(fastify: FastifyInstance): void {
 
       const postgresCheck = withTimeout(prisma.$queryRaw`SELECT 1`);
 
-      // `queueRedis` is null only under NODE_ENV=test (see plugins/queue.ts),
-      // where the queue is stubbed — so treating absence as healthy cannot
-      // mask a real outage in production, where it is always a live connection.
+      // `queueRedis` is null under NODE_ENV=test (stubbed queue) and when
+      // REDIS_URL is unset in inline mode (ADR-053). Both are configuration
+      // facts, not outages: bullmq mode refuses to boot without REDIS_URL,
+      // so a configured Redis is always probed for real.
+      const redisSkipped = fastify.queueRedis === null;
       const redisCheck = fastify.queueRedis
         ? withTimeout(fastify.queueRedis.ping())
         : Promise.resolve(true);
@@ -105,7 +108,7 @@ export function healthRoutes(fastify: FastifyInstance): void {
         ready,
         timestamp,
         postgres: { ok: postgresOk },
-        redis: { ok: redisOk },
+        redis: redisSkipped ? { ok: redisOk, skipped: true } : { ok: redisOk },
       };
     },
   );

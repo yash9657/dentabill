@@ -1,3 +1,4 @@
+import { JOB_DISPATCH_MODES } from '@dentabill/queue';
 import { z } from 'zod';
 
 /**
@@ -8,7 +9,13 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
   DATABASE_URL: z.string().includes('://').min(1),
-  REDIS_URL: z.string().includes('://').min(1),
+  /**
+   * BullMQ + SSE pub/sub. Required in `bullmq` dispatch mode; optional in
+   * `inline` mode (ADR-053), where its absence switches SSE to Postgres
+   * polling, the readiness probe skips Redis, and the summary cost guard
+   * becomes process-local. `rediss://` (TLS) URLs work as-is via ioredis.
+   */
+  REDIS_URL: z.string().includes('://').optional(),
   NEXT_PUBLIC_APP_URL: z.string().includes('://').min(1),
   NEXT_PUBLIC_API_URL: z.string().includes('://').optional(),
   API_CORS_ORIGINS: z.string().default(''),
@@ -66,6 +73,45 @@ const envSchema = z.object({
    * guard once real telephony is wired up. See `payerHoursOverridden`.
    */
   DEMO_IGNORE_PAYER_HOURS: z.enum(['true', 'false']).optional().default('false'),
+
+  /**
+   * ADR-053 — how jobs are run. `bullmq` (default): Redis queues drained by
+   * the always-on call-worker / summary-worker. `inline`: no workers; the
+   * API POSTs each job to its own `/v1/internal/jobs/*` route, which runs
+   * the processor to completion (serverless / Vercel deployments).
+   */
+  JOB_DISPATCH_MODE: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? 'bullmq').trim().toLowerCase())
+    .pipe(z.enum(JOB_DISPATCH_MODES)),
+  /**
+   * Shared secret for `/v1/internal/jobs/*` (sent in the
+   * `x-internal-job-secret` header). Required in `inline` mode.
+   */
+  INTERNAL_JOB_SECRET: z.string().min(32).optional(),
+  /**
+   * Origin the inline dispatcher POSTs internal jobs to. Defaults to the
+   * Vercel production domain, then the per-deployment URL, then localhost.
+   * Set it explicitly when Deployment Protection guards *.vercel.app.
+   */
+  INTERNAL_API_BASE_URL: z.string().includes('://').optional(),
+  /** Vercel system env (set automatically on Vercel). */
+  VERCEL: z.string().optional(),
+  VERCEL_ENV: z.string().optional(),
+  VERCEL_URL: z.string().optional(),
+  VERCEL_PROJECT_PRODUCTION_URL: z.string().optional(),
+  /** Set by Vercel when "Protection Bypass for Automation" is enabled. */
+  VERCEL_AUTOMATION_BYPASS_SECRET: z.string().optional(),
+  /**
+   * Upper bound on one SSE response. The client reconnects (and replays,
+   * de-duplicated by event id) when a stream ends without a `close` event,
+   * so this only needs to sit under the platform's function timeout.
+   * Unset = unbounded, except on Vercel where it defaults to 780 s.
+   */
+  SSE_MAX_STREAM_MS: z.coerce.number().int().positive().optional(),
+  /** Postgres poll cadence for SSE when Redis is not configured. */
+  SSE_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(1_000),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -94,6 +140,13 @@ export function loadEnv(): Env {
     if (raw[key] === '') raw[key] = undefined;
   }
   const parsed = envSchema.safeParse(raw);
+
+  if (parsed.success) {
+    const modeErrors = dispatchModeErrors(parsed.data);
+    if (modeErrors.length > 0) {
+      throw new Error(`Invalid environment: ${modeErrors.join('; ')}`);
+    }
+  }
 
   if (!parsed.success) {
     const errors = parsed.error.issues
@@ -137,4 +190,36 @@ export function initEnv(): Env {
 export function payerHoursOverridden(candidate: Env = getEnv()): boolean {
   const hasRealTelephony = Boolean(candidate.RETELL_API_KEY && candidate.RETELL_API_KEY.length > 0);
   return candidate.DEMO_IGNORE_PAYER_HOURS === 'true' && !hasRealTelephony;
+}
+
+function dispatchModeErrors(candidate: Env): string[] {
+  const errors: string[] = [];
+  if (candidate.JOB_DISPATCH_MODE === 'bullmq' && !candidate.REDIS_URL) {
+    errors.push('REDIS_URL: required when JOB_DISPATCH_MODE=bullmq');
+  }
+  if (candidate.JOB_DISPATCH_MODE === 'inline' && !candidate.INTERNAL_JOB_SECRET) {
+    errors.push('INTERNAL_JOB_SECRET: required (min 32 chars) when JOB_DISPATCH_MODE=inline');
+  }
+  return errors;
+}
+
+/**
+ * Origin the inline dispatcher calls back into (ADR-053). Order:
+ * explicit `INTERNAL_API_BASE_URL` → Vercel production domain (production
+ * deployments only — unaffected by Standard Deployment Protection) →
+ * per-deployment `VERCEL_URL` → local listener.
+ */
+export function resolveInternalApiBaseUrl(candidate: Env = getEnv()): string {
+  if (candidate.INTERNAL_API_BASE_URL) return candidate.INTERNAL_API_BASE_URL;
+  if (candidate.VERCEL_ENV === 'production' && candidate.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${candidate.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (candidate.VERCEL_URL) return `https://${candidate.VERCEL_URL}`;
+  return `http://127.0.0.1:${String(candidate.PORT)}`;
+}
+
+/** Effective SSE stream cap — see `SSE_MAX_STREAM_MS`. */
+export function sseMaxStreamMs(candidate: Env = getEnv()): number | null {
+  if (candidate.SSE_MAX_STREAM_MS !== undefined) return candidate.SSE_MAX_STREAM_MS;
+  return candidate.VERCEL ? 780_000 : null;
 }
