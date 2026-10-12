@@ -2,6 +2,7 @@ import { prisma } from '@dentabill/db';
 import { createLogger, type Logger } from '@dentabill/logger';
 import { createRetellPort, type RetellPort } from '@dentabill/payer-ivr';
 import {
+  createBullMqJobDispatcher,
   createCallsWorker,
   createRedisConnection,
   createSummariesQueue,
@@ -96,7 +97,7 @@ export async function bootCallWorker(
       retellPort,
       env,
       outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
-      summariesQueue,
+      jobDispatcher: createBullMqJobDispatcher({ summariesQueue }),
     }),
   });
 

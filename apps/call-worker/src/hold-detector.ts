@@ -2,11 +2,10 @@ import type { RetellPort } from '@dentabill/payer-ivr';
 import {
   type CallJobData,
   CALL_JOB_NAME,
-  type CallsQueue,
-  CALLS_DEFAULT_JOB_OPTIONS,
   DLQ_REASONS,
   type DlqQueue,
   enqueueDlqJob,
+  type JobDispatcher,
 } from '@dentabill/queue';
 
 /**
@@ -90,7 +89,12 @@ export function createHoldDetector(options: HoldDetectorOptions): HoldDetector {
 }
 
 export interface ResolveHoldBreachInput {
-  readonly callsQueue: CallsQueue;
+  /**
+   * Re-dispatch target for the rescheduled attempt (ADR-053). BullMQ
+   * dispatch applies the `calls` queue's default job options; inline
+   * dispatch runs the next attempt immediately in a fresh invocation.
+   */
+  readonly jobDispatcher: Pick<JobDispatcher, 'dispatchCall'>;
   readonly dlqQueue: DlqQueue;
   readonly retellPort: RetellPort;
   readonly retellCallId: string;
@@ -142,10 +146,7 @@ export async function resolveHoldBreach(
       attemptNumber: nextAttemptNumber,
       idempotencyKey: nextJobId,
     };
-    await input.callsQueue.add(CALL_JOB_NAME, nextData, {
-      jobId: nextJobId,
-      ...CALLS_DEFAULT_JOB_OPTIONS,
-    });
+    await input.jobDispatcher.dispatchCall(nextData);
     return { outcome: 'rescheduled', nextAttemptNumber, nextJobId };
   }
 

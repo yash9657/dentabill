@@ -2,7 +2,7 @@ import type { EndCallInput, RetellPort, StartCallResult } from '@dentabill/payer
 import {
   CALL_JOB_NAME,
   type CallJobData,
-  type CallsQueue,
+  createBullMqJobDispatcher,
   type DlqQueue,
   DLQ_JOB_NAME,
   DLQ_REASONS,
@@ -108,7 +108,7 @@ describe('resolveHoldBreach', () => {
     const calls = mockCallsQueue();
     const dlq = mockDlqQueue();
     await resolveHoldBreach({
-      callsQueue: calls as unknown as CallsQueue,
+      jobDispatcher: createBullMqJobDispatcher({ callsQueue: calls }),
       dlqQueue: dlq as unknown as DlqQueue,
       retellPort: retell,
       retellCallId: 'fake_call_1',
@@ -124,7 +124,7 @@ describe('resolveHoldBreach', () => {
     const calls = mockCallsQueue();
     const dlq = mockDlqQueue();
     const result = await resolveHoldBreach({
-      callsQueue: calls as unknown as CallsQueue,
+      jobDispatcher: createBullMqJobDispatcher({ callsQueue: calls }),
       dlqQueue: dlq as unknown as DlqQueue,
       retellPort: retell,
       retellCallId: 'fake_call_1',
@@ -153,7 +153,7 @@ describe('resolveHoldBreach', () => {
     const calls = mockCallsQueue();
     const dlq = mockDlqQueue();
     const result = await resolveHoldBreach({
-      callsQueue: calls as unknown as CallsQueue,
+      jobDispatcher: createBullMqJobDispatcher({ callsQueue: calls }),
       dlqQueue: dlq as unknown as DlqQueue,
       retellPort: retell,
       retellCallId: 'fake_call_1',
@@ -182,7 +182,7 @@ describe('resolveHoldBreach', () => {
     const calls = mockCallsQueue();
     const dlq = mockDlqQueue();
     await resolveHoldBreach({
-      callsQueue: calls as unknown as CallsQueue,
+      jobDispatcher: createBullMqJobDispatcher({ callsQueue: calls }),
       dlqQueue: dlq as unknown as DlqQueue,
       retellPort: retell,
       retellCallId: 'fake_call_1',
