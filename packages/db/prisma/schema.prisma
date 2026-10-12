@@ -13,6 +13,9 @@
 
 generator client {
   provider = "prisma-client-js"
+  // "native" for local dev + Docker images; "rhel-openssl-3.0.x" for Vercel
+  // Functions (Amazon Linux 2023) — ADR-053 / docs/DEPLOY_VERCEL.md.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
