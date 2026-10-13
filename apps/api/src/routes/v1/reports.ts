@@ -3,11 +3,16 @@ import { ApiError } from '@dentabill/types';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import {
+  unavailableVerifiedPayments,
+  VerifiedPaymentsSchema,
+} from '../../lib/financial-reporting.js';
+
 /**
  * `/v1/reports/summary` — aggregate metrics for dashboard overview.
  *
  * Returns org-scoped aggregates across claims and calls:
- * - recoveredByWeek: last 8 weeks of claim resolutions
+ * - callActivityByWeek: call-start cohorts for eight UTC weeks
  * - denialReasons: breakdown by denial code
  * - claimAging: buckets (0-7, 8-14, 15-30, 31-60, 60+ days)
  * - payerOutcomes: per-payer call/resolution metrics
@@ -22,14 +27,15 @@ const DayBucketSchema = z.object({
 
 const WeekBucketSchema = z.object({
   weekStart: z.string(), // ISO date string YYYY-MM-DD
-  recoveredCents: z.number().int().min(0),
-  claimCount: z.number().int().min(0),
+  callCount: z.number().int().min(0),
+  completedCallCount: z.number().int().min(0),
+  uniqueClaimCount: z.number().int().min(0),
 });
 
 const DenialReasonSchema = z.object({
   code: z.string(),
   label: z.string(),
-  count: z.number().int().min(0),
+  uniqueClaimCount: z.number().int().min(0),
 });
 
 const ClaimAgingBucketSchema = z.object({
@@ -40,20 +46,32 @@ const ClaimAgingBucketSchema = z.object({
 const PayerOutcomeSchema = z.object({
   payer: z.string(),
   callCount: z.number().int().min(0),
-  resolvedCount: z.number().int().min(0),
+  completedCallCount: z.number().int().min(0),
+  uniqueClaimCount: z.number().int().min(0),
+  claimsMarkedResolvedCount: z
+    .number()
+    .int()
+    .min(0)
+    .describe(
+      'Distinct claims with current workflow status RESOLVED, among claims with calls. Does not establish payment or settlement.',
+    ),
   avgDurationSeconds: z.number().int().min(0).nullable(),
-  recoveredCents: z.number().int().min(0),
 });
 
 const ReportsSummaryResponseSchema = z.object({
-  recoveredByWeek: z.array(WeekBucketSchema),
+  callActivityByWeek: z
+    .array(WeekBucketSchema)
+    .describe(
+      'Calls started in the current and seven preceding UTC weeks, grouped by Monday. Distinct claims are counted per week and may recur across weeks.',
+    ),
+  verifiedPayments: VerifiedPaymentsSchema,
   denialReasons: z.array(DenialReasonSchema),
   claimAging: z.array(ClaimAgingBucketSchema),
   payerOutcomes: z.array(PayerOutcomeSchema),
   callVolume: z.array(DayBucketSchema),
 });
 
-type ReportsSummaryResponse = z.infer<typeof ReportsSummaryResponseSchema>;
+export type ReportsSummaryResponse = z.infer<typeof ReportsSummaryResponseSchema>;
 
 export function reportsRoutes(fastify: FastifyInstance): void {
   const { requireAuth } = fastify.auth;
@@ -65,7 +83,7 @@ export function reportsRoutes(fastify: FastifyInstance): void {
       preHandler: requireAuth,
       schema: {
         description:
-          'Aggregate metrics for the dashboard overview: recovered claims by week, denial reasons, claim aging, payer outcomes, and call volume.',
+          'Operational call and distinct-claim metrics, denial observations, claim aging, and explicit payment-data availability. Workflow status and payer reports do not establish recovery.',
         security,
         response: { 200: ReportsSummaryResponseSchema },
       },
@@ -77,41 +95,51 @@ export function reportsRoutes(fastify: FastifyInstance): void {
 
       const now = new Date();
 
-      // ─── Recovered by week (last 8 weeks) ──────────────────────────────
-      const eightWeeksAgo = new Date(now.getTime() - 8 * 7 * 24 * 60 * 60 * 1000);
-      const resolvedClaims = await prisma.claim.findMany({
-        where: {
-          organizationId: orgId,
-          status: 'RESOLVED',
-          updatedAt: { gte: eightWeeksAgo },
+      const calls = await prisma.call.findMany({
+        where: { organizationId: orgId, claim: { organizationId: orgId } },
+        select: {
+          claimId: true,
+          startedAt: true,
+          status: true,
+          durationSeconds: true,
+          claim: { select: { payerCode: true, status: true } },
         },
-        select: { claimAmount: true, updatedAt: true },
       });
-
-      // Group by ISO week start (Monday)
-      const weekMap = new Map<string, { recoveredCents: number; claimCount: number }>();
-      resolvedClaims.forEach((claim) => {
-        const date = claim.updatedAt;
-        const dayOfWeek = date.getUTCDay();
-        const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-        const weekStart = new Date(date);
-        weekStart.setUTCDate(weekStart.getUTCDate() - daysToMonday);
-        weekStart.setUTCHours(0, 0, 0, 0);
-        const weekKey = weekStart.toISOString().split('T')[0];
-        if (!weekKey) return;
-
-        const existing = weekMap.get(weekKey) ?? { recoveredCents: 0, claimCount: 0 };
-        const dollars = Number(claim.claimAmount);
-        existing.recoveredCents += Number.isNaN(dollars) ? 0 : Math.round(dollars * 100);
-        existing.claimCount += 1;
+      const currentMonday = new Date(now);
+      const daysToMonday = (now.getUTCDay() + 6) % 7;
+      currentMonday.setUTCDate(currentMonday.getUTCDate() - daysToMonday);
+      currentMonday.setUTCHours(0, 0, 0, 0);
+      const firstWeekStart = new Date(currentMonday.getTime() - 7 * 7 * 24 * 60 * 60 * 1000);
+      const weekMap = new Map<
+        string,
+        { callCount: number; completedCallCount: number; claimIds: Set<string> }
+      >();
+      for (let week = 0; week < 8; week += 1) {
+        const weekStart = new Date(firstWeekStart.getTime() + week * 7 * 24 * 60 * 60 * 1000);
+        weekMap.set(weekStart.toISOString().slice(0, 10), {
+          callCount: 0,
+          completedCallCount: 0,
+          claimIds: new Set<string>(),
+        });
+      }
+      calls.forEach((call) => {
+        if (!call.startedAt || call.startedAt < firstWeekStart || call.startedAt > now) return;
+        const weekStart = new Date(call.startedAt);
+        weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7));
+        const weekKey = weekStart.toISOString().slice(0, 10);
+        const existing = weekMap.get(weekKey);
+        if (!existing) return;
+        existing.callCount += 1;
+        if (call.status === 'COMPLETED') existing.completedCallCount += 1;
+        existing.claimIds.add(call.claimId);
         weekMap.set(weekKey, existing);
       });
-
-      const recoveredByWeek = Array.from(weekMap.entries())
-        .map(([weekStart, { recoveredCents, claimCount }]) => ({
+      const callActivityByWeek = Array.from(weekMap.entries())
+        .map(([weekStart, { callCount, completedCallCount, claimIds }]) => ({
           weekStart,
-          recoveredCents,
-          claimCount,
+          callCount,
+          completedCallCount,
+          uniqueClaimCount: claimIds.size,
         }))
         .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
 
@@ -120,24 +148,26 @@ export function reportsRoutes(fastify: FastifyInstance): void {
         where: {
           organizationId: orgId,
           denialCode: { not: null },
+          call: { organizationId: orgId, claim: { organizationId: orgId } },
         },
-        select: { denialCode: true, denialReason: true },
+        select: { denialCode: true, denialReason: true, call: { select: { claimId: true } } },
+        orderBy: { createdAt: 'desc' },
       });
 
-      const denialMap = new Map<string, { label: string; count: number }>();
+      const denialMap = new Map<string, { label: string; claimIds: Set<string> }>();
       summariesWithDenials.forEach((summary) => {
         if (!summary.denialCode) return;
         const existing = denialMap.get(summary.denialCode) ?? {
           label: summary.denialReason ?? summary.denialCode,
-          count: 0,
+          claimIds: new Set<string>(),
         };
-        existing.count += 1;
+        existing.claimIds.add(summary.call.claimId);
         denialMap.set(summary.denialCode, existing);
       });
 
       const denialReasons = Array.from(denialMap.entries())
-        .map(([code, { label, count }]) => ({ code, label, count }))
-        .sort((a, b) => b.count - a.count);
+        .map(([code, { label, claimIds }]) => ({ code, label, uniqueClaimCount: claimIds.size }))
+        .sort((a, b) => b.uniqueClaimCount - a.uniqueClaimCount);
 
       // ─── Claim aging buckets ───────────────────────────────────────────
       const pendingClaims = await prisma.claim.findMany({
@@ -171,64 +201,55 @@ export function reportsRoutes(fastify: FastifyInstance): void {
       ];
 
       // ─── Payer outcomes ────────────────────────────────────────────────
-      const calls = await prisma.call.findMany({
-        where: { organizationId: orgId },
-        select: {
-          status: true,
-          durationSeconds: true,
-          claim: { select: { payerCode: true, claimAmount: true, status: true } },
-        },
-      });
-
       const payerMap = new Map<
         string,
-        { callCount: number; resolvedCount: number; durations: number[]; recoveredCents: number }
+        {
+          callCount: number;
+          completedCallCount: number;
+          claimIds: Set<string>;
+          resolvedClaimIds: Set<string>;
+          durations: number[];
+        }
       >();
 
       calls.forEach((call) => {
         const payer = call.claim.payerCode;
         const existing = payerMap.get(payer) ?? {
           callCount: 0,
-          resolvedCount: 0,
+          completedCallCount: 0,
+          claimIds: new Set<string>(),
+          resolvedClaimIds: new Set<string>(),
           durations: [],
-          recoveredCents: 0,
         };
         existing.callCount += 1;
-        if (call.status === 'COMPLETED') existing.resolvedCount += 1;
+        if (call.status === 'COMPLETED') existing.completedCallCount += 1;
+        existing.claimIds.add(call.claimId);
+        if (call.claim.status === 'RESOLVED') existing.resolvedClaimIds.add(call.claimId);
         if (call.durationSeconds !== null) existing.durations.push(call.durationSeconds);
-        if (call.claim.status === 'RESOLVED') {
-          const dollars = Number(call.claim.claimAmount);
-          existing.recoveredCents += Number.isNaN(dollars) ? 0 : Math.round(dollars * 100);
-        }
         payerMap.set(payer, existing);
       });
 
       const payerOutcomes = Array.from(payerMap.entries())
-        .map(([payer, { callCount, resolvedCount, durations, recoveredCents }]) => ({
-          payer,
-          callCount,
-          resolvedCount,
-          avgDurationSeconds:
-            durations.length > 0
-              ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
-              : null,
-          recoveredCents,
-        }))
+        .map(
+          ([payer, { callCount, completedCallCount, claimIds, resolvedClaimIds, durations }]) => ({
+            payer,
+            callCount,
+            completedCallCount,
+            uniqueClaimCount: claimIds.size,
+            claimsMarkedResolvedCount: resolvedClaimIds.size,
+            avgDurationSeconds:
+              durations.length > 0
+                ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+                : null,
+          }),
+        )
         .sort((a, b) => b.callCount - a.callCount);
 
       // ─── Call volume (last 14 days) ────────────────────────────────────
       const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-      const recentCalls = await prisma.call.findMany({
-        where: {
-          organizationId: orgId,
-          startedAt: { gte: fourteenDaysAgo },
-        },
-        select: { startedAt: true, durationSeconds: true },
-      });
-
       const dayMap = new Map<string, { callCount: number; durations: number[] }>();
-      recentCalls.forEach((call) => {
-        if (!call.startedAt) return;
+      calls.forEach((call) => {
+        if (!call.startedAt || call.startedAt < fourteenDaysAgo || call.startedAt > now) return;
         const dayKey = call.startedAt.toISOString().split('T')[0];
         if (!dayKey) return;
         const existing = dayMap.get(dayKey) ?? { callCount: 0, durations: [] };
@@ -256,7 +277,14 @@ export function reportsRoutes(fastify: FastifyInstance): void {
         metadata: { clerkUserId: auth.userId },
       });
 
-      return { recoveredByWeek, denialReasons, claimAging, payerOutcomes, callVolume };
+      return {
+        callActivityByWeek,
+        denialReasons,
+        claimAging,
+        payerOutcomes,
+        callVolume,
+        verifiedPayments: unavailableVerifiedPayments,
+      };
     },
   );
 }

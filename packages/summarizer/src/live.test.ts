@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { LiveClaude } from './live.js';
+import { LiveClaude, type LiveClaudeOptions } from './live.js';
 import { SummaryValidationError } from './port.js';
 import type { SummarizeInput } from './types.js';
 
@@ -30,6 +30,7 @@ const VALID_TOOL_INPUT = {
 // the boundary so tests don't need to spell out Anthropic's full
 // request/response shape.
 type LoaderCtor = new (options: { apiKey: string }) => unknown;
+type AdapterCtor = Awaited<ReturnType<NonNullable<LiveClaudeOptions['anthropicLoader']>>>;
 
 function makeFakeAnthropicCtor(opts: {
   readonly toolInput?: unknown;
@@ -156,12 +157,31 @@ describe('LiveClaude', () => {
       anthropicLoader: () =>
         Promise.resolve(
           makeFakeAnthropicCtor({
-            toolInput: { ...VALID_TOOL_INPUT, denialCode: 'CO-9999' },
+            toolInput: { ...VALID_TOOL_INPUT, denialCode: 'X'.repeat(65) },
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
           }) as any,
         ),
     });
     await expect(live.summarize(inputFor())).rejects.toBeInstanceOf(SummaryValidationError);
+  });
+
+  it('preserves an unrecognized code from a provider response for worker review', async () => {
+    const live = new LiveClaude({
+      apiKey: 'sk-test',
+      anthropicLoader: () =>
+        Promise.resolve(
+          makeFakeAnthropicCtor({
+            toolInput: {
+              ...VALID_TOOL_INPUT,
+              claimStatus: 'denied',
+              denialCode: 'PAYER:Z-42',
+              nextAction: 'SUBMIT_DOCS',
+            },
+          }) as unknown as AdapterCtor,
+        ),
+    });
+    const result = await live.summarize(inputFor());
+    expect(result.summary.denialCode).toBe('PAYER:Z-42');
   });
 
   it('reports tokensUsed including cache_creation_input_tokens', async () => {

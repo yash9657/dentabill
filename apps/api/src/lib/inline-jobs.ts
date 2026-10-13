@@ -7,10 +7,19 @@
  * this module only supplies what BullMQ used to: a Job-shaped object, the
  * retry policy, duplicate suppression, and the terminal DLQ hand-off.
  */
-import { createCallJobHandler, createDlqJobHandler, loadWorkerEnv } from '@dentabill/call-worker';
+import {
+  createCallJobHandler,
+  createDlqJobHandler,
+  loadWorkerEnv,
+  MissingCallIdentityError,
+} from '@dentabill/call-worker';
 import { prisma as defaultPrisma } from '@dentabill/db';
 import { createLogger, type Logger } from '@dentabill/logger';
-import { createRetellPort, type RetellPort } from '@dentabill/payer-ivr';
+import {
+  createRetellPort,
+  type MissingCallIdentityField,
+  type RetellPort,
+} from '@dentabill/payer-ivr';
 import {
   asBullMqJob,
   CALL_JOB_NAME,
@@ -63,6 +72,12 @@ export type InlineRunReport =
   | { readonly status: 'completed'; readonly attemptsMade: number }
   | { readonly status: 'skipped'; readonly reason: string }
   | {
+      readonly status: 'blocked';
+      readonly reason: 'MISSING_CALL_IDENTITY';
+      readonly missingFields: readonly MissingCallIdentityField[];
+      readonly attemptsMade: number;
+    }
+  | {
       readonly status: 'failed';
       readonly attemptsMade: number;
       readonly budgetExhausted: boolean;
@@ -82,6 +97,12 @@ export interface JobAttempt {
 export type AttemptReport =
   | { readonly status: 'completed'; readonly attempt: number }
   | { readonly status: 'skipped'; readonly reason: string }
+  | {
+      readonly status: 'blocked';
+      readonly reason: 'MISSING_CALL_IDENTITY';
+      readonly missingFields: readonly MissingCallIdentityField[];
+      readonly attempt: number;
+    }
   | {
       /** Failed, attempts remain — the caller must make the queue redeliver. */
       readonly status: 'retry';
@@ -282,7 +303,17 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
         jobOptions: callJobOptions,
         budgetMs,
         ...(deps.sleep && { sleep: deps.sleep }),
-        process: (job) => callHandler(asBullMqJob(job)),
+        process: async (job) => {
+          try {
+            await callHandler(asBullMqJob(job));
+            return null;
+          } catch (err) {
+            // Missing data needs a biller; retrying or DLQ escalation would
+            // replace the handler's NEEDS_INFO state without improving it.
+            if (err instanceof MissingCallIdentityError) return err;
+            throw err;
+          }
+        },
         onAttemptFailed: (err, attemptsMade) => {
           logger.error(
             { jobId, attemptsMade, err: errInfo(err) },
@@ -291,6 +322,14 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
         },
       });
       if (outcome.status === 'completed') {
+        if (outcome.result instanceof MissingCallIdentityError) {
+          return {
+            status: 'blocked',
+            reason: outcome.result.code,
+            missingFields: outcome.result.missingFields,
+            attemptsMade: outcome.attemptsMade,
+          };
+        }
         logger.info({ jobId, attemptsMade: outcome.attemptsMade }, 'inline call job completed');
         return { status: 'completed', attemptsMade: outcome.attemptsMade };
       }
@@ -359,6 +398,14 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
         logger.info({ jobId, attempt }, 'call job completed');
         return { status: 'completed', attempt };
       } catch (err) {
+        if (err instanceof MissingCallIdentityError) {
+          return {
+            status: 'blocked',
+            reason: err.code,
+            missingFields: err.missingFields,
+            attempt,
+          };
+        }
         logger.error({ jobId, attempt, maxAttempts, err: errInfo(err) }, 'call job attempt failed');
         if (attempt < maxAttempts) {
           return {

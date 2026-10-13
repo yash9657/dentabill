@@ -41,6 +41,7 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/claims/{id}/calls',
   '/v1/calls',
   '/v1/calls/stats',
+  '/v1/reports/summary',
   '/v1/calls/{id}',
   '/v1/calls/{id}/cancel',
   '/v1/webhooks/retell',
@@ -50,6 +51,53 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
 describe('OpenAPI ↔ generated types contract', () => {
   it('declares an OpenAPI 3.x document', () => {
     expect(spec.openapi).toMatch(/^3\./);
+  });
+
+  it('describes unavailable verified payments without legacy recovered money fields', () => {
+    const responseProperties = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    for (const path of ['/v1/calls/stats', '/v1/reports/summary']) {
+      expect(spec.paths[path]).toHaveProperty(
+        [...responseProperties, 'verifiedPayments', 'properties', 'amountCents', 'enum'],
+        [null],
+      );
+      expect(spec.paths[path]).toHaveProperty(
+        [...responseProperties, 'verifiedPayments', 'properties', 'status', 'enum'],
+        ['unavailable'],
+      );
+    }
+    expect(spec.paths['/v1/calls/stats']).not.toHaveProperty([
+      ...responseProperties,
+      'recoveredThisWeekCents',
+    ]);
+    expect(spec.paths['/v1/reports/summary']).not.toHaveProperty([
+      ...responseProperties,
+      'recoveredByWeek',
+    ]);
+    const payerProperties = [...responseProperties, 'payerOutcomes', 'items', 'properties'];
+    for (const field of [
+      'callCount',
+      'completedCallCount',
+      'uniqueClaimCount',
+      'claimsMarkedResolvedCount',
+    ]) {
+      expect(spec.paths['/v1/reports/summary']).toHaveProperty([...payerProperties, field]);
+    }
+    expect(spec.paths['/v1/reports/summary']).not.toHaveProperty([
+      ...payerProperties,
+      'recoveredCents',
+    ]);
+    expect(spec.paths['/v1/reports/summary']).not.toHaveProperty([
+      ...payerProperties,
+      'resolvedCount',
+    ]);
   });
 
   it.each(REQUIRED_PATHS)(

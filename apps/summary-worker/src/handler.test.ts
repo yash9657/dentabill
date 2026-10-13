@@ -168,7 +168,7 @@ describe('createSummaryJobHandler — happy path (kill-switch OFF)', () => {
 });
 
 describe('createSummaryJobHandler — auto-transition ENABLED', () => {
-  it('flips Claim → RESOLVED when SUMMARIZER_AUTO_TRANSITION_ENABLED=true and confidence ≥ 0.95', async () => {
+  it('requires review for a paid summary even when automatic transitions are enabled', async () => {
     const seeded = await seedOrgClaimCall();
     const fake = new FakeClaude();
     fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
@@ -189,9 +189,9 @@ describe('createSummaryJobHandler — auto-transition ENABLED', () => {
       }),
     );
 
-    expect(result.outcome).toBe('AUTO_TRANSITIONED');
+    expect(result.outcome).toBe('MANUAL_REVIEW');
     const claim = await prisma.claim.findUniqueOrThrow({ where: { id: seeded.claimId } });
-    expect(claim.status).toBe('RESOLVED');
+    expect(claim.status).toBe('MANUAL_REVIEW');
   });
 });
 
@@ -259,7 +259,7 @@ describe('createSummaryJobHandler — cost guard', () => {
 });
 
 describe('createSummaryJobHandler — notifier dispatch (P4-T6)', () => {
-  it('dispatches a claim.resolved notification when notifier + recipient are wired', async () => {
+  it('dispatches review-required notification for a payer-reported payment', async () => {
     const seeded = await seedOrgClaimCall();
     const fake = new FakeClaude();
     fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
@@ -283,7 +283,7 @@ describe('createSummaryJobHandler — notifier dispatch (P4-T6)', () => {
       }),
     );
     expect(notifier.deliveries).toHaveLength(1);
-    expect(notifier.deliveries[0]?.template).toBe('claim.resolved');
+    expect(notifier.deliveries[0]?.template).toBe('summary.review_required');
     expect(notifier.deliveries[0]?.to).toBe('owner@practice.test');
   });
 
@@ -332,5 +332,315 @@ describe('createSummaryJobHandler — unknown call', () => {
       }),
     );
     expect(result.outcome).toBe('DLQ');
+  });
+});
+
+describe('summary containment under retries and stale evidence', () => {
+  function payload(seeded: Seeded): SummaryJobData {
+    return {
+      organizationId: seeded.orgId,
+      callId: seeded.callId,
+      promptVersion: 'v1',
+      idempotencyKey: 'containment',
+    };
+  }
+
+  it.each(['paid', 'pending'] as const)(
+    'never treats %s wording and RESOLVED advice as payment evidence',
+    async (claimStatus) => {
+      const seeded = await seedOrgClaimCall();
+      const fake = new FakeClaude();
+      fake.setDefault('DELTA_DENTAL_PPO', { ...RESOLVED_FIXTURE, claimStatus });
+      const handler = createSummaryJobHandler({
+        logger: silentLogger,
+        prisma,
+        redis,
+        summarizer: fake,
+        env: { ...baseEnv, SUMMARIZER_AUTO_TRANSITION_ENABLED: true },
+      });
+      await handler(jobFor(payload(seeded)));
+      const claim = await prisma.claim.findFirstOrThrow({
+        where: { id: seeded.claimId, organizationId: seeded.orgId },
+      });
+      expect(claim.status).toBe('MANUAL_REVIEW');
+    },
+  );
+
+  it('preserves operator closure, stores the observation, and suppresses a stale notification', async () => {
+    const seeded = await seedOrgClaimCall();
+    await prisma.claim.updateMany({
+      where: { id: seeded.claimId, organizationId: seeded.orgId },
+      data: { status: 'RESOLVED' },
+    });
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    const notifier = new FakeResend();
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      redis,
+      summarizer: fake,
+      env: baseEnv,
+      notifier,
+      resolveRecipient: async () => 'owner@practice.test',
+    });
+    const result = await handler(jobFor(payload(seeded)));
+    expect(result.outcome).toBe('STALE_RESULT');
+    expect(result.summaryId).not.toBeNull();
+    expect(
+      (
+        await prisma.claim.findFirstOrThrow({
+          where: { id: seeded.claimId, organizationId: seeded.orgId },
+        })
+      ).status,
+    ).toBe('RESOLVED');
+    expect(notifier.deliveries).toHaveLength(0);
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: seeded.orgId, action: 'claim.transition' },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: seeded.orgId, action: 'summary.transition_skipped' },
+      }),
+    ).toBe(1);
+  });
+
+  it('does not overwrite a same-status claim edit made while inference is running', async () => {
+    const seeded = await seedOrgClaimCall();
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', { ...RESOLVED_FIXTURE, nextAction: 'SUBMIT_DOCS' });
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      redis,
+      env: { ...baseEnv, SUMMARIZER_AUTO_TRANSITION_ENABLED: true },
+      summarizer: {
+        summarize: async (input) => {
+          await prisma.claim.updateMany({
+            where: { id: seeded.claimId, organizationId: seeded.orgId },
+            data: { claimAmount: '125.00', updatedAt: new Date('2099-01-01') },
+          });
+          return fake.summarize(input);
+        },
+      },
+    });
+    expect((await handler(jobFor(payload(seeded)))).outcome).toBe('STALE_RESULT');
+    const claim = await prisma.claim.findFirstOrThrow({
+      where: { id: seeded.claimId, organizationId: seeded.orgId },
+    });
+    expect(claim.status).toBe('COMPLETED');
+    expect(claim.claimAmount.toString()).toBe('125');
+  });
+
+  it('does not apply an old call summary after a newer call has completed', async () => {
+    const seeded = await seedOrgClaimCall();
+    await prisma.call.create({
+      data: {
+        organizationId: seeded.orgId,
+        claimId: seeded.claimId,
+        retellCallId: 'newer_call',
+        status: 'COMPLETED',
+        createdAt: new Date('2099-01-01'),
+      },
+    });
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      redis,
+      summarizer: fake,
+      env: baseEnv,
+    });
+    expect((await handler(jobFor(payload(seeded)))).outcome).toBe('STALE_RESULT');
+    expect(
+      (
+        await prisma.claim.findFirstOrThrow({
+          where: { id: seeded.claimId, organizationId: seeded.orgId },
+        })
+      ).status,
+    ).toBe('COMPLETED');
+  });
+
+  it('does not overwrite a reviewed claim when validation fails during inference', async () => {
+    const seeded = await seedOrgClaimCall();
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      redis,
+      env: baseEnv,
+      summarizer: {
+        summarize: async (input) => {
+          await prisma.claim.updateMany({
+            where: { id: seeded.claimId, organizationId: seeded.orgId },
+            data: { status: 'WRITTEN_OFF' },
+          });
+          const result = await fake.summarize(input);
+          return { ...result, summary: { ...result.summary, confidence: Number.NaN } };
+        },
+      },
+    });
+    expect((await handler(jobFor(payload(seeded)))).outcome).toBe('DLQ');
+    expect(
+      (
+        await prisma.claim.findFirstOrThrow({
+          where: { id: seeded.claimId, organizationId: seeded.orgId },
+        })
+      ).status,
+    ).toBe('WRITTEN_OFF');
+  });
+
+  it('replays a committed summary without another inference, transition, charge, or notification', async () => {
+    const seeded = await seedOrgClaimCall();
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    const notifier = new FakeResend();
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      redis,
+      summarizer: fake,
+      env: baseEnv,
+      notifier,
+      resolveRecipient: async () => 'owner@practice.test',
+    });
+    const first = await handler(jobFor(payload(seeded)));
+    const second = await handler(jobFor(payload(seeded)));
+    expect(second).toMatchObject({
+      summaryId: first.summaryId,
+      outcome: 'ALREADY_PROCESSED',
+      tokensUsed: 0,
+    });
+    expect(fake.invocations).toHaveLength(1);
+    expect(notifier.deliveries).toHaveLength(1);
+    expect(
+      (await prisma.organization.findUniqueOrThrow({ where: { id: seeded.orgId } }))
+        .summaryTokensUsed,
+    ).toBe(first.tokensUsed);
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: seeded.orgId, action: 'claim.transition' },
+      }),
+    ).toBe(1);
+  });
+
+  it('rolls back summary, claim, and usage if transition audit fails, then recovers on retry', async () => {
+    const seeded = await seedOrgClaimCall();
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      redis,
+      summarizer: fake,
+      env: baseEnv,
+    });
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION summary_test_fail_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'claim.transition' THEN RAISE EXCEPTION 'synthetic audit failure'; END IF; RETURN NEW; END $$`,
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE TRIGGER summary_test_fail_audit BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION summary_test_fail_audit()`,
+    );
+    try {
+      await expect(handler(jobFor(payload(seeded)))).rejects.toThrow();
+      expect(await prisma.callSummary.count({ where: { organizationId: seeded.orgId } })).toBe(0);
+      expect(
+        (
+          await prisma.claim.findFirstOrThrow({
+            where: { id: seeded.claimId, organizationId: seeded.orgId },
+          })
+        ).status,
+      ).toBe('COMPLETED');
+      expect(
+        (await prisma.organization.findUniqueOrThrow({ where: { id: seeded.orgId } }))
+          .summaryTokensUsed,
+      ).toBe(0);
+    } finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER summary_test_fail_audit ON "AuditLog"`);
+      await prisma.$executeRawUnsafe(`DROP FUNCTION summary_test_fail_audit()`);
+    }
+    expect((await handler(jobFor(payload(seeded)))).outcome).toBe('MANUAL_REVIEW');
+    expect(await prisma.callSummary.count({ where: { organizationId: seeded.orgId } })).toBe(1);
+  });
+});
+
+describe('unfinished transcript containment', () => {
+  it('waits for terminal call state without persisting or charging for a partial summary', async () => {
+    const seeded = await seedOrgClaimCall();
+    await prisma.call.updateMany({
+      where: { id: seeded.callId, organizationId: seeded.orgId },
+      data: { status: 'HUMAN_REACHED' },
+    });
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      redis,
+      summarizer: fake,
+      env: baseEnv,
+    });
+    const data = {
+      organizationId: seeded.orgId,
+      callId: seeded.callId,
+      promptVersion: 'v1',
+      idempotencyKey: 'partial',
+    };
+    expect((await handler(jobFor(data))).outcome).toBe('CALL_NOT_TERMINAL');
+    expect(fake.invocations).toHaveLength(0);
+    expect(await prisma.callSummary.count({ where: { organizationId: seeded.orgId } })).toBe(0);
+    await prisma.call.updateMany({
+      where: { id: seeded.callId, organizationId: seeded.orgId },
+      data: { status: 'COMPLETED' },
+    });
+    expect((await handler(jobFor(data))).outcome).toBe('MANUAL_REVIEW');
+    expect(fake.invocations).toHaveLength(1);
+  });
+});
+
+describe('unmapped code preservation', () => {
+  it('retains the raw code as evidence and requires review instead of losing the summary', async () => {
+    const seeded = await seedOrgClaimCall();
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', {
+      ...RESOLVED_FIXTURE,
+      denialCode: 'PLAN-X7',
+      nextAction: 'SUBMIT_DOCS',
+    });
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      redis,
+      summarizer: fake,
+      env: { ...baseEnv, SUMMARIZER_AUTO_TRANSITION_ENABLED: true },
+    });
+    const result = await handler(
+      jobFor({
+        organizationId: seeded.orgId,
+        callId: seeded.callId,
+        promptVersion: 'v1',
+        idempotencyKey: 'unmapped',
+      }),
+    );
+    expect(result.outcome).toBe('MANUAL_REVIEW');
+    const summary = await prisma.callSummary.findFirstOrThrow({
+      where: { callId: seeded.callId, organizationId: seeded.orgId },
+    });
+    expect(summary.denialCode).toBe('PLAN-X7');
+    expect(
+      (
+        await prisma.claim.findFirstOrThrow({
+          where: { id: seeded.claimId, organizationId: seeded.orgId },
+        })
+      ).status,
+    ).toBe('MANUAL_REVIEW');
+    const transition = await prisma.auditLog.findFirstOrThrow({
+      where: { organizationId: seeded.orgId, action: 'claim.transition' },
+    });
+    expect(transition.metadata).toMatchObject({ reason: 'UNMAPPED_CODE', autoTransitioned: false });
   });
 });

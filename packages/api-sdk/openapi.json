@@ -96,6 +96,9 @@
                       "properties": {
                         "ok": {
                           "type": "boolean"
+                        },
+                        "skipped": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -144,6 +147,9 @@
                       "type": "object",
                       "properties": {
                         "ok": {
+                          "type": "boolean"
+                        },
+                        "skipped": {
                           "type": "boolean"
                         }
                       },
@@ -1594,17 +1600,43 @@
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
-                    "recoveredThisWeekCents": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
+                    "verifiedPayments": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "unavailable"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "PAYMENT_LEDGER_NOT_IMPLEMENTED"
+                          ]
+                        },
+                        "amountCents": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            null
+                          ],
+                          "description": "Unknown, never zero or claim face value. No reconciled payment ledger exists."
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "reason",
+                        "amountCents"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "callsToday",
                     "queueDepth",
                     "avgCallSeconds",
-                    "recoveredThisWeekCents"
+                    "verifiedPayments"
                   ],
                   "additionalProperties": false
                 }
@@ -2386,7 +2418,7 @@
     },
     "/v1/reports/summary": {
       "get": {
-        "description": "Aggregate metrics for the dashboard overview: recovered claims by week, denial reasons, claim aging, payer outcomes, and call volume.",
+        "description": "Operational call and distinct-claim metrics, denial observations, claim aging, and explicit payment-data availability. Workflow status and payer reports do not establish recovery.",
         "security": [
           {
             "bearer": []
@@ -2400,7 +2432,7 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "recoveredByWeek": {
+                    "callActivityByWeek": {
                       "type": "array",
                       "items": {
                         "type": "object",
@@ -2408,12 +2440,17 @@
                           "weekStart": {
                             "type": "string"
                           },
-                          "recoveredCents": {
+                          "callCount": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 9007199254740991
                           },
-                          "claimCount": {
+                          "completedCallCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "uniqueClaimCount": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 9007199254740991
@@ -2421,11 +2458,44 @@
                         },
                         "required": [
                           "weekStart",
-                          "recoveredCents",
-                          "claimCount"
+                          "callCount",
+                          "completedCallCount",
+                          "uniqueClaimCount"
                         ],
                         "additionalProperties": false
-                      }
+                      },
+                      "description": "Calls started in the current and seven preceding UTC weeks, grouped by Monday. Distinct claims are counted per week and may recur across weeks."
+                    },
+                    "verifiedPayments": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "unavailable"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "PAYMENT_LEDGER_NOT_IMPLEMENTED"
+                          ]
+                        },
+                        "amountCents": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            null
+                          ],
+                          "description": "Unknown, never zero or claim face value. No reconciled payment ledger exists."
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "reason",
+                        "amountCents"
+                      ],
+                      "additionalProperties": false
                     },
                     "denialReasons": {
                       "type": "array",
@@ -2438,7 +2508,7 @@
                           "label": {
                             "type": "string"
                           },
-                          "count": {
+                          "uniqueClaimCount": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 9007199254740991
@@ -2447,7 +2517,7 @@
                         "required": [
                           "code",
                           "label",
-                          "count"
+                          "uniqueClaimCount"
                         ],
                         "additionalProperties": false
                       }
@@ -2493,18 +2563,24 @@
                             "minimum": 0,
                             "maximum": 9007199254740991
                           },
-                          "resolvedCount": {
+                          "completedCallCount": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 9007199254740991
+                          },
+                          "uniqueClaimCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "claimsMarkedResolvedCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "Distinct claims with current workflow status RESOLVED, among claims with calls. Does not establish payment or settlement."
                           },
                           "avgDurationSeconds": {
                             "nullable": true,
-                            "type": "integer",
-                            "minimum": 0,
-                            "maximum": 9007199254740991
-                          },
-                          "recoveredCents": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 9007199254740991
@@ -2513,9 +2589,10 @@
                         "required": [
                           "payer",
                           "callCount",
-                          "resolvedCount",
-                          "avgDurationSeconds",
-                          "recoveredCents"
+                          "completedCallCount",
+                          "uniqueClaimCount",
+                          "claimsMarkedResolvedCount",
+                          "avgDurationSeconds"
                         ],
                         "additionalProperties": false
                       }
@@ -2550,7 +2627,8 @@
                     }
                   },
                   "required": [
-                    "recoveredByWeek",
+                    "callActivityByWeek",
+                    "verifiedPayments",
                     "denialReasons",
                     "claimAging",
                     "payerOutcomes",

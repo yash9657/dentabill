@@ -18,7 +18,7 @@ const RESOLVED_OUTPUT = {
 
 const DENIED_OUTPUT = {
   claimStatus: 'denied',
-  denialReason: 'non-covered service',
+  denialReason: 'payer determined medical necessity was not established',
   denialCode: 'CO-50',
   nextAction: 'APPEAL',
   confidence: 0.91,
@@ -78,11 +78,18 @@ describe('FakeClaude', () => {
     expect(fake.invocations[0]?.transcriptTurns[0]?.text).toBe('one');
   });
 
-  it('rejects fixture registration with a hallucinated denial code', () => {
+  it('preserves an unfamiliar fixture code for the worker to review', async () => {
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', { ...DENIED_OUTPUT, denialCode: 'CO-9999' });
+    const result = await fake.summarize(inputFor('DELTA_DENTAL_PPO', 'unfamiliar code'));
+    expect(result.summary.denialCode).toBe('CO-9999');
+  });
+
+  it('rejects an oversized fixture code without truncating it', () => {
     const fake = new FakeClaude();
     expect(() => {
-      fake.setDefault('DELTA_DENTAL_PPO', { ...DENIED_OUTPUT, denialCode: 'CO-9999' });
-    }).toThrow(/allow-list/);
+      fake.setDefault('DELTA_DENTAL_PPO', { ...DENIED_OUTPUT, denialCode: 'X'.repeat(65) });
+    }).toThrow(/64 characters/);
   });
 });
 
@@ -135,7 +142,7 @@ describe('FakeClaude — demo derivation fallback', () => {
     const result = await fake.summarize(
       withTurns([
         'Calling about claim DEMO-004.',
-        'That claim was denied — code CO-50, non-covered service. The amount billed was $420.',
+        'That claim was denied — code CO-50, medical necessity was not established. The amount billed was $420.',
       ]),
     );
     expect(result.summary.claimStatus).toBe('denied');

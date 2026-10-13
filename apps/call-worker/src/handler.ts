@@ -9,15 +9,19 @@ import {
 import type { Logger } from '@dentabill/logger';
 import {
   type AgentPrompt,
+  type CallIdentity,
   getAgentPrompt,
   getIvrMap,
+  type MissingCallIdentityField,
   type PayerIvrMap,
   type RetellCallEndedEvent,
   type RetellPort,
   RetellCallEndReason,
   type StartCallInput,
+  validateCallIdentity,
 } from '@dentabill/payer-ivr';
 import { CallJobDataSchema, type CallsProcessor, type JobDispatcher } from '@dentabill/queue';
+import { UnrecoverableError } from 'bullmq';
 
 import type { WorkerEnv } from './env.js';
 
@@ -28,6 +32,17 @@ import type { WorkerEnv } from './env.js';
  * and tests will fail to typecheck if we use the raw type here.
  */
 export type DbClient = typeof defaultPrisma;
+
+export class MissingCallIdentityError extends UnrecoverableError {
+  public readonly code = 'MISSING_CALL_IDENTITY';
+  public readonly missingFields: readonly MissingCallIdentityField[];
+
+  public constructor(missingFields: readonly MissingCallIdentityField[]) {
+    super(`Outbound call blocked: required identity is missing (${missingFields.join(', ')}).`);
+    this.name = 'MissingCallIdentityError';
+    this.missingFields = missingFields;
+  }
+}
 
 /**
  * Real call-job handler (P3-T10).
@@ -122,10 +137,36 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
       },
     });
     const providerNpi = payerConfig?.providerNpi ?? org.npi;
-    if (providerNpi === null || providerNpi.length === 0) {
-      throw new Error(
-        `call-worker: no provider NPI configured for org ${data.organizationId} payer ${claim.payerCode}`,
-      );
+    const identity = validateCallIdentity({ subscriberId: claim.subscriberId, providerNpi });
+    if (!identity.ok) {
+      await deps.prisma.$transaction(async (tx) => {
+        const blocked = await tx.claim.updateMany({
+          where: {
+            id: claim.id,
+            organizationId: data.organizationId,
+            status: { in: ['IN_QUEUE', 'CALLING'] },
+            updatedAt: claim.updatedAt,
+          },
+          data: { status: 'NEEDS_INFO' },
+        });
+        if (blocked.count > 0) {
+          await audit(
+            {
+              action: 'call.blocked',
+              resourceType: 'Claim',
+              resourceId: claim.id,
+              organizationId: data.organizationId,
+              metadata: {
+                jobId: job.id ?? null,
+                reason: identity.code,
+                missingFields: identity.missingFields,
+              },
+            },
+            tx,
+          );
+        }
+      });
+      throw new MissingCallIdentityError(identity.missingFields);
     }
 
     // ── 4. Transition Claim → CALLING and start the Retell call ──────
@@ -151,7 +192,7 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
       org,
       ivrMap,
       agentPrompt,
-      providerNpi,
+      identity: identity.identity,
       outboundNumberE164: deps.outboundNumberE164,
       env: deps.env,
     });
@@ -287,14 +328,12 @@ interface BuildStartCallInputArgs {
   readonly data: { readonly idempotencyKey: string };
   readonly claim: {
     readonly serviceDate: Date;
-    readonly claimNumber: string;
-    readonly subscriberId: string | null;
     readonly payerCode: PayerCode;
   };
   readonly org: { readonly name: string };
   readonly ivrMap: PayerIvrMap;
   readonly agentPrompt: AgentPrompt;
-  readonly providerNpi: string;
+  readonly identity: CallIdentity;
   readonly outboundNumberE164: string;
   readonly env: WorkerEnv;
 }
@@ -308,13 +347,8 @@ function buildStartCallInput(args: BuildStartCallInputArgs): StartCallInput {
     toNumberE164: providerLineToE164(args.ivrMap.providerLine),
     agentMetadata: {
       practiceName: args.org.name,
-      providerNpi: args.providerNpi,
-      // Phase 4 expand step (ADR-045 / P4-T1C). When the CSV import
-      // captured a subscriberId we pass it; otherwise we fall back to
-      // claimNumber so reps can still locate the claim by practice-
-      // side ID + DOS. Phase 5+ tightens to NOT NULL once the
-      // backfill from claim narrative completes.
-      subscriberId: args.claim.subscriberId ?? args.claim.claimNumber,
+      providerNpi: args.identity.providerNpi,
+      subscriberId: args.identity.subscriberId,
       dateOfService: args.claim.serviceDate.toISOString().slice(0, 10),
     },
     idempotencyKey: args.data.idempotencyKey,

@@ -79,6 +79,14 @@ describe('decide', () => {
   it('only a retry report keeps the message', () => {
     expect(decide({ status: 'completed', attempt: 1 })).toBe('delete');
     expect(decide({ status: 'skipped', reason: 'summary_exists' })).toBe('delete');
+    expect(
+      decide({
+        status: 'blocked',
+        reason: 'MISSING_CALL_IDENTITY',
+        missingFields: ['subscriberId'],
+        attempt: 1,
+      }),
+    ).toBe('delete');
     expect(decide({ status: 'failed', attempt: 3, dlq: true })).toBe('delete');
     expect(decide({ status: 'retry', attempt: 1, retryDelayMs: 30_000, error: null })).toBe(
       'retry',

@@ -37,6 +37,13 @@ export {
 export { checkPayerHours, isWithinPayerHours, type PayerHoursResult } from './business-hours.js';
 
 export {
+  validateCallIdentity,
+  type CallIdentity,
+  type CallIdentityValidation,
+  type MissingCallIdentityField,
+} from './call-identity.js';
+
+export {
   createIvrNavigator,
   DEFAULT_MISDETECT_PATTERNS,
   type CreateIvrNavigatorInput,

@@ -109,6 +109,7 @@ export interface paths {
                             };
                             redis: {
                                 ok: boolean;
+                                skipped?: boolean;
                             };
                         };
                     };
@@ -127,6 +128,7 @@ export interface paths {
                             };
                             redis: {
                                 ok: boolean;
+                                skipped?: boolean;
                             };
                         };
                     };
@@ -700,7 +702,17 @@ export interface paths {
                             callsToday: number;
                             queueDepth: number;
                             avgCallSeconds: number | null;
-                            recoveredThisWeekCents: number;
+                            verifiedPayments: {
+                                /** @enum {string} */
+                                status: "unavailable";
+                                /** @enum {string} */
+                                reason: "PAYMENT_LEDGER_NOT_IMPLEMENTED";
+                                /**
+                                 * @description Unknown, never zero or claim face value. No reconciled payment ledger exists.
+                                 * @enum {string|null}
+                                 */
+                                amountCents: null;
+                            };
                         };
                     };
                 };
@@ -1229,7 +1241,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Aggregate metrics for the dashboard overview: recovered claims by week, denial reasons, claim aging, payer outcomes, and call volume. */
+        /** @description Operational call and distinct-claim metrics, denial observations, claim aging, and explicit payment-data availability. Workflow status and payer reports do not establish recovery. */
         get: {
             parameters: {
                 query?: never;
@@ -1246,15 +1258,28 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            recoveredByWeek: {
+                            /** @description Calls started in the current and seven preceding UTC weeks, grouped by Monday. Distinct claims are counted per week and may recur across weeks. */
+                            callActivityByWeek: {
                                 weekStart: string;
-                                recoveredCents: number;
-                                claimCount: number;
+                                callCount: number;
+                                completedCallCount: number;
+                                uniqueClaimCount: number;
                             }[];
+                            verifiedPayments: {
+                                /** @enum {string} */
+                                status: "unavailable";
+                                /** @enum {string} */
+                                reason: "PAYMENT_LEDGER_NOT_IMPLEMENTED";
+                                /**
+                                 * @description Unknown, never zero or claim face value. No reconciled payment ledger exists.
+                                 * @enum {string|null}
+                                 */
+                                amountCents: null;
+                            };
                             denialReasons: {
                                 code: string;
                                 label: string;
-                                count: number;
+                                uniqueClaimCount: number;
                             }[];
                             claimAging: {
                                 /** @enum {string} */
@@ -1264,9 +1289,11 @@ export interface paths {
                             payerOutcomes: {
                                 payer: string;
                                 callCount: number;
-                                resolvedCount: number;
+                                completedCallCount: number;
+                                uniqueClaimCount: number;
+                                /** @description Distinct claims with current workflow status RESOLVED, among claims with calls. Does not establish payment or settlement. */
+                                claimsMarkedResolvedCount: number;
                                 avgDurationSeconds: number | null;
-                                recoveredCents: number;
                             }[];
                             callVolume: {
                                 day: string;

@@ -11,15 +11,15 @@ describe('DashboardOverviewPage (P2-T35)', () => {
 
   it('renders the four headline stat tiles with em-dash placeholders (unauth fallback)', () => {
     // No Clerk env stubbed → page falls back to the static placeholder strip.
-    // P3-T25 swapped "Denials this week" for "Avg call (7d)" / "Recovered (7d)"
-    // to align with the live `/v1/calls/stats` aggregate.
     render(<DashboardOverviewPage />);
     const region = screen.getByRole('region', { name: /headline metrics/i });
     expect(region).toBeInTheDocument();
-    for (const label of ['Calls today', 'Queue depth', 'Avg call (7d)', 'Recovered (7d)']) {
+    for (const label of ['Calls today', 'Queue depth', 'Avg call (7d)', 'Verified payments']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
     expect(screen.getAllByText('—').length).toBe(4);
+    expect(screen.getByText('Unavailable: no reconciliation')).toBeInTheDocument();
+    expect(screen.queryByText(/Recovered/i)).not.toBeInTheDocument();
   });
 
   it('renders both empty-state panels with their CTAs pointing at the dashboard routes', () => {

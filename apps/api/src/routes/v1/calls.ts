@@ -1,11 +1,15 @@
 import { audit, getOrgScopedDb, prisma } from '@dentabill/db';
-import { checkPayerHours } from '@dentabill/payer-ivr';
+import { checkPayerHours, validateCallIdentity } from '@dentabill/payer-ivr';
 import type { CallJobData, SummaryJobData } from '@dentabill/queue';
 import { ApiError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@dentabill/types';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { payerHoursOverridden } from '../../lib/env.js';
+import {
+  unavailableVerifiedPayments,
+  VerifiedPaymentsSchema,
+} from '../../lib/financial-reporting.js';
 
 /**
  * `/v1/claims/:id/calls` — enqueue an outbound call (P3-T16).
@@ -259,17 +263,13 @@ function toCallSummaryResponse(
  *                           that have an `endedAt` in the last 7
  *                           days. `null` when there are zero such
  *                           calls (the UI renders an em-dash).
- *   - `recoveredThisWeekCents` — sum of `claimAmount * 100` (cents)
- *                           across `Claim`s flipped to `RESOLVED`
- *                           in the last 7 days. Phase 4 will replace
- *                           this with a real ledger; for now we use
- *                           the claim amount as the proxy.
+ *   - `verifiedPayments` — unavailable until a reconciled payment ledger exists.
  */
 const CallsStatsResponseSchema = z.object({
   callsToday: z.number().int().min(0),
   queueDepth: z.number().int().min(0),
   avgCallSeconds: z.number().int().min(0).nullable(),
-  recoveredThisWeekCents: z.number().int().min(0),
+  verifiedPayments: VerifiedPaymentsSchema,
 });
 type CallsStatsResponse = z.infer<typeof CallsStatsResponseSchema>;
 
@@ -427,10 +427,21 @@ export function callsRoutes(fastify: FastifyInstance): void {
         }),
       ]);
       const resolvedNpi = payerConfigRow?.providerNpi ?? orgRow?.npi ?? null;
-      if (resolvedNpi === null || resolvedNpi.length === 0) {
+      if (resolvedNpi === null || resolvedNpi.trim().length === 0) {
         throw new ApiError(
           'MISSING_PROVIDER_NPI',
           'Add your practice NPI in Settings before placing calls. The payer rep needs it to look up the claim.',
+        );
+      }
+
+      const identity = validateCallIdentity({
+        subscriberId: claim.subscriberId,
+        providerNpi: resolvedNpi,
+      });
+      if (!identity.ok) {
+        throw new ApiError(
+          'MISSING_CALL_IDENTITY',
+          'Add the subscriber ID from the source record before placing a call.',
         );
       }
 
@@ -661,7 +672,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       // We don't go through `getOrgScopedDb` here because count/aggregate
       // helpers aren't on the org-scoped wrapper's surface; the explicit
       // filter is the established pattern for aggregates.
-      const [callsToday, queueDepth, avgRow, recoveredRows] = await Promise.all([
+      const [callsToday, queueDepth, avgRow] = await Promise.all([
         prisma.call.count({
           where: { organizationId: orgId, startedAt: { gte: startOfTodayUTC } },
         }),
@@ -676,28 +687,17 @@ export function callsRoutes(fastify: FastifyInstance): void {
             durationSeconds: { not: null },
           },
         }),
-        prisma.claim.findMany({
-          where: {
-            organizationId: orgId,
-            status: 'RESOLVED',
-            updatedAt: { gte: sevenDaysAgo },
-          },
-          select: { claimAmount: true },
-        }),
       ]);
 
       const avgCallSeconds =
         avgRow._avg.durationSeconds === null ? null : Math.round(avgRow._avg.durationSeconds);
 
-      // Prisma decimal columns come back as `Decimal | string`. We sum
-      // in cents (integer math) to avoid float drift.
-      const recoveredThisWeekCents = recoveredRows.reduce((acc, row) => {
-        const dollars = Number(row.claimAmount);
-        if (Number.isNaN(dollars)) return acc;
-        return acc + Math.round(dollars * 100);
-      }, 0);
-
-      return { callsToday, queueDepth, avgCallSeconds, recoveredThisWeekCents };
+      return {
+        callsToday,
+        queueDepth,
+        avgCallSeconds,
+        verifiedPayments: unavailableVerifiedPayments,
+      };
     },
   );
 
@@ -931,6 +931,13 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const call = await db.call.findFirst({ where: { id } });
       if (!call) {
         throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
+      }
+
+      if (!TERMINAL_CALL_STATUSES.has(call.status)) {
+        throw new ApiError(
+          'VALIDATION_ERROR',
+          'Wait until the call has ended before requesting a summary.',
+        );
       }
 
       // Derive a deterministic retry key from the count of past

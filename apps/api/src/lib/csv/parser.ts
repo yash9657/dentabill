@@ -164,8 +164,8 @@ function normaliseRow(args: {
   const payer = resolvePayerCode(carrierRaw);
 
   // Subscriber ID is optional — Dentrix layouts often omit it. Empty
-  // string and absent header both normalise to null so downstream
-  // can do `subscriberId ?? claimNumber` without an extra check.
+  // string and absent header both normalise to null; outbound calls
+  // remain blocked until the missing subscriber identity is supplied.
   const subscriberHeader = roleToHeader.subscriberId;
   const subscriberRaw = subscriberHeader ? (raw[subscriberHeader] ?? '').trim() : '';
   const subscriberId = subscriberRaw.length > 0 ? subscriberRaw : null;

@@ -152,10 +152,9 @@ model Claim {
   patientDOBHash  String
   patientDOBLast4 String?
   claimNumber     String
-  // Phase-4 expand step (ADR-045). Nullable so historical rows stay
-  // valid; the call-worker uses `subscriberId ?? claimNumber` as the
-  // metadata fallback during the expand window. Phase-5 backfills
-  // historic rows from claim narrative; Phase-5+ tightens to NOT NULL.
+  // Nullable for imports without subscriber identity. Missing values block
+  // outbound calls until supplied by an authorized source or biller;
+  // claim numbers and inferred values are never substitutes.
   subscriberId    String?
   cdtCodes        String[]
   claimAmount     Decimal     @db.Decimal(10, 2)

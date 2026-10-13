@@ -15,7 +15,7 @@ import { OverviewStatStrip, type OverviewStat } from './overview-stat-strip.js';
  *   - Calls today          — count of Call rows started today (UTC).
  *   - Queue depth          — count of claims in PENDING/IN_QUEUE/CALLING.
  *   - Avg call (last 7d)   — mean Call.durationSeconds, last 7 days.
- *   - Recovered this week  — sum of resolved Claim.claimAmount, last 7d.
+ *   - Verified payments    — explicitly unavailable until payment reconciliation.
  *
  * Pre-load: every tile shows "—" so the strip never reflows when data
  * lands. On error: same em-dash placeholders + a small retry hint
@@ -35,15 +35,6 @@ function fmtDuration(seconds: number | null): string {
   const m = Math.floor(seconds / 60);
   const s = Math.round(seconds - m * 60);
   return `${String(m)}m ${String(s).padStart(2, '0')}s`;
-}
-
-function fmtCents(cents: number): string {
-  const dollars = cents / 100;
-  return dollars.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  });
 }
 
 export function OverviewKpiTiles(): React.ReactElement {
@@ -67,9 +58,12 @@ export function OverviewKpiTiles(): React.ReactElement {
       caption: 'Last seven days',
     },
     {
-      label: 'Recovered (7d)',
-      value: data ? fmtCents(data.recoveredThisWeekCents) : '—',
-      caption: 'Resolved claims, last seven days',
+      label: 'Verified payments',
+      value: '—',
+      caption:
+        data?.verifiedPayments.status === 'unavailable'
+          ? 'Unavailable: no reconciliation'
+          : 'Loading…',
     },
   ];
 

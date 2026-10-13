@@ -8,7 +8,7 @@ import {
   createRedisConnection,
 } from '@dentabill/queue';
 import type { Redis } from 'ioredis';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { loadWorkerEnv } from './env.js';
 import { bootCallWorker, type CallWorkerHandle } from './server.js';
@@ -98,6 +98,7 @@ async function seedOrgAndClaim(): Promise<SeedResult> {
     data: {
       organizationId: org.id,
       claimNumber: 'CLM-9001',
+      subscriberId: 'MEMBER-9001',
       patientDOBHash: hashPatientDOB({
         dob: '1990-05-12',
         organizationId: org.id,
@@ -284,5 +285,53 @@ describe('call-worker e2e — graceful shutdown', () => {
     // Idempotent — second call is a no-op.
     await workerHandle.shutdown();
     workerHandle = null; // already shut down; afterEach must not double-close.
+  });
+});
+
+describe('call-worker e2e — missing identity', () => {
+  it('fails once despite retries being configured and keeps the claim in NEEDS_INFO', async () => {
+    const { orgId, claimId } = await seedOrgAndClaim();
+    await prisma.claim.updateMany({
+      where: { id: claimId, organizationId: orgId },
+      data: { subscriberId: null },
+    });
+    const fake = new FakeRetell();
+    const startCall = vi.spyOn(fake, 'startCall');
+    workerHandle = await bootCallWorker({
+      env: buildEnv({ workerPort: pickWorkerPort() }),
+      retellPort: fake,
+    });
+    const queue = createCallsQueue({ connection: queueConnection });
+    try {
+      const jobId = 'e2e-missing-identity';
+      await queue.add(
+        CALL_JOB_NAME,
+        {
+          organizationId: orgId,
+          claimId,
+          payerCode: 'DELTA_DENTAL_PPO',
+          attemptNumber: 1,
+          claimPriority: 80,
+          idempotencyKey: jobId,
+        },
+        { jobId, attempts: 3, backoff: { type: 'fixed', delay: 10 } },
+      );
+      await waitFor(
+        async () =>
+          (await queue.getJob(jobId))?.getState().then((state) => state === 'failed') ?? false,
+      );
+      const failedJob = await queue.getJob(jobId);
+      expect(failedJob?.attemptsMade).toBe(1);
+      expect(failedJob?.failedReason).toContain('subscriberId');
+      expect(startCall).not.toHaveBeenCalled();
+      const claim = await prisma.claim.findFirstOrThrow({
+        where: { id: claimId, organizationId: orgId },
+      });
+      expect(claim.status).toBe('NEEDS_INFO');
+      expect(claim.lastCallAt).toBeNull();
+      expect(await prisma.call.count({ where: { organizationId: orgId, claimId } })).toBe(0);
+    } finally {
+      await queue.close();
+    }
   });
 });

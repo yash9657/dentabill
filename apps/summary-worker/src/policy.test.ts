@@ -29,10 +29,10 @@ describe('applyTransitionPolicy', () => {
     expect(result.targetStatus).toBe('MANUAL_REVIEW');
   });
 
-  it('auto-transitions Claim → RESOLVED on RESOLVED + high confidence', () => {
+  it('requires review for model-reported resolution even with high confidence', () => {
     const result = applyTransitionPolicy({ ...BASELINE, nextAction: 'RESOLVED' });
-    expect(result.autoTransitioned).toBe(true);
-    expect(result.targetStatus).toBe('RESOLVED');
+    expect(result.autoTransitioned).toBe(false);
+    expect(result.targetStatus).toBe('MANUAL_REVIEW');
   });
 
   it('auto-transitions Claim → NEEDS_INFO on SUBMIT_DOCS + high confidence', () => {
@@ -63,5 +63,42 @@ describe('applyTransitionPolicy', () => {
     const result = applyTransitionPolicy({ ...BASELINE, nextAction: 'MANUAL_REVIEW' });
     expect(result.autoTransitioned).toBe(false);
     expect(result.targetStatus).toBe('MANUAL_REVIEW');
+  });
+});
+
+describe('protected claim state', () => {
+  it.each([
+    'RESOLVED',
+    'WRITTEN_OFF',
+    'APPEALING',
+    'IN_QUEUE',
+    'CALLING',
+    'NEEDS_INFO',
+    'PENDING',
+    'MANUAL_REVIEW',
+  ] as const)('preserves %s when an older summary arrives', (currentStatus) => {
+    const result = applyTransitionPolicy({ ...BASELINE, currentStatus, nextAction: 'SUBMIT_DOCS' });
+    expect(result.targetStatus).toBe(currentStatus);
+    expect(result.autoTransitioned).toBe(false);
+  });
+  it.each([Number.NaN, Infinity, -1, 1.1])('rejects invalid confidence %s', (confidence) => {
+    const result = applyTransitionPolicy({ ...BASELINE, confidence, nextAction: 'SUBMIT_DOCS' });
+    expect(result.autoTransitioned).toBe(false);
+    expect(result.targetStatus).toBe('MANUAL_REVIEW');
+  });
+});
+
+describe('unmapped source code containment', () => {
+  it('requires review even when the proposal is a high-confidence document request', () => {
+    const result = applyTransitionPolicy({
+      ...BASELINE,
+      denialCode: 'PAYER-X7',
+      nextAction: 'SUBMIT_DOCS',
+    });
+    expect(result).toMatchObject({
+      autoTransitioned: false,
+      targetStatus: 'MANUAL_REVIEW',
+      reason: 'UNMAPPED_CODE',
+    });
   });
 });

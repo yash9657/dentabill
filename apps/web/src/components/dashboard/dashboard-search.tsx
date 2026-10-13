@@ -41,7 +41,7 @@ const destinations = [
   },
   {
     label: 'Reports',
-    description: 'Recovery and payer performance',
+    description: 'Call activity and claim aging',
     href: '/dashboard/reports',
     icon: TrendingUp,
   },

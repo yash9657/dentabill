@@ -1,5 +1,6 @@
 'use client';
 
+import type { paths } from '@dentabill/api-sdk/types';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { z } from 'zod';
 
@@ -7,8 +8,7 @@ import { useDentaBillApi } from '../api-client.js';
 
 /**
  * Zod schemas matching the API response types from `/v1/reports/summary`.
- * These are derived from apps/api/src/routes/v1/reports.ts to ensure
- * consistency without depending on SDK regeneration.
+ * The generated SDK enforces contract consistency; Zod checks the wire response.
  */
 const DayBucketSchema = z.object({
   day: z.string(),
@@ -18,14 +18,15 @@ const DayBucketSchema = z.object({
 
 const WeekBucketSchema = z.object({
   weekStart: z.string(),
-  recoveredCents: z.number().int(),
-  claimCount: z.number().int(),
+  callCount: z.number().int().min(0),
+  completedCallCount: z.number().int().min(0),
+  uniqueClaimCount: z.number().int().min(0),
 });
 
 const DenialReasonSchema = z.object({
   code: z.string(),
   label: z.string(),
-  count: z.number().int(),
+  uniqueClaimCount: z.number().int().min(0),
 });
 
 const ClaimAgingBucketSchema = z.object({
@@ -36,20 +37,27 @@ const ClaimAgingBucketSchema = z.object({
 const PayerOutcomeSchema = z.object({
   payer: z.string(),
   callCount: z.number().int(),
-  resolvedCount: z.number().int(),
+  completedCallCount: z.number().int().min(0),
+  uniqueClaimCount: z.number().int().min(0),
+  claimsMarkedResolvedCount: z.number().int().min(0),
   avgDurationSeconds: z.number().int().nullable(),
-  recoveredCents: z.number().int(),
 });
 
 const ReportsSummaryResponseSchema = z.object({
-  recoveredByWeek: z.array(WeekBucketSchema),
+  callActivityByWeek: z.array(WeekBucketSchema),
+  verifiedPayments: z.object({
+    status: z.literal('unavailable'),
+    reason: z.literal('PAYMENT_LEDGER_NOT_IMPLEMENTED'),
+    amountCents: z.null(),
+  }),
   denialReasons: z.array(DenialReasonSchema),
   claimAging: z.array(ClaimAgingBucketSchema),
   payerOutcomes: z.array(PayerOutcomeSchema),
   callVolume: z.array(DayBucketSchema),
-});
+}) satisfies z.ZodType<ReportsSummaryResponse>;
 
-export type ReportsSummaryResponse = z.infer<typeof ReportsSummaryResponseSchema>;
+export type ReportsSummaryResponse =
+  paths['/v1/reports/summary']['get']['responses'][200]['content']['application/json'];
 export type WeekBucket = z.infer<typeof WeekBucketSchema>;
 export type DenialReason = z.infer<typeof DenialReasonSchema>;
 export type ClaimAgingBucket = z.infer<typeof ClaimAgingBucketSchema>;
@@ -64,7 +72,8 @@ interface ApiErrorBody {
  * `useReportsSummary()` fetches `/v1/reports/summary` which returns
  * five aggregates for the reports dashboard:
  *
- * - recoveredByWeek: last 8 weeks of claim resolutions (value, count)
+ * - callActivityByWeek: calls started in the current and seven preceding UTC weeks
+ * - verifiedPayments: explicit unavailability until payments can be reconciled
  * - denialReasons: breakdown by denial code
  * - claimAging: distribution of pending claims by age bucket
  * - payerOutcomes: per-payer call/resolution metrics

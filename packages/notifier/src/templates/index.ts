@@ -56,6 +56,7 @@ export const TEMPLATES = {
   'claim.needs_info': ClaimNeedsInfoTemplate,
   'claim.denied': ClaimDeniedTemplate,
   'summary.dlq': SummaryDlqTemplate,
+  'summary.review_required': ClaimNeedsInfoTemplate,
 } as const;
 
 export type TemplateName = keyof typeof TEMPLATES;

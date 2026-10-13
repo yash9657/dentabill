@@ -108,12 +108,20 @@ export type SummaryJobData = z.infer<typeof SummaryJobDataSchema>;
 export const SummaryJobResultSchema = z.object({
   summaryId: z.string().min(1).nullable(),
   /**
-   * `RESOLVED` / `MANUAL_REVIEW` / `DLQ` describe what the worker did
-   * with the Claim transition; `BUDGET_EXCEEDED` is the cost-guard
-   * abort. `DLQ` returns instead of throwing because retrying a
-   * Zod-validation failure won't change the outcome.
+   * Routing outcomes describe workflow decisions, never collected cash.
+   * STALE_RESULT preserves newer/reviewed state; ALREADY_PROCESSED skips
+   * duplicate inference; CALL_NOT_TERMINAL refuses a partial transcript.
+   * DLQ is non-retryable output validation; BUDGET_EXCEEDED skips inference.
    */
-  outcome: z.enum(['AUTO_TRANSITIONED', 'MANUAL_REVIEW', 'BUDGET_EXCEEDED', 'DLQ']),
+  outcome: z.enum([
+    'AUTO_TRANSITIONED',
+    'MANUAL_REVIEW',
+    'BUDGET_EXCEEDED',
+    'DLQ',
+    'STALE_RESULT',
+    'ALREADY_PROCESSED',
+    'CALL_NOT_TERMINAL',
+  ]),
   tokensUsed: z.number().int().min(0),
   promptVersion: z.string().min(1),
 });

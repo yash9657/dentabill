@@ -1,9 +1,18 @@
-import { audit, getOrgScopedDb, type CallEvent, type NextAction, type prisma } from '@dentabill/db';
+import {
+  audit,
+  getOrgScopedDb,
+  type CallEvent,
+  type ClaimStatus,
+  type NextAction,
+  type prisma,
+} from '@dentabill/db';
 import type { Logger } from '@dentabill/logger';
-import type { NotifierPort, TemplateName, TemplateVars } from '@dentabill/notifier';
+import type { NotifierPort } from '@dentabill/notifier';
+import { isKnownDenialCode } from '@dentabill/payer-ivr';
 import { SummaryJobDataSchema, type SummaryJobData, type SummaryJobResult } from '@dentabill/queue';
 import {
   SummaryValidationError,
+  SummaryOutputSchema,
   type SummarizerPort,
   type SummarizeInput,
 } from '@dentabill/summarizer';
@@ -33,7 +42,7 @@ import type { SummaryWorkerEnv } from './env.js';
  *   7. Apply transition policy:
  *        - `SUMMARIZER_AUTO_TRANSITION_ENABLED` env OFF → MANUAL_REVIEW.
  *        - `confidence < 0.95` → MANUAL_REVIEW.
- *        - `nextAction in {RESOLVED, NEEDS_INFO}` → flip Claim.
+ *        - `nextAction = SUBMIT_DOCS` → route eligible Claim to NEEDS_INFO.
  *        - Anything else → MANUAL_REVIEW.
  *      The Claim transition writes one `claim.transition` audit row.
  *   8. Update `Organization.summaryTokensUsed += tokensUsed` (still
@@ -58,7 +67,7 @@ export interface SummaryHandlerDeps {
   readonly clock?: () => Date;
   /**
    * Optional notifier — when present, the handler dispatches a
-   * post-resolution event to the operator. Phase 4 wires FakeResend
+   * review-required event to the operator. Phase 4 wires FakeResend
    * (which only logs to memory); the live adapter ships in 4.5. The
    * notifier is intentionally optional: a misconfigured org without an
    * outbound mailbox should still get summaries persisted, just no
@@ -77,11 +86,7 @@ export type SummaryJobLike = Pick<Job<SummaryJobData, SummaryJobResult>, 'id' | 
 
 export type SummaryHandler = (job: SummaryJobLike) => Promise<SummaryJobResult>;
 
-const AUTO_TRANSITION_ACTIONS: ReadonlySet<NextAction> = new Set<NextAction>([
-  'RESOLVED',
-  'CALL_BACK', // benign re-poll
-  'SUBMIT_DOCS',
-]);
+const SUMMARY_ELIGIBLE_STATUSES: ReadonlySet<ClaimStatus> = new Set(['COMPLETED', 'DENIED']);
 
 const MIN_AUTO_CONFIDENCE = 0.95;
 
@@ -123,6 +128,18 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
     }
 
     try {
+      const orgScoped = getOrgScopedDb(data.organizationId);
+      const existingSummary = await orgScoped.callSummary.findFirst({
+        where: { callId: data.callId },
+      });
+      if (existingSummary) {
+        return {
+          summaryId: existingSummary.id,
+          outcome: 'ALREADY_PROCESSED',
+          tokensUsed: 0,
+          promptVersion: data.promptVersion,
+        };
+      }
       const tokensBudget = deps.env.SUMMARIZER_DAILY_TOKEN_BUDGET;
       const org = await deps.prisma.organization.findUnique({
         where: { id: data.organizationId },
@@ -165,7 +182,6 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
       // Multi-tenant load: the read-scope extension forces
       // organizationId on every query — even a buggy or forged
       // job payload can't cross orgs.
-      const orgScoped = getOrgScopedDb(data.organizationId);
       const call = await orgScoped.call.findFirst({ where: { id: data.callId } });
       if (!call) {
         deps.logger.error(
@@ -180,8 +196,17 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
         };
       }
 
+      if (!['COMPLETED', 'FAILED', 'VOICEMAIL'].includes(call.status)) {
+        return {
+          summaryId: null,
+          outcome: 'CALL_NOT_TERMINAL',
+          tokensUsed: 0,
+          promptVersion: data.promptVersion,
+        };
+      }
+
       const events = await deps.prisma.callEvent.findMany({
-        where: { callId: call.id },
+        where: { callId: call.id, call: { organizationId: data.organizationId } },
         orderBy: { timestamp: 'asc' },
       });
       const transcriptTurns = transcriptFromEvents(events);
@@ -222,6 +247,17 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
           transcriptTurns,
         };
         summarizeResult = await deps.summarizer.summarize(input);
+        const parsed = SummaryOutputSchema.safeParse(summarizeResult.summary);
+        if (!parsed.success) {
+          throw new SummaryValidationError(
+            call.id,
+            parsed.error.issues.map((issue) => ({
+              path: issue.path.join('.'),
+              message: 'Invalid summary field',
+            })),
+          );
+        }
+        summarizeResult = { ...summarizeResult, summary: parsed.data };
       } catch (err) {
         if (err instanceof SummaryValidationError) {
           await audit({
@@ -237,7 +273,10 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
           // Force the Claim into MANUAL_REVIEW so the operator picks
           // it up — never auto-decision when validation failed.
           await deps.prisma.claim.updateMany({
-            where: { id: claim.id, organizationId: data.organizationId },
+            where: {
+              ...summaryTransitionWhere(claim, call, data.organizationId),
+              status: { in: ['COMPLETED', 'DENIED'] },
+            },
             data: { status: 'MANUAL_REVIEW' },
           });
           return {
@@ -250,86 +289,89 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
         throw err;
       }
 
-      // Persist the CallSummary. The org-scope write middleware enforces
-      // organizationId presence; we pass it explicitly.
-      const summary = await deps.prisma.callSummary.create({
-        data: {
-          organizationId: data.organizationId,
-          callId: call.id,
-          claimStatus: summarizeResult.summary.claimStatus,
-          denialReason: summarizeResult.summary.denialReason,
-          denialCode: summarizeResult.summary.denialCode,
-          nextAction: summarizeResult.summary.nextAction,
-          confidence: summarizeResult.summary.confidence,
-          repName: summarizeResult.summary.repName,
-          referenceNumber: summarizeResult.summary.referenceNumber,
-          callbackDate: summarizeResult.summary.callbackDate
-            ? new Date(summarizeResult.summary.callbackDate)
-            : null,
-          amountApproved:
-            summarizeResult.summary.amountApprovedCents === null
-              ? null
-              : (summarizeResult.summary.amountApprovedCents / 100).toFixed(2),
-          notes: summarizeResult.summary.notes,
-          rawTranscript: transcriptTurns.map((t) => `[${t.role}] ${t.text}`).join('\n'),
-          claudeSummary: stringifyClaudeSummary(summarizeResult.summary),
-        },
-      });
-
       const policy = applyTransitionPolicy({
         autoTransitionEnabled: deps.env.SUMMARIZER_AUTO_TRANSITION_ENABLED,
         confidence: summarizeResult.summary.confidence,
         nextAction: summarizeResult.summary.nextAction,
         currentStatus: claim.status,
+        denialCode: summarizeResult.summary.denialCode,
       });
 
-      await deps.prisma.claim.updateMany({
-        where: { id: claim.id, organizationId: data.organizationId },
-        data: { status: policy.targetStatus },
-      });
+      // A summary, its state effect, audit, and usage must commit together.
+      const { summary, transitionApplied } = await deps.prisma.$transaction(async (tx) => {
+        const summary = await tx.callSummary.create({
+          data: {
+            organizationId: data.organizationId,
+            callId: call.id,
+            claimStatus: summarizeResult.summary.claimStatus,
+            denialReason: summarizeResult.summary.denialReason,
+            denialCode: summarizeResult.summary.denialCode,
+            nextAction: summarizeResult.summary.nextAction,
+            confidence: summarizeResult.summary.confidence,
+            repName: summarizeResult.summary.repName,
+            referenceNumber: summarizeResult.summary.referenceNumber,
+            callbackDate: summarizeResult.summary.callbackDate
+              ? new Date(summarizeResult.summary.callbackDate)
+              : null,
+            amountApproved:
+              summarizeResult.summary.amountApprovedCents === null
+                ? null
+                : (summarizeResult.summary.amountApprovedCents / 100).toFixed(2),
+            notes: summarizeResult.summary.notes,
+            rawTranscript: transcriptTurns.map((t) => `[${t.role}] ${t.text}`).join('\n'),
+            claudeSummary: stringifyClaudeSummary(summarizeResult.summary),
+          },
+        });
 
-      await audit({
-        action: 'claim.transition',
-        resourceType: 'Claim',
-        resourceId: claim.id,
-        organizationId: data.organizationId,
-        metadata: {
-          summaryId: summary.id,
-          confidence: summarizeResult.summary.confidence,
-          nextAction: summarizeResult.summary.nextAction,
-          autoTransitioned: policy.autoTransitioned,
-          fromStatus: claim.status,
-          toStatus: policy.targetStatus,
-          prompt: summarizeResult.promptVersion,
-          model: summarizeResult.model,
-          jobId: job.id ?? null,
-        },
-      });
-
-      // Update the org's running token tally inside the lock window.
-      // `increment` keeps the write contention-safe even though we
-      // already serialised via the lock — defence in depth.
-      await deps.prisma.organization.update({
-        where: { id: org.id },
-        data: {
-          summaryTokensUsed: isStaleResetDay(org.summaryTokensResetAt, billingDay)
-            ? summarizeResult.tokensUsed
-            : { increment: summarizeResult.tokensUsed },
-          summaryTokensResetAt: clock(),
-        },
+        const transition = SUMMARY_ELIGIBLE_STATUSES.has(claim.status)
+          ? await tx.claim.updateMany({
+              where: summaryTransitionWhere(claim, call, data.organizationId),
+              data: { status: policy.targetStatus },
+            })
+          : { count: 0 };
+        const transitionApplied = transition.count === 1;
+        await audit(
+          {
+            action: transitionApplied ? 'claim.transition' : 'summary.transition_skipped',
+            resourceType: 'Claim',
+            resourceId: claim.id,
+            organizationId: data.organizationId,
+            metadata: {
+              summaryId: summary.id,
+              confidence: summarizeResult.summary.confidence,
+              nextAction: summarizeResult.summary.nextAction,
+              autoTransitioned: transitionApplied && policy.autoTransitioned,
+              fromStatus: claim.status,
+              toStatus: transitionApplied ? policy.targetStatus : null,
+              reason: transitionApplied ? policy.reason : 'CLAIM_CHANGED_OR_PROTECTED',
+              prompt: summarizeResult.promptVersion,
+              model: summarizeResult.model,
+              jobId: job.id ?? null,
+            },
+          },
+          tx,
+        );
+        await tx.organization.update({
+          where: { id: org.id },
+          data: {
+            summaryTokensUsed: isStaleResetDay(org.summaryTokensResetAt, billingDay)
+              ? summarizeResult.tokensUsed
+              : { increment: summarizeResult.tokensUsed },
+            summaryTokensResetAt: clock(),
+          },
+        });
+        return { summary, transitionApplied };
       });
 
       // Optional notify. PHI-screened by the template's Zod schema —
       // we only pass claim metadata, never patient identifiers.
-      if (deps.notifier && deps.resolveRecipient) {
+      if (transitionApplied && deps.notifier && deps.resolveRecipient) {
         try {
           const to = await deps.resolveRecipient(data.organizationId);
           if (to) {
             await dispatchClaimNotification(deps.notifier, {
               to,
               organizationId: data.organizationId,
-              summaryStatus: summarizeResult.summary.claimStatus,
-              denialCode: summarizeResult.summary.denialCode,
               claimNumber: claim.claimNumber,
               payerCode: claim.payerCode,
               serviceDate: claim.serviceDate,
@@ -339,7 +381,7 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
           // Notify failure is NOT fatal — the summary is persisted
           // and audited. Log and continue.
           deps.logger.error(
-            { err: err instanceof Error ? { message: err.message, name: err.name } : err },
+            { errorType: err instanceof Error ? err.name : 'UnknownError' },
             'summary-worker: notifier dispatch failed — summary still persisted',
           );
         }
@@ -347,7 +389,11 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
 
       return {
         summaryId: summary.id,
-        outcome: policy.autoTransitioned ? 'AUTO_TRANSITIONED' : 'MANUAL_REVIEW',
+        outcome: !transitionApplied
+          ? 'STALE_RESULT'
+          : policy.autoTransitioned
+            ? 'AUTO_TRANSITIONED'
+            : 'MANUAL_REVIEW',
         tokensUsed: summarizeResult.tokensUsed,
         promptVersion: summarizeResult.promptVersion,
       };
@@ -412,59 +458,72 @@ function stringifyClaudeSummary(summary: {
   return parts.join(' | ');
 }
 
+function summaryTransitionWhere(
+  claim: { readonly id: string; readonly status: ClaimStatus; readonly updatedAt: Date },
+  call: { readonly id: string; readonly createdAt: Date },
+  organizationId: string,
+) {
+  return {
+    id: claim.id,
+    organizationId,
+    status: claim.status,
+    updatedAt: claim.updatedAt,
+    calls: {
+      none: {
+        organizationId,
+        OR: [
+          { createdAt: { gt: call.createdAt } },
+          { createdAt: call.createdAt, id: { gt: call.id } },
+        ],
+      },
+    },
+  };
+}
+
 export interface TransitionPolicyInput {
   readonly autoTransitionEnabled: boolean;
   readonly confidence: number;
   readonly nextAction: NextAction;
-  readonly currentStatus: string;
+  readonly currentStatus: ClaimStatus;
+  readonly denialCode?: string | null;
 }
 
 export interface TransitionPolicyResult {
   readonly autoTransitioned: boolean;
-  readonly targetStatus:
-    | 'MANUAL_REVIEW'
-    | 'RESOLVED'
-    | 'NEEDS_INFO'
-    | 'CALLING'
-    | 'PENDING'
-    | 'COMPLETED';
+  readonly targetStatus: ClaimStatus;
+  readonly reason:
+    | 'CLAIM_STATE_PROTECTED'
+    | 'REVIEW_REQUIRED'
+    | 'NON_FINANCIAL_ROUTING'
+    | 'UNMAPPED_CODE';
 }
 
-/**
- * Pure transition policy. The handler invokes this with the parsed
- * `SummaryOutput` + the kill-switch flag; it returns the target
- * `Claim.status` plus a flag indicating whether this counts as an
- * auto-decision (drives the audit metadata + result outcome).
- */
 export function applyTransitionPolicy(input: TransitionPolicyInput): TransitionPolicyResult {
-  if (!input.autoTransitionEnabled) {
-    return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW' };
+  if (!SUMMARY_ELIGIBLE_STATUSES.has(input.currentStatus)) {
+    return {
+      autoTransitioned: false,
+      targetStatus: input.currentStatus,
+      reason: 'CLAIM_STATE_PROTECTED',
+    };
   }
-  if (input.confidence < MIN_AUTO_CONFIDENCE) {
-    return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW' };
+  if (input.denialCode && !isKnownDenialCode(input.denialCode)) {
+    return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW', reason: 'UNMAPPED_CODE' };
   }
-  if (!AUTO_TRANSITION_ACTIONS.has(input.nextAction)) {
-    return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW' };
+  if (
+    input.autoTransitionEnabled &&
+    Number.isFinite(input.confidence) &&
+    input.confidence >= MIN_AUTO_CONFIDENCE &&
+    input.confidence <= 1 &&
+    input.nextAction === 'SUBMIT_DOCS'
+  ) {
+    return { autoTransitioned: true, targetStatus: 'NEEDS_INFO', reason: 'NON_FINANCIAL_ROUTING' };
   }
-  switch (input.nextAction) {
-    case 'RESOLVED':
-      return { autoTransitioned: true, targetStatus: 'RESOLVED' };
-    case 'SUBMIT_DOCS':
-      return { autoTransitioned: true, targetStatus: 'NEEDS_INFO' };
-    case 'CALL_BACK':
-      // Benign re-poll — leave Claim COMPLETED so the dashboard surfaces
-      // it for the operator's next-call decision rather than auto-flipping.
-      return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW' };
-    default:
-      return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW' };
-  }
+  return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW', reason: 'REVIEW_REQUIRED' };
 }
 
 interface DispatchInput {
   readonly to: string;
   readonly organizationId: string;
-  readonly summaryStatus: string;
-  readonly denialCode: string | null;
   readonly claimNumber: string;
   readonly payerCode: string;
   readonly serviceDate: Date;
@@ -480,23 +539,13 @@ async function dispatchClaimNotification(
     payerCode: input.payerCode,
     serviceDate,
   };
-  let template: TemplateName;
-  let vars: TemplateVars<TemplateName>;
-
-  if (input.summaryStatus === 'paid') {
-    template = 'claim.resolved';
-    vars = { ...baseVars, amountResolvedCents: 0 };
-  } else if (input.summaryStatus === 'denied' && input.denialCode) {
-    template = 'claim.denied';
-    vars = { ...baseVars, denialCode: input.denialCode };
-  } else {
-    template = 'claim.needs_info';
-    vars = { ...baseVars, hint: 'Operator review required.' };
-  }
   await notifier.notify({
     to: input.to,
-    template,
-    vars,
+    template: 'summary.review_required',
+    vars: {
+      ...baseVars,
+      hint: 'Review the call evidence. Payer-reported amounts are not verified payments.',
+    },
     organizationId: input.organizationId,
   });
 }

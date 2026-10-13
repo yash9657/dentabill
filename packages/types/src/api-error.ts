@@ -52,6 +52,7 @@ export const API_ERROR_CODES = {
    * instead of letting a job die in the DLQ.
    */
   MISSING_PROVIDER_NPI: 'MISSING_PROVIDER_NPI',
+  MISSING_CALL_IDENTITY: 'MISSING_CALL_IDENTITY',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 
@@ -74,6 +75,7 @@ const CODE_TO_STATUS: Readonly<Record<ApiErrorCode, number>> = {
   PAYER_HOURS_CLOSED: 422,
   UNSUPPORTED_PAYER: 422,
   MISSING_PROVIDER_NPI: 422,
+  MISSING_CALL_IDENTITY: 422,
   INTERNAL_ERROR: 500,
 };
 

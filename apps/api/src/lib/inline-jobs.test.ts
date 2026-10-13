@@ -10,6 +10,8 @@ import type { CallJobData, JobDispatcher, SummaryJobData } from '@dentabill/queu
 import { createSummarizerPort } from '@dentabill/summarizer';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { createSqsJobWorker } from '../lambda-worker.js';
+
 import { createInlineJobRuntime, type CreateInlineJobRuntimeDeps } from './inline-jobs.js';
 
 const silentLogger = createLogger({ level: 'fatal', pretty: false, base: { service: 'test' } });
@@ -56,7 +58,13 @@ function runtimeWith(overrides: Partial<CreateInlineJobRuntimeDeps> = {}): {
   return { runtime, retell, retellCallId, dispatcher };
 }
 
-async function seed(opts: { npi?: string | null; status?: 'IN_QUEUE' | 'PENDING' } = {}): Promise<{
+async function seed(
+  opts: {
+    npi?: string | null;
+    subscriberId?: string | null;
+    status?: 'IN_QUEUE' | 'PENDING';
+  } = {},
+): Promise<{
   orgId: string;
   claimId: string;
   data: CallJobData;
@@ -72,6 +80,7 @@ async function seed(opts: { npi?: string | null; status?: 'IN_QUEUE' | 'PENDING'
     data: {
       organizationId: org.id,
       claimNumber: 'CLM-INLINE-1',
+      subscriberId: opts.subscriberId === null ? null : (opts.subscriberId ?? 'MEMBER-INLINE-1'),
       patientDOBHash: hashPatientDOB({
         dob: '1990-05-12',
         organizationId: org.id,
@@ -151,11 +160,11 @@ describe('createInlineJobRuntime — calls', () => {
   });
 
   it('retries per job options, then runs the DLQ escalation (claim → MANUAL_REVIEW)', async () => {
-    const { runtime } = runtimeWith({
+    const { runtime, retell } = runtimeWith({
       callJobOptions: { attempts: 2, backoff: { type: 'fixed', delay: 1 } },
     });
-    // No NPI → the handler throws on every attempt.
-    const { data, claimId } = await seed({ npi: null });
+    vi.spyOn(retell, 'startCall').mockRejectedValue(new Error('synthetic connection refused'));
+    const { data, claimId } = await seed();
 
     const report = await runtime.runCall(data);
 
@@ -168,12 +177,37 @@ describe('createInlineJobRuntime — calls', () => {
     const claim = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
     expect(claim.status).toBe('MANUAL_REVIEW');
   });
+
+  it.each([null, '', ' \t\n '])(
+    'blocks missing subscriber identity before any vendor call: %j',
+    async (subscriberId) => {
+      const { runtime, retell, dispatcher } = runtimeWith();
+      const startCall = vi.spyOn(retell, 'startCall');
+      const { data, claimId, orgId } = await seed({ subscriberId });
+
+      expect(await runtime.runCall(data)).toEqual({
+        status: 'blocked',
+        reason: 'MISSING_CALL_IDENTITY',
+        missingFields: ['subscriberId'],
+        attemptsMade: 1,
+      });
+      expect(startCall).not.toHaveBeenCalled();
+      expect(dispatcher.dispatchSummary).not.toHaveBeenCalled();
+      const claim = await prisma.claim.findFirstOrThrow({
+        where: { id: claimId, organizationId: orgId },
+      });
+      expect(claim.status).toBe('NEEDS_INFO');
+      expect(claim.lastCallAt).toBeNull();
+      expect(await prisma.call.count({ where: { organizationId: orgId, claimId } })).toBe(0);
+    },
+  );
 });
 
 describe('createInlineJobRuntime — single attempts (SQS mode)', () => {
   it('first attempt fails with attempts left → retry with the backoff, claim stays CALLING', async () => {
-    const { runtime } = runtimeWith();
-    const { data, claimId } = await seed({ npi: null });
+    const { runtime, retell } = runtimeWith();
+    vi.spyOn(retell, 'startCall').mockRejectedValue(new Error('synthetic connection refused'));
+    const { data, claimId } = await seed();
 
     const report = await runtime.runCallAttempt(data, { attempt: 1, maxAttempts: 3 });
 
@@ -183,8 +217,9 @@ describe('createInlineJobRuntime — single attempts (SQS mode)', () => {
   });
 
   it('a redelivery may re-take the CALLING lease, and the final attempt escalates to DLQ', async () => {
-    const { runtime } = runtimeWith();
-    const { data, claimId } = await seed({ npi: null });
+    const { runtime, retell } = runtimeWith();
+    vi.spyOn(retell, 'startCall').mockRejectedValue(new Error('synthetic connection refused'));
+    const { data, claimId } = await seed();
     await runtime.runCallAttempt(data, { attempt: 1, maxAttempts: 3 });
 
     await expect(
@@ -221,6 +256,59 @@ describe('createInlineJobRuntime — single attempts (SQS mode)', () => {
 
     await expect(running).resolves.toEqual({ status: 'completed', attempt: 1 });
   });
+
+  it.each([
+    { attempt: 1, subscriberId: null, npi: '1234567890', missingFields: ['subscriberId'] },
+    { attempt: 3, subscriberId: ' \t ', npi: '1234567890', missingFields: ['subscriberId'] },
+    { attempt: 3, subscriberId: 'MEMBER-INLINE-1', npi: null, missingFields: ['providerNpi'] },
+  ])(
+    'acknowledges missing identity through the Lambda batch route without retry or DLQ: %j',
+    async ({ attempt, subscriberId, npi, missingFields }) => {
+      const { runtime, retell, dispatcher } = runtimeWith();
+      const startCall = vi.spyOn(retell, 'startCall');
+      const runAttempt = vi.spyOn(runtime, 'runCallAttempt');
+      const scheduleRetry = vi.fn(async () => undefined);
+      const { data, claimId, orgId } = await seed({ subscriberId, npi });
+      const worker = createSqsJobWorker({
+        runtime,
+        logger: silentLogger,
+        maxReceiveCount: 3,
+        scheduleRetry,
+      });
+
+      expect(
+        await worker({
+          Records: [
+            {
+              messageId: 'missing-identity',
+              receiptHandle: 'synthetic-receipt',
+              body: JSON.stringify({ type: 'call.place', data }),
+              attributes: { ApproximateReceiveCount: String(attempt) },
+            },
+          ],
+        }),
+      ).toEqual({ batchItemFailures: [] });
+      await expect(runAttempt.mock.results[0]?.value).resolves.toEqual({
+        status: 'blocked',
+        reason: 'MISSING_CALL_IDENTITY',
+        missingFields,
+        attempt,
+      });
+      expect(scheduleRetry).not.toHaveBeenCalled();
+      expect(startCall).not.toHaveBeenCalled();
+      expect(dispatcher.dispatchSummary).not.toHaveBeenCalled();
+      const claim = await prisma.claim.findFirstOrThrow({
+        where: { id: claimId, organizationId: orgId },
+      });
+      expect(claim.status).toBe('NEEDS_INFO');
+      expect(claim.lastCallAt).toBeNull();
+      expect(await prisma.call.count({ where: { organizationId: orgId, claimId } })).toBe(0);
+      const audit = await prisma.auditLog.findFirstOrThrow({
+        where: { organizationId: orgId, resourceId: claimId, action: 'call.blocked' },
+      });
+      expect(audit.metadata).toMatchObject({ reason: 'MISSING_CALL_IDENTITY', missingFields });
+    },
+  );
 });
 
 describe('createInlineJobRuntime — summaries', () => {

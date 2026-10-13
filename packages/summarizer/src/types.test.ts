@@ -17,7 +17,7 @@ const RESOLVED_FIXTURE = {
 
 const DENIED_FIXTURE = {
   claimStatus: 'denied',
-  denialReason: 'non-covered service',
+  denialReason: 'payer determined medical necessity was not established',
   denialCode: 'CO-50',
   nextAction: 'APPEAL',
   confidence: 0.92,
@@ -41,14 +41,33 @@ describe('SummaryOutputSchema', () => {
     expect(parsed.amountApprovedCents).toBe(0);
   });
 
-  it('rejects unknown denial codes (suspected hallucination)', () => {
-    expect(() => SummaryOutputSchema.parse({ ...DENIED_FIXTURE, denialCode: 'CO-9999' })).toThrow(
-      /allow-list/,
-    );
+  it.each(['CO-9999', 'N999', 'CO50', 'co-50', 'payer-local:a12'])(
+    'preserves unrecognized raw code %s without rewriting its meaning',
+    (denialCode) => {
+      expect(SummaryOutputSchema.parse({ ...DENIED_FIXTURE, denialCode }).denialCode).toBe(
+        denialCode,
+      );
+    },
+  );
+
+  it('bounds denial-code length without silently truncating the evidence', () => {
+    expect(
+      SummaryOutputSchema.parse({ ...DENIED_FIXTURE, denialCode: 'X'.repeat(64) }).denialCode,
+    ).toBe('X'.repeat(64));
+    expect(() =>
+      SummaryOutputSchema.parse({ ...DENIED_FIXTURE, denialCode: 'X'.repeat(65) }),
+    ).toThrow(/64 characters/);
+  });
+
+  it('trims only surrounding whitespace and rejects non-string codes', () => {
+    expect(
+      SummaryOutputSchema.parse({ ...DENIED_FIXTURE, denialCode: ' LOCAL-1 ' }).denialCode,
+    ).toBe('LOCAL-1');
+    expect(() => SummaryOutputSchema.parse({ ...DENIED_FIXTURE, denialCode: 123 })).toThrow();
   });
 
   it('treats empty-string denialCode as null (LLM omitted the field)', () => {
-    const parsed = SummaryOutputSchema.parse({ ...RESOLVED_FIXTURE, denialCode: '' });
+    const parsed = SummaryOutputSchema.parse({ ...RESOLVED_FIXTURE, denialCode: ' \t ' });
     expect(parsed.denialCode).toBeNull();
   });
 

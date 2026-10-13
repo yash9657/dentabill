@@ -2,10 +2,10 @@ import { hashPatientDOB, prisma } from '@dentabill/db';
 import { createLogger } from '@dentabill/logger';
 import { FakeRetell } from '@dentabill/payer-ivr';
 import { type CallJobData, createBullMqJobDispatcher } from '@dentabill/queue';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { loadWorkerEnv } from './env.js';
-import { createCallJobHandler, providerLineToE164 } from './handler.js';
+import { createCallJobHandler, MissingCallIdentityError, providerLineToE164 } from './handler.js';
 
 /**
  * Integration tests for the real call-job handler (P3-T10).
@@ -50,7 +50,10 @@ interface SeedResult {
   readonly claimId: string;
 }
 
-async function seedOrgAndClaim(opts?: { providerNpi?: string | null }): Promise<SeedResult> {
+async function seedOrgAndClaim(opts?: {
+  providerNpi?: string | null;
+  subscriberId?: string | null;
+}): Promise<SeedResult> {
   const org = await prisma.organization.create({
     data: {
       name: 'Sunshine Family Dental',
@@ -62,6 +65,7 @@ async function seedOrgAndClaim(opts?: { providerNpi?: string | null }): Promise<
     data: {
       organizationId: org.id,
       claimNumber: 'CLM-9001',
+      subscriberId: opts?.subscriberId === null ? null : (opts?.subscriberId ?? 'MEMBER-9001'),
       patientDOBHash: hashPatientDOB({
         dob: '1990-05-12',
         organizationId: org.id,
@@ -138,6 +142,7 @@ describe('createCallJobHandler — happy path', () => {
     const result = await handlerPromise;
     expect(result.outcome).toBe('COMPLETED');
     expect(result.callId).toMatch(/^c[a-z0-9]+$/);
+    expect(fake.startedCalls[0]?.agentMetadata.subscriberId).toBe('MEMBER-9001');
 
     const claimAfter = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
     expect(claimAfter.status).toBe('COMPLETED');
@@ -274,8 +279,103 @@ describe('createCallJobHandler — input validation & guards', () => {
       claimPriority: 50,
       idempotencyKey: 'no-npi-1',
     };
-    await expect(handler(jobFor(data), 'token')).rejects.toThrow(/provider NPI/);
+    await expect(handler(jobFor(data), 'token')).rejects.toMatchObject({
+      code: 'MISSING_CALL_IDENTITY',
+      missingFields: ['providerNpi'],
+    });
     expect(fake.startedCalls).toHaveLength(0);
+  });
+
+  it.each([
+    { subscriberId: null, providerNpi: '1234567890', missingFields: ['subscriberId'] },
+    { subscriberId: '', providerNpi: '1234567890', missingFields: ['subscriberId'] },
+    { subscriberId: ' \t ', providerNpi: '1234567890', missingFields: ['subscriberId'] },
+    { subscriberId: 'MEMBER-9001', providerNpi: '', missingFields: ['providerNpi'] },
+    { subscriberId: 'MEMBER-9001', providerNpi: ' \n ', missingFields: ['providerNpi'] },
+    { subscriberId: null, providerNpi: null, missingFields: ['subscriberId', 'providerNpi'] },
+  ])('blocks dialing and routes missing identity to NEEDS_INFO: %j', async (identity) => {
+    const { orgId, claimId } = await seedOrgAndClaim(identity);
+    const fake = new FakeRetell();
+    const startCall = vi.spyOn(fake, 'startCall');
+    const handler = createCallJobHandler({
+      logger: silentLogger,
+      prisma,
+      retellPort: fake,
+      env,
+      outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+    });
+    const data: CallJobData = {
+      organizationId: orgId,
+      claimId,
+      payerCode: 'DELTA_DENTAL_PPO',
+      attemptNumber: 1,
+      claimPriority: 80,
+      idempotencyKey: 'missing-identity',
+    };
+    const failed = handler(jobFor(data), 'token');
+    await expect(failed).rejects.toBeInstanceOf(MissingCallIdentityError);
+    await expect(failed).rejects.toMatchObject({
+      code: 'MISSING_CALL_IDENTITY',
+      missingFields: identity.missingFields,
+    });
+    expect(startCall).not.toHaveBeenCalled();
+    expect(await prisma.call.count({ where: { organizationId: orgId, claimId } })).toBe(0);
+    const claim = await prisma.claim.findFirstOrThrow({
+      where: { id: claimId, organizationId: orgId },
+    });
+    expect(claim.status).toBe('NEEDS_INFO');
+    expect(claim.lastCallAt).toBeNull();
+    const logs = await prisma.auditLog.findMany({
+      where: { organizationId: orgId, resourceId: claimId, action: 'call.blocked' },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.metadata).toEqual({
+      jobId: 'job_test_1',
+      reason: 'MISSING_CALL_IDENTITY',
+      missingFields: identity.missingFields,
+    });
+    await expect(handler(jobFor(data), 'token')).rejects.toBeInstanceOf(MissingCallIdentityError);
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: orgId, resourceId: claimId, action: 'call.blocked' },
+      }),
+    ).toBe(1);
+    expect(startCall).not.toHaveBeenCalled();
+  });
+
+  it('does not reopen a resolved claim when a stale job lacks identity', async () => {
+    const { orgId, claimId } = await seedOrgAndClaim({ subscriberId: null });
+    await prisma.claim.updateMany({
+      where: { id: claimId, organizationId: orgId },
+      data: { status: 'RESOLVED' },
+    });
+    const fake = new FakeRetell();
+    const startCall = vi.spyOn(fake, 'startCall');
+    const handler = createCallJobHandler({
+      logger: silentLogger,
+      prisma,
+      retellPort: fake,
+      env,
+      outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+    });
+    await expect(
+      handler(
+        jobFor({
+          organizationId: orgId,
+          claimId,
+          payerCode: 'DELTA_DENTAL_PPO',
+          attemptNumber: 1,
+          claimPriority: 80,
+          idempotencyKey: 'stale-missing-identity',
+        }),
+        'token',
+      ),
+    ).rejects.toBeInstanceOf(MissingCallIdentityError);
+    expect(startCall).not.toHaveBeenCalled();
+    const claim = await prisma.claim.findFirstOrThrow({
+      where: { id: claimId, organizationId: orgId },
+    });
+    expect(claim.status).toBe('RESOLVED');
   });
 });
 
