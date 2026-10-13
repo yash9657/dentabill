@@ -307,8 +307,8 @@ function OnboardingFormShell({
                 key={payer}
                 className={cn(
                   'hairline-edge text-body flex cursor-pointer items-center gap-3 rounded-md bg-white px-3 py-2 text-black transition-colors',
-                  'hover:bg-stone-warm/40',
-                  'has-checked:bg-stone-warm/60',
+                  'hover:bg-warm-stone/40',
+                  'has-checked:bg-warm-stone/60',
                 )}
               >
                 <input

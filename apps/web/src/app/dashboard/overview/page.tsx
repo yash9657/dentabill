@@ -1,10 +1,11 @@
-import { DashboardPageHeading } from '@dentabill/ui';
+import { DashboardPageHeading, Pill } from '@dentabill/ui';
 import type { Metadata } from 'next';
 import * as React from 'react';
 
 import { OverviewEmptySection, OverviewStatStrip } from '../../../components/dashboard/index.js';
 import type { OverviewStat } from '../../../components/dashboard/index.js';
 import { MissingNpiBanner } from '../../../components/dashboard/missing-npi-banner.js';
+import { OverviewActivity } from '../../../components/dashboard/overview-activity.js';
 import { OverviewKpiTiles } from '../../../components/dashboard/overview-kpi-tiles.js';
 
 /**
@@ -53,29 +54,38 @@ export default function DashboardOverviewPage(): React.ReactElement {
     <div className="flex flex-col gap-8">
       <DashboardPageHeading
         title="Welcome back"
-        description="A snapshot of what DentaBill is doing for your practice today. Numbers fill in the moment claims start moving through the queue."
+        actions={
+          <Pill href="/dashboard/claims/import" size="sm" withArrow>
+            Import claims
+          </Pill>
+        }
+        description="Your claims, calls, and next steps — all in one place."
       />
 
       {hasClerkKeys() ? <MissingNpiBanner /> : null}
 
       {hasClerkKeys() ? <OverviewKpiTiles /> : <OverviewStatStrip stats={PLACEHOLDER_STATS} />}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <OverviewEmptySection
-          eyebrow="Recent claims"
-          heading="Nothing in the queue yet"
-          body="Upload a CSV from Dentrix, Eaglesoft, or Open Dental and DentaBill will start prioritising follow-ups by aging, amount, and payer. The import flow ships in P2-T51."
-          ctaLabel="Open claims"
-          ctaHref="/dashboard/claims"
-        />
-        <OverviewEmptySection
-          eyebrow="Recent calls"
-          heading="No payer calls yet"
-          body="Every payer call DentaBill makes will appear here in chronological order with the claim it touched and the result."
-          ctaLabel="Open calls"
-          ctaHref="/dashboard/calls"
-        />
-      </div>
+      {hasClerkKeys() ? (
+        <OverviewActivity />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <OverviewEmptySection
+            eyebrow="Recent claims"
+            heading="Nothing in the queue yet"
+            body="Upload a CSV from Dentrix, Eaglesoft, or Open Dental and DentaBill will start prioritising follow-ups by aging, amount, and payer."
+            ctaLabel="Import claims"
+            ctaHref="/dashboard/claims/import"
+          />
+          <OverviewEmptySection
+            eyebrow="Recent calls"
+            heading="No payer calls yet"
+            body="Every payer call DentaBill makes will appear here in chronological order with the claim it touched and the result."
+            ctaLabel="Open calls"
+            ctaHref="/dashboard/calls"
+          />
+        </div>
+      )}
     </div>
   );
 }

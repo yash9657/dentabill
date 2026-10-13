@@ -3,6 +3,7 @@
 import { cn, Pill } from '@dentabill/ui';
 import { Menu, X } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import * as React from 'react';
 
 import { Wordmark } from './wordmark.js';
@@ -38,6 +39,7 @@ export interface MarketingHeaderProps {
 }
 
 export function MarketingHeader({ className }: MarketingHeaderProps): React.ReactElement {
+  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const drawerId = React.useId();
 
@@ -62,11 +64,14 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
     <header
       role="banner"
       className={cn(
-        'border-border-subtle sticky top-0 z-40 w-full border-b bg-white/85 backdrop-blur',
+        'marketing-header border-border-light sticky top-0 z-40 w-full border-b',
         className,
       )}
     >
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
+      <div className="mx-auto flex h-[76px] max-w-[1280px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <Link href="/" aria-label="DentaBill home" className="rounded-sm">
           <Wordmark />
         </Link>
@@ -75,7 +80,11 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
           <ul className="flex items-center gap-7">
             {MARKETING_NAV_LINKS.map(({ href, label }) => (
               <li key={href}>
-                <Link href={href} className="text-body text-gray-dark hover:text-black">
+                <Link
+                  href={href}
+                  aria-current={pathname === href ? 'page' : undefined}
+                  className="text-caption text-gray-dark hover:text-black"
+                >
                   {label}
                 </Link>
               </li>
@@ -84,11 +93,11 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
         </nav>
 
         <div className="hidden items-center gap-3 lg:flex">
-          <Link href="/sign-in" className="text-body text-gray-dark hover:text-black">
+          <Link href="/sign-in" className="text-caption text-gray-dark hover:text-black">
             Sign in
           </Link>
-          <Pill href="/contact" variant="black" size="sm" withArrow>
-            Request access
+          <Pill href="/sign-up" variant="black" size="sm" withArrow>
+            Get started free
           </Pill>
         </div>
 
@@ -120,7 +129,7 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
                   onClick={() => {
                     setMobileOpen(false);
                   }}
-                  className="text-body text-gray-dark hover:bg-gray-light/50 block rounded-md px-3 py-2 hover:text-black"
+                  className="text-caption text-gray-dark hover:bg-gray-light/50 block rounded-md px-3 py-3 hover:text-black"
                 >
                   {label}
                 </Link>
@@ -132,14 +141,14 @@ export function MarketingHeader({ className }: MarketingHeaderProps): React.Reac
                 onClick={() => {
                   setMobileOpen(false);
                 }}
-                className="text-body text-gray-dark hover:bg-gray-light/50 block rounded-md px-3 py-2 hover:text-black"
+                className="text-caption text-gray-dark hover:bg-gray-light/50 block rounded-md px-3 py-3 hover:text-black"
               >
                 Sign in
               </Link>
             </li>
             <li className="px-3 pt-2">
-              <Pill href="/contact" variant="black" size="sm" withArrow className="w-full">
-                Request access
+              <Pill href="/sign-up" variant="black" size="sm" withArrow className="w-full">
+                Get started free
               </Pill>
             </li>
           </ul>

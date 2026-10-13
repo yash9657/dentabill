@@ -18,9 +18,8 @@ import type {
  * 3. Per-payer performance (horizontal bar chart)
  * 4. Claim aging distribution (data table)
  *
- * Charts are inline SVG drawn from the achromatic token palette —
- * marks differentiate by value, position, and label rather than by
- * hue, since ADR-013 reserves the one teal accent for live calls.
+ * Responsive HTML bars preserve full labels at every width. On phones,
+ * the recovered-value table replaces the SVG trend to keep dates legible.
  * Loading and error states handled inline with em-dash placeholders.
  */
 
@@ -42,7 +41,7 @@ function formatWeekLabel(dateStr: string): string {
 
 /**
  * Line chart: recovered value by week (last 8 weeks).
- * Achromatic design with black marks and warm-gray labels.
+ * Semantic brand marks, with an equivalent data table below.
  */
 function RecoveredByWeekChart({
   data,
@@ -59,8 +58,8 @@ function RecoveredByWeekChart({
 
   if (isLoading || !data || data.length === 0) {
     return (
-      <div className="border-border-light rounded-lg border bg-white p-6">
-        <h3 className="font-display text-xl font-light text-black">Recovered value by week</h3>
+      <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
+        <h3 className="font-body text-xl font-medium text-black">Recovered value by week</h3>
         <div className="text-gray-dark mt-4 flex h-64 items-center justify-center text-sm">
           {isLoading ? 'Loading chart…' : 'No data available'}
         </div>
@@ -75,7 +74,7 @@ function RecoveredByWeekChart({
   // Calculate points
   const points: { x: number; y: number; label: string; value: number }[] = [];
   data.forEach((week, i) => {
-    const x = padding.left + (i / (data.length - 1)) * innerWidth;
+    const x = padding.left + (i / Math.max(data.length - 1, 1)) * innerWidth;
     const y = padding.top + innerHeight - week.recoveredCents * pixelsPerCent;
     points.push({
       x,
@@ -93,21 +92,20 @@ function RecoveredByWeekChart({
     .join(' ');
 
   return (
-    <div className="border-border-light rounded-lg border bg-white p-6">
-      <h3 className="font-display text-xl font-light text-black">Recovered value by week</h3>
+    <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
+      <h3 className="font-body text-xl font-medium text-black">Recovered value by week</h3>
       <svg
-        width={chartWidth}
-        height={chartHeight}
-        className="mt-6"
+        viewBox={`0 0 ${String(chartWidth)} ${String(chartHeight)}`}
+        className="mt-6 hidden h-auto w-full sm:block"
         role="img"
         aria-label="Recovered value trend over 8 weeks"
       >
         <defs>
           <style>{`
-            .chart-line { stroke: oklch(0 0 0); stroke-width: 2; fill: none; }
-            .chart-dot { fill: oklch(0 0 0); }
-            .chart-text { font-family: var(--font-body), Inter, system-ui, sans-serif; font-size: 12px; fill: oklch(0.529 0.013 70); }
-            .chart-axis { stroke: oklch(0.911 0 0); stroke-width: 1; }
+            .chart-line { stroke: var(--color-brand); stroke-width: 2; fill: none; }
+            .chart-dot { fill: var(--color-brand); }
+            .chart-text { font-family: var(--font-body), Inter, system-ui, sans-serif; font-size: 12px; fill: var(--color-gray-dark); }
+            .chart-axis { stroke: var(--color-border-light); stroke-width: 1; }
           `}</style>
         </defs>
 
@@ -202,7 +200,7 @@ function RecoveredByWeekChart({
 
 /**
  * Horizontal bar chart: denial reasons, sorted by count.
- * Achromatic design with black bars and warm-gray labels.
+ * Text labels remain in normal document flow so they can wrap.
  */
 function DenialReasonsChart({
   data,
@@ -213,8 +211,8 @@ function DenialReasonsChart({
 }): React.ReactElement {
   if (isLoading || !data || data.length === 0) {
     return (
-      <div className="border-border-light rounded-lg border bg-white p-6">
-        <h3 className="font-display text-xl font-light text-black">Top denial reasons</h3>
+      <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
+        <h3 className="font-body text-xl font-medium text-black">Top denial reasons</h3>
         <div className="text-gray-dark mt-4 flex h-40 items-center justify-center text-sm">
           {isLoading ? 'Loading chart…' : 'No denials recorded'}
         </div>
@@ -222,61 +220,35 @@ function DenialReasonsChart({
     );
   }
 
-  const maxCount = Math.max(...data.map((d) => d.count), 1);
-  const chartHeight = data.length * 40 + 40;
-  const barHeight = 28;
-
+  const maxCount = Math.max(...data.map((reason) => reason.count), 1);
   return (
-    <div className="border-border-light rounded-lg border bg-white p-6">
-      <h3 className="font-display text-xl font-light text-black">Top denial reasons</h3>
-      <svg
-        width={500}
-        height={chartHeight}
-        className="mt-6"
-        role="img"
-        aria-label={`${String(data.length)} denial reasons by frequency`}
-      >
-        <defs>
-          <style>{`
-            .bar { fill: oklch(0 0 0); }
-            .bar-label { font-family: var(--font-body), Inter, system-ui, sans-serif; font-size: 12px; fill: oklch(0.529 0.013 70); }
-            .bar-value { font-family: var(--font-body), Inter, system-ui, sans-serif; font-size: 13px; font-weight: 500; fill: oklch(0 0 0); }
-          `}</style>
-        </defs>
-
-        {data.map((reason, i) => {
-          const y = i * 40 + 20;
-          const barWidth = (reason.count / maxCount) * 350;
-          return (
-            <g key={reason.code}>
-              <rect x={80} y={y} width={barWidth} height={barHeight} className="bar" rx={2} />
-              <text x={75} y={y + barHeight / 2 + 4} textAnchor="end" className="bar-label">
-                {reason.label}
-              </text>
-              <text x={85 + barWidth} y={y + barHeight / 2 + 4} className="bar-value">
-                {String(reason.count)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-
-      {/* Data list for accessibility */}
-      <div className="border-border-light mt-4 space-y-2 border-t pt-4">
+    <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
+      <h3 className="font-body text-xl font-medium text-black">Top denial reasons</h3>
+      <ul className="mt-6 space-y-6">
         {data.map((reason) => (
-          <div key={reason.code} className="flex justify-between text-sm">
-            <span className="text-gray-dark">{reason.label}</span>
-            <span className="font-medium text-black">{String(reason.count)}</span>
-          </div>
+          <li key={reason.code}>
+            <div className="flex items-baseline justify-between gap-4 text-sm">
+              <span className="text-gray-dark min-w-0 break-words">{reason.label}</span>
+              <span className="shrink-0 font-medium tabular-nums text-black">
+                {String(reason.count)}
+              </span>
+            </div>
+            <div className="bg-gray-light mt-2 h-2 overflow-hidden rounded-full" aria-hidden="true">
+              <div
+                className="bg-brand h-full rounded-full"
+                style={{ width: `${String((reason.count / maxCount) * 100)}%` }}
+              />
+            </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
 
 /**
  * Horizontal bar chart: per-payer recovered amount.
- * Achromatic design with black bars and warm-gray labels.
+ * Text labels remain in normal document flow so they can wrap.
  */
 function PayerOutcomesChart({
   data,
@@ -287,8 +259,8 @@ function PayerOutcomesChart({
 }): React.ReactElement {
   if (isLoading || !data || data.length === 0) {
     return (
-      <div className="border-border-light rounded-lg border bg-white p-6">
-        <h3 className="font-display text-xl font-light text-black">Per-payer recovery</h3>
+      <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
+        <h3 className="font-body text-xl font-medium text-black">Per-payer recovery</h3>
         <div className="text-gray-dark mt-4 flex h-40 items-center justify-center text-sm">
           {isLoading ? 'Loading chart…' : 'No payer data available'}
         </div>
@@ -296,74 +268,38 @@ function PayerOutcomesChart({
     );
   }
 
-  const maxRecovered = Math.max(...data.map((d) => d.recoveredCents), 1);
-  const chartHeight = data.length * 50 + 40;
-  const barHeight = 32;
-
+  const maxRecovered = Math.max(...data.map((payer) => payer.recoveredCents), 1);
   return (
-    <div className="border-border-light rounded-lg border bg-white p-6">
-      <h3 className="font-display text-xl font-light text-black">Per-payer recovery</h3>
-      <svg
-        width={550}
-        height={chartHeight}
-        className="mt-6"
-        role="img"
-        aria-label={`Recovered amounts by ${String(data.length)} payers`}
-      >
-        <defs>
-          <style>{`
-            .payer-bar { fill: oklch(0 0 0); }
-            .payer-label { font-family: var(--font-body), Inter, system-ui, sans-serif; font-size: 12px; fill: oklch(0.529 0.013 70); }
-            .payer-value { font-family: var(--font-body), Inter, system-ui, sans-serif; font-size: 13px; font-weight: 500; fill: oklch(0 0 0); }
-          `}</style>
-        </defs>
-
-        {data.map((payer, i) => {
-          const y = i * 50 + 20;
-          const barWidth = (payer.recoveredCents / maxRecovered) * 350;
-          return (
-            <g key={payer.payer}>
-              <rect
-                x={100}
-                y={y}
-                width={barWidth}
-                height={barHeight}
-                className="payer-bar"
-                rx={2}
-              />
-              <text x={95} y={y + barHeight / 2 + 4} textAnchor="end" className="payer-label">
-                {payer.payer}
-              </text>
-              <text x={105 + barWidth} y={y + barHeight / 2 + 4} className="payer-value">
-                {formatCents(payer.recoveredCents)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-
-      {/* Data table for accessibility */}
-      <div className="border-border-light mt-4 space-y-3 border-t pt-4">
+    <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
+      <h3 className="font-body text-xl font-medium text-black">Per-payer recovery</h3>
+      <ul className="mt-6 space-y-6">
         {data.map((payer) => (
-          <div key={payer.payer} className="space-y-1">
-            <div className="flex justify-between">
-              <span className="font-medium text-black">{payer.payer}</span>
-              <span className="text-gray-dark text-sm">{String(payer.callCount)} calls</span>
+          <li key={payer.payer}>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
+              <span className="min-w-0 break-words font-medium text-black">{payer.payer}</span>
+              <span className="text-brand font-semibold tabular-nums">
+                {formatCents(payer.recoveredCents)}
+              </span>
             </div>
-            <div className="text-sm">
-              <span className="text-gray-dark">Recovered: </span>
-              <span className="font-medium text-black">{formatCents(payer.recoveredCents)}</span>
-              <span className="text-gray-dark ml-2">({String(payer.resolvedCount)} resolved)</span>
+            <div className="bg-gray-light mt-2 h-2 overflow-hidden rounded-full" aria-hidden="true">
+              <div
+                className="bg-brand h-full rounded-full"
+                style={{ width: `${String((payer.recoveredCents / maxRecovered) * 100)}%` }}
+              />
             </div>
-            {payer.avgDurationSeconds && (
-              <div className="text-gray-warm text-xs">
-                Avg duration: {String(Math.round(payer.avgDurationSeconds / 60))}m{' '}
-                {String(payer.avgDurationSeconds % 60)}s
-              </div>
-            )}
-          </div>
+            <p className="text-gray-dark mt-2 text-xs leading-relaxed">
+              {String(payer.callCount)} calls · {String(payer.resolvedCount)} resolved
+              {payer.avgDurationSeconds !== null ? (
+                <>
+                  {' '}
+                  · Avg {String(Math.floor(payer.avgDurationSeconds / 60))}m{' '}
+                  {String(payer.avgDurationSeconds % 60)}s
+                </>
+              ) : null}
+            </p>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
@@ -380,8 +316,8 @@ function ClaimAgingTable({
 }): React.ReactElement {
   if (isLoading || !data || data.length === 0) {
     return (
-      <div className="border-border-light rounded-lg border bg-white p-6">
-        <h3 className="font-display text-xl font-light text-black">Claim aging</h3>
+      <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
+        <h3 className="font-body text-xl font-medium text-black">Claim aging</h3>
         <div className="text-gray-dark mt-4 flex h-40 items-center justify-center text-sm">
           {isLoading ? 'Loading table…' : 'No claims pending'}
         </div>
@@ -392,8 +328,8 @@ function ClaimAgingTable({
   const totalClaims = data.reduce((sum, b) => sum + b.count, 0);
 
   return (
-    <div className="border-border-light rounded-lg border bg-white p-6">
-      <h3 className="font-display text-xl font-light text-black">Claim aging</h3>
+    <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
+      <h3 className="font-body text-xl font-medium text-black">Claim aging</h3>
       <div className="mt-6 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -436,7 +372,7 @@ export function ReportsPage(): React.ReactElement {
   return (
     <div className="flex flex-col gap-8">
       <header className="max-w-3xl">
-        <h1 className="font-display text-[28px] font-light leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]">
+        <h1 className="font-body text-[28px] font-medium leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]">
           Reports
         </h1>
         <p className="text-body text-gray-dark mt-2">
@@ -453,12 +389,12 @@ export function ReportsPage(): React.ReactElement {
         </div>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-2">
         <RecoveredByWeekChart data={data?.recoveredByWeek ?? null} isLoading={query.isLoading} />
         <DenialReasonsChart data={data?.denialReasons ?? null} isLoading={query.isLoading} />
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-2">
         <PayerOutcomesChart data={data?.payerOutcomes ?? null} isLoading={query.isLoading} />
         <ClaimAgingTable data={data?.claimAging ?? null} isLoading={query.isLoading} />
       </div>

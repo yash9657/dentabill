@@ -91,10 +91,9 @@ function DetailLayout({ claim }: { readonly claim: Claim }): React.ReactElement 
       <BackLink />
 
       <header className="max-w-3xl">
-        <p className="text-caption text-gray-warm mb-2 uppercase tracking-[0.14em]">Claim</p>
         <h1
           id="claim-detail-heading"
-          className="font-display text-[28px] font-light leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]"
+          className="font-body text-[28px] font-medium leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]"
         >
           {claim.claimNumber}
         </h1>
@@ -216,7 +215,7 @@ function Timeline({ claim }: { readonly claim: Claim }): React.ReactElement {
     <article aria-labelledby="claim-history-heading" className="flex flex-col gap-4">
       <header>
         <p className="text-caption text-gray-warm uppercase tracking-[0.14em]">History</p>
-        <h2 id="claim-history-heading" className="font-display text-2xl font-light text-black">
+        <h2 id="claim-history-heading" className="font-body text-2xl font-medium text-black">
           Activity timeline
         </h2>
       </header>
@@ -329,7 +328,7 @@ function Entry({
   readonly body: string;
 }): React.ReactElement {
   return (
-    <li className="border-border-subtle grid grid-cols-[140px_1fr] gap-6 border-b px-5 py-4 last:border-b-0">
+    <li className="border-border-subtle grid grid-cols-1 gap-2 border-b px-5 py-4 last:border-b-0 sm:grid-cols-[140px_1fr] sm:gap-6">
       <span className="text-caption text-gray-warm uppercase tabular-nums tracking-[0.12em]">
         {when}
       </span>

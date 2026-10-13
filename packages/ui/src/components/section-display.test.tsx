@@ -15,7 +15,7 @@ describe('<SectionDisplay />', () => {
     const h = screen.getByRole('heading', { name: 'Section' });
     expect(h.className).toContain('text-section-heading');
     expect(h.className).toContain('font-display');
-    expect(h.className).toContain('font-light');
+    expect(h.className).toContain('font-medium');
   });
 
   it('supports `asChild` to render a different heading level', () => {

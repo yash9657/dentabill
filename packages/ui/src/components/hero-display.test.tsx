@@ -15,7 +15,7 @@ describe('<HeroDisplay />', () => {
     const h = screen.getByRole('heading', { name: 'Hero' });
     expect(h.className).toContain('text-hero');
     expect(h.className).toContain('font-display');
-    expect(h.className).toContain('font-extralight');
+    expect(h.className).toContain('font-normal');
   });
 
   it('renders as the child element when `asChild` is true', () => {
@@ -34,6 +34,6 @@ describe('<HeroDisplay />', () => {
     render(<HeroDisplay className="text-center">Centered</HeroDisplay>);
     const h = screen.getByRole('heading', { name: 'Centered' });
     expect(h.className).toContain('text-center');
-    expect(h.className).toContain('font-extralight');
+    expect(h.className).toContain('font-normal');
   });
 });

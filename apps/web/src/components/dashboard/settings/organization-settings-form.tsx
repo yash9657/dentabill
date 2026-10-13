@@ -91,7 +91,7 @@ export function OrganizationSettingsForm(): React.ReactElement {
   return (
     <div className="hairline-edge rounded-card flex flex-col gap-6 bg-white p-6">
       <div>
-        <h2 className="font-display text-[20px] font-light leading-[1.2] tracking-[-0.01em] text-black">
+        <h2 className="font-body text-[20px] font-medium leading-[1.2] tracking-[-0.01em] text-black">
           Practice details
         </h2>
         <p className="text-caption text-gray-warm mt-1">

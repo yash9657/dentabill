@@ -15,9 +15,9 @@ describe('<Pill />', () => {
   it('applies the black variant by default', () => {
     render(<Pill href="/x">CTA</Pill>);
     const link = screen.getByRole('link', { name: 'CTA' });
-    expect(link.className).toContain('bg-black');
+    expect(link.className).toContain('bg-brand');
     expect(link.className).toContain('text-white');
-    expect(link.className).toContain('rounded-pill');
+    expect(link.className).toContain('rounded-standard');
   });
 
   it('renders the warm-stone signature variant with the warm shadow', () => {
@@ -27,9 +27,9 @@ describe('<Pill />', () => {
       </Pill>,
     );
     const link = screen.getByRole('link', { name: 'Featured' });
-    expect(link.className).toContain('bg-warm-stone/80');
-    expect(link.className).toContain('rounded-warm-button');
-    expect(link.className).toContain('shadow-warm');
+    expect(link.className).toContain('bg-brand-soft');
+    expect(link.className).toContain('rounded-standard');
+    expect(link.className).toContain('bg-brand-soft');
   });
 
   it('renders the white-shadow variant with the layered card shadow', () => {
@@ -40,7 +40,7 @@ describe('<Pill />', () => {
     );
     const link = screen.getByRole('link', { name: 'Secondary' });
     expect(link.className).toContain('bg-white');
-    expect(link.className).toContain('shadow-card');
+    expect(link.className).toContain('border-border-light');
   });
 
   it('renders a trailing arrow when `withArrow` is set, marked aria-hidden', () => {
@@ -71,7 +71,7 @@ describe('<Pill />', () => {
     );
     const link = screen.getByTestId('custom-anchor');
     expect(link.tagName).toBe('A');
-    expect(link.className).toContain('bg-black');
+    expect(link.className).toContain('bg-brand');
   });
 
   it('forwards refs to the underlying anchor', () => {

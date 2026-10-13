@@ -31,9 +31,11 @@ export function DashboardAccountControls(): React.ReactElement {
           hidePersonal
           appearance={{
             elements: {
-              rootBox: 'flex items-center',
+              rootBox: 'flex min-w-0 max-w-[160px] items-center',
+              organizationSwitcherTriggerIcon: 'shrink-0',
+              organizationPreviewMainIdentifier: 'truncate max-w-[100px]',
               organizationSwitcherTrigger:
-                'rounded-md px-2 py-1.5 hover:bg-stone-warm/60 text-body text-black',
+                'rounded-md px-2 py-1.5 hover:bg-warm-stone/60 text-caption text-black',
             },
           }}
         />
@@ -52,7 +54,7 @@ export function DashboardAccountControls(): React.ReactElement {
       <div
         role="group"
         aria-label="Demo workspace"
-        className="text-body text-gray-dark hairline-edge bg-stone-warm/40 hidden h-9 items-center gap-2 rounded-md px-3 sm:inline-flex"
+        className="text-caption text-gray-dark hairline-edge bg-warm-stone/40 hidden h-9 items-center gap-2 rounded-md px-3 sm:inline-flex"
       >
         <Building2 className="h-4 w-4 shrink-0" aria-hidden />
         <span className="font-medium text-black">Demo workspace</span>
@@ -60,7 +62,7 @@ export function DashboardAccountControls(): React.ReactElement {
       <div
         role="img"
         aria-label="Account placeholder"
-        className="bg-stone-warm/60 inline-flex h-8 w-8 items-center justify-center rounded-full text-black"
+        className="bg-warm-stone/60 inline-flex h-8 w-8 items-center justify-center rounded-full text-black"
       >
         <User className="h-4 w-4" aria-hidden />
       </div>

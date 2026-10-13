@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import * as React from 'react';
 
-import { NewsletterSignupStub } from './newsletter-signup-stub.js';
 import { Wordmark } from './wordmark.js';
 
 /**
@@ -53,13 +52,13 @@ export function MarketingFooter(): React.ReactElement {
   const year = new Date().getFullYear();
 
   return (
-    <footer role="contentinfo" className="border-border-subtle border-t bg-white">
+    <footer role="contentinfo" className="marketing-footer border-border-light border-t">
       <div className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.5fr_2fr_1fr] lg:gap-16 lg:px-8">
         <div className="space-y-4">
           <Link href="/" aria-label="DentaBill home" className="rounded-sm">
             <Wordmark size="lg" />
           </Link>
-          <p className="text-body text-gray-dark max-w-sm text-balance">
+          <p className="text-caption text-gray-dark max-w-sm text-balance">
             AI voice agents that call dental insurance payers, navigate IVRs, and return structured
             claim status to your billing team.
           </p>
@@ -68,13 +67,11 @@ export function MarketingFooter(): React.ReactElement {
         <nav aria-label="Footer" className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3">
           {FOOTER_COLUMNS.map(({ heading, links }) => (
             <div key={heading}>
-              <h2 className="text-caption mb-4 font-medium uppercase tracking-wide text-black">
-                {heading}
-              </h2>
+              <h2 className="text-caption mb-4 font-medium text-black">{heading}</h2>
               <ul className="space-y-2">
                 {links.map(({ href, label }) => (
                   <li key={`${heading}-${href}-${label}`}>
-                    <Link href={href} className="text-body text-gray-dark hover:text-black">
+                    <Link href={href} className="text-caption text-gray-dark hover:text-black">
                       {label}
                     </Link>
                   </li>
@@ -85,10 +82,10 @@ export function MarketingFooter(): React.ReactElement {
         </nav>
 
         <div>
-          <h2 className="text-caption mb-4 font-medium uppercase tracking-wide text-black">
-            Newsletter
-          </h2>
-          <NewsletterSignupStub />
+          <h2 className="text-caption mb-4 font-medium text-black">Questions?</h2>
+          <Link href="/contact" className="text-link">
+            Talk to our team →
+          </Link>
         </div>
       </div>
 

@@ -28,7 +28,7 @@ export const metadata: Metadata = {
  */
 export default function FaqPage(): React.ReactElement {
   return (
-    <main>
+    <main id="main-content">
       <Header />
       {FAQ_CATEGORIES.map((cat, idx) => (
         <Category key={cat.id} category={cat} surface={idx % 2 === 0 ? 'light' : 'white'} />
@@ -41,17 +41,13 @@ export default function FaqPage(): React.ReactElement {
 function Header(): React.ReactElement {
   return (
     <section className="mx-auto max-w-3xl px-4 pb-16 pt-24 sm:px-6 sm:pt-32 lg:px-8">
-      <p className="text-caption text-gray-warm mb-4 uppercase tracking-[0.14em]">FAQ</p>
-      <h1 className="font-display text-hero mb-6 text-balance font-extralight text-black">
+      <h1 className="font-display text-hero mb-6 text-balance font-normal text-black">
         Questions we hear most from billing leads.
       </h1>
       <p className="text-body-large text-gray-dark max-w-2xl">
         If your question is not here, write to{' '}
-        <a
-          href="mailto:hello@dentabill.example"
-          className="text-black underline underline-offset-2 hover:no-underline"
-        >
-          hello@dentabill.example
+        <a href="/contact" className="text-black underline underline-offset-2 hover:no-underline">
+          our team
         </a>{' '}
         and we will reply today. For pricing-specific questions, see the inline FAQ on the{' '}
         <a href="/pricing" className="text-black underline underline-offset-2 hover:no-underline">
@@ -200,7 +196,7 @@ function Category({ category, surface }: CategoryProps): React.ReactElement {
         </p>
         <h2
           id={`${category.id}-heading`}
-          className="font-display text-section-heading mb-12 max-w-2xl text-balance font-light text-black"
+          className="font-display text-section-heading mb-12 max-w-2xl text-balance font-medium text-black"
         >
           {category.heading}
         </h2>
@@ -232,7 +228,7 @@ function ClosingCta(): React.ReactElement {
   return (
     <section aria-label="Get in touch" className="bg-warm-stone/40 border-border-subtle border-t">
       <div className="mx-auto flex max-w-3xl flex-col items-start gap-6 px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
-        <h2 className="font-display text-section-heading text-balance font-light text-black">
+        <h2 className="font-display text-section-heading text-balance font-medium text-black">
           Still have a question?
         </h2>
         <p className="text-body text-gray-dark max-w-xl">
@@ -244,7 +240,7 @@ function ClosingCta(): React.ReactElement {
             Ask us anything
           </Pill>
           <Pill href="/sign-up" variant="whiteShadow">
-            Start free trial
+            Get started free
           </Pill>
         </div>
       </div>

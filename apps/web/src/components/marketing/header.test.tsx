@@ -22,10 +22,10 @@ describe('<MarketingHeader />', () => {
     }
   });
 
-  it('renders the primary CTA pill linking to /contact (invite-only)', () => {
+  it('renders the primary CTA linking to signup', () => {
     render(<MarketingHeader />);
-    const requestAccess = screen.getAllByRole('link', { name: /request access/i });
-    expect(requestAccess[0]).toHaveAttribute('href', '/contact');
+    const requestAccess = screen.getAllByRole('link', { name: /get started free/i });
+    expect(requestAccess[0]).toHaveAttribute('href', '/sign-up');
   });
 
   it('toggles the mobile drawer via the hamburger button', async () => {

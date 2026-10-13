@@ -43,10 +43,10 @@ interface SubmitError {
 }
 
 const SELECT_CLASS =
-  'border-input focus-visible:border-ring focus-visible:ring-ring/50 flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm';
+  'border-border-light focus-visible:border-brand focus-visible:ring-brand/30 flex h-11 w-full min-w-0 rounded-md border bg-white px-3 py-1 text-base shadow-xs transition-[color,box-shadow] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm';
 
 const TEXTAREA_CLASS =
-  'border-input placeholder:text-gray-warm focus-visible:border-ring focus-visible:ring-ring/50 flex w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm';
+  'border-border-light placeholder:text-gray-warm focus-visible:border-brand focus-visible:ring-brand/30 flex w-full min-w-0 rounded-md border bg-white px-3 py-2 text-base shadow-xs transition-[color,box-shadow] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm';
 
 export function ContactForm(): React.ReactElement {
   const [submitError, setSubmitError] = React.useState<SubmitError | null>(null);
@@ -107,7 +107,7 @@ export function ContactForm(): React.ReactElement {
         ref={successRef}
         role="status"
         tabIndex={-1}
-        className="hairline-edge bg-warm-stone/40 rounded-card-large focus-visible:ring-ring-blue flex flex-col items-start gap-4 p-8 outline-none focus-visible:ring-2"
+        className="hairline-edge bg-warm-stone/40 rounded-card-large focus-visible:ring-ring-blue flex flex-col items-start gap-4 p-8 focus-visible:ring-2"
       >
         <span
           aria-hidden
@@ -116,7 +116,7 @@ export function ContactForm(): React.ReactElement {
           <Check className="h-5 w-5" />
         </span>
         <div className="space-y-2">
-          <p className="font-display text-card-heading text-balance font-light text-black">
+          <p className="font-display text-card-heading text-balance font-medium text-black">
             Thanks. We will be in touch within one business day.
           </p>
           <p className="text-body text-gray-dark">

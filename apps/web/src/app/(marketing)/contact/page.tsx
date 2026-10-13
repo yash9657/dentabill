@@ -21,36 +21,21 @@ export const metadata: Metadata = {
  */
 export default function ContactPage(): React.ReactElement {
   return (
-    <main>
+    <main id="main-content">
       <section className="mx-auto max-w-6xl px-4 pb-32 pt-24 sm:px-6 sm:pt-32 lg:px-8">
         <div className="grid gap-12 lg:grid-cols-12 lg:gap-16">
           <div className="lg:col-span-5">
-            <p className="text-caption text-gray-warm mb-4 uppercase tracking-[0.14em]">Contact</p>
-            <h1 className="font-display mb-6 text-balance text-[40px] font-extralight leading-[1.08] tracking-[-0.02em] text-black sm:text-[52px]">
-              Tell us about your practice. We will write back today.
+            <h1 className="font-display mb-6 text-balance text-[40px] font-normal leading-[1.08] tracking-[-0.02em] text-black sm:text-[52px]">
+              Let’s talk about your practice.
             </h1>
             <div className="text-body text-gray-dark space-y-4">
               <p>
-                You will hear from a real engineer, not a sales rep. We will set up a 20-minute call
-                to walk through whether DentaBill is a fit and answer any questions about BAA,
-                sub-processors, or the underlying voice agent.
+                Tell us about the claims you follow up on and the payers you work with. We’ll help
+                you see where DentaBill fits into your day.
               </p>
               <p>
-                If you are a security reviewer, send to{' '}
-                <a
-                  href="mailto:security@dentabill.example"
-                  className="text-black underline underline-offset-2 hover:no-underline"
-                >
-                  security@dentabill.example
-                </a>{' '}
-                instead. If you are press, write to{' '}
-                <a
-                  href="mailto:press@dentabill.example"
-                  className="text-black underline underline-offset-2 hover:no-underline"
-                >
-                  press@dentabill.example
-                </a>
-                .
+                Have a question about security, your BAA, or getting started? Include it in your
+                message and our team will follow up.
               </p>
             </div>
           </div>

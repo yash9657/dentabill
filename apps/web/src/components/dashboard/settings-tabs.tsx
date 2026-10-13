@@ -54,9 +54,9 @@ export function SettingsTabs(): React.ReactElement {
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'text-body inline-flex items-center border-b-2 px-3 py-3 font-medium transition-colors',
+                  'text-caption inline-flex items-center border-b-2 px-3 py-3 font-medium transition-colors',
                   active
-                    ? 'border-black text-black'
+                    ? 'border-brand text-brand'
                     : 'text-gray-warm border-transparent hover:text-black',
                 )}
               >

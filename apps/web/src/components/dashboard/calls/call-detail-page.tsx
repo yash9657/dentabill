@@ -72,10 +72,9 @@ function DetailLayout({ call }: { readonly call: CallDetailResponse }): React.Re
       <BackLink />
 
       <header className="max-w-3xl">
-        <p className="text-caption text-gray-warm mb-2 uppercase tracking-[0.14em]">Call</p>
         <h1
           id="call-detail-heading"
-          className="font-display text-[28px] font-light leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]"
+          className="font-body text-[28px] font-medium leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]"
         >
           Call to {payerLabel(call.claim.payerCode)}
         </h1>
@@ -169,7 +168,7 @@ function Timeline({ events }: { readonly events: readonly CallEvent[] }): React.
     <article aria-labelledby="call-events-heading" className="flex flex-col gap-4">
       <header>
         <p className="text-caption text-gray-warm uppercase tracking-[0.14em]">Timeline</p>
-        <h2 id="call-events-heading" className="font-display text-2xl font-light text-black">
+        <h2 id="call-events-heading" className="font-body text-2xl font-medium text-black">
           Event log
         </h2>
       </header>
@@ -206,7 +205,7 @@ function Entry({
   readonly body: string;
 }): React.ReactElement {
   return (
-    <li className="border-border-subtle grid grid-cols-[140px_1fr] gap-6 border-b px-5 py-4 last:border-b-0">
+    <li className="border-border-subtle grid grid-cols-1 gap-2 border-b px-5 py-4 last:border-b-0 sm:grid-cols-[140px_1fr] sm:gap-6">
       <span className="text-caption text-gray-warm uppercase tabular-nums tracking-[0.12em]">
         {when}
       </span>

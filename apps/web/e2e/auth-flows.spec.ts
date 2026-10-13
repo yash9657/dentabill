@@ -41,7 +41,7 @@ test.describe('auth flow navigation (P2-T31)', () => {
     );
     // Self-serve sign-up is closed; the lead path is now "Request access"
     // → /contact, where prospects request a Clerk invitation.
-    await expect(header.getByRole('link', { name: /request access/i }).first()).toHaveAttribute(
+    await expect(header.getByRole('link', { name: /get started free/i }).first()).toHaveAttribute(
       'href',
       '/contact',
     );

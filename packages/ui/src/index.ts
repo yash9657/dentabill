@@ -40,3 +40,4 @@ export {
   type DashboardPageHeadingProps,
 } from './components/dashboard-page-heading.js';
 export { StatTile, type StatTileProps } from './components/stat-tile.js';
+export { Select } from './components/select.js';

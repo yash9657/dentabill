@@ -35,12 +35,8 @@ import { useDashboardShell } from './dashboard-shell-context.js';
  *     below the link list flips the shell-level `collapsed` flag,
  *     which `<DashboardShell>` mirrors to localStorage.
  *
- * Active state styling is achromatic per ADR-013: the active link
- * gets a `bg-stone-warm/60` background and `text-black`; inactive
- * links use `text-gray-dark` and the same warm-stone background on
- * hover. No chromatic accent — the dashboard uses the teal accent
- * only for live-call indicators (`<StatusDot variant="active">`),
- * never as a navigation cue.
+ * Active links use the sage brand surface and pine foreground. Inactive
+ * links use muted text, with a visible hover surface and keyboard focus ring.
  */
 export const DASHBOARD_NAV_LINKS: readonly {
   readonly href: string;
@@ -65,6 +61,9 @@ export function DashboardSidebar(): React.ReactElement {
 
   return (
     <nav aria-label="Sidebar" className="flex h-full flex-col">
+      <p className={cn('text-gray-warm mb-3 px-3 text-xs font-medium', collapsed && 'lg:sr-only')}>
+        Workspace
+      </p>
       <ul className="flex flex-col gap-1">
         {DASHBOARD_NAV_LINKS.map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
@@ -75,15 +74,15 @@ export function DashboardSidebar(): React.ReactElement {
                 onClick={closeMobileDrawer}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'group flex items-center gap-3 rounded-md px-3 py-2 transition-colors',
+                  'dashboard-nav-link group flex items-center gap-3 rounded-md px-3 py-2 transition-colors',
                   active
-                    ? 'bg-warm-stone/80 text-black'
+                    ? 'bg-brand-soft text-brand'
                     : 'text-gray-dark hover:bg-warm-stone/60 hover:text-black',
                   collapsed && 'lg:justify-center lg:px-2',
                 )}
               >
                 <Icon className="h-4.5 w-4.5 shrink-0" aria-hidden />
-                <span className={cn('text-body font-medium', collapsed && 'lg:sr-only')}>
+                <span className={cn('text-caption font-medium', collapsed && 'lg:sr-only')}>
                   {label}
                 </span>
               </Link>
@@ -92,7 +91,20 @@ export function DashboardSidebar(): React.ReactElement {
         })}
       </ul>
 
-      <div className="border-border-subtle mt-auto hidden border-t pt-3 lg:block">
+      <div className={cn('mt-auto px-3 pb-6 pt-10', collapsed && 'lg:hidden')}>
+        <p className="text-caption text-brand font-medium">A hand with your follow-ups.</p>
+        <p className="text-gray-warm mt-2 text-xs leading-relaxed">
+          Have a question? We’re here to help your practice.
+        </p>
+        <Link
+          href="/contact"
+          onClick={closeMobileDrawer}
+          className="text-brand mt-3 inline-flex text-xs font-medium underline"
+        >
+          Contact support
+        </Link>
+      </div>
+      <div className="border-border-subtle hidden border-t pt-3 lg:block">
         <button
           type="button"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}

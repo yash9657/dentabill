@@ -188,6 +188,20 @@ describe('<ReportsPage>', () => {
     expect(screen.getByText('38.5%')).toBeInTheDocument();
   });
 
+  it('renders a single recovered week without invalid chart coordinates', () => {
+    vi.mocked(useReportsSummary).mockReturnValue({
+      data: { ...mockData, recoveredByWeek: [mockData.recoveredByWeek[0]!] },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as ReturnType<typeof useReportsSummary>);
+    render(<ReportsPage />);
+    const chart = screen.getByRole('img', { name: 'Recovered value trend over 8 weeks' });
+    expect(chart.querySelector('path')).toHaveAttribute('d', 'M 60 20');
+    expect(chart.querySelector('circle')).toHaveAttribute('cx', '60');
+    expect(screen.getByText('5 claims')).toBeInTheDocument();
+  });
+
   it('handles empty data gracefully', () => {
     (useReportsSummary as ReturnType<typeof vi.fn>).mockReturnValue({
       data: {

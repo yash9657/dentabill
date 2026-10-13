@@ -12,7 +12,10 @@ describe('<AuthShell />', () => {
     );
     expect(screen.getByRole('heading', { level: 1, name: /sign in/i })).toBeInTheDocument();
     expect(screen.getByText(/welcome back/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /dentabill home/i })).toHaveAttribute('href', '/');
+    expect(screen.getAllByRole('link', { name: /dentabill home/i })[0]).toHaveAttribute(
+      'href',
+      '/',
+    );
     expect(screen.getByTestId('slot')).toBeInTheDocument();
   });
 

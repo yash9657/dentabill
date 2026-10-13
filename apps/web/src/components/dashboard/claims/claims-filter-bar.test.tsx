@@ -1,74 +1,39 @@
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-
-import type { ClaimsFilters } from '../../../lib/claims/types.js';
 
 import { ClaimsFilterBar } from './claims-filter-bar.js';
 
-function ControlledHarness({
-  initial,
-  onChange,
-}: {
-  readonly initial?: ClaimsFilters;
-  readonly onChange?: (next: ClaimsFilters) => void;
-}): React.ReactElement {
-  const [filters, setFilters] = React.useState<ClaimsFilters>(initial ?? {});
-  return (
-    <ClaimsFilterBar
-      filters={filters}
-      onChange={(next) => {
-        setFilters(next);
-        onChange?.(next);
-      }}
-    />
-  );
-}
-
 describe('<ClaimsFilterBar />', () => {
-  it('renders search input and chip groups for status and payer', () => {
-    render(<ClaimsFilterBar filters={{}} onChange={() => undefined} />);
+  it('provides labeled search, status and payer controls', () => {
+    render(<ClaimsFilterBar filters={{}} onChange={vi.fn()} />);
     expect(screen.getByRole('searchbox', { name: /search claim number/i })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: /status/i })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: /payer/i })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Status' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Payer' })).toHaveValue('');
   });
-
-  it('emits a status filter when a status chip is clicked', async () => {
+  it('changes status without discarding the payer', async () => {
     const onChange = vi.fn();
-    const user = userEvent.setup();
-    render(<ClaimsFilterBar filters={{}} onChange={onChange} />);
-    const denied = screen.getByRole('button', { name: 'Denied' });
-    await user.click(denied);
-    expect(onChange).toHaveBeenCalledWith({ status: 'DENIED' });
+    render(<ClaimsFilterBar filters={{ payer: 'CIGNA_DENTAL' }} onChange={onChange} />);
+    await userEvent
+      .setup()
+      .selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'DENIED');
+    expect(onChange).toHaveBeenCalledWith({ payer: 'CIGNA_DENTAL', status: 'DENIED' });
   });
-
-  it('clears a status filter when "All" is clicked', async () => {
+  it('removes a status when all statuses is selected', async () => {
     const onChange = vi.fn();
-    const user = userEvent.setup();
     render(<ClaimsFilterBar filters={{ status: 'CALLING' }} onChange={onChange} />);
-    const allChips = screen
-      .getByRole('group', { name: /status/i })
-      .querySelectorAll('button[aria-pressed]');
-    const allChip = Array.from(allChips).find((b) => b.textContent === 'All');
-    expect(allChip).toBeDefined();
-    await user.click(allChip as HTMLElement);
+    await userEvent.setup().selectOptions(screen.getByRole('combobox', { name: 'Status' }), '');
     expect(onChange).toHaveBeenCalledWith({});
   });
-
-  it('marks the active payer chip with aria-pressed=true', () => {
-    render(<ClaimsFilterBar filters={{ payer: 'CIGNA_DENTAL' }} onChange={() => undefined} />);
-    const cigna = screen.getByRole('button', { name: 'Cigna Dental' });
-    expect(cigna).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  it('emits a search filter trimmed of whitespace', async () => {
+  it('clears all filters with one action', async () => {
     const onChange = vi.fn();
-    const user = userEvent.setup();
-    render(<ControlledHarness onChange={onChange} />);
-    const input = screen.getByRole('searchbox', { name: /search claim number/i });
-    await user.type(input, '  CL-9 ');
-    const lastCall = onChange.mock.calls.at(-1)?.[0] as { search?: string };
-    expect(lastCall.search).toBe('CL-9');
+    render(
+      <ClaimsFilterBar
+        filters={{ payer: 'CIGNA_DENTAL', status: 'DENIED', search: '104' }}
+        onChange={onChange}
+      />,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(onChange).toHaveBeenCalledWith({});
   });
 });

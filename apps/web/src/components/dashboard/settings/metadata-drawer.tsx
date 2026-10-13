@@ -60,7 +60,7 @@ export function MetadataDrawer({ entry, onClose }: MetadataDrawerProps): React.R
       <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-auto bg-white shadow-lg">
         <div className="bg-warm-stone/30 border-border-subtle sticky top-0 flex items-center justify-between border-b px-6 py-4">
           <div>
-            <h2 className="font-display text-lg font-light text-black">Audit Details</h2>
+            <h2 className="font-body text-lg font-medium text-black">Audit Details</h2>
             <p className="text-gray-warm mt-1 text-xs">
               {entry.action} · {entry.resourceType} {entry.resourceId}
             </p>
@@ -88,7 +88,7 @@ export function MetadataDrawer({ entry, onClose }: MetadataDrawerProps): React.R
             entry.metadata.confidence ||
             entry.metadata.promptVersion) ? (
             <div className="rounded-standard border-border-subtle bg-warm-stone/20 border p-4">
-              <h3 className="font-display mb-3 text-sm font-medium text-black">
+              <h3 className="font-body mb-3 text-sm font-medium text-black">
                 AI Decision Parameters
               </h3>
               <div className="space-y-2">

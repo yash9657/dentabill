@@ -45,10 +45,7 @@ export default async function OnboardingPage(): Promise<React.ReactElement> {
       </Link>
 
       <div className="hairline-edge shadow-card rounded-card-large w-full max-w-2xl bg-white px-6 py-10 sm:px-10 sm:py-12">
-        <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">
-          One quick step
-        </p>
-        <h1 className="font-display mb-3 text-[28px] font-light leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]">
+        <h1 className="font-body mb-3 text-[28px] font-medium leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]">
           Set up your practice
         </h1>
         <p className="text-body text-gray-dark mb-8 max-w-prose">

@@ -10,7 +10,7 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
     <DashboardEmptyState
       eyebrow="Integrations"
       title="Connect Dentrix, Eaglesoft, or Open Dental"
-      body="CSV export is available now — import claims at /dashboard/claims/import. Direct PMS sync via API is coming soon with full change-data-capture support."
+      body="Bring your claims across with a CSV export. Direct connections are not available yet; CSV import works with all three systems today."
       previewChildren={<SkeletonList rows={3} />}
       primaryCta={{ label: 'Import claims', href: '/dashboard/claims/import' }}
       secondaryCta={{ label: 'See security', href: '/security' }}

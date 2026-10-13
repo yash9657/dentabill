@@ -31,7 +31,7 @@ describe('/pricing', () => {
     expect(
       screen.getByRole('heading', { level: 2, name: /no card required.*just log in/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /get started free/i })).toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: /get started free/i })[0]).toHaveAttribute(
       'href',
       '/sign-up',
     );

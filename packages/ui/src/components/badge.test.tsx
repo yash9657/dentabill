@@ -14,8 +14,8 @@ describe('<Badge />', () => {
   it('active variant is the ONLY chromatic variant and uses the teal status accent', () => {
     render(<Badge variant="active">CALLING</Badge>);
     const b = screen.getByText('CALLING');
-    expect(b.className).toContain('bg-status-active/15');
-    expect(b.className).toContain('text-status-active');
+    expect(b.className).toContain('bg-brand-soft');
+    expect(b.className).toContain('text-brand');
   });
 
   it('muted variant uses the warm-stone treatment', () => {

@@ -37,7 +37,7 @@ export const metadata: Metadata = {
  */
 export default function SecurityPage(): React.ReactElement {
   return (
-    <main>
+    <main id="main-content">
       <Header />
       <HipaaStance />
       <Baa />
@@ -52,10 +52,8 @@ export default function SecurityPage(): React.ReactElement {
 function Header(): React.ReactElement {
   return (
     <section className="mx-auto max-w-3xl px-4 pb-16 pt-24 sm:px-6 sm:pt-32 lg:px-8">
-      <p className="text-caption text-gray-warm mb-4 uppercase tracking-[0.14em]">Security</p>
-      <h1 className="font-display mb-6 text-balance text-[40px] font-extralight leading-[1.08] tracking-[-0.02em] text-black sm:text-[52px]">
-        We are paid to call insurance companies. We are not paid to keep your patient data, and we
-        do not.
+      <h1 className="font-display mb-6 text-balance text-[40px] font-normal leading-[1.08] tracking-[-0.02em] text-black sm:text-[52px]">
+        Patient data, handled with care.
       </h1>
       <p className="text-body-large text-gray-dark max-w-2xl">
         This page is written for the billing lead doing the BAA conversation and for the security
@@ -71,10 +69,9 @@ function HipaaStance(): React.ReactElement {
       aria-labelledby="hipaa-heading"
       className="mx-auto max-w-3xl px-4 pb-24 sm:px-6 lg:px-8"
     >
-      <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">PHI handling</p>
       <h2
         id="hipaa-heading"
-        className="font-display text-section-heading mb-8 text-balance font-light text-black"
+        className="font-display text-section-heading mb-8 text-balance font-medium text-black"
       >
         Patient names never reach our application logs.
       </h2>
@@ -109,12 +106,9 @@ function Baa(): React.ReactElement {
   return (
     <section aria-labelledby="baa-heading" className="bg-gray-light border-border-subtle border-t">
       <div className="mx-auto max-w-3xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
-        <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">
-          Business associate agreement
-        </p>
         <h2
           id="baa-heading"
-          className="font-display text-section-heading mb-8 text-balance font-light text-black"
+          className="font-display text-section-heading mb-8 text-balance font-medium text-black"
         >
           We sign a BAA with every customer.
         </h2>
@@ -133,9 +127,9 @@ function Baa(): React.ReactElement {
             To request a draft BAA, write to{' '}
             <a
               className="text-black underline underline-offset-2 hover:no-underline"
-              href="mailto:legal@dentabill.example"
+              href="/contact"
             >
-              legal@dentabill.example
+              our legal contact form
             </a>
             . We respond within one business day.
           </p>
@@ -170,23 +164,17 @@ function SubProcessors(): React.ReactElement {
       className="border-border-subtle border-t bg-white"
     >
       <div className="mx-auto max-w-5xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
-        <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">
-          Sub-processors
-        </p>
         <h2
           id="subprocessors-heading"
-          className="font-display text-section-heading mb-4 max-w-2xl text-balance font-light text-black"
+          className="font-display text-section-heading mb-4 max-w-2xl text-balance font-medium text-black"
         >
           The vendors we share data with, and what they do with it.
         </h2>
         <p className="text-body text-gray-dark mb-12 max-w-2xl">
           We update this list at least 30 days before a new sub-processor begins handling production
           data. Subscribe to{' '}
-          <a
-            className="text-black underline underline-offset-2 hover:no-underline"
-            href="mailto:security@dentabill.example?subject=Subscribe%20to%20sub-processor%20updates"
-          >
-            security@dentabill.example
+          <a className="text-black underline underline-offset-2 hover:no-underline" href="/contact">
+            our contact form
           </a>{' '}
           to be notified.
         </p>
@@ -240,12 +228,9 @@ function Disclosure(): React.ReactElement {
       className="bg-gray-light border-border-subtle border-t"
     >
       <div className="mx-auto max-w-3xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
-        <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">
-          Vulnerability disclosure
-        </p>
         <h2
           id="disclosure-heading"
-          className="font-display text-section-heading mb-8 text-balance font-light text-black"
+          className="font-display text-section-heading mb-8 text-balance font-medium text-black"
         >
           Found something? Tell us first, in writing.
         </h2>
@@ -254,9 +239,9 @@ function Disclosure(): React.ReactElement {
             Send security findings to{' '}
             <a
               className="text-black underline underline-offset-2 hover:no-underline"
-              href="mailto:security@dentabill.example"
+              href="/contact"
             >
-              security@dentabill.example
+              our contact form
             </a>
             . We acknowledge within one business day and aim to resolve high-severity findings
             within seven days.
@@ -285,10 +270,9 @@ function ComplianceRoadmap(): React.ReactElement {
       className="border-border-subtle border-t bg-white"
     >
       <div className="mx-auto max-w-3xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
-        <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">Compliance</p>
         <h2
           id="compliance-heading"
-          className="font-display text-section-heading mb-8 text-balance font-light text-black"
+          className="font-display text-section-heading mb-8 text-balance font-medium text-black"
         >
           Where we are on SOC 2 and the public status page.
         </h2>
@@ -312,7 +296,7 @@ function ClosingCta(): React.ReactElement {
   return (
     <section aria-label="Get in touch" className="bg-warm-stone/40 border-border-subtle border-t">
       <div className="mx-auto flex max-w-3xl flex-col items-start gap-6 px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
-        <h2 className="font-display text-section-heading text-balance font-light text-black">
+        <h2 className="font-display text-section-heading text-balance font-medium text-black">
           If you are a security reviewer, ask us anything.
         </h2>
         <p className="text-body text-gray-dark max-w-xl">
@@ -324,7 +308,7 @@ function ClosingCta(): React.ReactElement {
             Talk to security
           </Pill>
           <Pill href="/sign-up" variant="whiteShadow">
-            Start free trial
+            Get started free
           </Pill>
         </div>
       </div>

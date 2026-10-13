@@ -2,7 +2,6 @@ import { Pill } from '@dentabill/ui';
 import type { Metadata } from 'next';
 import * as React from 'react';
 
-import { NewsletterSignupStub } from '../../../components/marketing/index.js';
 import { getAllPosts, type BlogPost } from '../../../lib/blog.js';
 
 export const metadata: Metadata = {
@@ -28,18 +27,14 @@ export default function BlogIndexPage(): React.ReactElement {
   const posts = getAllPosts();
 
   return (
-    <main>
+    <main id="main-content">
       <section className="mx-auto max-w-3xl px-4 pb-16 pt-24 sm:px-6 sm:pt-32 lg:px-8">
-        <p className="text-caption text-gray-warm mb-4 uppercase tracking-[0.14em]">Blog</p>
-        <h1 className="font-display mb-6 text-balance text-[40px] font-extralight leading-[1.08] tracking-[-0.02em] text-black sm:text-[52px]">
-          {posts.length === 0
-            ? 'No posts yet. We would rather publish nothing than publish filler.'
-            : 'Notes from the DentaBill team.'}
+        <h1 className="font-display mb-6 text-balance text-[40px] font-normal leading-[1.08] tracking-[-0.02em] text-black sm:text-[52px]">
+          {posts.length === 0 ? 'Notes on dental billing.' : 'Notes from the DentaBill team.'}
         </h1>
         <p className="text-body-large text-gray-dark max-w-2xl">
           When we have something concrete to say about dental billing automation, payer IVR drift,
-          or the engineering choices behind DentaBill, it will appear here. Subscribe to the
-          newsletter and the first post arrives the day we publish it.
+          or the engineering choices behind DentaBill, it will appear here.
         </p>
       </section>
 
@@ -58,16 +53,19 @@ function EmptyState(): React.ReactElement {
         <div className="lg:col-span-5">
           <h2
             id="empty-blog-heading"
-            className="font-display text-section-heading mb-4 text-balance font-light text-black"
+            className="font-display text-section-heading mb-4 text-balance font-medium text-black"
           >
-            Subscribe and the first post lands in your inbox.
+            Our first notes are on the way.
           </h2>
           <p className="text-body text-gray-dark max-w-md">
-            One newsletter. No drip campaigns, no roundup digests. Unsubscribe in one click.
+            No posts yet. In the meantime, our FAQ covers how DentaBill works, supported payers, and
+            getting started.
           </p>
         </div>
         <div className="lg:col-span-7">
-          <NewsletterSignupStub />
+          <Pill href="/faq" variant="whiteShadow" withArrow>
+            Explore the FAQ
+          </Pill>
         </div>
       </div>
     </section>
@@ -98,7 +96,7 @@ function PostList({ posts }: PostListProps): React.ReactElement {
                 <p className="text-caption text-gray-warm mb-2 uppercase tracking-[0.14em]">
                   {post.publishedAt} · {String(post.minutesToRead)} min
                 </p>
-                <h3 className="font-display text-card-heading mb-2 text-balance font-light text-black">
+                <h3 className="font-display text-card-heading mb-2 text-balance font-medium text-black">
                   {post.title}
                 </h3>
                 <p className="text-body text-gray-dark">{post.summary}</p>
@@ -108,7 +106,7 @@ function PostList({ posts }: PostListProps): React.ReactElement {
         </ul>
         <div className="mt-12">
           <Pill href="/sign-up" variant="black" withArrow>
-            Start free trial
+            Get started free
           </Pill>
         </div>
       </div>

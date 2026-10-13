@@ -26,15 +26,15 @@ const MARKETING_ROUTES: readonly {
   readonly h1Match: RegExp;
   readonly title: string;
 }[] = [
-  { path: '/', h1Match: /stop waiting on hold/i, title: 'Landing' },
-  { path: '/about', h1Match: /billing teams should not spend their day/i, title: 'About' },
-  { path: '/pricing', h1Match: /pay per call/i, title: 'Pricing' },
-  { path: '/security', h1Match: /paid to call insurance companies/i, title: 'Security' },
+  { path: '/', h1Match: /your front desk/i, title: 'Landing' },
+  { path: '/about', h1Match: /built for the people behind the practice/i, title: 'About' },
+  { path: '/pricing', h1Match: /free for practices/i, title: 'Pricing' },
+  { path: '/security', h1Match: /patient data, handled with care/i, title: 'Security' },
   { path: '/privacy', h1Match: /short, honest privacy policy/i, title: 'Privacy' },
   { path: '/terms', h1Match: /plain-english terms of service/i, title: 'Terms' },
-  { path: '/contact', h1Match: /tell us about your practice/i, title: 'Contact' },
+  { path: '/contact', h1Match: /talk about your practice/i, title: 'Contact' },
   { path: '/faq', h1Match: /questions we hear most/i, title: 'FAQ' },
-  { path: '/blog', h1Match: /no posts yet/i, title: 'Blog' },
+  { path: '/blog', h1Match: /notes on dental billing/i, title: 'Blog' },
 ];
 
 test.describe.parallel('marketing site (P2-T27)', () => {

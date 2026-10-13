@@ -7,7 +7,7 @@ describe('/security', () => {
   it('renders the hero h1', () => {
     render(<SecurityPage />);
     expect(
-      screen.getByRole('heading', { level: 1, name: /paid to call insurance companies/i }),
+      screen.getByRole('heading', { level: 1, name: /patient data, handled with care/i }),
     ).toBeInTheDocument();
   });
 
@@ -43,16 +43,16 @@ describe('/security', () => {
     expect(dataRows.length).toBeGreaterThanOrEqual(8);
   });
 
-  it('exposes machine-readable mailto links for legal, security, and disclosure', () => {
+  it('routes legal, security, and disclosure inquiries to the contact form', () => {
     render(<SecurityPage />);
-    expect(screen.getByRole('link', { name: /legal@dentabill.example/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /our legal contact form/i })).toHaveAttribute(
       'href',
-      'mailto:legal@dentabill.example',
+      '/contact',
     );
-    const securityLinks = screen.getAllByRole('link', { name: /security@dentabill.example/i });
+    const securityLinks = screen.getAllByRole('link', { name: /our contact form/i });
     expect(securityLinks.length).toBeGreaterThanOrEqual(2);
     for (const link of securityLinks) {
-      expect(link.getAttribute('href') ?? '').toMatch(/^mailto:security@dentabill.example/);
+      expect(link).toHaveAttribute('href', '/contact');
     }
   });
 
@@ -62,7 +62,7 @@ describe('/security', () => {
       'href',
       '/contact',
     );
-    expect(screen.getByRole('link', { name: /start free trial/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /get started free/i })).toHaveAttribute(
       'href',
       '/sign-up',
     );

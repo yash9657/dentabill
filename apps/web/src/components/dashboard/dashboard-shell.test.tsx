@@ -1,11 +1,30 @@
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardShell } from './dashboard-shell.js';
 
 describe('<DashboardShell />', () => {
   beforeEach(() => {
+    const items = new Map<string, string>();
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => items.get(key) ?? null,
+        setItem: (key: string, value: string) => items.set(key, value),
+        clear: () => {
+          items.clear();
+        },
+      },
+    });
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    });
     window.localStorage.clear();
   });
   afterEach(() => {

@@ -69,10 +69,9 @@ export function CookieBanner({ storage }: CookieBannerProps = {}): React.ReactEl
       aria-label="Cookie notice"
       className="shadow-card border-border-subtle fixed bottom-4 left-1/2 z-50 w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border bg-white p-4 sm:p-5"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-body-small text-gray-dark text-balance">
-          We use a small number of cookies to keep you signed in and to measure how our marketing
-          pages perform. See our{' '}
+      <div className="flex gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-caption text-gray-dark text-balance">
+          We use cookies to keep you signed in. Read our{' '}
           <Link
             href="/privacy"
             className="text-black underline underline-offset-2 hover:no-underline"
@@ -81,7 +80,7 @@ export function CookieBanner({ storage }: CookieBannerProps = {}): React.ReactEl
           </Link>
           .
         </p>
-        <Button type="button" size="sm" onClick={dismiss} className="self-start sm:self-auto">
+        <Button type="button" size="sm" onClick={dismiss} className="shrink-0 self-center">
           Got it
         </Button>
       </div>

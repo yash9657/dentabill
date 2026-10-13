@@ -92,7 +92,7 @@ function AuthenticatedClaimsList(): React.ReactElement {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1
           id="claims-heading"
-          className="font-display text-[22px] font-light leading-[1.2] tracking-[-0.01em] text-black sm:text-[24px]"
+          className="font-body text-[22px] font-medium leading-[1.2] tracking-[-0.01em] text-black sm:text-[24px]"
         >
           Open claims queue
         </h1>

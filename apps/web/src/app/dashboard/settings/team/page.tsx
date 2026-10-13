@@ -10,9 +10,9 @@ export default function SettingsTeamPage(): React.ReactElement {
     <DashboardEmptyState
       eyebrow="Team"
       title="Invite the rest of your billing team"
-      body="Member roles, invitations, and per-seat permissions are managed by Clerk's organization API. The full member list with role editing coming soon."
+      body="Manage your practice members from the organization menu in the top bar. A dedicated team management page is being prepared."
       previewChildren={<SkeletonList rows={4} />}
-      primaryCta={{ label: 'Open Clerk org switcher', href: '/dashboard/overview' }}
+      primaryCta={{ label: 'Back to your workspace', href: '/dashboard/overview' }}
     />
   );
 }

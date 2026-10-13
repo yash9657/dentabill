@@ -76,7 +76,7 @@ export function AuditLogTable({
   if (items.length === 0) {
     return (
       <div className="hairline-edge rounded-card flex flex-col items-start gap-2 bg-white px-6 py-10">
-        <p className="font-display text-2xl font-light text-black">
+        <p className="font-body text-2xl font-medium text-black">
           No audit logs match these filters
         </p>
         <p className="text-body text-gray-warm">
@@ -92,13 +92,13 @@ export function AuditLogTable({
         role="grid"
         aria-label="Audit logs"
         aria-rowcount={items.length + 1}
-        className="hairline-edge rounded-card overflow-hidden bg-white"
+        className="hairline-edge rounded-card overflow-x-auto bg-white"
       >
         <div
           role="row"
           aria-rowindex={1}
           style={{ height: HEADER_HEIGHT }}
-          className="text-caption text-gray-warm bg-warm-stone/30 grid grid-cols-[2fr_1.2fr_1.2fr_1.2fr_1fr] items-center gap-4 px-5 uppercase tracking-[0.12em]"
+          className="text-caption text-gray-warm bg-gray-light-alt grid min-w-[720px] grid-cols-[2fr_1.2fr_1.2fr_1.2fr_1fr] items-center gap-4 px-5 uppercase tracking-[0.12em]"
         >
           <span role="columnheader">Timestamp</span>
           <span role="columnheader">Actor</span>
@@ -111,7 +111,7 @@ export function AuditLogTable({
 
         <div
           ref={parentRef}
-          className="relative h-[480px] overflow-auto"
+          className="relative h-[min(480px,60vh)] min-w-[720px] overflow-y-auto"
           data-testid="audit-log-scroll-viewport"
         >
           <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>

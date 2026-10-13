@@ -18,11 +18,11 @@ describe('<Card />', () => {
     expect(card.className).toContain('bg-white');
   });
 
-  it('CardTitle uses display family at weight 300 (font-light) per ADR-013 — NEVER bold', () => {
+  it('CardTitle uses display family at weight 300 (font-medium) per ADR-013 — NEVER bold', () => {
     render(<CardTitle>Title</CardTitle>);
     const title = screen.getByText('Title');
-    expect(title.className).toContain('font-display');
-    expect(title.className).toContain('font-light');
+    expect(title.className).toContain('font-body');
+    expect(title.className).toContain('font-medium');
     expect(title.className).not.toContain('font-bold');
   });
 

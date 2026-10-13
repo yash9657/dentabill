@@ -50,9 +50,9 @@ export default async function DashboardLayout({
 
   return (
     <DashboardShell sidebar={<DashboardSidebar />} topbar={<DashboardTopbar />}>
-      <div className="px-4 pb-12 pt-6 sm:px-6 lg:px-8">
+      <div className="dashboard-content px-4 pb-12 pt-6 sm:px-6 lg:px-8">
         <DashboardBreadcrumbs />
-        <div className="mt-4">{children}</div>
+        <div className="mt-6">{children}</div>
       </div>
     </DashboardShell>
   );

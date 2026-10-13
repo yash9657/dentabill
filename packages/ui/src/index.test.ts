@@ -55,28 +55,20 @@ function normalize(value: string): string {
 
 describe('@dentabill/ui — design tokens', () => {
   describe('color', () => {
-    it.each([
-      ['white', 'color-white'],
-      ['grayLight', 'color-gray-light'],
-      ['grayLightAlt', 'color-gray-light-alt'],
-      ['warmStone', 'color-warm-stone'],
-      ['black', 'color-black'],
-      ['grayDark', 'color-gray-dark'],
-      ['grayWarm', 'color-gray-warm'],
-      ['borderLight', 'color-border-light'],
-      ['borderSubtle', 'color-border-subtle'],
-      ['statusActive', 'color-status-active'],
-      ['ringBlue', 'color-ring-blue'],
-      ['gridCyan', 'color-grid-cyan'],
-    ])('color.%s matches CSS var --%s', (tsKey, cssName) => {
+    it.each(
+      Object.keys(tokens.color).map((key) => [
+        key,
+        `color-${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`,
+      ]),
+    )('color.%s matches CSS var --%s', (tsKey, cssName) => {
       const tsValue = tokens.color[tsKey as keyof typeof tokens.color];
       const cssValue = readCssVar(cssName);
       expect(cssValue, `--${cssName} missing from theme.css`).toBeDefined();
       expect(normalize(cssValue!)).toBe(normalize(tsValue));
     });
 
-    it('locks the status accent to the exact OKLCH from ADR-013', () => {
-      expect(tokens.color.statusActive).toBe('oklch(0.78 0.04 200)');
+    it('keeps the live status accent legible', () => {
+      expect(tokens.color.statusActive).toBe('#397666');
     });
   });
 
@@ -130,22 +122,22 @@ describe('@dentabill/ui — design tokens', () => {
   });
 
   describe('typography', () => {
-    it('display weights are locked to ADR-013 (200 hero, 300 sections)', () => {
-      expect(tokens.typography.weight.displayHero).toBe('200');
-      expect(tokens.typography.weight.display).toBe('300');
+    it('display weights support the editorial serif', () => {
+      expect(tokens.typography.weight.displayHero).toBe('400');
+      expect(tokens.typography.weight.display).toBe('400');
     });
 
-    it('hero size matches ElevenLabs spec (48px / 1.08 / -0.96px)', () => {
+    it('hero type scales fluidly between phone and desktop', () => {
       expect(tokens.typography.size.hero).toEqual({
-        fontSize: '48px',
+        fontSize: 'clamp(2.75rem, 5.4vw, 4.75rem)',
         lineHeight: '1.08',
         letterSpacing: '-0.96px',
       });
     });
 
-    it('body uses positive letter-spacing (the airy reading quality)', () => {
-      expect(tokens.typography.size.body.letterSpacing).toBe('0.18px');
-      expect(tokens.typography.size.bodyStandard.letterSpacing).toBe('0.16px');
+    it('body uses natural letter spacing for readable dense UI', () => {
+      expect(tokens.typography.size.body.letterSpacing).toBe('0');
+      expect(tokens.typography.size.bodyStandard.letterSpacing).toBe('0');
     });
   });
 

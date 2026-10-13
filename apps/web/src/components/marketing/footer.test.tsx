@@ -35,8 +35,8 @@ describe('<MarketingFooter />', () => {
     expect(screen.getByText(`© ${year} DentaBill. All rights reserved.`)).toBeInTheDocument();
   });
 
-  it('mounts the newsletter signup stub', () => {
+  it('provides a working contact link', () => {
     render(<MarketingFooter />);
-    expect(screen.getByRole('button', { name: /subscribe/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /talk to our team/i })).toBeInTheDocument();
   });
 });

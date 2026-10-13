@@ -15,8 +15,8 @@ describe('<DashboardPageHeading />', () => {
     render(<DashboardPageHeading title="Dashboard" />);
     const h = screen.getByRole('heading', { name: 'Dashboard' });
     expect(h.className).toContain('text-[32px]');
-    expect(h.className).toContain('font-light');
-    expect(h.className).toContain('font-display');
+    expect(h.className).toContain('font-semibold');
+    expect(h.className).toContain('font-body');
   });
 
   it('renders an optional eyebrow at micro size, uppercase, warm-gray', () => {
@@ -40,7 +40,7 @@ describe('<DashboardPageHeading />', () => {
     render(<DashboardPageHeading title="Subsection" level="h2" />);
     const h = screen.getByRole('heading', { level: 2, name: 'Subsection' });
     expect(h.tagName).toBe('H2');
-    expect(h.className).toContain('font-display');
+    expect(h.className).toContain('font-body');
   });
 
   it('renders an optional actions slot (right-aligned on desktop)', () => {

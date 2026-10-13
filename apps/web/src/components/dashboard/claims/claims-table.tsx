@@ -83,10 +83,9 @@ export function ClaimsTable({
   if (items.length === 0) {
     return (
       <div className="hairline-edge rounded-card flex flex-col items-start gap-2 bg-white px-6 py-10">
-        <p className="font-display text-2xl font-light text-black">No claims match these filters</p>
+        <p className="font-body text-2xl font-medium text-black">No claims match these filters</p>
         <p className="text-body text-gray-warm">
-          Adjust the chips above, or import a CSV from /dashboard/claims/import to populate the
-          queue.
+          Try a different search or clear a filter. You can also import claims to add to your queue.
         </p>
       </div>
     );
@@ -97,13 +96,13 @@ export function ClaimsTable({
       role="grid"
       aria-label="Claims"
       aria-rowcount={items.length + 1}
-      className="hairline-edge rounded-card overflow-hidden bg-white"
+      className="hairline-edge rounded-card overflow-x-auto bg-white"
     >
       <div
         role="row"
         aria-rowindex={1}
         style={{ height: HEADER_HEIGHT }}
-        className="text-caption text-gray-warm bg-warm-stone/30 grid grid-cols-[1.4fr_1.3fr_0.85fr_1fr_0.95fr_0.55fr_minmax(7rem,0.9fr)] items-center gap-4 px-5 uppercase tracking-[0.12em]"
+        className="text-caption text-gray-warm bg-gray-light-alt grid min-w-[900px] grid-cols-[1.4fr_1.3fr_0.85fr_1fr_0.95fr_0.55fr_minmax(7rem,0.9fr)] items-center gap-4 px-5 uppercase tracking-[0.12em]"
       >
         <span role="columnheader">Claim</span>
         <span role="columnheader">Payer</span>
@@ -122,7 +121,7 @@ export function ClaimsTable({
 
       <div
         ref={parentRef}
-        className="relative h-[480px] overflow-auto"
+        className="relative h-[min(480px,60vh)] min-w-[900px] overflow-y-auto"
         data-testid="claims-scroll-viewport"
       >
         <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>
@@ -183,7 +182,7 @@ function ClaimRow({
       <Link
         href={`/dashboard/claims/${claim.id}`}
         prefetch={false}
-        className="col-span-6 grid h-full grid-cols-subgrid items-center focus-visible:outline-none"
+        className="focus-visible:outline-brand col-span-6 grid h-full grid-cols-subgrid items-center focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2"
       >
         <span role="gridcell" className="font-mono text-sm text-black">
           {claim.claimNumber}

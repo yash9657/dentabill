@@ -70,7 +70,7 @@ function InviteOnlyPanel(): React.ReactElement {
         <p className="text-caption text-gray-warm uppercase tracking-[0.14em]">
           By invitation only
         </p>
-        <h1 className="font-display text-card-heading text-balance font-light text-black">
+        <h1 className="font-display text-card-heading text-balance font-medium text-black">
           DentaBill onboarding is hand-walked.
         </h1>
         <p className="text-body text-gray-dark text-balance">

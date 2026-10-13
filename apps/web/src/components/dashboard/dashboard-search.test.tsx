@@ -15,10 +15,10 @@ beforeEach(() => {
 });
 
 describe('<DashboardSearch />', () => {
-  it('renders both the desktop trigger and the mobile icon trigger', () => {
+  it('renders a responsive trigger', () => {
     render(<DashboardSearch />);
     const triggers = screen.getAllByRole('button', { name: /open command palette/i });
-    expect(triggers.length).toBeGreaterThanOrEqual(2);
+    expect(triggers).toHaveLength(1);
   });
 
   it('opens the command palette dialog when the trigger is clicked', async () => {
@@ -35,4 +35,16 @@ describe('<DashboardSearch />', () => {
     await user.keyboard('{Meta>}k{/Meta}');
     expect(screen.getByRole('dialog', { name: /command palette/i })).toBeInTheDocument();
   });
+});
+
+it('filters actual navigation destinations and closes when one is selected', async () => {
+  const user = userEvent.setup();
+  render(<DashboardSearch />);
+  await user.click(screen.getByRole('button', { name: /open command palette/i }));
+  await user.type(screen.getByRole('searchbox', { name: 'Find a page' }), 'import');
+  const link = screen.getByRole('link', { name: /import claims/i });
+  expect(link).toHaveAttribute('href', '/dashboard/claims/import');
+  expect(screen.queryByRole('link', { name: /Reports/ })).not.toBeInTheDocument();
+  await user.click(link);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

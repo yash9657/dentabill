@@ -1,6 +1,7 @@
 'use client';
 
 import { Bell } from 'lucide-react';
+import Link from 'next/link';
 import * as React from 'react';
 
 /**
@@ -35,12 +36,19 @@ export function DashboardNotifications(): React.ReactElement {
         aria-label="Notifications"
         className="hairline-edge shadow-card rounded-card-large w-full max-w-md bg-white p-6 backdrop:bg-black/30"
       >
-        <h2 className="font-display text-body-large mb-2 font-light text-black">Notifications</h2>
+        <h2 className="font-body text-body-large mb-2 font-medium text-black">Notifications</h2>
         <p className="text-body text-gray-dark mb-4">
-          Real-time alerts for call completions, denials, and high-priority follow-ups are coming
-          soon.
+          Your call history has the latest outcomes. A dedicated notification inbox is not available
+          yet.
         </p>
-        <div className="flex justify-end">
+        <Link
+          href="/dashboard/calls"
+          onClick={() => dialogRef.current?.close()}
+          className="text-link"
+        >
+          View call history
+        </Link>
+        <div className="mt-5 flex justify-end">
           <button
             type="button"
             onClick={() => {

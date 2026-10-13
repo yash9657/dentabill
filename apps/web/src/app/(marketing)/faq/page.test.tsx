@@ -60,7 +60,7 @@ describe('/faq', () => {
       'href',
       '/contact',
     );
-    expect(screen.getByRole('link', { name: /start free trial/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /get started free/i })).toHaveAttribute(
       'href',
       '/sign-up',
     );

@@ -1,62 +1,41 @@
 import { render, screen } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
 import HomePage from './page.js';
 
-describe('HomePage (P2-T18)', () => {
-  it('renders the hero h1', () => {
+describe('HomePage', () => {
+  it('explains the product and exposes the main calls to action', () => {
     render(<HomePage />);
-    expect(
-      screen.getByRole('heading', { level: 1, name: /stop waiting on hold/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      'Your front deskisn’t a call center.',
+    );
+    for (const link of screen.getAllByRole('link', { name: 'Get started free' }))
+      expect(link).toHaveAttribute('href', '/sign-up');
+    expect(screen.getByRole('link', { name: 'Book a demo' })).toHaveAttribute('href', '/contact');
   });
-
-  it('renders the call-flow waveform with an accessible label', () => {
+  it('labels demo data and lets users walk through the entire follow-up', async () => {
+    const user = userEvent.setup();
     render(<HomePage />);
-    expect(screen.getByRole('img', { name: /diagram of a dentabill call/i })).toBeInTheDocument();
+    expect(screen.getByText('Illustrative example')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Claim imported' }));
+    expect(screen.getByRole('button', { name: 'Claim imported' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByText('One less claim to chase.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'See the next step' }));
+    expect(screen.getByText('The hold music is our job.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'See the next step' }));
+    expect(screen.getByText('Payment is being processed')).toBeInTheDocument();
   });
-
-  it('exposes the live-call status example using the only chromatic surface in the system', () => {
+  it('shows import, call, and review as three concrete steps', () => {
     render(<HomePage />);
-    expect(screen.getByText(/calling delta dental ppo/i)).toBeInTheDocument();
-  });
-
-  it('renders the three "How it works" step headings', () => {
-    render(<HomePage />);
-    expect(screen.getByRole('heading', { level: 3, name: /upload a csv/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { level: 3, name: /agent dials the payer/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { level: 3, name: /you read the result/i }),
-    ).toBeInTheDocument();
-  });
-
-  it('renders both capability rows with their headlines', () => {
-    render(<HomePage />);
-    expect(
-      screen.getByRole('heading', { level: 3, name: /your queue runs at 6 a\.m\./i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { level: 3, name: /patient names never reach our logs/i }),
-    ).toBeInTheDocument();
-  });
-
-  it('renders CTAs to sign up and demo, linked correctly', () => {
-    render(<HomePage />);
-    const signups = screen.getAllByRole('link', { name: /get started free/i });
-    expect(signups.length).toBeGreaterThanOrEqual(1);
-    for (const s of signups) expect(s).toHaveAttribute('href', '/sign-up');
-
-    const demos = screen.getAllByRole('link', { name: /book a 20-minute demo/i });
-    expect(demos.length).toBeGreaterThanOrEqual(2);
-    for (const d of demos) expect(d).toHaveAttribute('href', '/contact');
-  });
-
-  it('renders the closing CTA section heading', () => {
-    render(<HomePage />);
-    expect(
-      screen.getByRole('heading', { level: 2, name: /give your front desk back the morning/i }),
-    ).toBeInTheDocument();
+    for (const name of [
+      'Bring your open claims.',
+      'Let us make the call.',
+      'Know what happens next.',
+    ])
+      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
   });
 });

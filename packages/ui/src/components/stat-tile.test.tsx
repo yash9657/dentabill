@@ -17,15 +17,15 @@ describe('<StatTile />', () => {
     const label = screen.getByText('Status');
     expect(label.className).toContain('text-micro');
     expect(label.className).toContain('text-gray-warm');
-    expect(label.className).toContain('uppercase');
+    expect(label.className).toContain('font-medium');
   });
 
   it('applies value as 28–32px display weight 300, black', () => {
     render(<StatTile label="Count" value="1,234" />);
     const value = screen.getByText('1,234');
     expect(value.className).toContain('text-[28px]');
-    expect(value.className).toContain('font-display');
-    expect(value.className).toContain('font-light');
+    expect(value.className).toContain('font-body');
+    expect(value.className).toContain('font-semibold');
     expect(value.className).toContain('text-black');
   });
 

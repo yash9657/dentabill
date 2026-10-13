@@ -83,10 +83,7 @@ export function ClaimStatusDialog({ claim }: ClaimStatusDialogProps): React.Reac
           <p className="text-caption text-gray-warm uppercase tracking-[0.14em]">
             Manual status change
           </p>
-          <h2
-            id="claim-status-dialog-title"
-            className="font-display text-2xl font-light text-black"
-          >
+          <h2 id="claim-status-dialog-title" className="font-body text-2xl font-medium text-black">
             Move claim {claim.claimNumber}
           </h2>
           <p className="text-body text-gray-dark mt-1 text-sm">
@@ -109,7 +106,7 @@ export function ClaimStatusDialog({ claim }: ClaimStatusDialogProps): React.Reac
                   key={option}
                   className={cn(
                     'rounded-card hairline-edge flex cursor-pointer items-center gap-3 px-4 py-3',
-                    isSelected ? 'bg-black text-white' : 'hover:bg-stone-warm/40 bg-white',
+                    isSelected ? 'bg-black text-white' : 'hover:bg-warm-stone/40 bg-white',
                   )}
                 >
                   <input

@@ -1,235 +1,214 @@
-import { Pill, StatusDot } from '@dentabill/ui';
+import { Pill } from '@dentabill/ui';
+import { ArrowUpRight, Check, FileCheck2, LockKeyhole, PhoneCall } from 'lucide-react';
+import Link from 'next/link';
 import * as React from 'react';
 
-import { CallFlowWaveform } from '../../components/marketing/call-flow-waveform.js';
+import { ClaimDemo } from '../../components/marketing/claim-demo.js';
 
-/**
- * Marketing landing page (P2-T18).
- *
- * Composed of five quiet, distinct sections — each with its own
- * spacing rhythm so the page reads as a sequence of exhibits rather
- * than a card grid. The visual language is ADR-013: achromatic with
- * warm undertones; the only chromatic moment is the muted-teal status
- * accent on the live-call indicator (and the matching cluster in the
- * call-flow waveform).
- *
- * Sections:
- *   1. Hero — oversized weight-200 headline, explanatory subhead, two
- *      CTAs, the call-flow waveform sitting beneath as a quiet exhibit.
- *   2. Live-status strip — single horizontal line with the chromatic
- *      status dot (the brand's only moment of color), tying the
- *      product promise back to the visual system.
- *   3. How it works — three numbered steps in a flowing row; varied
- *      typography per step (numeral huge, heading mid, body small) so
- *      it's not three identical cards.
- *   4. Capabilities — two alternating panels at full bleed. Plain
- *      text + a small inset illustration each. Text-led, not
- *      icon-led.
- *   5. Closing CTA — a single line + the same two pills, set against
- *      a quiet warm-stone band so the eye knows the page has landed.
- *
- * The marketing layout already provides the header, footer, and
- * cookie banner.
- */
 export default function HomePage(): React.ReactElement {
   return (
-    <main>
-      <Hero />
-      <LiveStatusStrip />
-      <HowItWorks />
-      <Capabilities />
-      <ClosingCta />
-    </main>
-  );
-}
+    <main id="main-content" className="landing-page">
+      <section className="landing-hero page-container">
+        <div className="hero-copy">
+          <h1>
+            Your front desk
+            <br />
+            isn’t a <em>call center.</em>
+          </h1>
+          <p>
+            Give the insurance calls to DentaBill. Our AI voice agent navigates phone trees, waits
+            on hold, and gets the claim updates your billing team needs.
+          </p>
+          <div className="hero-actions">
+            <Pill href="/sign-up" size="lg" withArrow>
+              Get started free
+            </Pill>
+            <Pill href="/contact" variant="whiteShadow" size="lg">
+              Book a demo
+            </Pill>
+          </div>
+          <p className="hero-reassurance">
+            <Check size={15} /> Free for practices <span aria-hidden>·</span> No credit card
+            required
+          </p>
+        </div>
+        <ClaimDemo />
+      </section>
 
-function Hero(): React.ReactElement {
-  return (
-    <section className="mx-auto flex max-w-5xl flex-col items-center gap-10 px-4 pb-16 pt-24 sm:px-6 sm:pt-32 lg:px-8">
-      <h1 className="font-display max-w-4xl text-balance text-center text-[44px] font-extralight leading-[1.06] tracking-[-0.02em] text-black sm:text-[56px] md:text-[64px]">
-        Stop waiting on hold with insurance.
-      </h1>
-
-      <p className="text-body-large text-gray-dark max-w-2xl text-balance text-center">
-        DentaBill is an AI voice agent for dental billing teams. It calls payers, navigates IVRs,
-        waits on hold, talks to a real rep, and returns structured claim status. Your front desk
-        gets time back.
-      </p>
-
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        <Pill href="/contact" variant="black" withArrow>
-          Request access
-        </Pill>
-        <Pill href="/contact" variant="warmStone" size="warm">
-          Book a 20-minute demo
-        </Pill>
-      </div>
-
-      <div className="mt-16 w-full max-w-3xl pb-4">
-        <CallFlowWaveform className="h-auto w-full text-black" />
-      </div>
-    </section>
-  );
-}
-
-function LiveStatusStrip(): React.ReactElement {
-  return (
-    <section
-      aria-label="Live call indicator example"
-      className="mx-auto max-w-5xl px-4 pb-24 sm:px-6 lg:px-8"
-    >
-      <div className="hairline-edge rounded-card-large flex flex-col gap-4 bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-        <div className="flex items-center gap-3">
-          <StatusDot variant="active" />
-          <span className="font-body text-body-standard text-black">
-            Calling Delta Dental PPO for claim #84219
+      <section className="compatibility-band" aria-label="Compatible CSV exports">
+        <div className="page-container">
+          <p>
+            Start with the tools
+            <br className="hidden sm:block" /> your practice already uses.
+          </p>
+          <div className="compatibility-names">
+            <span>Dentrix</span>
+            <span>Eaglesoft</span>
+            <span>Open Dental</span>
+          </div>
+          <span className="text-caption text-gray-warm">
+            Simple CSV import.
+            <br />
+            No system migration.
           </span>
         </div>
-        <span className="text-caption text-gray-warm font-mono">on hold, 4m 12s</span>
-      </div>
-      <p className="text-caption text-gray-warm mt-4 max-w-md">
-        The teal dot is the only color in the system. It only ever appears when a call is live.
-      </p>
-    </section>
-  );
-}
+      </section>
 
-function HowItWorks(): React.ReactElement {
-  const steps: readonly { readonly n: string; readonly title: string; readonly body: string }[] = [
-    {
-      n: '01',
-      title: 'Upload a CSV of pending claims',
-      body: 'Dentrix, Eaglesoft, Open Dental. We detect the schema, hash patient identifiers, and queue each claim by amount, age, and prior denial pattern.',
-    },
-    {
-      n: '02',
-      title: 'The agent dials the payer',
-      body: 'It navigates the IVR with DTMF, waits on hold, then talks to a real claims rep. Voice and tone are calibrated for the payer; conversation rules come from the IVR map.',
-    },
-    {
-      n: '03',
-      title: 'You read the result, not the transcript',
-      body: 'Status, denial reason if any, next-action plan. Full transcript and recording are kept for audit, but your billing team works from a structured summary.',
-    },
-  ];
-
-  return (
-    <section
-      aria-labelledby="how-it-works-heading"
-      className="bg-gray-light border-border-subtle border-t"
-    >
-      <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
-        <div className="mb-16 max-w-2xl">
-          <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">
-            How it works
-          </p>
-          <h2
-            id="how-it-works-heading"
-            className="font-display text-section-heading text-balance font-light text-black"
-          >
-            One CSV in. Structured claim status out. No queue staff in between.
+      <section
+        id="how-it-works"
+        className="workflow-section page-container"
+        aria-labelledby="workflow-heading"
+      >
+        <div className="section-intro">
+          <h2 id="workflow-heading">
+            From “still pending”
+            <br />
+            to a plan of action.
           </h2>
+          <p>
+            Keep your team focused on the work that needs a human. We’ll handle the calls that get
+            in the way.
+          </p>
         </div>
-
-        <ol className="grid gap-12 md:grid-cols-3 md:gap-8 lg:gap-12">
-          {steps.map((s) => (
-            <li key={s.n} className="flex flex-col gap-3">
-              <span
-                aria-hidden
-                className="font-display text-gray-warm text-[56px] font-extralight leading-none tracking-[-0.02em]"
-              >
-                {s.n}
+        <ol className="workflow-list">
+          <li>
+            <span className="workflow-number">01</span>
+            <div>
+              <h3>Bring your open claims.</h3>
+              <p>
+                Upload a CSV from your practice management system. Review your imported claims in
+                one organized queue.
+              </p>
+              <Link href="/faq" className="text-link">
+                About importing claims <ArrowUpRight size={16} />
+              </Link>
+            </div>
+            <div className="workflow-art import-art" aria-label="Illustrative CSV import">
+              <FileCheck2 size={28} />
+              <div>
+                <strong>Open claims.csv</strong>
+                <span>Ready for follow-up</span>
+              </div>
+              <Check size={20} />
+            </div>
+          </li>
+          <li>
+            <span className="workflow-number">02</span>
+            <div>
+              <h3>Let us make the call.</h3>
+              <p>
+                The voice agent navigates the phone tree, waits on hold, and asks the payer’s
+                representative for the details.
+              </p>
+              <span className="text-caption text-gray-warm">
+                Follow every call from your dashboard.
               </span>
-              <h3 className="font-display text-card-heading text-balance font-light text-black">
-                {s.title}
-              </h3>
-              <p className="text-body text-gray-dark">{s.body}</p>
-            </li>
-          ))}
+            </div>
+            <div className="workflow-art call-art" aria-label="Illustrative payer call">
+              <PhoneCall size={23} />
+              <div>
+                <strong>Speaking with the payer</strong>
+                <span className="wave-bars" aria-hidden>
+                  {[9, 18, 12, 26, 16, 30, 20, 12, 24, 14, 28, 19, 10, 22, 14].map((height, i) => (
+                    <i key={i} style={{ height }} />
+                  ))}
+                </span>
+              </div>
+              <span className="text-caption tabular-nums">02:14</span>
+            </div>
+          </li>
+          <li>
+            <span className="workflow-number">03</span>
+            <div>
+              <h3>Know what happens next.</h3>
+              <p>
+                Get a structured summary with the claim status, denial reason, and next action. The
+                transcript stays close when you need the detail.
+              </p>
+              <Link href="/sign-up" className="text-link">
+                Start your first follow-up <ArrowUpRight size={16} />
+              </Link>
+            </div>
+            <div className="workflow-art result-art">
+              <Check size={22} />
+              <div>
+                <strong>Answer received</strong>
+                <span>Claim status · Reference · Next step</span>
+              </div>
+            </div>
+          </li>
         </ol>
-      </div>
-    </section>
-  );
-}
+      </section>
 
-function Capabilities(): React.ReactElement {
-  return (
-    <section
-      aria-labelledby="capabilities-heading"
-      className="border-border-subtle border-t bg-white"
-    >
-      <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
-        <h2 id="capabilities-heading" className="sr-only">
-          Capabilities
-        </h2>
-
-        <CapabilityRow
-          eyebrow="Calls run while you sleep"
-          headline="Your queue runs at 6 a.m. Your team sees the results at 9."
-          body="DentaBill can dial overnight when payer call volume is lowest. Claims that would have spent a full day on hold get resolved before the front desk's coffee is cold. Status, denial reason, and next-action plan are waiting in the dashboard."
-        />
-
-        <div className="bg-warm-stone/50 my-20 h-px w-full" aria-hidden />
-
-        <CapabilityRow
-          eyebrow="Built for HIPAA from the inside"
-          headline="Patient names never reach our logs. Recordings are encrypted at rest and tied to a BAA."
-          body="DOBs are hashed with a per-organisation secret before they leave your dashboard. Every read is org-scoped at the database layer; cross-tenant access is a build-time error, not a code review heuristic. The runtime layer redacts PHI from logs even when the application code forgets."
-          flip
-        />
-      </div>
-    </section>
-  );
-}
-
-interface CapabilityRowProps {
-  readonly eyebrow: string;
-  readonly headline: string;
-  readonly body: string;
-  readonly flip?: boolean;
-}
-
-function CapabilityRow({
-  eyebrow,
-  headline,
-  body,
-  flip = false,
-}: CapabilityRowProps): React.ReactElement {
-  return (
-    <div className={`grid items-center gap-12 md:grid-cols-12 ${flip ? 'md:[direction:rtl]' : ''}`}>
-      <div className="md:col-span-7 md:[direction:ltr]">
-        <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">{eyebrow}</p>
-        <h3 className="font-display text-card-heading text-balance font-light text-black">
-          {headline}
-        </h3>
-      </div>
-      <div className="md:col-span-5 md:[direction:ltr]">
-        <p className="text-body text-gray-dark">{body}</p>
-      </div>
-    </div>
-  );
-}
-
-function ClosingCta(): React.ReactElement {
-  return (
-    <section aria-label="Get started" className="bg-warm-stone/40 border-border-subtle border-t">
-      <div className="mx-auto flex max-w-3xl flex-col items-center gap-8 px-4 py-24 text-center sm:px-6 sm:py-32 lg:px-8">
-        <h2 className="font-display text-section-heading text-balance font-light text-black">
-          Give your front desk back the morning.
-        </h2>
-        <p className="text-body text-gray-dark max-w-xl text-balance">
-          Free forever. No card required. Unlimited claim follow-up that runs while your office
-          sleeps.
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <Pill href="/sign-up" variant="black" withArrow>
-            Get started free
-          </Pill>
-          <Pill href="/contact" variant="whiteShadow">
-            Book a 20-minute demo
-          </Pill>
+      <section className="practice-section">
+        <div className="page-container practice-grid">
+          <div>
+            <h2>
+              A little less hold music.
+              <br />
+              <em>A lot more headspace.</em>
+            </h2>
+            <p>
+              Insurance follow-up shouldn’t take over the day. Give your billing team a clear view
+              of what’s moving, what needs attention, and what to do next.
+            </p>
+            <Pill href="/contact" variant="whiteShadow" withArrow>
+              See DentaBill in action
+            </Pill>
+          </div>
+          <div className="practice-ledger">
+            <div>
+              <span>One place for your open claims</span>
+              <Check size={18} />
+            </div>
+            <div>
+              <span>Live call status and complete history</span>
+              <Check size={18} />
+            </div>
+            <div>
+              <span>Summaries with actionable next steps</span>
+              <Check size={18} />
+            </div>
+            <div>
+              <span>Your team stays in control</span>
+              <Check size={18} />
+            </div>
+            <p>Built around the everyday work of dental billing.</p>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <section className="security-section page-container">
+        <LockKeyhole size={30} strokeWidth={1.5} />
+        <div>
+          <h2>Patient data deserves thoughtful care.</h2>
+          <p>
+            Organization-scoped access, encrypted recordings, and a business associate agreement
+            available on request. Clear information for your practice’s security review.
+          </p>
+        </div>
+        <Link href="/security" className="text-link">
+          Explore security <ArrowUpRight size={17} />
+        </Link>
+      </section>
+      <section className="closing-section">
+        <div className="page-container">
+          <h2>
+            Give your front desk
+            <br />
+            <em>the day back.</em>
+          </h2>
+          <div>
+            <p>Your next follow-up doesn’t have to be your next phone call.</p>
+            <Pill href="/sign-up" size="lg" withArrow>
+              Get started free
+            </Pill>
+            <span className="text-caption text-gray-dark mt-4 block">
+              No card. No complicated setup.
+            </span>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

@@ -13,7 +13,7 @@ describe('<Wordmark />', () => {
     const { rerender } = render(<Wordmark size="sm" data-testid="wm" />);
     expect(screen.getByTestId('wm').className).toContain('text-base');
     rerender(<Wordmark size="lg" data-testid="wm" />);
-    expect(screen.getByTestId('wm').className).toContain('text-xl');
+    expect(screen.getByTestId('wm').className).toContain('text-[28px]');
   });
 
   it('forwards arbitrary HTML attributes', () => {

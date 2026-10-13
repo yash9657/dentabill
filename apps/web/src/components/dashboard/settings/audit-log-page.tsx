@@ -38,7 +38,7 @@ export function AuditLogPage(): React.ReactElement {
       {/* Filter section */}
       <div className="rounded-card hairline-edge space-y-4 bg-white p-6">
         <div>
-          <h2 className="font-display text-lg font-light text-black">Filters</h2>
+          <h2 className="font-body text-lg font-medium text-black">Filters</h2>
           <p className="text-body text-gray-warm mt-1 text-sm">
             Search audit logs by resource type and date range.
           </p>
