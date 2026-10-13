@@ -40,6 +40,31 @@ function transcriptText(evt: CallStreamEvent): string | null {
   return null;
 }
 
+/** Who is speaking on a given turn. */
+type Speaker = 'agent' | 'representative' | 'ivr';
+
+/**
+ * Retell's wire vocabulary is `agent` (the AI placing the call), `user` (the
+ * human it is speaking to — here, the payer representative) and `system` (the
+ * IVR). Anything unrecognised is attributed to our own agent, matching
+ * `pickRole` in the summary worker.
+ */
+function speakerOf(evt: CallStreamEvent): Speaker {
+  const raw = (evt.data as { role?: unknown }).role;
+  const role = typeof raw === 'string' ? raw.toLowerCase() : '';
+  if (role === 'user' || role === 'representative' || role === 'rep' || role === 'human') {
+    return 'representative';
+  }
+  if (role === 'system') return 'ivr';
+  return 'agent';
+}
+
+const SPEAKER_LABEL: Record<Speaker, string> = {
+  agent: 'DentaBill agent',
+  representative: 'Payer rep',
+  ivr: 'IVR',
+};
+
 export function TranscriptStream({ callId, bearerToken, baseUrl }: Props): React.ReactElement {
   const enabled = SSE_LIVE_ENABLED && callId.length > 0;
   const { events, status, reconnect } = useCallEventStream({
@@ -50,8 +75,8 @@ export function TranscriptStream({ callId, bearerToken, baseUrl }: Props): React
   });
 
   const transcriptRows = events
-    .map((evt) => ({ id: evt.id, text: transcriptText(evt), eventType: evt.eventType }))
-    .filter((row): row is { id: string; text: string; eventType: string } => row.text !== null);
+    .map((evt) => ({ id: evt.id, text: transcriptText(evt), speaker: speakerOf(evt) }))
+    .filter((row): row is { id: string; text: string; speaker: Speaker } => row.text !== null);
 
   return (
     <section
@@ -73,13 +98,31 @@ export function TranscriptStream({ callId, bearerToken, baseUrl }: Props): React
         transcriptRows.length === 0 ? (
           <p className="text-caption text-gray-warm">Waiting for transcript turns…</p>
         ) : (
-          <ol aria-live="polite" className="flex flex-col gap-2">
+          <ol aria-live="polite" className="flex flex-col gap-3">
             {transcriptRows.map((row) => (
-              <li key={row.id} className="text-body text-gray-dark">
-                <span className="text-caption text-gray-warm pr-2 font-mono">
-                  {row.eventType.replace('webhook.', '')}
+              <li
+                key={row.id}
+                data-speaker={row.speaker}
+                className={
+                  row.speaker === 'ivr'
+                    ? 'flex flex-col gap-1'
+                    : row.speaker === 'agent'
+                      ? 'rounded-card bg-warm-stone/30 flex flex-col gap-1 px-3 py-2'
+                      : 'flex flex-col gap-1 px-3 py-2'
+                }
+              >
+                <span className="text-caption text-gray-warm uppercase tracking-[0.12em]">
+                  {SPEAKER_LABEL[row.speaker]}
                 </span>
-                {row.text}
+                <span
+                  className={
+                    row.speaker === 'ivr'
+                      ? 'text-caption text-gray-warm'
+                      : 'text-body text-gray-dark'
+                  }
+                >
+                  {row.text}
+                </span>
               </li>
             ))}
           </ol>
@@ -95,7 +138,7 @@ export function TranscriptStream({ callId, bearerToken, baseUrl }: Props): React
         <button
           type="button"
           onClick={reconnect}
-          className="text-caption text-gray-dark hairline-edge rounded-card bg-stone-warm/30 self-start px-3 py-2"
+          className="text-caption text-gray-dark hairline-edge rounded-card bg-warm-stone/30 self-start px-3 py-2"
         >
           Reconnect
         </button>

@@ -61,7 +61,7 @@ export function CallsTable({
 
   if (errorMessage) {
     return (
-      <div role="alert" className="hairline-edge rounded-card text-body bg-stone-warm/30 px-5 py-4">
+      <div role="alert" className="hairline-edge rounded-card text-body bg-warm-stone/30 px-5 py-4">
         <p className="text-black">Couldn’t load calls</p>
         <p className="text-gray-warm mt-1 text-sm">{errorMessage}</p>
       </div>
@@ -75,10 +75,10 @@ export function CallsTable({
   if (items.length === 0) {
     return (
       <div className="hairline-edge rounded-card flex flex-col items-start gap-2 bg-white px-6 py-10">
-        <p className="font-display text-2xl font-light text-black">No calls match these filters</p>
+        <p className="font-body text-2xl font-medium text-black">No calls match these filters</p>
         <p className="text-body text-gray-warm">
-          Click “Call now” on a PENDING claim to enqueue the first call. Live calls will appear here
-          and refresh every five seconds while in flight.
+          Choose “Call now” on a pending claim to start a follow-up. Its progress and outcome will
+          appear here.
         </p>
       </div>
     );
@@ -89,13 +89,13 @@ export function CallsTable({
       role="grid"
       aria-label="Calls"
       aria-rowcount={items.length + 1}
-      className="hairline-edge rounded-card overflow-hidden bg-white"
+      className="hairline-edge rounded-card overflow-x-auto bg-white"
     >
       <div
         role="row"
         aria-rowindex={1}
         style={{ height: HEADER_HEIGHT }}
-        className="text-caption text-gray-warm bg-stone-warm/30 grid grid-cols-[1.4fr_1.2fr_0.7fr_0.7fr_0.9fr] items-center gap-4 px-5 uppercase tracking-[0.12em]"
+        className="text-caption text-gray-warm bg-gray-light-alt grid min-w-[660px] grid-cols-[1.4fr_1.2fr_0.7fr_0.7fr_0.9fr] items-center gap-4 px-5 uppercase tracking-[0.12em]"
       >
         <span role="columnheader">Started</span>
         <span role="columnheader">Status</span>
@@ -112,7 +112,7 @@ export function CallsTable({
 
       <div
         ref={parentRef}
-        className="relative h-[480px] overflow-auto"
+        className="relative h-[min(480px,60vh)] min-w-[660px] overflow-y-auto"
         data-testid="calls-scroll-viewport"
       >
         <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>
@@ -137,7 +137,7 @@ export function CallsTable({
           })}
         </div>
         {isFetchingMore ? (
-          <div className="text-caption text-gray-warm absolute bottom-0 left-0 right-0 border-t border-black/5 bg-white/95 px-5 py-2">
+          <div className="text-caption text-gray-warm border-border-subtle absolute bottom-0 left-0 right-0 border-t bg-white/95 px-5 py-2">
             Loading more…
           </div>
         ) : null}
@@ -162,8 +162,8 @@ function CallRow({
         prefetch={false}
         className={cn(
           'grid h-full grid-cols-[1.4fr_1.2fr_0.7fr_0.7fr_0.9fr] items-center gap-4 px-5',
-          'hover:bg-stone-warm/30 border-t border-black/5 transition-colors',
-          'focus-visible:bg-stone-warm/40 focus-visible:outline-none',
+          'hover:bg-warm-stone/30 border-border-subtle border-t transition-colors',
+          'focus-visible:bg-warm-stone/40 focus-visible:outline-brand focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2',
         )}
       >
         <span role="gridcell" className="text-body text-sm tabular-nums text-black">

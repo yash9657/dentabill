@@ -3,21 +3,19 @@ import * as React from 'react';
 
 import { cn } from '../lib/utils.js';
 
-/**
- * Badge — communicates status without color (per ADR-013). The `active`
- * variant is the ONLY chromatic variant — uses the muted teal status accent
- * for live-call indicators. Everything else is achromatic + warm-tinted.
- */
 const badgeVariants = cva(
-  'rounded-subtle text-small font-body inline-flex items-center px-1.5 py-0.5 font-medium',
+  'rounded-pill text-small font-body inline-flex items-center gap-1.5 px-2.5 py-1 font-medium',
   {
     variants: {
       variant: {
         default: 'bg-gray-light text-gray-dark',
+        success: 'bg-success-soft text-success',
+        warning: 'bg-warning-soft text-warning',
+        danger: 'bg-danger-soft text-danger',
         outline: 'border-border-light text-gray-dark border bg-white',
         muted: 'bg-warm-stone/80 text-gray-dark',
-        // The only chromatic badge — used ONLY for `CALLING` / live-call.
-        active: 'bg-status-active/15 text-status-active',
+        // Pine and sage identify active work; semantic colors cover outcomes.
+        active: 'bg-brand-soft text-brand',
       },
     },
     defaultVariants: {

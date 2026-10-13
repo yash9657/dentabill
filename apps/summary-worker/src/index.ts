@@ -9,4 +9,12 @@ export {
   type TransitionPolicyInput,
   type TransitionPolicyResult,
 } from './handler.js';
-export { billingDayUtc, release, tryAcquire, type CostGuardLock } from './cost-guard.js';
+export {
+  billingDayUtc,
+  createInMemoryCostGuard,
+  createRedisCostGuard,
+  release,
+  tryAcquire,
+  type CostGuard,
+  type CostGuardLock,
+} from './cost-guard.js';

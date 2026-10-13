@@ -1,7 +1,7 @@
 import './globals.css';
 
 import type { Metadata, Viewport } from 'next';
-import { Geist_Mono, Inter } from 'next/font/google';
+import { Geist_Mono, Inter, Newsreader } from 'next/font/google';
 import * as React from 'react';
 
 import { Providers } from '../components/providers.js';
@@ -18,22 +18,24 @@ import { getServerRequestId, REQUEST_ID_META_NAME } from '../lib/observability/r
  * fallback text immediately instead of waiting for the variable font,
  * keeping LCP under the 2.5s budget from ADR-020.
  *
- * `Inter` is loaded as a single variable font covering the weight range
- * 100–900; we use 200 (display hero), 300 (display sections), 400 (body),
- * 500 (UI/buttons), and 700 (the rare uppercase CTA). `Geist_Mono` covers
- * code blocks; loaded with normal + 500 weights.
- *
- * The CSS variables `--font-inter` and `--font-geist-mono` are applied to
- * `<html>` via `className`. `globals.css` aliases `--font-inter-display`
- * onto `--font-inter` so our token (`family.display` →
- * `var(--font-inter-display)`) resolves to the same loaded variable font
- * without doubling the download.
+ * Inter covers body and working UI at 400/500/600/700. Newsreader supplies
+ * marketing headings at 400/500, including italic emphasis. Geist Mono is
+ * reserved for code and technical identifiers. All fonts are self-hosted by
+ * next/font and exposed through CSS variables on <html>.
  */
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
   display: 'swap',
-  weight: ['200', '300', '400', '500', '700'],
+  weight: ['400', '500', '600', '700'],
+});
+
+const newsreader = Newsreader({
+  subsets: ['latin'],
+  variable: '--font-newsreader',
+  display: 'swap',
+  weight: ['400', '500'],
+  style: ['normal', 'italic'],
 });
 
 const geistMono = Geist_Mono({
@@ -54,6 +56,7 @@ export const metadata: Metadata = {
   description:
     'DentaBill calls dental insurance payers, navigates IVRs, and returns structured claim status to your billing team — so your front desk stops waiting on hold.',
   applicationName: 'DentaBill',
+  icons: { icon: '/icon.svg', apple: '/apple-icon.png' },
   authors: [{ name: 'DentaBill' }],
   keywords: [
     'dental billing',
@@ -99,14 +102,12 @@ export const metadata: Metadata = {
 };
 
 /**
- * `viewport` is a top-level export per Next.js 15. `themeColor` is white
- * (the achromatic system per ADR-013); the mobile browser chrome blends
- * into the page background.
+ * The mobile browser chrome uses the same warm ivory as the public site.
  */
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#ffffff',
+  themeColor: '#faf8f1',
   colorScheme: 'light',
 };
 
@@ -117,7 +118,11 @@ export default async function RootLayout({
 }): Promise<React.ReactElement> {
   const requestId = await getServerRequestId();
   return (
-    <html lang="en" className={`${inter.variable} ${geistMono.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${inter.variable} ${geistMono.variable} ${newsreader.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         {/*
          * Embed the per-request id so client-side code can read it via

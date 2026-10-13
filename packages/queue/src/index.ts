@@ -53,3 +53,40 @@ export {
   type DlqReason,
   type EnqueueDlqJobInput,
 } from './dlq.js';
+export {
+  createBullMqJobDispatcher,
+  JOB_DISPATCH_MODES,
+  parseJobDispatchMode,
+  type CreateBullMqJobDispatcherOptions,
+  type DispatchCallOptions,
+  type DispatchOptions,
+  type JobDispatcher,
+  type JobDispatchMode,
+} from './dispatcher.js';
+export {
+  asBullMqJob,
+  computeBackoffMs,
+  createInlineJobDispatcher,
+  INTERNAL_JOB_ROUTES,
+  INTERNAL_JOB_SECRET_HEADER,
+  runInlineJob,
+  type CreateInlineJobDispatcherOptions,
+  type InlineJob,
+  type InlineJobKind,
+  type InlineJobOutcome,
+  type RunInlineJobOptions,
+} from './inline.js';
+export {
+  createSqsJobDispatcher,
+  createSqsRetryScheduler,
+  parseSqsJobMessage,
+  SQS_MAX_DELAY_SECONDS,
+  SQS_MAX_VISIBILITY_SECONDS,
+  SqsJobMessageSchema,
+  toSqsDelaySeconds,
+  type CreateSqsJobDispatcherOptions,
+  type CreateSqsRetrySchedulerOptions,
+  type SqsJobMessage,
+  type SqsSendClient,
+  type SqsVisibilityClient,
+} from './sqs.js';

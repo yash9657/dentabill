@@ -86,10 +86,9 @@ function AuthenticatedImportPage(): React.ReactElement {
   return (
     <section className="flex flex-col gap-8" aria-labelledby="claims-import-heading">
       <header className="max-w-3xl">
-        <p className="text-caption text-gray-warm mb-2 uppercase tracking-[0.14em]">Import</p>
         <h1
           id="claims-import-heading"
-          className="font-display text-[28px] font-light leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]"
+          className="font-body text-[28px] font-medium leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]"
         >
           Upload claims CSV
         </h1>
@@ -167,13 +166,13 @@ function DropZone(props: DropZoneProps): React.ReactElement {
         aria-label="CSV upload"
         className={cn(
           'rounded-card hairline-edge flex flex-col items-center gap-3 bg-white px-6 py-12 text-center transition-colors',
-          dragActive ? 'bg-stone-warm/40' : '',
+          dragActive ? 'bg-warm-stone/40' : '',
         )}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        <p className="font-display text-2xl font-light text-black">
+        <p className="font-body text-2xl font-medium text-black">
           {picked ? picked.name : 'Drop a CSV here'}
         </p>
         <p className="text-body text-gray-warm text-sm">
@@ -239,14 +238,12 @@ function ResultCard({
       className="hairline-edge rounded-card flex flex-col gap-6 bg-white p-6"
     >
       <header className="flex flex-col gap-1">
-        <p className="text-caption text-gray-warm uppercase tracking-[0.14em]">
-          Import summary · {SOURCE_LABELS[summary.source]}
-        </p>
-        <h2 id="import-result-heading" className="font-display text-2xl font-light text-black">
+        <h2 id="import-result-heading" className="font-body text-2xl font-medium text-black">
           {summary.insertedRows > 0
             ? `Imported ${String(summary.insertedRows)} new claims`
             : 'No new claims'}
         </h2>
+        <p className="text-caption text-gray-dark">Source: {SOURCE_LABELS[summary.source]}</p>
       </header>
 
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
@@ -280,7 +277,7 @@ function Stat({
   return (
     <div className="flex flex-col gap-1">
       <dt className="text-caption text-gray-warm uppercase tracking-[0.12em]">{label}</dt>
-      <dd className="font-display text-2xl font-light tabular-nums text-black">
+      <dd className="font-body text-2xl font-medium tabular-nums text-black">
         {value.toLocaleString()}
       </dd>
     </div>
@@ -289,7 +286,7 @@ function Stat({
 
 function ErrorList({ errors }: { readonly errors: ImportSummary['errors'] }): React.ReactElement {
   return (
-    <details className="rounded-card bg-stone-warm/30 px-5 py-4">
+    <details className="rounded-card bg-warm-stone/30 px-5 py-4">
       <summary className="text-body cursor-pointer text-sm font-medium text-black">
         {errors.length} {errors.length === 1 ? 'row was' : 'rows were'} skipped due to validation
         errors

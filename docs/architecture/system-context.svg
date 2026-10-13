@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-labelledby="t d">
+  <title id="t">DentaBill system context</title>
+  <desc id="d">Dental office staff use the Next.js web app on Vercel, which calls the DentaBill API. The API and the job worker run on AWS and store data in PostgreSQL. External systems: Clerk for identity, Retell AI for outbound voice calls to payer IVR phone lines, Anthropic Claude for post-call summaries, and Stripe for metered billing (dormant).</desc>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrMuted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/>
+    </marker>
+    <style>
+      text { font-family: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #0F172A; }
+      .h1 { font-size: 22px; font-weight: 700; }
+      .sub { font-size: 13px; fill: #475569; }
+      .name { font-size: 15px; font-weight: 700; }
+      .body { font-size: 13px; fill: #334155; }
+      .small { font-size: 12px; fill: #475569; }
+      .lbl { font-size: 12px; fill: #1E293B; }
+      .zone { font-size: 13px; font-weight: 700; fill: #B45309; }
+      .vercelHead { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+      .person { fill: #F8FAFC; stroke: #0F172A; stroke-width: 1.5; }
+      .app { fill: #F1F5F9; stroke: #475569; stroke-width: 1.5; }
+      .aws { fill: #FFF7EB; stroke: #FF9900; stroke-width: 2; }
+      .saas { fill: #F5F3FF; stroke: #7C3AED; stroke-width: 1.5; }
+      .dormant { fill: #FFFFFF; stroke: #94A3B8; stroke-width: 1.5; stroke-dasharray: 6 4; }
+      .vercel { fill: #FFFFFF; stroke: #000000; stroke-width: 2; }
+      .boundaryAws { fill: none; stroke: #FF9900; stroke-width: 1.5; stroke-dasharray: 8 5; }
+      .edge { fill: none; stroke: #334155; stroke-width: 1.6; }
+      .edgeMuted { fill: none; stroke: #94A3B8; stroke-width: 1.6; stroke-dasharray: 6 4; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="800" rx="16" fill="#FFFFFF"/>
+
+  <text x="24" y="42" class="h1">DentaBill — system context</text>
+  <text x="24" y="66" class="sub">Who uses DentaBill, which deployable parts it is built from, and the external systems it depends on.</text>
+
+  <!-- Staff -->
+  <rect x="24" y="300" width="170" height="110" rx="10" class="person"/>
+  <text x="109" y="334" class="name" text-anchor="middle">Dental office staff</text>
+  <text x="109" y="357" class="body" text-anchor="middle">billing team: owner,</text>
+  <text x="109" y="376" class="body" text-anchor="middle">admin, billing staff</text>
+
+  <!-- Clerk -->
+  <rect x="244" y="100" width="220" height="90" rx="10" class="saas"/>
+  <text x="354" y="132" class="name" text-anchor="middle">Clerk</text>
+  <text x="354" y="154" class="body" text-anchor="middle">users, organizations,</text>
+  <text x="354" y="173" class="body" text-anchor="middle">sessions (JWT)</text>
+
+  <!-- Web on Vercel -->
+  <rect x="244" y="280" width="220" height="150" rx="10" class="vercel"/>
+  <path d="M254,280 H454 A10,10 0 0 1 464,290 V308 H244 V290 A10,10 0 0 1 254,280 z" fill="#000000"/>
+  <path d="M258,302 L266,288 L274,302 z" fill="#FFFFFF"/>
+  <text x="282" y="299" class="vercelHead">Vercel</text>
+  <text x="354" y="334" class="name" text-anchor="middle">Web app · apps/web</text>
+  <text x="354" y="356" class="body" text-anchor="middle">Next.js 15 · React 19</text>
+  <text x="354" y="375" class="body" text-anchor="middle">usedentabill.xyz</text>
+  <text x="354" y="398" class="small" text-anchor="middle">dashboard, CSV claim import,</text>
+  <text x="354" y="416" class="small" text-anchor="middle">live call transcript</text>
+
+  <!-- AWS backend boundary -->
+  <rect x="520" y="226" width="360" height="446" rx="14" class="boundaryAws"/>
+  <text x="536" y="250" class="zone">DentaBill backend · AWS (production target)</text>
+
+  <rect x="544" y="270" width="312" height="98" rx="10" class="app"/>
+  <text x="700" y="298" class="name" text-anchor="middle">API · apps/api</text>
+  <text x="700" y="320" class="body" text-anchor="middle">Fastify 5 · REST + SSE · Clerk JWT auth</text>
+  <text x="700" y="340" class="body" text-anchor="middle">org-scoped Prisma · webhook receivers</text>
+  <text x="700" y="358" class="small" text-anchor="middle">Lambda (Lambda Web Adapter)</text>
+
+  <rect x="600" y="420" width="256" height="96" rx="10" class="app"/>
+  <text x="728" y="448" class="name" text-anchor="middle">Job worker</text>
+  <text x="728" y="470" class="body" text-anchor="middle">call.place → call processor</text>
+  <text x="728" y="489" class="body" text-anchor="middle">summary.generate → summarizer</text>
+  <text x="728" y="507" class="small" text-anchor="middle">Lambda, fed by SQS</text>
+
+  <rect x="544" y="570" width="312" height="80" rx="10" class="aws"/>
+  <text x="700" y="598" class="name" text-anchor="middle">PostgreSQL 17 · Aurora Serverless v2</text>
+  <text x="700" y="620" class="small" text-anchor="middle">orgs, claims, calls, call events, summaries,</text>
+  <text x="700" y="637" class="small" text-anchor="middle">audit log, billing usage</text>
+
+  <!-- Right column: external systems -->
+  <rect x="950" y="100" width="226" height="96" rx="10" class="saas"/>
+  <text x="1063" y="130" class="name" text-anchor="middle">Payer IVR phone lines</text>
+  <text x="1063" y="152" class="body" text-anchor="middle">Delta Dental, Cigna,</text>
+  <text x="1063" y="171" class="body" text-anchor="middle">MetLife, Aetna, …</text>
+
+  <rect x="950" y="270" width="226" height="100" rx="10" class="saas"/>
+  <text x="1063" y="300" class="name" text-anchor="middle">Retell AI</text>
+  <text x="1063" y="322" class="body" text-anchor="middle">voice agent per payer,</text>
+  <text x="1063" y="341" class="body" text-anchor="middle">IVR navigation</text>
+  <text x="1063" y="359" class="small" text-anchor="middle">telephony via Telnyx</text>
+
+  <rect x="950" y="420" width="226" height="96" rx="10" class="saas"/>
+  <text x="1063" y="450" class="name" text-anchor="middle">Anthropic Claude</text>
+  <text x="1063" y="472" class="body" text-anchor="middle">post-call summary: status,</text>
+  <text x="1063" y="491" class="body" text-anchor="middle">denial code, next action</text>
+
+  <rect x="950" y="570" width="226" height="80" rx="10" class="dormant"/>
+  <text x="1063" y="598" class="name" text-anchor="middle" fill="#475569">Stripe</text>
+  <text x="1063" y="620" class="small" text-anchor="middle">metered billing — dormant</text>
+  <text x="1063" y="637" class="small" text-anchor="middle">(free-forever, ADR-051)</text>
+
+  <!-- Edges -->
+  <line x1="194" y1="355" x2="242" y2="355" class="edge" marker-end="url(#arr)"/>
+  <text x="218" y="345" class="lbl" text-anchor="middle">HTTPS</text>
+
+  <line x1="354" y1="280" x2="354" y2="192" class="edge" marker-end="url(#arr)"/>
+  <text x="362" y="240" class="lbl">sign-in, session</text>
+
+  <path d="M464,145 H700 V268" class="edge" marker-end="url(#arr)"/>
+  <text x="476" y="136" class="lbl">JWKS (JWT verify) · user/org webhooks</text>
+
+  <line x1="464" y1="320" x2="542" y2="320" class="edge" marker-end="url(#arr)"/>
+  <text x="503" y="310" class="lbl" text-anchor="middle">REST + SSE</text>
+  <text x="503" y="337" class="lbl" text-anchor="middle">Bearer JWT</text>
+
+  <line x1="728" y1="368" x2="728" y2="418" class="edge" marker-end="url(#arr)"/>
+  <text x="736" y="398" class="lbl">enqueue (SQS)</text>
+
+  <line x1="570" y1="368" x2="570" y2="568" class="edge" marker-end="url(#arr)"/>
+  <line x1="728" y1="516" x2="728" y2="568" class="edge" marker-end="url(#arr)"/>
+  <text x="736" y="548" class="lbl">Prisma over TLS</text>
+
+  <path d="M856,445 H910 V340 H948" class="edge" marker-end="url(#arr)"/>
+  <text x="918" y="398" class="lbl">start call · HTTPS</text>
+
+  <line x1="950" y1="298" x2="858" y2="298" class="edge" marker-end="url(#arr)"/>
+  <text x="903" y="290" class="lbl" text-anchor="middle">webhooks</text>
+  <text x="903" y="316" class="lbl" text-anchor="middle">(HMAC)</text>
+
+  <line x1="1063" y1="270" x2="1063" y2="198" class="edge" marker-end="url(#arr)"/>
+  <text x="1055" y="230" class="lbl" text-anchor="end">PSTN</text>
+  <text x="1055" y="248" class="lbl" text-anchor="end">DTMF + speech</text>
+
+  <line x1="856" y1="490" x2="948" y2="490" class="edge" marker-end="url(#arr)"/>
+  <text x="903" y="481" class="lbl" text-anchor="middle">Messages API</text>
+
+  <line x1="856" y1="610" x2="948" y2="610" class="edgeMuted" marker-end="url(#arrMuted)"/>
+  <text x="903" y="601" class="small" text-anchor="middle">usage</text>
+
+  <!-- Footnote -->
+  <text x="24" y="704" class="small">Demo mode (today): with no Retell or Anthropic key configured, DEMO_AUTOPILOT simulates the phone call inside the worker and DEMO_SUMMARIZER_FALLBACK derives</text>
+  <text x="24" y="722" class="small">the summary from the transcript. Everything else (queue, worker, database writes, live SSE, claim transition, audit) is the production path.</text>
+
+  <!-- Legend -->
+  <g transform="translate(24,748)">
+    <rect x="0" y="0" width="22" height="16" rx="3" class="app"/>
+    <text x="30" y="13" class="small">DentaBill component</text>
+    <rect x="170" y="0" width="22" height="16" rx="3" class="aws"/>
+    <text x="200" y="13" class="small">AWS-managed</text>
+    <rect x="310" y="0" width="22" height="16" rx="3" class="vercel"/>
+    <text x="340" y="13" class="small">Vercel</text>
+    <rect x="410" y="0" width="22" height="16" rx="3" class="saas"/>
+    <text x="440" y="13" class="small">External system</text>
+    <rect x="565" y="0" width="22" height="16" rx="3" class="dormant"/>
+    <text x="595" y="13" class="small">Present but disabled</text>
+    <rect x="740" y="0" width="22" height="16" rx="3" class="boundaryAws"/>
+    <text x="770" y="13" class="small">Deployment / trust boundary</text>
+  </g>
+</svg>

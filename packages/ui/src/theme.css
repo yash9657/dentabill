@@ -1,46 +1,35 @@
-/*
- * DentaBill design tokens — Tailwind v4 `@theme` mirror.
- *
- * Authored alongside `tokens.ts` (TypeScript canon). `tokens.test.ts` parses
- * this file and asserts every value matches `tokens.<token>` — drift is a CI
- * failure. Edit both files together; never edit only one.
- *
- * Apps consume these by importing this file at the top of their global CSS:
- *   @import "@dentabill/ui/theme.css";
- *   @import "tailwindcss";
- *
- * Tailwind v4 picks up the custom properties under `@theme` and exposes them
- * as utilities (e.g. `bg-warm-stone`, `shadow-warm`, `rounded-pill`).
- */
-
+/* DentaBill tokens. Keep in sync with tokens.ts. */
 @theme {
-  /* ──────────────────────────────────────────────────────────── color */
+  --spacing: 0.25rem;
+  --color-ink-inverse: #edf4eb;
+  --color-danger-soft: #faeeeb;
+  --color-danger: #ad453d;
+  --color-warning-soft: #fbf0dc;
+  --color-warning: #93621c;
+  --color-success-soft: #e9f3ec;
+  --color-success: #29734f;
+  --color-cream: #faf8f1;
+  --color-canvas: #f6f7f3;
+  --color-brand-soft: #e5eee7;
+  --color-brand-hover: #183c32;
+  --color-brand: #214e40;
+  --color-white: #ffffff;
+  --color-gray-light: #f2f4f0;
+  --color-gray-light-alt: #f7f8f5;
+  --color-warm-stone: #f1eee6;
+  --color-black: #202e2b;
 
-  /* surfaces */
-  --color-white: oklch(1 0 0);
-  --color-gray-light: oklch(0.961 0 0);
-  --color-gray-light-alt: oklch(0.965 0 0);
-  --color-warm-stone: oklch(0.957 0.005 75);
-  --color-black: oklch(0 0 0);
+  --color-gray-dark: #4f605a;
+  --color-gray-warm: #617068;
 
-  /* text */
-  --color-gray-dark: oklch(0.428 0 0);
-  --color-gray-warm: oklch(0.529 0.013 70);
+  --color-border-light: #d7ded6;
+  --color-border-subtle: #e7ebe4;
 
-  /* borders */
-  --color-border-light: oklch(0.911 0 0);
-  --color-border-subtle: oklch(0 0 0 / 0.05);
+  --color-status-active: #397666;
 
-  /* status accent — only use for active call states (ADR-013) */
-  --color-status-active: oklch(0.78 0.04 200);
+  --color-ring-blue: #397666;
 
-  /* focus */
-  --color-ring-blue: oklch(0.81 0.085 240 / 0.5);
-
-  /* decorative */
-  --color-grid-cyan: oklch(0.951 0.094 200);
-
-  /* ──────────────────────────────────────────────────────────── shadow */
+  --color-grid-cyan: #dfece4;
 
   --shadow-inset-border: rgba(0, 0, 0, 0.075) 0px 0px 0px 0.5px inset;
   --shadow-inset-dark: rgba(0, 0, 0, 0.1) 0px 0px 0px 0.5px inset;
@@ -54,67 +43,31 @@
     rgba(0, 0, 0, 0.06) 0px 0px 0px 1px, rgba(0, 0, 0, 0.04) 0px 1px 2px,
     rgba(0, 0, 0, 0.04) 0px 2px 4px;
 
-  /* ──────────────────────────────────────────────────────────── radius */
-
   --radius-minimal: 2px;
   --radius-subtle: 4px;
   --radius-standard: 8px;
   --radius-comfortable: 10px;
   --radius-md: 12px;
   --radius-card: 16px;
-  --radius-card-large: 20px;
-  --radius-section: 24px;
-  --radius-warm-button: 30px;
+  --radius-card-large: 16px;
+  --radius-section: 16px;
+  --radius-warm-button: 8px;
   --radius-pill: 9999px;
 
-  /* ──────────────────────────────────────────────────────────── spacing */
-
-  --spacing-px: 1px;
-  --spacing-0_5: 4px;
-  --spacing-1: 8px;
-  --spacing-1_5: 12px;
-  --spacing-2: 16px;
-  --spacing-2_5: 20px;
-  --spacing-3: 24px;
-  --spacing-3_5: 28px;
-  --spacing-4: 32px;
-  --spacing-5: 40px;
-  --spacing-6: 48px;
-  --spacing-7: 56px;
-  --spacing-8: 64px;
-  --spacing-9: 72px;
-  --spacing-10: 80px;
-  --spacing-12: 96px;
-  --spacing-16: 128px;
-  --spacing-20: 160px;
-  --spacing-24: 192px;
-
-  /* ──────────────────────────────────────────────────────────── typography */
-
-  /* font families — assigned by next/font in apps/web's root layout */
-  --font-display: var(--font-inter-display), Inter, system-ui, sans-serif;
+  --font-display: var(--font-newsreader), Georgia, serif;
   --font-body: var(--font-inter), Inter, system-ui, sans-serif;
   --font-mono:
     var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* weights — Tailwind v4 ships these as built-in utilities
-   * (`font-extralight` 200, `font-light` 300, `font-normal` 400,
-   * `font-medium` 500, `font-bold` 700). We don't author custom weight
-   * tokens because `--font-weight-display: 300` would generate a
-   * `font-display` utility that collides with the family token of the
-   * same name. ADR-013's "weight 200 / 300 only" rule is enforced by
-   * code review + ESLint config, not by token shape. */
-
-  /* type scale (size / line-height / letter-spacing per DESIGN.md §3 table) */
-  --text-hero: 48px;
+  --text-hero: clamp(2.75rem, 5.4vw, 4.75rem);
   --text-hero--line-height: 1.08;
   --text-hero--letter-spacing: -0.96px;
 
-  --text-section-heading: 36px;
+  --text-section-heading: clamp(2rem, 3.6vw, 3.25rem);
   --text-section-heading--line-height: 1.17;
   --text-section-heading--letter-spacing: 0;
 
-  --text-card-heading: 32px;
+  --text-card-heading: 26px;
   --text-card-heading--line-height: 1.13;
   --text-card-heading--letter-spacing: 0;
 
@@ -123,12 +76,12 @@
   --text-body-large--letter-spacing: 0;
 
   --text-body: 18px;
-  --text-body--line-height: 1.5;
-  --text-body--letter-spacing: 0.18px;
+  --text-body--line-height: 1.65;
+  --text-body--letter-spacing: 0;
 
   --text-body-standard: 16px;
   --text-body-standard--line-height: 1.5;
-  --text-body-standard--letter-spacing: 0.16px;
+  --text-body-standard--letter-spacing: 0;
 
   --text-nav-ui: 15px;
   --text-nav-ui--line-height: 1.4;
@@ -162,14 +115,10 @@
   --text-tiny--line-height: 1.6;
   --text-tiny--letter-spacing: 0;
 
-  /* ──────────────────────────────────────────────────────────── motion */
-
   --duration-fast: 150ms;
   --duration-standard: 200ms;
   --duration-slow: 300ms;
   --ease-calm: cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* ──────────────────────────────────────────────────────────── breakpoints */
 
   --breakpoint-mobile: 0px;
   --breakpoint-desktop: 1024px;

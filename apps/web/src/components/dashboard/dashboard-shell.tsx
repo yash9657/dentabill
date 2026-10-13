@@ -6,41 +6,7 @@ import * as React from 'react';
 
 import { DashboardShellProvider } from './dashboard-shell-context.js';
 
-/**
- * `<DashboardShell>` — the visual chassis for every authenticated
- * `/dashboard/**` route.
- *
- * Layout primitives (DESIGN.md, ADR-013, sized to ElevenLabs's own
- * dashboard treatment):
- *
- *   • Sidebar: 240px wide expanded / 72px collapsed, white, hairline
- *     right border. On large viewports (>=lg) it is a permanently-
- *     visible flex column whose width tracks the persisted collapse
- *     preference (see below). On small viewports it is a fixed
- *     drawer that slides in from the left, behind a translucent
- *     scrim that dismisses the drawer when clicked.
- *   • Topbar: 64px tall, white, hairline bottom border. Hosts the
- *     mobile hamburger trigger and the topbar slot (filled by
- *     P2-T34 with the org switcher / user button / search).
- *   • Content well: takes the rest. Grid-positioned so the topbar
- *     is sticky-friendly and the sidebar shadow does not clip when
- *     the page scrolls.
- *
- * Why a single client component owning the state instead of three
- * siblings: both the desktop collapse preference and the mobile
- * drawer mechanics need to coordinate the sidebar's width and
- * visibility. Lifting that to one place keeps the props minimal,
- * and the collapse state is exposed to children via
- * `<DashboardShellContext>` so the sidebar can hide labels in sync
- * with the width animation.
- *
- * Persistence: the desktop collapse preference is mirrored to
- * `localStorage` under `dentabill:dashboard:sidebar-collapsed`. We
- * read it lazily after hydration to keep the SSR markup stable
- * (the server has no access to localStorage); a brief "expanded"
- * flicker on first paint is preferable to a hydration mismatch
- * crash, and the animation hides the transition.
- */
+/** Shared responsive navigation, focus management, and persisted desktop collapse state. */
 const SIDEBAR_ID = 'dashboard-sidebar';
 const COLLAPSE_STORAGE_KEY = 'dentabill:dashboard:sidebar-collapsed';
 
@@ -55,6 +21,9 @@ export function DashboardShell({
   topbar,
   children,
 }: DashboardShellProps): React.ReactElement {
+  const sidebarRef = React.useRef<HTMLElement>(null);
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const menuRef = React.useRef<HTMLButtonElement>(null);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState(false);
 
@@ -68,13 +37,51 @@ export function DashboardShell({
   }, []);
 
   React.useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const sync = (): void => {
+      if (sidebarRef.current) sidebarRef.current.inert = !media.matches && !drawerOpen;
+      if (media.matches && drawerOpen) setDrawerOpen(false);
+    };
+    sync();
+    media.addEventListener('change', sync);
+    return () => {
+      media.removeEventListener('change', sync);
+    };
+  }, [drawerOpen]);
+
+  React.useEffect(() => {
     if (!drawerOpen) return;
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setDrawerOpen(false);
+    const content = contentRef.current;
+    const menu = menuRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    if (content) content.inert = true;
+    const focusable = (): HTMLElement[] =>
+      Array.from(
+        sidebarRef.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled)') ?? [],
+      ).filter((element) => element.getClientRects().length > 0);
+    focusable()[0]?.focus();
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setDrawerOpen(false);
+      if (event.key === 'Tab') {
+        const elements = focusable();
+        const first = elements[0];
+        const last = elements[elements.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => {
+      document.body.style.overflow = previousOverflow;
+      if (content) content.inert = false;
       window.removeEventListener('keydown', onKey);
+      menu?.focus();
     };
   }, [drawerOpen]);
 
@@ -101,26 +108,30 @@ export function DashboardShell({
 
   return (
     <DashboardShellProvider value={ctx}>
-      <div className="bg-stone-warm/30 flex min-h-screen flex-col lg:flex-row">
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
+      <div className="dashboard-shell flex min-h-screen flex-col lg:flex-row">
         <aside
+          ref={sidebarRef}
           id={SIDEBAR_ID}
           aria-label="Dashboard navigation"
           data-collapsed={collapsed ? 'true' : 'false'}
           className={cn(
-            'border-black/6 fixed inset-y-0 left-0 z-50 flex w-[240px] -translate-x-full flex-col border-r bg-white transition-[transform,width] duration-200 ease-out',
+            'dashboard-sidebar border-border-light fixed inset-y-0 left-0 z-50 flex w-[240px] -translate-x-full flex-col border-r transition-[transform,width] duration-200 ease-out',
             'lg:sticky lg:inset-y-auto lg:top-0 lg:h-screen lg:translate-x-0 lg:self-start',
             drawerOpen && 'translate-x-0',
             collapsed && 'lg:w-[72px]',
           )}
         >
-          <div className="flex h-16 items-center justify-between border-b border-black/5 px-5">
+          <div className="border-border-subtle flex h-[76px] items-center justify-between border-b px-5">
             <div
               className={cn(
-                'font-display inline-flex items-center gap-2 text-[18px] font-light tracking-[-0.01em] text-black',
+                'font-body text-brand inline-flex items-center gap-2 text-[22px] font-semibold tracking-[-0.03em]',
                 collapsed && 'lg:hidden',
               )}
             >
-              <BrandMark size={28} />
+              <BrandMark size={32} />
               <span>DentaBill</span>
             </div>
             <div
@@ -138,12 +149,12 @@ export function DashboardShell({
               onClick={() => {
                 setDrawerOpen(false);
               }}
-              className="hover:bg-stone-warm/60 inline-flex h-9 w-9 items-center justify-center rounded-md text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black lg:hidden"
+              className="hover:bg-warm-stone/60 inline-flex h-9 w-9 items-center justify-center rounded-md text-black lg:hidden"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
-          <div className={cn('flex-1 overflow-y-auto py-4', collapsed ? 'lg:px-2' : 'px-3')}>
+          <div className={cn('flex-1 overflow-y-auto py-4', collapsed ? 'px-3 lg:px-2' : 'px-3')}>
             {sidebar}
           </div>
         </aside>
@@ -159,27 +170,30 @@ export function DashboardShell({
           />
         ) : null}
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div ref={contentRef} className="flex min-w-0 flex-1 flex-col">
           <header
             role="banner"
-            className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-black/5 bg-white px-4 sm:px-6"
+            className="border-border-subtle sticky top-0 z-30 flex h-[76px] shrink-0 items-center gap-3 border-b bg-white px-4 sm:px-6"
           >
             <button
               type="button"
+              ref={menuRef}
               aria-label="Open menu"
               aria-expanded={drawerOpen}
               aria-controls={SIDEBAR_ID}
               onClick={() => {
                 setDrawerOpen(true);
               }}
-              className="hover:bg-stone-warm/60 inline-flex h-10 w-10 items-center justify-center rounded-md text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black lg:hidden"
+              className="hover:bg-warm-stone/60 inline-flex h-10 w-10 items-center justify-center rounded-md text-black lg:hidden"
             >
               <Menu className="h-5 w-5" />
             </button>
             <div className="min-w-0 flex-1">{topbar}</div>
           </header>
 
-          <main className="min-w-0 flex-1">{children}</main>
+          <main id="main-content" className="min-w-0 flex-1">
+            {children}
+          </main>
         </div>
       </div>
     </DashboardShellProvider>

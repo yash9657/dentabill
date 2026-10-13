@@ -1,14 +1,11 @@
 import { audit, getOrgScopedDb, prisma } from '@dentabill/db';
 import { checkPayerHours } from '@dentabill/payer-ivr';
-import {
-  CALL_JOB_NAME,
-  type CallJobData,
-  SUMMARY_JOB_NAME,
-  type SummaryJobData,
-} from '@dentabill/queue';
+import type { CallJobData, SummaryJobData } from '@dentabill/queue';
 import { ApiError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@dentabill/types';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+
+import { payerHoursOverridden } from '../../lib/env.js';
 
 /**
  * `/v1/claims/:id/calls` — enqueue an outbound call (P3-T16).
@@ -440,10 +437,20 @@ export function callsRoutes(fastify: FastifyInstance): void {
       // ADR-037 — business-hours guard at enqueue, not worker pickup.
       const hours = checkPayerHours(claim.payerCode, new Date());
       if (hours.state === 'closed') {
-        throw new ApiError(
-          'PAYER_HOURS_CLOSED',
-          `${claim.payerCode} provider line is closed (${hours.reason}). Next opening: ${hours.nextOpeningAt.toISOString()}.`,
-        );
+        // The demo override is interlocked against RETELL_API_KEY (see
+        // payerHoursOverridden), so a real deployment can never dial a closed
+        // line. Logged at warn so it is never a silent bypass.
+        if (payerHoursOverridden()) {
+          request.log.warn(
+            { payerCode: claim.payerCode, reason: hours.reason },
+            'DEMO_IGNORE_PAYER_HOURS: enqueuing against a closed payer line',
+          );
+        } else {
+          throw new ApiError(
+            'PAYER_HOURS_CLOSED',
+            `${claim.payerCode} provider line is closed (${hours.reason}). Next opening: ${hours.nextOpeningAt.toISOString()}.`,
+          );
+        }
       }
       if (hours.state === 'unsupported_payer') {
         throw new ApiError(
@@ -496,11 +503,10 @@ export function callsRoutes(fastify: FastifyInstance): void {
       });
 
       try {
-        await fastify.callsQueue.add(CALL_JOB_NAME, data, {
-          jobId: idempotencyKey,
+        await fastify.jobDispatcher.dispatchCall(data, {
           // Higher claimPriority → lower BullMQ priority value (BullMQ
           // is min-first). Map [0..100] → [101..1] so 100 priority
-          // dials before 0.
+          // dials before 0. Inline dispatch ignores priority.
           priority: 101 - data.claimPriority,
         });
       } catch (err) {
@@ -946,21 +952,19 @@ export function callsRoutes(fastify: FastifyInstance): void {
         promptVersion: 'v1',
         idempotencyKey,
       };
-      const job = await fastify.summariesQueue.add(SUMMARY_JOB_NAME, data, {
-        jobId: idempotencyKey,
-      });
+      const jobId = await fastify.jobDispatcher.dispatchSummary(data);
 
       await audit({
         action: 'callSummary.retry',
         resourceType: 'Call',
         resourceId: id,
         organizationId: orgId,
-        metadata: { clerkUserId: auth.userId, jobId: job.id ?? idempotencyKey, retryNumber },
+        metadata: { clerkUserId: auth.userId, jobId, retryNumber },
       });
 
       reply.code(202);
       return {
-        jobId: job.id ?? idempotencyKey,
+        jobId,
         callId: id,
         retryNumber,
         queuedAt: new Date().toISOString(),

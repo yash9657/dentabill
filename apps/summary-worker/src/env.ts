@@ -17,6 +17,18 @@ const envSchema = z.object({
   /** Selects FakeClaude when empty / unset; LiveClaude otherwise. */
   ANTHROPIC_API_KEY: z.string().optional().default(''),
 
+  /**
+   * Demo-only: let FakeClaude derive a summary from the transcript instead of
+   * throwing when no test fixture is registered.
+   *
+   * FakeClaude is fixture-driven, so a call that is not driven by test code
+   * produces no summary — the job retries and dead-letters, and the claim
+   * never transitions. That makes a fake-mode demo impossible without this.
+   * Ignored whenever ANTHROPIC_API_KEY is set, since LiveClaude is then doing
+   * the summarizing. Counterpart to DEMO_AUTOPILOT on the call worker.
+   */
+  DEMO_SUMMARIZER_FALLBACK: z.enum(['true', 'false']).optional().default('false'),
+
   /** Hard cap on output tokens per Claude call (ADR-042). */
   SUMMARIZER_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(4000),
 

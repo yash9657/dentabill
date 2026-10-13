@@ -25,14 +25,14 @@ describe('DashboardOverviewPage (P2-T35)', () => {
   it('renders both empty-state panels with their CTAs pointing at the dashboard routes', () => {
     render(<DashboardOverviewPage />);
     expect(
-      screen.getByRole('heading', { level: 2, name: /nothing in the queue yet/i }),
+      screen.getByRole('heading', { level: 3, name: /nothing in the queue yet/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { level: 2, name: /no payer calls yet/i }),
+      screen.getByRole('heading', { level: 3, name: /no payer calls yet/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /open claims/i })).toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: /import claims/i })[0]).toHaveAttribute(
       'href',
-      '/dashboard/claims',
+      '/dashboard/claims/import',
     );
     expect(screen.getByRole('link', { name: /open calls/i })).toHaveAttribute(
       'href',

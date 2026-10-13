@@ -10,6 +10,9 @@ yarn-error.log*
 
 # Build outputs
 dist/
+dist-vercel/
+dist-lambda/
+.vercel/
 build/
 .next/
 .turbo/
@@ -55,3 +58,6 @@ strructure.txt
 # against the repo root by accident. See docs/DESIGN_TOOLING.md.
 design-extracts/
 *.skill
+
+# Local visual review captures
+.impeccable/review/

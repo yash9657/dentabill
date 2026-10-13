@@ -35,3 +35,9 @@ export { SectionDisplay, type SectionDisplayProps } from './components/section-d
 export { ShadowCard, shadowCardVariants, type ShadowCardProps } from './components/shadow-card.js';
 export { StatusDot, statusDotVariants, type StatusDotProps } from './components/status-dot.js';
 export { BrandMark, type BrandMarkProps } from './components/brand-mark.js';
+export {
+  DashboardPageHeading,
+  type DashboardPageHeadingProps,
+} from './components/dashboard-page-heading.js';
+export { StatTile, type StatTileProps } from './components/stat-tile.js';
+export { Select } from './components/select.js';

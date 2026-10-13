@@ -16,7 +16,7 @@ describe('/faq', () => {
     render(<FaqPage />);
     const headings = [
       /getting dentabill running in your practice/i,
-      /how dentabill charges/i,
+      /cost and value/i,
       /how patient data is handled/i,
       /which insurance companies the agent can call/i,
       /how dentabill plays with the rest of your stack/i,
@@ -60,7 +60,7 @@ describe('/faq', () => {
       'href',
       '/contact',
     );
-    expect(screen.getByRole('link', { name: /start free trial/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /get started free/i })).toHaveAttribute(
       'href',
       '/sign-up',
     );

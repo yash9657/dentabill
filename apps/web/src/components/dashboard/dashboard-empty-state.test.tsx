@@ -14,7 +14,7 @@ describe('<DashboardEmptyState />', () => {
         primaryCta={{ label: 'Import claims', href: '/dashboard/claims/import' }}
       />,
     );
-    expect(screen.getByText(/^Claims$/)).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Claims' })).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { level: 1, name: /bring in your open claims/i }),
     ).toBeInTheDocument();

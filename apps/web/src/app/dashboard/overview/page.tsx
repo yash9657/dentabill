@@ -1,9 +1,11 @@
+import { DashboardPageHeading, Pill } from '@dentabill/ui';
 import type { Metadata } from 'next';
 import * as React from 'react';
 
 import { OverviewEmptySection, OverviewStatStrip } from '../../../components/dashboard/index.js';
 import type { OverviewStat } from '../../../components/dashboard/index.js';
 import { MissingNpiBanner } from '../../../components/dashboard/missing-npi-banner.js';
+import { OverviewActivity } from '../../../components/dashboard/overview-activity.js';
 import { OverviewKpiTiles } from '../../../components/dashboard/overview-kpi-tiles.js';
 
 /**
@@ -13,15 +15,14 @@ import { OverviewKpiTiles } from '../../../components/dashboard/overview-kpi-til
  *
  *   1. Stat strip. Calls today, queue depth, denials this week,
  *      recovered amount. Em-dash placeholders on first load until
- *      P2-T41 (claims) and Phase 3 (calls) wire the real numbers
- *      in. The strip is one cohesive horizontal block, not a card
- *      grid — Impeccable design law against the four-cards-in-a-
- *      row template applies here.
+ *      data is available. The strip is one cohesive horizontal block,
+ *      not a card grid — Impeccable design law against the
+ *      four-cards-in-a-row template applies here.
  *   2. Recent claims panel. Empty state with a "Import claims" CTA
  *      pointing at the claims index until the import flow ships in
  *      P2-T51.
- *   3. Recent calls panel. Empty state explaining the call worker
- *      is wired in Phase 3, with a CTA back to the calls index.
+ *   3. Recent calls panel. Empty state explaining calls will appear here
+ *      once the call worker starts, with a CTA back to the calls index.
  *
  * The two panels stack on phones and tablets and reflow into a
  * 2-up grid only above the lg breakpoint, so each panel keeps its
@@ -51,36 +52,40 @@ function hasClerkKeys(): boolean {
 export default function DashboardOverviewPage(): React.ReactElement {
   return (
     <div className="flex flex-col gap-8">
-      <header className="max-w-3xl">
-        <h1 className="font-display text-[28px] font-light leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]">
-          Welcome back
-        </h1>
-        <p className="text-body text-gray-dark mt-2">
-          A snapshot of what DentaBill is doing for your practice today. Numbers fill in the moment
-          claims start moving through the queue.
-        </p>
-      </header>
+      <DashboardPageHeading
+        title="Welcome back"
+        actions={
+          <Pill href="/dashboard/claims/import" size="sm" withArrow>
+            Import claims
+          </Pill>
+        }
+        description="Your claims, calls, and next steps — all in one place."
+      />
 
       {hasClerkKeys() ? <MissingNpiBanner /> : null}
 
       {hasClerkKeys() ? <OverviewKpiTiles /> : <OverviewStatStrip stats={PLACEHOLDER_STATS} />}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <OverviewEmptySection
-          eyebrow="Recent claims"
-          heading="Nothing in the queue yet"
-          body="Upload a CSV from Dentrix, Eaglesoft, or Open Dental and DentaBill will start prioritising follow-ups by aging, amount, and payer. The import flow ships in P2-T51."
-          ctaLabel="Open claims"
-          ctaHref="/dashboard/claims"
-        />
-        <OverviewEmptySection
-          eyebrow="Recent calls"
-          heading="No payer calls yet"
-          body="Once the call worker is live in Phase 3, every payer call DentaBill makes will appear here in chronological order with the claim it touched and the result."
-          ctaLabel="Open calls"
-          ctaHref="/dashboard/calls"
-        />
-      </div>
+      {hasClerkKeys() ? (
+        <OverviewActivity />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <OverviewEmptySection
+            eyebrow="Recent claims"
+            heading="Nothing in the queue yet"
+            body="Upload a CSV from Dentrix, Eaglesoft, or Open Dental and DentaBill will start prioritising follow-ups by aging, amount, and payer."
+            ctaLabel="Import claims"
+            ctaHref="/dashboard/claims/import"
+          />
+          <OverviewEmptySection
+            eyebrow="Recent calls"
+            heading="No payer calls yet"
+            body="Every payer call DentaBill makes will appear here in chronological order with the claim it touched and the result."
+            ctaLabel="Open calls"
+            ctaHref="/dashboard/calls"
+          />
+        </div>
+      )}
     </div>
   );
 }

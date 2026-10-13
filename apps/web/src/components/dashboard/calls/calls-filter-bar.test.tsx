@@ -5,40 +5,27 @@ import { describe, expect, it, vi } from 'vitest';
 import { CallsFilterBar } from './calls-filter-bar.js';
 
 describe('<CallsFilterBar />', () => {
-  it('renders Status + Payer chip groups with All chips and an aria-pressed toggle', () => {
+  it('labels both filters and defaults to all calls', () => {
     render(<CallsFilterBar filters={{}} onChange={vi.fn()} />);
-    expect(screen.getByRole('group', { name: 'Status' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Payer' })).toBeInTheDocument();
-    // The "All" chips inside Status + Payer groups should be active when no filter set.
-    const allChips = screen.getAllByRole('button', { name: 'All' });
-    expect(allChips).toHaveLength(2);
-    for (const chip of allChips) expect(chip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('combobox', { name: 'Status' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Payer' })).toHaveValue('');
   });
-
-  it('calls onChange with a status filter when a status chip is clicked', async () => {
+  it('filters calls while preserving the selected payer', async () => {
     const onChange = vi.fn();
-    const user = userEvent.setup();
-    render(<CallsFilterBar filters={{}} onChange={onChange} />);
-    await user.click(screen.getByRole('button', { name: 'On hold' }));
-    expect(onChange).toHaveBeenCalledWith({ status: 'ON_HOLD' });
+    render(<CallsFilterBar filters={{ payer: 'CIGNA_DENTAL' }} onChange={onChange} />);
+    await userEvent
+      .setup()
+      .selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'ON_HOLD');
+    expect(onChange).toHaveBeenCalledWith({ status: 'ON_HOLD', payer: 'CIGNA_DENTAL' });
   });
-
-  it('clears the status filter when clicking the active chip again via the All chip', async () => {
+  it('clears the selected status', async () => {
     const onChange = vi.fn();
-    const user = userEvent.setup();
     render(<CallsFilterBar filters={{ status: 'ON_HOLD' }} onChange={onChange} />);
-    // Status group's All chip is the first one with name "All".
-    const [statusAll] = screen.getAllByRole('button', { name: 'All' });
-    if (!statusAll) throw new Error('no status All chip rendered');
-    await user.click(statusAll);
+    await userEvent.setup().selectOptions(screen.getByRole('combobox', { name: 'Status' }), '');
     expect(onChange).toHaveBeenCalledWith({});
   });
-
-  it('marks the active status chip with aria-pressed="true"', () => {
+  it('shows the selected status', () => {
     render(<CallsFilterBar filters={{ status: 'COMPLETED' }} onChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: 'Completed' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(screen.getByRole('combobox', { name: 'Status' })).toHaveValue('COMPLETED');
   });
 });

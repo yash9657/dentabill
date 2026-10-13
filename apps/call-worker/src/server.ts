@@ -2,6 +2,7 @@ import { prisma } from '@dentabill/db';
 import { createLogger, type Logger } from '@dentabill/logger';
 import { createRetellPort, type RetellPort } from '@dentabill/payer-ivr';
 import {
+  createBullMqJobDispatcher,
   createCallsWorker,
   createRedisConnection,
   createSummariesQueue,
@@ -79,7 +80,12 @@ export async function bootCallWorker(
   await connection.ping();
 
   const prismaClient = options.prisma ?? prisma;
-  const retellPort = options.retellPort ?? createRetellPort({ apiKey: env.RETELL_API_KEY }).port;
+  const retellPort =
+    options.retellPort ??
+    createRetellPort({
+      apiKey: env.RETELL_API_KEY,
+      demoAutopilot: env.DEMO_AUTOPILOT === 'true',
+    }).port;
   const summariesQueue = createSummariesQueue({ connection });
 
   const worker = createCallsWorker({
@@ -91,7 +97,7 @@ export async function bootCallWorker(
       retellPort,
       env,
       outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
-      summariesQueue,
+      jobDispatcher: createBullMqJobDispatcher({ summariesQueue }),
     }),
   });
 

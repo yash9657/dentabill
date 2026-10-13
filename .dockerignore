@@ -1,0 +1,67 @@
+# Docker build context exclusions.
+# Reduces build context size and prevents unintended copies.
+
+# Dependencies and build artifacts
+node_modules
+.pnpm-store
+.next
+dist
+build
+.turbo
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Environment (never commit or copy to image)
+.env
+.env.local
+.env.*.local
+.env.example
+
+# Testing and development
+.vitest
+coverage
+.pytest_cache
+__pycache__
+
+# Editor config (not needed in image)
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# CI/CD artifacts
+.github
+.gitlab-ci.yml
+
+# Documentation (not needed in image)
+docs
+README.md
+CLAUDE.md
+DESIGN.md
+PRD.md
+PROGRESS.md
+
+# Stale/duplicate files
+PHASE_3_RECAP.md
+PROJECT_STATUS.html
+"apps/api/scripts/seed-test 2.mts"
+"apps/api/src/routes/v1/me.test 2.ts"
+"apps/api/src/routes/v1/me.test 3.ts"
+"apps/web/src/components/dashboard/missing-npi-banner 2.tsx"
+"apps/web/src/lib/calls/use-claim-calls 2.ts"
+
+# Playwright test artifacts
+.playwright
+test-results
+playwright-report
+
+# Next.js specific
+apps/web/.next
+
+# OS files
+.DS_Store
+Thumbs.db

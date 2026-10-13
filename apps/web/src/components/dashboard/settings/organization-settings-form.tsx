@@ -91,7 +91,7 @@ export function OrganizationSettingsForm(): React.ReactElement {
   return (
     <div className="hairline-edge rounded-card flex flex-col gap-6 bg-white p-6">
       <div>
-        <h2 className="font-display text-[20px] font-light leading-[1.2] tracking-[-0.01em] text-black">
+        <h2 className="font-body text-[20px] font-medium leading-[1.2] tracking-[-0.01em] text-black">
           Practice details
         </h2>
         <p className="text-caption text-gray-warm mt-1">
@@ -104,7 +104,7 @@ export function OrganizationSettingsForm(): React.ReactElement {
       {npiMissing ? (
         <div
           role="status"
-          className="rounded-card hairline-edge bg-stone-warm/40 text-body text-gray-dark px-4 py-3"
+          className="rounded-card hairline-edge bg-warm-stone/40 text-body text-gray-dark px-4 py-3"
         >
           <span className="text-black">NPI is missing.</span> The payer rep needs your 10-digit
           National Provider Identifier to look up claims. Calls to Delta Dental, Cigna, and MetLife
@@ -168,7 +168,7 @@ export function OrganizationSettingsForm(): React.ReactElement {
         {update.isError ? (
           <p
             role="alert"
-            className="text-caption text-gray-dark hairline-edge rounded-card bg-stone-warm/30 px-3 py-2"
+            className="text-caption text-gray-dark hairline-edge rounded-card bg-warm-stone/30 px-3 py-2"
           >
             {update.error.message || 'Could not save changes.'}
           </p>

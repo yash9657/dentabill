@@ -8,7 +8,7 @@ describe('<OverviewStatStrip />', () => {
     render(
       <OverviewStatStrip
         stats={[
-          { label: 'Calls today', value: '—', caption: 'Phase 3 lights this up' },
+          { label: 'Calls today', value: '—', caption: 'Coming soon' },
           { label: 'Queue depth', value: '0' },
         ]}
       />,
@@ -16,7 +16,7 @@ describe('<OverviewStatStrip />', () => {
     const region = screen.getByRole('region', { name: /headline metrics/i });
     expect(within(region).getByText(/calls today/i)).toBeInTheDocument();
     expect(within(region).getByText('—')).toBeInTheDocument();
-    expect(within(region).getByText(/phase 3 lights this up/i)).toBeInTheDocument();
+    expect(within(region).getByText(/coming soon/i)).toBeInTheDocument();
     expect(within(region).getByText(/queue depth/i)).toBeInTheDocument();
     expect(within(region).getByText('0')).toBeInTheDocument();
   });

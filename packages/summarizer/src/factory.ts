@@ -11,6 +11,15 @@ import type { SummarizerPort } from './port.js';
 export interface CreateSummarizerPortInput {
   readonly anthropicApiKey?: string;
   readonly maxOutputTokens?: number;
+  /**
+   * Let the fake adapter derive a summary from the transcript instead of
+   * throwing when no fixture is registered. Only meaningful in `fake` mode.
+   *
+   * Without this, an unkeyed call — i.e. any call not driven by test code —
+   * fails summarization, retries, and dead-letters, so the claim never
+   * transitions and no summary ever reaches the dashboard.
+   */
+  readonly deriveWhenUnregistered?: boolean;
 }
 
 export interface CreateSummarizerPortResult {
@@ -21,7 +30,12 @@ export interface CreateSummarizerPortResult {
 export function createSummarizerPort(input: CreateSummarizerPortInput): CreateSummarizerPortResult {
   const key = input.anthropicApiKey ?? '';
   if (key.length === 0) {
-    return { summarizer: new FakeClaude(), mode: 'fake' };
+    return {
+      summarizer: new FakeClaude({
+        deriveWhenUnregistered: input.deriveWhenUnregistered ?? false,
+      }),
+      mode: 'fake',
+    };
   }
   const liveOpts: { apiKey: string; maxOutputTokens?: number } = { apiKey: key };
   if (input.maxOutputTokens !== undefined) liveOpts.maxOutputTokens = input.maxOutputTokens;

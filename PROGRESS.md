@@ -2,9 +2,10 @@
 
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
-**Last updated:** 2026-05-06
-**Current phase:** Phase 4 — Intelligence + Realtime + Billing **(substantively complete — 12 PRs landed CI-green; W0 ✓ W1 ✓ W2 ✓ W3 ✓ W4 ✓ W5 ✓ W6 ✓ W7 ✓ W8 ✓)**. Deferred items (Playwright SSE chaos, golden-set evals, per-suite test schemas, Prometheus collection target, synthetic monitor) carry into Phase 5 per ADR-050.
-**Next task:** **P5-T0** — Phase 5 plan + ADR cluster. Cloud target selection (Render / Fly / Fargate) per the deferred portion of ADR-001, deployment hardening, observability targets, and the Phase-4.5 LiveResend micro-phase.
+**Last updated:** 2026-08-22
+**Current phase:** Phase 5 — Go-live for investor demo (**tracks A–E2 executed; deploy + telephony next**). Plan: `docs/GOLIVE_PLAN.md` (ADR-051); execution findings: **ADR-052**. All gates green: typecheck 16/16 packages, ESLint 0 errors, **1,006 tests passing**, three Docker images building, api image verified booting and serving `/v1/readyz` 200 with live Postgres + Redis probes.
+**Proven end-to-end, not asserted:** one real enqueue drove `PENDING→CALLING→DENIED→MANUAL_REVIEW`, a 42s call with 16 CallEvents, a CallSummary at 0.88 confidence, and an audit row carrying `summaryId` + `confidence` + `promptVersion` — demo-script step 7 working for real.
+**Next task:** Deploy to Railway + Vercel (E3–E7), then real telephony. Retell is further along than the docs claimed: the API key works, all three payer agents already exist in the account, and the outbound number + agent IDs are configured. The remaining telephony gap is that the agents carry only an `end_call` tool — **no `press_digit`** — so they can talk to a rep but cannot navigate an IVR. Fix is a compiler from `packages/payer-ivr/src/ivr/maps/*` (already a `WAIT`/`DTMF`/`COLLECT_VOICE_INPUT`/`WAIT_FOR_HUMAN` step machine) into Retell `press_digit` tools + states. The hold detector, duration guard and a `waitForCallEnd` timeout also remain unwired — no real call should be placed until they are.
 **Carry-over (deferred, user-driven):** **P2-T52** — `PRODUCT.md` via `$impeccable teach` (interactive skill — cannot be done autonomously).
 
 ---
@@ -71,6 +72,8 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 See `docs/DECISIONS.md`. Currently **41 ADRs** — 9 from Phase 1 + ADRs 010–012 (impeccable skill, SkillUI tooling, ElevenLabs-inspired DESIGN.md) + the Phase 2 cluster ADR-013 → ADR-028 + ADR-029 (terms-template) + ADR-030 (Phase 2 retro) + the Phase 3 cluster ADR-031 → ADR-040 (Clerk-Orgs deferral, per-payer Retell agents, RetellPort adapters, Phase 3 UI scope, queue topology, webhook HMAC, business-hours guard, per-call cap, hold policy, PHI / Retell-audio boundary) + ADR-041 (Phase 3 retrospective, P3-T29).
 
 ## Known issues / open questions
+
+- **Live-call wiring gap (2026-08-21, see `docs/GOLIVE_PLAN.md` §1a):** the IVR navigator, hold detector, and per-call duration cap exist as tested modules but are not wired into the production call handler; `RetellPort` cannot send DTMF, so IVR maps never execute; Retell agent IDs are placeholders. No real call has ever been placed. Demo is unaffected (autopilot/simulation mode); real telephony go-live needs its own engineering phase.
 
 - Branch-protection rules still need enabling in the GitHub UI per the checklist in `docs/SECURITY.md`. Auto-merge is working on PRs but enforcement is per-PR rather than rule-bound.
 - No external service credentials yet (Clerk / Retell / Anthropic / Resend / Stripe / Telnyx) — `.env.example` placeholders ready, populate as tasks activate them.

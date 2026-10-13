@@ -28,9 +28,9 @@ export default function MarketingLayout({
   readonly children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <div className="flex min-h-screen flex-col bg-white">
+    <div className="marketing-site flex min-h-screen flex-col">
       <MarketingHeader />
-      <div className="flex-1">{children}</div>
+      <div className="marketing-content flex-1">{children}</div>
       <MarketingFooter />
       <CookieBanner />
     </div>

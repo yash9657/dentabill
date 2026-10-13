@@ -2,22 +2,12 @@ import * as React from 'react';
 
 import { cn } from '../lib/utils.js';
 
-/**
- * BrandMark — the DentaBill glyph (three nested arcs that read as a
- * stylised speech-bubble/wave). Three concentric shapes evoke the call
- * cadence: the largest is the dial, the middle is IVR navigation, the
- * smallest is the resolved follow-up.
- *
- * Inline SVG with `fill="currentColor"` so consumers tint the mark via
- * Tailwind text utilities (`text-black`, `text-white`, `text-gray-warm`).
- * Default size is `1em` so it inlines next to a wordmark without alignment
- * gymnastics; pass `size` to override.
- */
 export interface BrandMarkProps extends React.SVGAttributes<SVGSVGElement> {
   readonly size?: number | string;
   readonly title?: string;
 }
 
+/** A quiet dental outline with rounded roots, designed to remain clear at small sizes. */
 export function BrandMark({
   size = '1em',
   title,
@@ -28,8 +18,8 @@ export function BrandMark({
     <svg
       width={size}
       height={size}
-      viewBox="0 0 294 294"
-      fill="currentColor"
+      viewBox="0 0 40 40"
+      fill="none"
       role={title ? 'img' : 'presentation'}
       aria-label={title}
       aria-hidden={title ? undefined : true}
@@ -37,9 +27,13 @@ export function BrandMark({
       {...props}
     >
       {title ? <title>{title}</title> : null}
-      <path d="M38 0C119.186 0 185 65.8141 185 147C185 228.186 119.186 294 38 294H0V0H38Z" />
-      <path d="M185 19C229.764 44.1599 260 92.0533 260 147C260 201.947 229.764 249.84 185 275V19Z" />
-      <path d="M260 53C281.229 78.4786 294 111.248 294 147C294 182.753 281.228 215.521 260 241V53Z" />
+      <path
+        d="M12.5 5.5c-4.8 0-7.8 3.3-7.2 8.5l1.8 9.9c.9 5 2.7 10.6 5.8 10.6 2.2 0 2.4-4.8 3.6-8.5.7-2.2 1.6-3.4 3.5-3.4s2.8 1.2 3.5 3.4c1.2 3.7 1.4 8.5 3.6 8.5 3.1 0 4.9-5.6 5.8-10.6l1.8-9.9c.6-5.2-2.4-8.5-7.2-8.5-3 0-4.6 1.5-7.5 1.5S15.5 5.5 12.5 5.5Z"
+        stroke="currentColor"
+        strokeWidth="3.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

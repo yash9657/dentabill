@@ -1,0 +1,693 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-13T00:11:29.637753+00:00",
+  "title": "Design System: DentaBill",
+  "extensions": {
+    "colorMeta": {
+      "ink-inverse": {
+        "role": "primary",
+        "displayName": "Ink Inverse",
+        "canonical": "#edf4eb",
+        "tonalRamp": [
+          "oklch(0.15 0.01402 138.71)",
+          "oklch(0.2643 0.01402 138.71)",
+          "oklch(0.3786 0.01402 138.71)",
+          "oklch(0.4929 0.01402 138.71)",
+          "oklch(0.6071 0.01402 138.71)",
+          "oklch(0.7214 0.01402 138.71)",
+          "oklch(0.8357 0.01402 138.71)",
+          "oklch(0.95 0.01402 138.71)"
+        ]
+      },
+      "danger-soft": {
+        "role": "semantic",
+        "displayName": "Danger Soft",
+        "canonical": "#faeeeb",
+        "tonalRamp": [
+          "oklch(0.15 0.01364 34.3)",
+          "oklch(0.2643 0.01364 34.3)",
+          "oklch(0.3786 0.01364 34.3)",
+          "oklch(0.4929 0.01364 34.3)",
+          "oklch(0.6071 0.01364 34.3)",
+          "oklch(0.7214 0.01364 34.3)",
+          "oklch(0.8357 0.01364 34.3)",
+          "oklch(0.95 0.01364 34.3)"
+        ]
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Danger",
+        "canonical": "#ad453d",
+        "tonalRamp": [
+          "oklch(0.15 0.13816 27.18)",
+          "oklch(0.2643 0.13816 27.18)",
+          "oklch(0.3786 0.13816 27.18)",
+          "oklch(0.4929 0.13816 27.18)",
+          "oklch(0.6071 0.13816 27.18)",
+          "oklch(0.7214 0.13816 27.18)",
+          "oklch(0.8357 0.13816 27.18)",
+          "oklch(0.95 0.13816 27.18)"
+        ]
+      },
+      "warning-soft": {
+        "role": "semantic",
+        "displayName": "Warning Soft",
+        "canonical": "#fbf0dc",
+        "tonalRamp": [
+          "oklch(0.15 0.02891 82.6)",
+          "oklch(0.2643 0.02891 82.6)",
+          "oklch(0.3786 0.02891 82.6)",
+          "oklch(0.4929 0.02891 82.6)",
+          "oklch(0.6071 0.02891 82.6)",
+          "oklch(0.7214 0.02891 82.6)",
+          "oklch(0.8357 0.02891 82.6)",
+          "oklch(0.95 0.02891 82.6)"
+        ]
+      },
+      "warning": {
+        "role": "semantic",
+        "displayName": "Warning",
+        "canonical": "#93621c",
+        "tonalRamp": [
+          "oklch(0.15 0.10363 70.92)",
+          "oklch(0.2643 0.10363 70.92)",
+          "oklch(0.3786 0.10363 70.92)",
+          "oklch(0.4929 0.10363 70.92)",
+          "oklch(0.6071 0.10363 70.92)",
+          "oklch(0.7214 0.10363 70.92)",
+          "oklch(0.8357 0.10363 70.92)",
+          "oklch(0.95 0.10363 70.92)"
+        ]
+      },
+      "success-soft": {
+        "role": "semantic",
+        "displayName": "Success Soft",
+        "canonical": "#e9f3ec",
+        "tonalRamp": [
+          "oklch(0.15 0.01407 155.59)",
+          "oklch(0.2643 0.01407 155.59)",
+          "oklch(0.3786 0.01407 155.59)",
+          "oklch(0.4929 0.01407 155.59)",
+          "oklch(0.6071 0.01407 155.59)",
+          "oklch(0.7214 0.01407 155.59)",
+          "oklch(0.8357 0.01407 155.59)",
+          "oklch(0.95 0.01407 155.59)"
+        ]
+      },
+      "success": {
+        "role": "semantic",
+        "displayName": "Success",
+        "canonical": "#29734f",
+        "tonalRamp": [
+          "oklch(0.15 0.09365 158.84)",
+          "oklch(0.2643 0.09365 158.84)",
+          "oklch(0.3786 0.09365 158.84)",
+          "oklch(0.4929 0.09365 158.84)",
+          "oklch(0.6071 0.09365 158.84)",
+          "oklch(0.7214 0.09365 158.84)",
+          "oklch(0.8357 0.09365 158.84)",
+          "oklch(0.95 0.09365 158.84)"
+        ]
+      },
+      "cream": {
+        "role": "neutral",
+        "displayName": "Ivory",
+        "canonical": "#faf8f1",
+        "tonalRamp": [
+          "oklch(0.15 0.00949 93.57)",
+          "oklch(0.2643 0.00949 93.57)",
+          "oklch(0.3786 0.00949 93.57)",
+          "oklch(0.4929 0.00949 93.57)",
+          "oklch(0.6071 0.00949 93.57)",
+          "oklch(0.7214 0.00949 93.57)",
+          "oklch(0.8357 0.00949 93.57)",
+          "oklch(0.95 0.00949 93.57)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Working Canvas",
+        "canonical": "#f6f7f3",
+        "tonalRamp": [
+          "oklch(0.15 0.00538 117.92)",
+          "oklch(0.2643 0.00538 117.92)",
+          "oklch(0.3786 0.00538 117.92)",
+          "oklch(0.4929 0.00538 117.92)",
+          "oklch(0.6071 0.00538 117.92)",
+          "oklch(0.7214 0.00538 117.92)",
+          "oklch(0.8357 0.00538 117.92)",
+          "oklch(0.95 0.00538 117.92)"
+        ]
+      },
+      "brand-soft": {
+        "role": "primary",
+        "displayName": "Soft Sage",
+        "canonical": "#e5eee7",
+        "tonalRamp": [
+          "oklch(0.15 0.01334 152.6)",
+          "oklch(0.2643 0.01334 152.6)",
+          "oklch(0.3786 0.01334 152.6)",
+          "oklch(0.4929 0.01334 152.6)",
+          "oklch(0.6071 0.01334 152.6)",
+          "oklch(0.7214 0.01334 152.6)",
+          "oklch(0.8357 0.01334 152.6)",
+          "oklch(0.95 0.01334 152.6)"
+        ]
+      },
+      "brand-hover": {
+        "role": "primary",
+        "displayName": "Deep Pine Hover",
+        "canonical": "#183c32",
+        "tonalRamp": [
+          "oklch(0.15 0.04556 172.76)",
+          "oklch(0.2643 0.04556 172.76)",
+          "oklch(0.3786 0.04556 172.76)",
+          "oklch(0.4929 0.04556 172.76)",
+          "oklch(0.6071 0.04556 172.76)",
+          "oklch(0.7214 0.04556 172.76)",
+          "oklch(0.8357 0.04556 172.76)",
+          "oklch(0.95 0.04556 172.76)"
+        ]
+      },
+      "brand": {
+        "role": "primary",
+        "displayName": "Deep Pine",
+        "canonical": "#214e40",
+        "tonalRamp": [
+          "oklch(0.15 0.0556 170.43)",
+          "oklch(0.2643 0.0556 170.43)",
+          "oklch(0.3786 0.0556 170.43)",
+          "oklch(0.4929 0.0556 170.43)",
+          "oklch(0.6071 0.0556 170.43)",
+          "oklch(0.7214 0.0556 170.43)",
+          "oklch(0.8357 0.0556 170.43)",
+          "oklch(0.95 0.0556 170.43)"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(0.15 0.0 89.88)",
+          "oklch(0.2643 0.0 89.88)",
+          "oklch(0.3786 0.0 89.88)",
+          "oklch(0.4929 0.0 89.88)",
+          "oklch(0.6071 0.0 89.88)",
+          "oklch(0.7214 0.0 89.88)",
+          "oklch(0.8357 0.0 89.88)",
+          "oklch(0.95 0.0 89.88)"
+        ]
+      },
+      "gray-light": {
+        "role": "neutral",
+        "displayName": "Gray Light",
+        "canonical": "#f2f4f0",
+        "tonalRamp": [
+          "oklch(0.15 0.00569 128.53)",
+          "oklch(0.2643 0.00569 128.53)",
+          "oklch(0.3786 0.00569 128.53)",
+          "oklch(0.4929 0.00569 128.53)",
+          "oklch(0.6071 0.00569 128.53)",
+          "oklch(0.7214 0.00569 128.53)",
+          "oklch(0.8357 0.00569 128.53)",
+          "oklch(0.95 0.00569 128.53)"
+        ]
+      },
+      "gray-light-alt": {
+        "role": "neutral",
+        "displayName": "Gray Light Alt",
+        "canonical": "#f7f8f5",
+        "tonalRamp": [
+          "oklch(0.15 0.00409 121.56)",
+          "oklch(0.2643 0.00409 121.56)",
+          "oklch(0.3786 0.00409 121.56)",
+          "oklch(0.4929 0.00409 121.56)",
+          "oklch(0.6071 0.00409 121.56)",
+          "oklch(0.7214 0.00409 121.56)",
+          "oklch(0.8357 0.00409 121.56)",
+          "oklch(0.95 0.00409 121.56)"
+        ]
+      },
+      "warm-stone": {
+        "role": "neutral",
+        "displayName": "Warm Stone",
+        "canonical": "#f1eee6",
+        "tonalRamp": [
+          "oklch(0.15 0.01112 89.72)",
+          "oklch(0.2643 0.01112 89.72)",
+          "oklch(0.3786 0.01112 89.72)",
+          "oklch(0.4929 0.01112 89.72)",
+          "oklch(0.6071 0.01112 89.72)",
+          "oklch(0.7214 0.01112 89.72)",
+          "oklch(0.8357 0.01112 89.72)",
+          "oklch(0.95 0.01112 89.72)"
+        ]
+      },
+      "black": {
+        "role": "neutral",
+        "displayName": "Deep Green Ink",
+        "canonical": "#202e2b",
+        "tonalRamp": [
+          "oklch(0.15 0.01968 180.17)",
+          "oklch(0.2643 0.01968 180.17)",
+          "oklch(0.3786 0.01968 180.17)",
+          "oklch(0.4929 0.01968 180.17)",
+          "oklch(0.6071 0.01968 180.17)",
+          "oklch(0.7214 0.01968 180.17)",
+          "oklch(0.8357 0.01968 180.17)",
+          "oklch(0.95 0.01968 180.17)"
+        ]
+      },
+      "gray-dark": {
+        "role": "neutral",
+        "displayName": "Gray Dark",
+        "canonical": "#4f605a",
+        "tonalRamp": [
+          "oklch(0.15 0.02293 171.9)",
+          "oklch(0.2643 0.02293 171.9)",
+          "oklch(0.3786 0.02293 171.9)",
+          "oklch(0.4929 0.02293 171.9)",
+          "oklch(0.6071 0.02293 171.9)",
+          "oklch(0.7214 0.02293 171.9)",
+          "oklch(0.8357 0.02293 171.9)",
+          "oklch(0.95 0.02293 171.9)"
+        ]
+      },
+      "gray-warm": {
+        "role": "neutral",
+        "displayName": "Gray Warm",
+        "canonical": "#617068",
+        "tonalRamp": [
+          "oklch(0.15 0.02188 162.36)",
+          "oklch(0.2643 0.02188 162.36)",
+          "oklch(0.3786 0.02188 162.36)",
+          "oklch(0.4929 0.02188 162.36)",
+          "oklch(0.6071 0.02188 162.36)",
+          "oklch(0.7214 0.02188 162.36)",
+          "oklch(0.8357 0.02188 162.36)",
+          "oklch(0.95 0.02188 162.36)"
+        ]
+      },
+      "border-light": {
+        "role": "neutral",
+        "displayName": "Border Light",
+        "canonical": "#d7ded6",
+        "tonalRamp": [
+          "oklch(0.15 0.01315 141.81)",
+          "oklch(0.2643 0.01315 141.81)",
+          "oklch(0.3786 0.01315 141.81)",
+          "oklch(0.4929 0.01315 141.81)",
+          "oklch(0.6071 0.01315 141.81)",
+          "oklch(0.7214 0.01315 141.81)",
+          "oklch(0.8357 0.01315 141.81)",
+          "oklch(0.95 0.01315 141.81)"
+        ]
+      },
+      "border-subtle": {
+        "role": "neutral",
+        "displayName": "Border Subtle",
+        "canonical": "#e7ebe4",
+        "tonalRamp": [
+          "oklch(0.15 0.01024 131.36)",
+          "oklch(0.2643 0.01024 131.36)",
+          "oklch(0.3786 0.01024 131.36)",
+          "oklch(0.4929 0.01024 131.36)",
+          "oklch(0.6071 0.01024 131.36)",
+          "oklch(0.7214 0.01024 131.36)",
+          "oklch(0.8357 0.01024 131.36)",
+          "oklch(0.95 0.01024 131.36)"
+        ]
+      },
+      "status-active": {
+        "role": "semantic",
+        "displayName": "Status Active",
+        "canonical": "#397666",
+        "tonalRamp": [
+          "oklch(0.15 0.06889 174.19)",
+          "oklch(0.2643 0.06889 174.19)",
+          "oklch(0.3786 0.06889 174.19)",
+          "oklch(0.4929 0.06889 174.19)",
+          "oklch(0.6071 0.06889 174.19)",
+          "oklch(0.7214 0.06889 174.19)",
+          "oklch(0.8357 0.06889 174.19)",
+          "oklch(0.95 0.06889 174.19)"
+        ]
+      },
+      "ring-blue": {
+        "role": "neutral",
+        "displayName": "Green Focus (compatibility name)",
+        "canonical": "#397666",
+        "tonalRamp": [
+          "oklch(0.15 0.06889 174.19)",
+          "oklch(0.2643 0.06889 174.19)",
+          "oklch(0.3786 0.06889 174.19)",
+          "oklch(0.4929 0.06889 174.19)",
+          "oklch(0.6071 0.06889 174.19)",
+          "oklch(0.7214 0.06889 174.19)",
+          "oklch(0.8357 0.06889 174.19)",
+          "oklch(0.95 0.06889 174.19)"
+        ]
+      },
+      "grid-cyan": {
+        "role": "neutral",
+        "displayName": "Pale Green (compatibility name)",
+        "canonical": "#dfece4",
+        "tonalRamp": [
+          "oklch(0.15 0.01745 159.1)",
+          "oklch(0.2643 0.01745 159.1)",
+          "oklch(0.3786 0.01745 159.1)",
+          "oklch(0.4929 0.01745 159.1)",
+          "oklch(0.6071 0.01745 159.1)",
+          "oklch(0.7214 0.01745 159.1)",
+          "oklch(0.8357 0.01745 159.1)",
+          "oklch(0.95 0.01745 159.1)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "hero": {
+        "displayName": "Hero",
+        "purpose": "Shared hero role."
+      },
+      "section-heading": {
+        "displayName": "Section Heading",
+        "purpose": "Reusable SectionDisplay uses Newsreader 500; this component overrides the shared display-weight token of 400."
+      },
+      "card-heading": {
+        "displayName": "Card Heading",
+        "purpose": "Shared scale entry; Card itself uses card-title."
+      },
+      "body-large": {
+        "displayName": "Body Large",
+        "purpose": "Shared body large role."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Shared body role."
+      },
+      "body-standard": {
+        "displayName": "Body Standard",
+        "purpose": "Shared body standard role."
+      },
+      "nav-ui": {
+        "displayName": "Nav Ui",
+        "purpose": "Shared nav ui role."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Shared button role."
+      },
+      "button-uppercase": {
+        "displayName": "Button Uppercase",
+        "purpose": "Compatibility scale; not the default CTA style."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Shared caption role."
+      },
+      "small": {
+        "displayName": "Small",
+        "purpose": "Shared small role."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Shared code role."
+      },
+      "micro": {
+        "displayName": "Micro",
+        "purpose": "Shared micro role."
+      },
+      "tiny": {
+        "displayName": "Tiny",
+        "purpose": "Shared tiny role."
+      },
+      "landing-display": {
+        "displayName": "Landing Display",
+        "purpose": "Landing-specific display composition."
+      },
+      "workspace-heading": {
+        "displayName": "Workspace Heading",
+        "purpose": "Shared working heading at base width; 32px at sm."
+      },
+      "card-title": {
+        "displayName": "Card Title",
+        "purpose": "Shared card title role."
+      }
+    },
+    "shadows": [
+      {
+        "name": "inset-border",
+        "value": "rgba(0, 0, 0, 0.075) 0px 0px 0px 0.5px inset",
+        "purpose": "Hairline-edge utility."
+      },
+      {
+        "name": "inset-dark",
+        "value": "rgba(0, 0, 0, 0.1) 0px 0px 0px 0.5px inset",
+        "purpose": "Available stronger inset edge token."
+      },
+      {
+        "name": "outline-ring",
+        "value": "rgba(0, 0, 0, 0.06) 0px 0px 0px 1px",
+        "purpose": "Available outline shadow token."
+      },
+      {
+        "name": "soft-elevation",
+        "value": "rgba(0, 0, 0, 0.04) 0px 4px 4px",
+        "purpose": "Available low lift token."
+      },
+      {
+        "name": "card",
+        "value": "rgba(0, 0, 0, 0.4) 0px 0px 1px, rgba(0, 0, 0, 0.04) 0px 4px 4px",
+        "purpose": "Available compact card shadow token."
+      },
+      {
+        "name": "warm",
+        "value": "rgba(78, 50, 23, 0.04) 0px 6px 16px",
+        "purpose": "Warm ShadowCard."
+      },
+      {
+        "name": "edge",
+        "value": "rgba(0, 0, 0, 0.08) 0px 0px 0px 0.5px",
+        "purpose": "Available half-pixel edge token."
+      },
+      {
+        "name": "inset-ring",
+        "value": "rgba(0, 0, 0, 0.1) 0px 0px 0px 1px inset",
+        "purpose": "Available one-pixel inset token."
+      },
+      {
+        "name": "card-layered",
+        "value": "rgba(0, 0, 0, 0.06) 0px 0px 0px 1px, rgba(0, 0, 0, 0.04) 0px 1px 2px, rgba(0, 0, 0, 0.04) 0px 2px 4px",
+        "purpose": "Shared Card and neutral ShadowCard."
+      },
+      {
+        "name": "claim-demo",
+        "value": "0 8px 48px -16px rgb(33 78 64 / 0.22)",
+        "purpose": "Local landing claim walkthrough shadow."
+      }
+    ],
+    "motion": [
+      {
+        "name": "duration-fast",
+        "value": "150ms",
+        "purpose": "Input color and small interaction transitions."
+      },
+      {
+        "name": "duration-standard",
+        "value": "200ms",
+        "purpose": "Shared Button and Pill transitions."
+      },
+      {
+        "name": "duration-slow",
+        "value": "300ms",
+        "purpose": "Available shared duration token."
+      },
+      {
+        "name": "ease-calm",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Shared control transitions and loading/active animations."
+      },
+      {
+        "name": "status-pulse",
+        "value": "2s cubic-bezier(0.4, 0, 0.2, 1) infinite",
+        "purpose": "Active dot opacity from 1 to 0.4 and back; motion-safe only."
+      },
+      {
+        "name": "shimmer",
+        "value": "1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite",
+        "purpose": "Skeleton gradient moves from -200% to 200% background position."
+      },
+      {
+        "name": "sidebar",
+        "value": "200ms ease-out",
+        "purpose": "Sidebar transform and width transition."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Global animation/transition duration override; one animation iteration and auto scroll behavior."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "0px"
+      },
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg / desktop",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      },
+      {
+        "name": "landing/auth compact (max-width)",
+        "value": "1100px"
+      },
+      {
+        "name": "landing/auth stack (max-width)",
+        "value": "767px"
+      },
+      {
+        "name": "landing narrow (max-width)",
+        "value": "390px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Shared Button primary variant, default size.",
+      "html": "<button class=\"ds-button-primary\" type=\"button\">Start follow-up</button>",
+      "css": ".ds-button-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;font-family:var(--font-body, Inter, system-ui, sans-serif);font-size:15px;font-weight:500;line-height:1.47;letter-spacing:0;border-radius:var(--radius-standard, 8px);height:44px;padding:0 16px;cursor:pointer;transition:background-color var(--duration-standard, 200ms) var(--ease-calm, cubic-bezier(0.4, 0, 0.2, 1)),color var(--duration-standard, 200ms) var(--ease-calm, cubic-bezier(0.4, 0, 0.2, 1));background:var(--color-brand, #214e40);color:var(--color-white, #ffffff);border:none}.ds-button-primary:hover{background:var(--color-brand-hover, #183c32)}.ds-button-primary:focus-visible{outline:2px solid var(--color-brand, #214e40);outline-offset:2px;}.ds-button-primary:disabled{pointer-events:none;opacity:.5}.ds-button-primary:active{background:var(--color-brand-hover, #183c32)}@media(prefers-reduced-motion:reduce){.ds-button-primary{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Shared Button secondary variant, default size.",
+      "html": "<button class=\"ds-button-secondary\" type=\"button\">View claim</button>",
+      "css": ".ds-button-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;font-family:var(--font-body, Inter, system-ui, sans-serif);font-size:15px;font-weight:500;line-height:1.47;letter-spacing:0;border-radius:var(--radius-standard, 8px);height:44px;padding:0 16px;cursor:pointer;transition:background-color var(--duration-standard, 200ms) var(--ease-calm, cubic-bezier(0.4, 0, 0.2, 1)),color var(--duration-standard, 200ms) var(--ease-calm, cubic-bezier(0.4, 0, 0.2, 1));background:var(--color-white, #ffffff);color:var(--color-black, #202e2b);border:1px solid var(--color-border-light, #d7ded6)}.ds-button-secondary:hover{background:var(--color-gray-light, #f2f4f0)}.ds-button-secondary:focus-visible{outline:2px solid var(--color-brand, #214e40);outline-offset:2px;}.ds-button-secondary:disabled{pointer-events:none;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-button-secondary{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Soft Button",
+      "kind": "button",
+      "refersTo": "button-soft",
+      "description": "Shared Button warmStone compatibility variant, default size.",
+      "html": "<button class=\"ds-button-soft\" type=\"button\">Try the walkthrough</button>",
+      "css": ".ds-button-soft{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;font-family:var(--font-body, Inter, system-ui, sans-serif);font-size:15px;font-weight:500;line-height:1.47;letter-spacing:0;border-radius:var(--radius-standard, 8px);height:44px;padding:0 16px;cursor:pointer;transition:background-color var(--duration-standard, 200ms) var(--ease-calm, cubic-bezier(0.4, 0, 0.2, 1)),color var(--duration-standard, 200ms) var(--ease-calm, cubic-bezier(0.4, 0, 0.2, 1));background:var(--color-brand-soft, #e5eee7);color:var(--color-brand, #214e40);border:none}.ds-button-soft:hover{background:color-mix(in oklab, var(--color-brand-soft, #e5eee7) 70%, transparent)}.ds-button-soft:focus-visible{outline:2px solid var(--color-brand, #214e40);outline-offset:2px;}.ds-button-soft:disabled{pointer-events:none;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-button-soft{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Shared Button ghost variant, default size.",
+      "html": "<button class=\"ds-button-ghost\" type=\"button\">Cancel</button>",
+      "css": ".ds-button-ghost{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;font-family:var(--font-body, Inter, system-ui, sans-serif);font-size:15px;font-weight:500;line-height:1.47;letter-spacing:0;border-radius:var(--radius-standard, 8px);height:44px;padding:0 16px;cursor:pointer;transition:background-color var(--duration-standard, 200ms) var(--ease-calm, cubic-bezier(0.4, 0, 0.2, 1)),color var(--duration-standard, 200ms) var(--ease-calm, cubic-bezier(0.4, 0, 0.2, 1));background:transparent;color:var(--color-black, #202e2b);border:none}.ds-button-ghost:hover{background:var(--color-gray-light, #f2f4f0)}.ds-button-ghost:focus-visible{outline:2px solid var(--color-brand, #214e40);outline-offset:2px;}.ds-button-ghost:disabled{pointer-events:none;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-button-ghost{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Shared Input with label, focus, invalid, and disabled states.",
+      "html": "<label class=\"ds-field-label\" for=\"ds-claim-search\">Claim reference</label><input class=\"ds-input\" id=\"ds-claim-search\" placeholder=\"Search claims\" />",
+      "css": ".ds-field-label{display:block;margin-bottom:8px;font-family:var(--font-body, Inter, system-ui, sans-serif);font-size:14px;font-weight:500;color:var(--color-black, #202e2b)}.ds-input{font-family:var(--font-body, Inter, system-ui, sans-serif);height:44px;width:100%;padding:0 12px;border:1px solid var(--color-border-light, #d7ded6);border-radius:var(--radius-standard, 8px);background:var(--color-white, #ffffff);color:var(--color-black, #202e2b);font-size:16px;line-height:1.5;transition:border-color var(--duration-fast,150ms) var(--ease-calm,cubic-bezier(.4,0,.2,1))}.ds-input::placeholder{color:var(--color-gray-warm, #617068)}.ds-input:focus{border-color:var(--color-brand, #214e40)}.ds-input:focus-visible{outline:2px solid var(--color-ring-blue, #397666);outline-offset:2px}.ds-input[aria-invalid=\"true\"]{border-color:var(--color-danger, #ad453d);background:color-mix(in oklab,var(--color-danger-soft, #faeeeb) 30%,transparent)}.ds-input:disabled{cursor:not-allowed;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-input{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Success Badge",
+      "kind": "chip",
+      "refersTo": "badge-success",
+      "description": "A readable status label with semantic color; noninteractive.",
+      "html": "<span class=\"ds-badge\"><span class=\"ds-status-dot\" aria-hidden=\"true\"></span>Completed</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:var(--radius-pill, 9999px);background:var(--color-success-soft, #e9f3ec);color:var(--color-success, #29734f);font-family:var(--font-body, Inter, system-ui, sans-serif);font-size:13px;line-height:1.38;font-weight:500}.ds-status-dot{width:8px;height:8px;border-radius:var(--radius-pill, 9999px);background:var(--color-success, #29734f);display:inline-block;flex-shrink:0}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Shared Card with header and content spacing.",
+      "html": "<section class=\"ds-card\"><header class=\"ds-card-header\"><h3 class=\"ds-card-title\">Claim activity</h3><p class=\"ds-card-description\">Review the latest follow-up.</p></header><div class=\"ds-card-content\">Call details appear here.</div></section>",
+      "css": ".ds-card{font-family:var(--font-body, Inter, system-ui, sans-serif);border-radius:var(--radius-card, 16px);background:var(--color-white, #ffffff);color:var(--color-black, #202e2b);box-shadow:var(--shadow-card-layered, rgba(0, 0, 0, 0.06) 0px 0px 0px 1px, rgba(0, 0, 0, 0.04) 0px 1px 2px,\n    rgba(0, 0, 0, 0.04) 0px 2px 4px)}.ds-card-header{display:flex;flex-direction:column;gap:8px;padding:24px}.ds-card-title{margin:0;font-size:20px;font-weight:500;line-height:1.25}.ds-card-description{margin:0;font-size:16px;line-height:1.5;color:var(--color-gray-dark, #4f605a)}.ds-card-content{padding:0 24px 24px;font-size:16px;line-height:1.5}"
+    },
+    {
+      "name": "Workspace Navigation",
+      "kind": "nav",
+      "refersTo": "nav-active",
+      "description": "Dashboard navigation with active location and hover/focus states.",
+      "html": "<nav class=\"ds-navigation\" aria-label=\"Workspace preview\"><a class=\"ds-nav-link\" href=\"#overview\" aria-current=\"page\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\"/><rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"/></svg>Overview</a><a class=\"ds-nav-link\" href=\"#claims\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v6h6M8 13h8M8 17h8\"/></svg>Claims</a></nav>",
+      "css": ".ds-navigation{display:flex;flex-direction:column;gap:4px;font-family:var(--font-body, Inter, system-ui, sans-serif);}.ds-nav-link{display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 12px;border-radius:var(--radius-md, 12px);font-size:14px;line-height:1.5;font-weight:500;letter-spacing:.14px;color:var(--color-gray-dark, #4f605a);text-decoration:none;transition:background-color var(--duration-standard, 200ms) var(--ease-calm, cubic-bezier(0.4, 0, 0.2, 1)),color var(--duration-standard, 200ms) var(--ease-calm, cubic-bezier(0.4, 0, 0.2, 1));}.ds-nav-link:hover{background:color-mix(in oklab,var(--color-warm-stone, #f1eee6) 60%,transparent);color:var(--color-black, #202e2b)}.ds-nav-link[aria-current=\"page\"]{background:var(--color-brand-soft, #e5eee7);color:var(--color-brand, #214e40)}.ds-nav-link:focus-visible{outline:2px solid var(--color-ring-blue, #397666);outline-offset:2px}@media(prefers-reduced-motion:reduce){.ds-nav-link{transition-duration:.01ms}}"
+    },
+    {
+      "name": "D / Check Brand Mark",
+      "kind": "custom",
+      "refersTo": "brand-mark",
+      "description": "The authored, currentColor brand vector.",
+      "html": "<svg class=\"ds-brand-mark\" width=\"32\" height=\"32\" viewBox=\"0 0 40 40\" fill=\"none\" role=\"img\" aria-label=\"DentaBill\"><path d=\"M12.5 5.5c-4.8 0-7.8 3.3-7.2 8.5l1.8 9.9c.9 5 2.7 10.6 5.8 10.6 2.2 0 2.4-4.8 3.6-8.5.7-2.2 1.6-3.4 3.5-3.4s2.8 1.2 3.5 3.4c1.2 3.7 1.4 8.5 3.6 8.5 3.1 0 4.9-5.6 5.8-10.6l1.8-9.9c.6-5.2-2.4-8.5-7.2-8.5-3 0-4.6 1.5-7.5 1.5S15.5 5.5 12.5 5.5Z\" stroke=\"currentColor\" stroke-width=\"3.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>",
+      "css": ".ds-brand-mark{display:inline-block;flex-shrink:0;color:var(--color-brand, #214e40)}"
+    },
+    {
+      "name": "Claim Walkthrough Panel",
+      "kind": "custom",
+      "refersTo": "claim-demo",
+      "description": "Static result-state excerpt of the implemented illustrative walkthrough; the live component owns stage interaction.",
+      "html": "<section class=\"ds-claim-demo\"><header class=\"ds-demo-topline\"><span>Your follow-up, handled</span><span class=\"ds-demo-label\">Illustrative example</span></header><div class=\"ds-demo-result\"><h2>A clear next step. Finally.</h2><p>Your team gets the answer, with a summary and a complete call history.</p></div><button class=\"ds-demo-next\" type=\"button\">Walk through the follow-up <svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14m-6-6 6 6-6 6\"/></svg></button></section>",
+      "css": ".ds-claim-demo{font-family:var(--font-body, Inter, system-ui, sans-serif);border-radius:var(--radius-card, 16px);background:var(--color-white, #ffffff);box-shadow:0 8px 48px -16px rgb(33 78 64 / .22);overflow:hidden}.ds-demo-topline{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;padding:18px 24px;background:var(--color-brand, #214e40);color:var(--color-ink-inverse, #edf4eb);font-size:12px}.ds-demo-label{font-size:10px;opacity:.85}.ds-demo-result{padding:16px 28px 24px;min-height:263px}.ds-demo-result h2{font-family:var(--font-display, Georgia, serif);font-weight:400;font-size:29px;line-height:1.15;margin:18px 0 8px;color:var(--color-black, #202e2b)}.ds-demo-result p{font-size:13px;line-height:1.65;color:var(--color-gray-dark, #4f605a)}.ds-demo-next{font-family:var(--font-body, Inter, system-ui, sans-serif);display:flex;width:100%;justify-content:space-between;align-items:center;gap:12px;padding:16px 28px;color:var(--color-brand, #214e40);font-size:12px;font-weight:500;border:0;border-top:1px solid var(--color-border-subtle, #e7ebe4);background:transparent;cursor:pointer;transition:background var(--duration-fast,150ms)}.ds-demo-next:hover{background:var(--color-gray-light-alt, #f7f8f5)}.ds-demo-next:focus-visible{outline:2px solid var(--color-ring-blue, #397666);outline-offset:2px}@media(prefers-reduced-motion:reduce){.ds-demo-next{transition-duration:.01ms}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calm Front Desk",
+    "overview": "DentaBill combines warm ivory, deep pine, and muted sage with editorial Newsreader headlines and practical Inter controls. The public site is open and conversational; the working application is compact, structured, and easy to scan. Both use the same colors, shapes, controls, and dental-outline identity.\n\nThis document records the implemented redesign. The normative implementation is packages/ui/src/theme.css and its TypeScript mirror, packages/ui/src/tokens.ts; app-specific compositions live in apps/web/src/app/globals.css. The frontmatter records their values, while the sidecar extends them with stateful previews, shadows, motion, and responsive metadata. The descriptive north star names the built system; it is not a record of an approved image-generation concept.",
+    "keyCharacteristics": [
+      "Warm ivory marketing canvas and pale green working canvas.",
+      "Deep pine actions, sage selection, and distinct semantic status colors.",
+      "Newsreader for editorial display; Inter for operations; Geist Mono for identifiers and code.",
+      "Compact controls, softly rounded panels, fine dividers, and restrained elevation.",
+      "A hand-authored dental-outline mark and an illustrative claim walkthrough."
+    ],
+    "rules": [
+      {
+        "name": "The Two Voices Rule",
+        "body": "Use Newsreader for editorial display and Inter for working headings, fields, navigation, and controls.",
+        "section": "typography"
+      },
+      {
+        "name": "The Status With Meaning Rule",
+        "body": "Pair status color with a readable label; reserve the pulsing dot for an active call.",
+        "section": "colors"
+      },
+      {
+        "name": "The Quiet Depth Rule",
+        "body": "Use borders and tonal surfaces for everyday structure; use the existing soft shadows for panels that need elevation.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do reuse the shared controls and token values before adding local styles.",
+      "Do use pine for primary actions, sage for selection, and the semantic success, warning, and danger pairings for status.",
+      "Do keep workspace headings and operational data in Inter, with tabular numerals for comparable values.",
+      "Do preserve keyboard focus, meaningful labels, reduced-motion behavior, and narrow-screen reading order.",
+      "Do label sample claim content as illustrative and use authored vectors for the brand.",
+      "Do keep the recovered-value data table available when its trend plot is hidden on small screens, and preserve wrapping labels beside report bars."
+    ],
+    "donts": [
+      "Don't carry the former ElevenLabs, achromatic-only, thin Inter display, or pill-button rules into new work.",
+      "Don't use compatibility names such as ring-blue, grid-cyan, black, or warmStone to infer their current color or shape.",
+      "Don't introduce decorative heading eyebrows, stock imagery, decorative gradients, invented testimonials, or fictional business metrics.",
+      "Don't use color as the sole explanation of a claim or call state.",
+      "Don't suppress the focus outline without a visible replacement or add bounce and elastic motion.",
+      "Don't treat synthetic tonal ramps in the documentation panel as shipped application tokens."
+    ]
+  }
+}

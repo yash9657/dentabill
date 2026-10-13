@@ -24,11 +24,10 @@ export const metadata: Metadata = {
  */
 export default function AboutPage(): React.ReactElement {
   return (
-    <main>
+    <main id="main-content">
       <section className="mx-auto max-w-3xl px-4 pb-16 pt-24 sm:px-6 sm:pt-32 lg:px-8">
-        <p className="text-caption text-gray-warm mb-4 uppercase tracking-[0.14em]">About</p>
-        <h1 className="font-display text-balance text-[40px] font-extralight leading-[1.08] tracking-[-0.02em] text-black sm:text-[52px]">
-          We built this because billing teams should not spend their day on hold.
+        <h1 className="font-display text-balance text-[40px] font-normal leading-[1.08] tracking-[-0.02em] text-black sm:text-[52px]">
+          Built for the people behind the practice.
         </h1>
       </section>
 
@@ -57,17 +56,14 @@ export default function AboutPage(): React.ReactElement {
 
       <section
         aria-labelledby="principles-heading"
-        className="bg-gray-light border-t border-black/5"
+        className="bg-gray-light border-border-subtle border-t"
       >
         <div className="mx-auto max-w-5xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
-          <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">
-            How we work
-          </p>
           <h2
             id="principles-heading"
-            className="font-display text-section-heading mb-16 max-w-2xl text-balance font-light text-black"
+            className="font-display text-section-heading mb-16 max-w-2xl text-balance font-medium text-black"
           >
-            Three principles that actually shape decisions, not a values poster.
+            What matters to us.
           </h2>
           <ol className="grid gap-12 md:grid-cols-3 md:gap-8 lg:gap-12">
             <Principle
@@ -83,15 +79,15 @@ export default function AboutPage(): React.ReactElement {
             <Principle
               n="03"
               title="One product done well"
-              body="We do not ship dashboards we wouldn't use. Every screen passes a manual keyboard audit and zero WCAG AA violations before it leaves a PR. The visual system is achromatic on purpose; the only color is the live-call dot, because that's the only moment that needs the eye."
+              body="Your team needs clear answers and an obvious next step. We design around the daily work of a billing desk, with readable information, keyboard access, and responsive layouts."
             />
           </ol>
         </div>
       </section>
 
-      <section aria-label="Get in touch" className="bg-warm-stone/40 border-t border-black/5">
+      <section aria-label="Get in touch" className="bg-warm-stone/40 border-border-subtle border-t">
         <div className="mx-auto flex max-w-3xl flex-col items-start gap-6 px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
-          <h2 className="font-display text-section-heading text-balance font-light text-black">
+          <h2 className="font-display text-section-heading text-balance font-medium text-black">
             If your practice is on hold right now, we would like to talk.
           </h2>
           <p className="text-body text-gray-dark max-w-xl">
@@ -103,7 +99,7 @@ export default function AboutPage(): React.ReactElement {
               Book a 20-minute demo
             </Pill>
             <Pill href="/sign-up" variant="whiteShadow">
-              Start free trial
+              Get started free
             </Pill>
           </div>
         </div>
@@ -123,11 +119,13 @@ function Principle({ n, title, body }: PrincipleProps): React.ReactElement {
     <li className="flex flex-col gap-3">
       <span
         aria-hidden
-        className="font-display text-gray-warm text-[40px] font-extralight leading-none tracking-[-0.02em]"
+        className="font-display text-gray-warm text-[40px] font-normal leading-none tracking-[-0.02em]"
       >
         {n}
       </span>
-      <h3 className="font-display text-card-heading text-balance font-light text-black">{title}</h3>
+      <h3 className="font-display text-card-heading text-balance font-medium text-black">
+        {title}
+      </h3>
       <p className="text-body text-gray-dark">{body}</p>
     </li>
   );

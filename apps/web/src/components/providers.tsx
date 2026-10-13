@@ -2,6 +2,7 @@
 
 import { ClerkProvider } from '@clerk/nextjs';
 import { QueryProvider } from '@dentabill/ui/query';
+import { tokens } from '@dentabill/ui/tokens';
 import * as React from 'react';
 
 /**
@@ -27,21 +28,22 @@ import * as React from 'react';
  */
 const CLERK_APPEARANCE = {
   variables: {
-    colorPrimary: 'oklch(0 0 0)',
-    colorText: 'oklch(0 0 0)',
-    colorTextSecondary: 'oklch(0.428 0 0)',
+    colorPrimary: tokens.color.brand,
+    colorText: tokens.color.black,
+    colorTextSecondary: tokens.color.grayDark,
     colorBackground: 'oklch(1 0 0)',
     colorInputBackground: 'oklch(1 0 0)',
-    colorInputText: 'oklch(0 0 0)',
-    colorNeutral: 'oklch(0.957 0.005 75)',
-    borderRadius: '12px',
+    colorInputText: tokens.color.black,
+    colorNeutral: tokens.color.black,
+    borderRadius: tokens.radius.standard,
     fontFamily: 'var(--font-inter), Inter, system-ui, sans-serif',
   },
   elements: {
-    formButtonPrimary: 'rounded-pill bg-black text-white hover:bg-black/90 font-body font-medium',
-    card: 'shadow-card hairline-edge rounded-[20px]',
-    headerTitle: 'font-display font-light text-black',
-    socialButtonsBlockButton: 'rounded-pill border-black/10',
+    formButtonPrimary:
+      'rounded-standard bg-brand text-white hover:bg-brand-hover font-body font-medium',
+    card: 'shadow-card hairline-edge rounded-card-large',
+    headerTitle: 'font-display font-medium text-black',
+    socialButtonsBlockButton: 'rounded-standard border-border-light',
   },
 } as const;
 

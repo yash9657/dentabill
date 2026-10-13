@@ -4,7 +4,7 @@ import { userEvent } from '@testing-library/user-event';
 import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ClaimStatus } from '../../../lib/claims/types.js';
+import type { ClaimStatus, PayerCode } from '../../../lib/claims/types.js';
 
 import { CallNowPill } from './call-now-pill.js';
 
@@ -25,6 +25,7 @@ function renderPill(props: {
   claimId?: string;
   claimStatus: ClaimStatus;
   variant?: 'detail' | 'compact';
+  payerCode?: PayerCode;
 }): { user: ReturnType<typeof userEvent.setup> } {
   const user = userEvent.setup();
   const client = createDentaBillQueryClient();
@@ -34,6 +35,7 @@ function renderPill(props: {
         claimId={props.claimId ?? 'claim_a'}
         claimStatus={props.claimStatus}
         {...(props.variant ? { variant: props.variant } : {})}
+        {...(props.payerCode ? { payerCode: props.payerCode } : {})}
       />
     </QueryProvider>,
   );
@@ -277,5 +279,18 @@ describe('CallNowPill (P3-T22)', () => {
     expect(error).toHaveTextContent(/Add your practice NPI/);
     const link = screen.getByRole('link', { name: /Add NPI in settings/ });
     expect(link).toHaveAttribute('href', '/dashboard/settings/organization?focus=npi');
+  });
+
+  it('does not render Phase-related text when showing supported payers', () => {
+    renderPill({ claimStatus: 'PENDING', payerCode: 'DELTA_DENTAL_PPO' });
+    expect(screen.queryByText(/Phase [0-9]/i)).not.toBeInTheDocument();
+  });
+
+  it('does not render Phase-related text in the manual review tooltip for unsupported payers', () => {
+    renderPill({ claimStatus: 'PENDING', payerCode: 'UNKNOWN' });
+    const badge = screen.getByTestId('call-now-pill-manual-review');
+    // The badge exists with a title attribute instead of showing Phase text
+    expect(badge).toHaveAttribute('title');
+    expect(badge.getAttribute('title')).toMatch(/DentaBill currently dials/);
   });
 });

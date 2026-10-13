@@ -100,4 +100,29 @@ describe('<OverviewKpiTiles /> (P3-T25)', () => {
       /temporary upstream blip/,
     );
   });
+
+  it('displays em-dash placeholders when the request fails (error state)', async () => {
+    getMock.mockResolvedValueOnce({
+      error: { message: 'Service temporarily unavailable' },
+    });
+    renderTiles();
+    // Error state should still show em-dashes (no data to display)
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(4);
+    // Error message visible
+    expect(await screen.findByTestId('overview-kpi-error')).toBeInTheDocument();
+  });
+
+  it('does not render Phase-related text in the component', () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        callsToday: 1,
+        queueDepth: 2,
+        avgCallSeconds: 45,
+        recoveredThisWeekCents: 50000,
+      },
+    });
+    renderTiles();
+    // Verify no "Phase" strings appear in the rendered output
+    expect(screen.queryByText(/Phase [0-9]/i)).not.toBeInTheDocument();
+  });
 });

@@ -10,7 +10,7 @@ import {
 import type { Job } from 'bullmq';
 import type { Redis } from 'ioredis';
 
-import { billingDayUtc, release as releaseLock, tryAcquire } from './cost-guard.js';
+import { billingDayUtc, type CostGuard, createRedisCostGuard } from './cost-guard.js';
 import type { SummaryWorkerEnv } from './env.js';
 
 /**
@@ -46,7 +46,13 @@ export type DbClient = typeof prisma;
 export interface SummaryHandlerDeps {
   readonly logger: Logger;
   readonly prisma: DbClient;
-  readonly redis: Redis;
+  /**
+   * Redis for the per-org cost-guard lock. Ignored when `costGuard` is
+   * given; one of the two is required.
+   */
+  readonly redis?: Redis;
+  /** Explicit cost-guard mutex (ADR-053) — e.g. the in-memory one when there is no Redis. */
+  readonly costGuard?: CostGuard;
   readonly summarizer: SummarizerPort;
   readonly env: SummaryWorkerEnv;
   readonly clock?: () => Date;
@@ -81,6 +87,10 @@ const MIN_AUTO_CONFIDENCE = 0.95;
 
 export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandler {
   const clock = deps.clock ?? ((): Date => new Date());
+  const costGuard = deps.costGuard ?? (deps.redis ? createRedisCostGuard(deps.redis) : undefined);
+  if (!costGuard) {
+    throw new Error('createSummaryJobHandler: either `costGuard` or `redis` is required');
+  }
   return async function handle(job: SummaryJobLike): Promise<SummaryJobResult> {
     const validated = SummaryJobDataSchema.safeParse(job.data);
     if (!validated.success) {
@@ -101,7 +111,7 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
     const data = validated.data;
     const billingDay = billingDayUtc(clock());
 
-    const lock = await tryAcquire(deps.redis, data.organizationId, billingDay);
+    const lock = await costGuard.tryAcquire(data.organizationId, billingDay);
     if (!lock) {
       // Another worker holds the org's budget mutex. Throwing makes
       // BullMQ requeue with backoff — this is rate-limiting, not a
@@ -342,7 +352,7 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
         promptVersion: summarizeResult.promptVersion,
       };
     } finally {
-      await releaseLock(deps.redis, lock);
+      await costGuard.release(lock);
     }
   };
 }
@@ -373,7 +383,14 @@ function transcriptFromEvents(events: readonly CallEvent[]): readonly Transcript
 
 function pickRole(data: Record<string, unknown> | null): TranscriptTurn['role'] {
   const raw = typeof data?.role === 'string' ? data.role.toLowerCase() : '';
-  if (raw === 'representative' || raw === 'rep' || raw === 'human') return 'representative';
+  // `user` is Retell's own wire vocabulary for the human on the far end of the
+  // call — the payer representative. Without it here the fallthrough labelled
+  // every rep line `agent`, so the transcript handed to the summarizer (and
+  // the `rawTranscript` persisted alongside the summary) attributed the
+  // payer's words to our own agent.
+  if (raw === 'representative' || raw === 'rep' || raw === 'human' || raw === 'user') {
+    return 'representative';
+  }
   if (raw === 'system') return 'system';
   return 'agent';
 }

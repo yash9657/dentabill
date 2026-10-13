@@ -106,7 +106,7 @@ export function CallNowPill({
   // detail variant has room for the fuller phrasing. The full
   // explanation lives in the title attribute on both.
   if (payerCode !== undefined && !PHASE_3_DIALABLE_PAYERS.has(payerCode)) {
-    const tooltip = 'Phase 3 only dials Delta Dental PPO, Cigna Dental, and MetLife Dental.';
+    const tooltip = 'DentaBill currently dials Delta Dental PPO, Cigna Dental, and MetLife Dental.';
     if (compact) {
       return (
         <span
@@ -115,7 +115,7 @@ export function CallNowPill({
           data-testid="call-now-pill-manual-review"
           className={cn(
             'rounded-pill text-caption inline-flex h-7 items-center px-2.5 font-medium',
-            'hairline-edge text-gray-warm bg-stone-warm/30',
+            'hairline-edge text-gray-warm bg-warm-stone/30',
             className,
           )}
         >
@@ -130,7 +130,7 @@ export function CallNowPill({
         data-testid="call-now-pill-manual-review"
         className={cn(
           'rounded-pill inline-flex h-9 items-center px-3 text-sm font-medium',
-          'hairline-edge text-gray-warm bg-stone-warm/30',
+          'hairline-edge text-gray-warm bg-warm-stone/30',
           className,
         )}
       >
@@ -160,9 +160,8 @@ export function CallNowPill({
           data-testid="call-now-pill"
           className={cn(
             'rounded-pill text-caption duration-standard ease-calm inline-flex h-7 items-center gap-1.5 px-2.5 font-medium transition-colors',
-            'hairline-edge bg-stone-warm/60 text-black',
+            'hairline-edge bg-warm-stone/60 text-black',
             'hover:border-transparent hover:bg-black hover:text-white',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-1',
             className,
           )}
         >
@@ -183,9 +182,8 @@ export function CallNowPill({
           'rounded-pill text-caption duration-standard ease-calm inline-flex h-7 items-center gap-1.5 px-2.5 font-medium transition-colors',
           'hairline-edge text-gray-dark bg-white/70',
           'hover:border-transparent hover:bg-black hover:text-white',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-1',
-          'disabled:cursor-progress disabled:opacity-60',
-          errorMessage ? 'border-black/30' : '',
+          'disabled:cursor-progress',
+          errorMessage ? 'border-border-light' : '',
           className,
         )}
       >
@@ -279,7 +277,7 @@ function NoActionBadge({
       data-testid="call-now-pill-no-action"
       className={cn(
         'rounded-pill inline-flex items-center font-medium',
-        'hairline-edge bg-stone-warm/30 text-gray-warm',
+        'hairline-edge bg-warm-stone/30 text-gray-warm',
         compact ? 'h-7 px-2.5 text-[13px]' : 'h-9 px-3 text-sm',
         live ? 'gap-1.5' : '',
         className,

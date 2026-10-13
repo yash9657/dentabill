@@ -48,12 +48,12 @@ export default async function BlogPostPage({
   if (!post) notFound();
 
   return (
-    <main>
+    <main id="main-content">
       <article className="mx-auto max-w-3xl px-4 pb-32 pt-24 sm:px-6 sm:pt-32 lg:px-8">
         <p className="text-caption text-gray-warm mb-4 uppercase tracking-[0.14em]">
           {post.publishedAt} · {String(post.minutesToRead)} min
         </p>
-        <h1 className="font-display mb-8 text-balance text-[40px] font-extralight leading-[1.08] tracking-[-0.02em] text-black sm:text-[48px]">
+        <h1 className="font-display mb-8 text-balance text-[40px] font-normal leading-[1.08] tracking-[-0.02em] text-black sm:text-[48px]">
           {post.title}
         </h1>
         <p className="text-body-large text-gray-dark mb-12 max-w-2xl">{post.summary}</p>

@@ -15,25 +15,25 @@ describe('<Button />', () => {
   it('applies the primary (black pill) classes by default', () => {
     render(<Button>Click</Button>);
     const btn = screen.getByRole('button', { name: 'Click' });
-    expect(btn.className).toContain('bg-black');
+    expect(btn.className).toContain('bg-brand');
     expect(btn.className).toContain('text-white');
-    expect(btn.className).toContain('rounded-pill');
+    expect(btn.className).toContain('rounded-standard');
   });
 
   it('supports the warm-stone variant — the signature warm CTA from DESIGN.md', () => {
     render(<Button variant="warmStone">Get started</Button>);
     const btn = screen.getByRole('button', { name: 'Get started' });
-    expect(btn.className).toContain('bg-warm-stone/80');
-    expect(btn.className).toContain('rounded-warm-button');
-    expect(btn.className).toContain('shadow-warm');
+    expect(btn.className).toContain('bg-brand-soft');
+    expect(btn.className).toContain('rounded-standard');
+    expect(btn.className).toContain('bg-brand-soft');
   });
 
   it('supports the secondary (white pill with card shadow) variant', () => {
     render(<Button variant="secondary">Learn more</Button>);
     const btn = screen.getByRole('button', { name: 'Learn more' });
     expect(btn.className).toContain('bg-white');
-    expect(btn.className).toContain('shadow-card');
-    expect(btn.className).toContain('rounded-pill');
+    expect(btn.className).toContain('border-border-light');
+    expect(btn.className).toContain('rounded-standard');
   });
 
   it('renders as the child element when `asChild` is true (Slot pattern)', () => {
@@ -46,7 +46,7 @@ describe('<Button />', () => {
     expect(link.tagName).toBe('A');
     expect(link).toHaveAttribute('href', '/sign-up');
     // The button styling propagates to the slotted element.
-    expect(link.className).toContain('bg-black');
+    expect(link.className).toContain('bg-brand');
   });
 
   it('forwards refs to the underlying button', () => {
@@ -67,7 +67,7 @@ describe('<Button />', () => {
     render(<Button className="w-full">Wide</Button>);
     const btn = screen.getByRole('button', { name: 'Wide' });
     expect(btn.className).toContain('w-full');
-    expect(btn.className).toContain('bg-black');
+    expect(btn.className).toContain('bg-brand');
   });
 
   it('size="warm" applies the warm-stone CTA padding', () => {
@@ -77,7 +77,7 @@ describe('<Button />', () => {
       </Button>,
     );
     const btn = screen.getByRole('button', { name: 'Start trial' });
-    expect(btn.className).toContain('h-10');
+    expect(btn.className).toContain('h-11');
     expect(btn.className).toContain('px-4');
   });
 });

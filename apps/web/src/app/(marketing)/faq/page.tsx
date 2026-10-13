@@ -28,7 +28,7 @@ export const metadata: Metadata = {
  */
 export default function FaqPage(): React.ReactElement {
   return (
-    <main>
+    <main id="main-content">
       <Header />
       {FAQ_CATEGORIES.map((cat, idx) => (
         <Category key={cat.id} category={cat} surface={idx % 2 === 0 ? 'light' : 'white'} />
@@ -41,17 +41,13 @@ export default function FaqPage(): React.ReactElement {
 function Header(): React.ReactElement {
   return (
     <section className="mx-auto max-w-3xl px-4 pb-16 pt-24 sm:px-6 sm:pt-32 lg:px-8">
-      <p className="text-caption text-gray-warm mb-4 uppercase tracking-[0.14em]">FAQ</p>
-      <h1 className="font-display mb-6 text-balance text-[40px] font-extralight leading-[1.08] tracking-[-0.02em] text-black sm:text-[52px]">
+      <h1 className="font-display text-hero mb-6 text-balance font-normal text-black">
         Questions we hear most from billing leads.
       </h1>
       <p className="text-body-large text-gray-dark max-w-2xl">
         If your question is not here, write to{' '}
-        <a
-          href="mailto:hello@dentabill.example"
-          className="text-black underline underline-offset-2 hover:no-underline"
-        >
-          hello@dentabill.example
+        <a href="/contact" className="text-black underline underline-offset-2 hover:no-underline">
+          our team
         </a>{' '}
         and we will reply today. For pricing-specific questions, see the inline FAQ on the{' '}
         <a href="/pricing" className="text-black underline underline-offset-2 hover:no-underline">
@@ -98,22 +94,24 @@ const FAQ_CATEGORIES: readonly FaqCategory[] = [
   {
     id: 'pricing',
     eyebrow: 'Pricing',
-    heading: 'How DentaBill charges, and what it does not charge for.',
+    heading: 'Cost and value.',
     items: [
       {
-        q: 'Is there a free tier?',
-        a: 'Yes. Starter is free for the first 50 follow-up calls a month. Above that, the per-call fee applies. There is no per-seat fee at any tier.',
+        q: 'Is DentaBill really free?',
+        a: 'Yes. DentaBill is free for all practices, forever. No tiers, no paywalls, no "upgrade to unlock" prompts. Every practice gets full access to all features.',
       },
       {
-        q: 'Do I pay for time on hold?',
-        a: 'No. Hold time is on us. Long holds are a payer problem, not a customer problem.',
+        q: 'Are there hidden costs or per-seat fees?',
+        a: 'No. No setup fees, no per-seat charges, no hold-time surcharges, no surprise invoices. You sign up, you use it. That is it.',
       },
       {
-        q: 'Where do I see the full pricing breakdown?',
+        q: 'How is this free and sustainable?',
         a: (
           <>
-            On the <a href="/pricing">pricing page</a>. The inline FAQ there covers per-call billing
-            semantics, the 250-call Professional minimum, and DSO multi-location billing.
+            Great question. Read the full story on the <a href="/pricing">pricing page</a>. In
+            short: we are exploring partnerships with DSOs, practice management systems, and other
+            players in the dental ecosystem who benefit from claim follow-up automation. Until those
+            mature, we are funding this ourselves because the problem is real.
           </>
         ),
       },
@@ -188,8 +186,8 @@ interface CategoryProps {
 function Category({ category, surface }: CategoryProps): React.ReactElement {
   const surfaceClass =
     surface === 'light'
-      ? 'bg-gray-light border-t border-black/5'
-      : 'border-t border-black/5 bg-white';
+      ? 'bg-gray-light border-t border-border-subtle'
+      : 'border-t border-border-subtle bg-white';
   return (
     <section aria-labelledby={`${category.id}-heading`} className={surfaceClass}>
       <div className="mx-auto max-w-5xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
@@ -198,12 +196,12 @@ function Category({ category, surface }: CategoryProps): React.ReactElement {
         </p>
         <h2
           id={`${category.id}-heading`}
-          className="font-display text-section-heading mb-12 max-w-2xl text-balance font-light text-black"
+          className="font-display text-section-heading mb-12 max-w-2xl text-balance font-medium text-black"
         >
           {category.heading}
         </h2>
 
-        <ul className="divide-y divide-black/10 border-y border-black/10">
+        <ul className="divide-border-subtle border-border-subtle divide-y border-y">
           {category.items.map((qa) => (
             <li key={qa.q}>
               <details className="group">
@@ -228,9 +226,9 @@ function Category({ category, surface }: CategoryProps): React.ReactElement {
 
 function ClosingCta(): React.ReactElement {
   return (
-    <section aria-label="Get in touch" className="bg-warm-stone/40 border-t border-black/5">
+    <section aria-label="Get in touch" className="bg-warm-stone/40 border-border-subtle border-t">
       <div className="mx-auto flex max-w-3xl flex-col items-start gap-6 px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
-        <h2 className="font-display text-section-heading text-balance font-light text-black">
+        <h2 className="font-display text-section-heading text-balance font-medium text-black">
           Still have a question?
         </h2>
         <p className="text-body text-gray-dark max-w-xl">
@@ -242,7 +240,7 @@ function ClosingCta(): React.ReactElement {
             Ask us anything
           </Pill>
           <Pill href="/sign-up" variant="whiteShadow">
-            Start free trial
+            Get started free
           </Pill>
         </div>
       </div>

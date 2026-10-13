@@ -9,21 +9,20 @@ describe('/blog (skeleton)', () => {
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: /no posts yet\. we would rather publish nothing/i,
+        name: /notes on dental billing/i,
       }),
     ).toBeInTheDocument();
   });
 
-  it('renders the newsletter signup as the empty-state CTA', () => {
+  it('offers the FAQ while articles are being prepared', () => {
     render(<BlogIndexPage />);
-    expect(screen.getByRole('button', { name: /subscribe/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /explore the faq/i })).toHaveAttribute('href', '/faq');
   });
 
   it('exposes a heading describing the empty-state purpose', () => {
     render(<BlogIndexPage />);
     expect(
-      screen.getByRole('heading', { level: 2, name: /first post lands in your inbox/i }),
+      screen.getByRole('heading', { level: 2, name: /first notes are on the way/i }),
     ).toBeInTheDocument();
   });
 });

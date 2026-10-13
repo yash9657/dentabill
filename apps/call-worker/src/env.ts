@@ -21,6 +21,9 @@ const envSchema = z.object({
   /** Retell SDK key. Empty / unset → `FakeRetell` adapter (ADR-033). */
   RETELL_API_KEY: z.string().optional().default(''),
 
+  /** Enable demo autopilot scenario driver (G-B5). Only activates when RETELL_API_KEY is empty. */
+  DEMO_AUTOPILOT: z.enum(['true', 'false']).optional().default('false'),
+
   /** Per-payer Retell agent IDs (ADR-032). Empty in dev / test. */
   RETELL_AGENT_ID_DELTA_DENTAL_PPO: z.string().optional().default(''),
   RETELL_AGENT_ID_CIGNA_DENTAL: z.string().optional().default(''),

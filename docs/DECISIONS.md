@@ -617,3 +617,66 @@ The corresponding workaround is removed from each app's `vitest.setup.ts`. `TEST
 7. Anthropic BAA signing (owner-action; gates `LiveClaude` in prod).
 
 **Consequences:** Phase 5 starts with the platform shipping the full call → summary → claim transition → billing → notification value loop. The remaining work is hardening, observability target wiring, and the 4.5 LiveResend micro-phase. The exit-criteria checklist in the Phase-4 plan items 1–9 are met (1: CallSummary; 2: claim transition; 3: AuditLog with summary metadata; 4: SSE replay + stream; 5: BillingUsageRecord; 6: Notifier delivery log via FakeResend; 7: PHI redaction; 8: cross-tenant tests; 9: CI green per merge). Item 10 is this ADR.
+
+## ADR-051 — Go-live plan for the investor demo: cloud target, free-forever pivot, simulated telephony, demo scope
+
+**Date:** 2026-08-21. **Status:** accepted. **Full plan:** `docs/GOLIVE_PLAN.md` (this ADR records the decisions; the plan carries the task specs).
+
+**Context.** An investor demo on a production URL is due within hours. Phases 1–4 are complete and green; deployment infra, demo data, and several dashboard surfaces are not. Real telephony is hard-blocked on the Retell BAA (owner action). Product direction pivots to free-forever — no paywall for practices.
+
+**Decisions.**
+
+1. **Cloud target (closes the deferred half of ADR-001/ADR-004):** Railway for api + call-worker + summary-worker + Postgres 16 + Redis 7; Vercel for web. billing-worker is not deployed.
+2. **Free-forever pivot:** Stripe/billing code stays in-tree but permanently dormant (`STRIPE_API_KEY` empty, flag false). `/pricing` rewritten to free positioning; `/dashboard/settings/billing` renamed to usage with the portal CTA removed. Excise-vs-keep revisited post-demo.
+3. **Simulated telephony through the real pipeline:** new `DEMO_AUTOPILOT=true` env makes FakeRetell time-driven (~75s scripted scenario) so Call Now exercises the production path end-to-end (worker → CallEvents → Redis → SSE → summarizer → transition → audit). Guard: only active when `RETELL_API_KEY` is empty. The demo explicitly discloses simulation mode — simulated audio is never presented as a live payer call.
+4. **Summarizer:** `LiveClaude` iff `ANTHROPIC_API_KEY` provided — demo data is fully synthetic, so no PHI exists and the Anthropic BAA is not a demo prerequisite. `SUMMARIZER_AUTO_TRANSITION_ENABLED=true` for the demo only.
+5. **Demo scope:** build `/dashboard/reports` (new org-scoped `GET /v1/reports/summary`) and the `/settings/audit-log` viewer; polish (not build) team/integrations/notifications as roadmap states; remove all user-facing "Phase N" copy.
+6. **Auth:** Clerk development-instance keys for the demo deployment; synthetic `local_*` org ids remain; production Clerk instance + `migrate-clerk-orgs.mts` stay post-demo.
+7. **Process exception:** single branch `phase-5/golive-demo` with per-task conventional commits and one squash-merged PR, instead of one-PR-per-task — justified by the timeline, not a precedent.
+
+**Consequences.** The demo is honest (real pipeline, disclosed simulation), reversible (no billing code deleted, all flags env-scoped), and leaves a recorded post-demo hardening backlog (plan §11): Retell/Anthropic BAAs, Clerk prod migration, observability wiring, evals, chaos tests, compiled workers, backups.
+
+## ADR-052 — Executing the go-live plan: four demo-blocking gaps that only running the thing revealed
+
+**Date:** 2026-08-22. **Status:** accepted. **Supersedes nothing; extends ADR-051.**
+
+**Context.** ADR-051 and `docs/GOLIVE_PLAN.md` were authored from a static audit — reading code, running typecheck and the unit suites. Execution of tracks A–E surfaced four defects that every green gate had missed, because each one only manifests when a real request travels the real pipeline. All four would have fired live, during the demo.
+
+**What the static audit could not see.**
+
+1. **The business-hours guard closes the demo.** ADR-037 blocks enqueue when the payer line is shut. Correct for production — dialling a closed line burns a call. But payer lines are closed evenings and weekends, so `POST /v1/claims/:id/calls` returned `422 PAYER_HOURS_CLOSED` on a Saturday, which is precisely when a demo runs. **Decision:** `DEMO_IGNORE_PAYER_HOURS`, interlocked against `RETELL_API_KEY` — a real telephony key restores the guard regardless of the flag, and the bypass logs at `warn`. Never a silent override.
+
+2. **`FakeClaude` cannot carry a live run.** It is fixture-driven: it throws unless a test pre-registered an output keyed by payer + transcript snippet. ADR-051 D4 treated it as the graceful fallback when `ANTHROPIC_API_KEY` is absent, but a genuine call registers no fixture, so summarization failed, retried, and dead-lettered — no summary, no claim transition, no audit entry. This is the exact shape of the FakeRetell problem G-B5 was written to fix; the same flaw existed one stage downstream and went unnoticed. **Decision:** an opt-in `deriveWhenUnregistered` mode that reads the transcript and produces a summary consistent with it, wired through `DEMO_SUMMARIZER_FALLBACK`. Default off, because for tests the throw is the point.
+
+3. **`Call.retellCallId` is UNIQUE and `FakeRetell`'s counter restarts per process.** `fake_call_1`, `fake_call_2`, … begin again at 1 on every boot, so a restarted worker collided with rows the previous process wrote and every job died on a unique-constraint violation. Any worker restart — or any redeploy — broke the next call. **Decision:** `createRetellPort` namespaces the generator per process. Tests constructing `FakeRetell` directly keep the deterministic counter.
+
+4. **`node dist/server.js` is unreachable in this workspace.** All seven workspace packages declare `"main": "./src/index.ts"` with no JS-emitting build, so even a fully compiled `apps/api/dist` would `import '@dentabill/db'` and resolve it to TypeScript. Shipping compiled output is a seven-package refactor, not a Dockerfile change. **Decision:** all three services run under `tsx`, extending the tradeoff the plan already accepted for the workers. Recorded in `docs/DEPLOY.md` with what compiling would actually require.
+
+**Consequences.**
+
+- Three demo-only flags now exist, each interlocked so it cannot weaken production: `DEMO_AUTOPILOT` and `DEMO_IGNORE_PAYER_HOURS` are inert once `RETELL_API_KEY` is set; `DEMO_SUMMARIZER_FALLBACK` is inert once `ANTHROPIC_API_KEY` is set. The safety property is that configuring the real dependency always wins over the demo flag.
+- The demo pipeline is proven, not asserted: enqueue → autopilot call (42s, 16 events) → summary (confidence 0.88) → claim transition → audit row carrying `summaryId` + `confidence` + `promptVersion`.
+- **Process lesson, and the reason this ADR exists:** every one of these four passed typecheck, lint, and 828 unit tests. Fakes built for tests are driven _by_ tests; they do not spontaneously work when a real job arrives. Any future "fake adapter" must be exercised by an actual end-to-end run before it is called done, and a phase is not complete because its gates are green — only because its path has been walked.
+
+## ADR-053 — Vercel-only serverless backend: job dispatcher abstraction, inline execution, Redis optional
+
+**Date:** 2026-10-12. **Status:** accepted. **Amends ADR-051 D1** (cloud target) for the $0-infra deployment; ADR-035 (queue topology) and ADR-046 (SSE over Redis pub/sub) remain the default topology. **Runbook:** `docs/DEPLOY_VERCEL.md`.
+
+**Context.** The owner will not pay for hosting beyond the existing Vercel Pro plan. Railway (always-on api + two workers + Redis) is out, and Redis itself is out: the Vercel Marketplace Upstash integration has no free plan, and BullMQ's blocking/polling workers would exhaust a free Redis command quota anyway. Postgres moves to Neon free. Everything in the backend that assumed a long-lived process — BullMQ workers, the DLQ consumer, Redis pub/sub for SSE, the Redis cost-guard lock — needs a serverless path, without breaking the Docker/Railway/local-dev topology.
+
+**Decisions.**
+
+1. **`JobDispatcher` in `@dentabill/queue`** (`dispatchCall` / `dispatchSummary`, returning the job id). Every producer — the enqueue and summary-retry routes, the call handler's summary fan-out, the hold-detector reschedule — uses it instead of `queue.add`. The BullMQ implementation is a thin wrapper with identical wire format (job name, `jobId = idempotencyKey`, priority, queue default options). Selected by `JOB_DISPATCH_MODE=bullmq|inline`, default `bullmq`.
+2. **Inline mode = self-invocation, not a queue.** The dispatcher POSTs the payload to `/v1/internal/jobs/{calls,summaries}` (shared secret `INTERNAL_JOB_SECRET`, constant-time compare, hidden from OpenAPI) inside `waitUntil`. The route acks `202` and runs the unchanged processor under `waitUntil` in its own invocation (maxDuration 800 s). The worker handlers are imported from `@dentabill/call-worker` / `@dentabill/summary-worker` as workspace dependencies — the least invasive option; no code moved.
+3. **BullMQ semantics reproduced where they matter:** a minimal Job adapter (`id`, `name`, `data`, `attemptsMade` — all the handlers read); retries with BullMQ's own backoff formula, capped by a 760 s budget; on final call failure the DLQ consumer's handler runs directly; duplicate triggers are suppressed by an atomic `IN_QUEUE → CALLING` claim lease (summaries: skip when a `CallSummary` exists, since `callId` is unique). Hold reschedules re-dispatch immediately, as BullMQ did.
+4. **Redis is optional in inline mode.** Without `REDIS_URL`: no ioredis/BullMQ objects are created; the SSE route replays from Postgres and then polls `CallEvent` (1 s), closing with `event: close` at a terminal call status; `/v1/readyz` reports `redis: {ok: true, skipped: true}`; the summary cost guard is a process-local lock (`CostGuard` interface, Redis-backed by default). With `REDIS_URL` set (including `rediss://`), behaviour is exactly as before.
+5. **Packaging = Build Output API, not zero-config.** Workspace packages ship raw TypeScript with NodeNext `.js` specifiers; rather than depend on how the platform builder treats them, `apps/api/scripts/build-vercel.mjs` bundles with esbuild (only `@prisma/client` external), traces with `@vercel/nft`, and emits `.vercel/output` with one streaming Node 22 function. `schema.prisma` gains `binaryTargets = ["native", "rhel-openssl-3.0.x"]`. SSE streams are cut at 780 s without `close` so clients reconnect and re-replay (de-duplicated by event id).
+
+**Consequences.**
+
+- One codebase, two topologies; bullmq mode is unchanged and remains the target for real telephony.
+- A job must finish within one invocation. 75 s demo calls fit; the 15-min real-call cap does not — live telephony needs a durable runner (Vercel Queues/Workflow) or the workers back.
+- No persisted queue: an invocation that dies mid-job loses the job (claim left `IN_QUEUE`/`CALLING`, recoverable per RUNBOOK). The trigger is fire-and-forget, so trigger failure after three attempts is only logged.
+- The daily summary token budget becomes a soft cap across instances; rate limiting stays per instance.
+- SSE costs ~2 queries/s per open stream on Neon; streams self-close at call end.
+- Deployment Protection blocks self-calls to `*.vercel.app` deployment URLs: production uses the production domain (`INTERNAL_API_BASE_URL` / `VERCEL_PROJECT_PRODUCTION_URL`); previews need Protection Bypass for Automation, whose secret the dispatcher forwards.

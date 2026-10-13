@@ -17,12 +17,7 @@ import {
   RetellCallEndReason,
   type StartCallInput,
 } from '@dentabill/payer-ivr';
-import {
-  CallJobDataSchema,
-  type CallsProcessor,
-  type SummariesQueue,
-  SUMMARY_JOB_NAME,
-} from '@dentabill/queue';
+import { CallJobDataSchema, type CallsProcessor, type JobDispatcher } from '@dentabill/queue';
 
 import type { WorkerEnv } from './env.js';
 
@@ -72,13 +67,14 @@ export interface CallJobHandlerDeps {
   /** Outbound caller number in E.164 (the worker's own dial-out line). */
   readonly outboundNumberE164: string;
   /**
-   * Optional summaries queue (Phase 4 / P4-T2G). When present, the
-   * handler enqueues a `summary.generate` job after `Call.endedAt` is
-   * persisted. Absent → the handler skips emission, which is the
-   * Phase-3 behaviour and what every existing test exercises.
-   * Production wiring in `server.ts` always provides it.
+   * Optional job dispatcher (Phase 4 / P4-T2G; ADR-053). When present,
+   * the handler dispatches a `summary.generate` job after `Call.endedAt`
+   * is persisted — onto BullMQ in the worker deployment, or to the
+   * inline internal route on serverless. Absent → the handler skips
+   * emission, which is the Phase-3 behaviour. Production wiring always
+   * provides it.
    */
-  readonly summariesQueue?: SummariesQueue;
+  readonly jobDispatcher?: Pick<JobDispatcher, 'dispatchSummary'>;
 }
 
 export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
@@ -249,24 +245,19 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
       },
     });
 
-    // P4-T2G — enqueue post-call summarisation. Only fired when the
-    // summaries queue is wired (production deploys + the explicit
-    // tests for this path). The job payload uses `call.<id>` as the
-    // BullMQ idempotency key so a double-finalise never produces two
+    // P4-T2G — enqueue post-call summarisation. Only fired when a
+    // dispatcher is wired (production deploys + the explicit tests for
+    // this path). The job payload uses `call.<id>` as the idempotency
+    // key (= BullMQ jobId) so a double-finalise never produces two
     // summary jobs.
-    if (deps.summariesQueue) {
+    if (deps.jobDispatcher) {
       try {
-        const idempotencyKey = `call.${call.id}`;
-        await deps.summariesQueue.add(
-          SUMMARY_JOB_NAME,
-          {
-            organizationId: data.organizationId,
-            callId: call.id,
-            promptVersion: 'v1',
-            idempotencyKey,
-          },
-          { jobId: idempotencyKey },
-        );
+        await deps.jobDispatcher.dispatchSummary({
+          organizationId: data.organizationId,
+          callId: call.id,
+          promptVersion: 'v1',
+          idempotencyKey: `call.${call.id}`,
+        });
       } catch (err) {
         // Failure to enqueue is NOT fatal for the call lifecycle —
         // the call is already finalised, the operator dashboard will

@@ -62,7 +62,7 @@ function AuthenticatedCallsList(): React.ReactElement {
         <p className="text-caption text-gray-warm mb-2 uppercase tracking-[0.14em]">Calls</p>
         <h1
           id="calls-heading"
-          className="font-display text-[28px] font-light leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]"
+          className="font-body text-[28px] font-medium leading-[1.15] tracking-[-0.01em] text-black sm:text-[32px]"
         >
           Live payer calls
         </h1>

@@ -1,0 +1,254 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1010" width="1200" height="1010" role="img" aria-labelledby="t d">
+  <title id="t">DentaBill AWS deployment topology</title>
+  <desc id="d">Requests flow from the staff browser through CloudFront to a Lambda Function URL with response streaming, into the dentabill-api Lambda in private subnets. The API sends jobs to the SQS dentabill-jobs queue; an event source mapping invokes the dentabill-worker Lambda; messages that fail three receives move to a dead-letter queue with a CloudWatch alarm. Both functions reach the shared Aurora Serverless v2 PostgreSQL cluster over TLS and reach the internet through a fck-nat instance in the public subnet. Operators port-forward to the database through SSM Session Manager.</desc>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrMuted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748B"/>
+    </marker>
+    <style>
+      text { font-family: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #0F172A; }
+      .h1 { font-size: 22px; font-weight: 700; }
+      .sub { font-size: 13px; fill: #475569; }
+      .name { font-size: 14px; font-weight: 700; }
+      .body { font-size: 12.5px; fill: #334155; }
+      .small { font-size: 12px; fill: #475569; }
+      .lbl { font-size: 12px; fill: #1E293B; font-weight: 600; stroke: #FFFFFF; stroke-width: 4px; stroke-linejoin: round; paint-order: stroke; }
+      .zoneAws { font-size: 13px; font-weight: 700; fill: #B45309; }
+      .zone { font-size: 12px; font-weight: 700; fill: #475569; }
+      .vercelHead { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+      .person { fill: #F8FAFC; stroke: #0F172A; stroke-width: 1.5; }
+      .aws { fill: #FFF7EB; stroke: #FF9900; stroke-width: 2; }
+      .saas { fill: #F5F3FF; stroke: #7C3AED; stroke-width: 1.5; }
+      .vercel { fill: #FFFFFF; stroke: #000000; stroke-width: 2; }
+      .cloud { fill: none; stroke: #FF9900; stroke-width: 2; }
+      .vpc { fill: #FCFCFD; stroke: #475569; stroke-width: 1.5; stroke-dasharray: 8 5; }
+      .az { fill: none; stroke: #94A3B8; stroke-width: 1; stroke-dasharray: 2 4; }
+      .pub { fill: #F0FDF4; stroke: #16A34A; stroke-width: 1.2; stroke-dasharray: 6 4; }
+      .priv { fill: #EFF6FF; stroke: #2563EB; stroke-width: 1.2; stroke-dasharray: 6 4; }
+      .band { fill: #FFFFFF; fill-opacity: 0.85; stroke: #FF9900; stroke-width: 1; stroke-dasharray: 3 3; }
+      .badge { fill: #0F172A; }
+      .badgeNum { font-size: 11px; font-weight: 700; fill: #FFFFFF; }
+      .halo { stroke: #FFFFFF; stroke-width: 4px; stroke-linejoin: round; paint-order: stroke; }
+      .edge { fill: none; stroke: #334155; stroke-width: 1.6; }
+      .edgeMuted { fill: none; stroke: #64748B; stroke-width: 1.4; stroke-dasharray: 5 4; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="1010" rx="16" fill="#FFFFFF"/>
+
+  <text x="24" y="40" class="h1">DentaBill on AWS — deployment topology</text>
+  <text x="24" y="63" class="sub">us-east-1. Numbered steps follow a request: page load, API call, job enqueue, background work, egress. Dashed outlines are network trust boundaries.</text>
+
+  <!-- ===== Left column: outside AWS ===== -->
+  <rect x="20" y="100" width="170" height="80" rx="10" class="person"/>
+  <text x="105" y="133" class="name" text-anchor="middle">Staff browser</text>
+  <text x="105" y="154" class="body" text-anchor="middle">dashboard + live calls</text>
+
+  <rect x="20" y="230" width="170" height="130" rx="10" class="vercel"/>
+  <path d="M30,230 H180 A10,10 0 0 1 190,240 V256 H20 V240 A10,10 0 0 1 30,230 z" fill="#000000"/>
+  <path d="M32,251 L40,237 L48,251 z" fill="#FFFFFF"/>
+  <text x="56" y="249" class="vercelHead">Vercel</text>
+  <text x="105" y="280" class="name" text-anchor="middle">Web · Next.js 15</text>
+  <text x="105" y="300" class="body" text-anchor="middle">usedentabill.xyz</text>
+  <text x="105" y="324" class="small" text-anchor="middle">legacy API project:</text>
+  <text x="105" y="341" class="small" text-anchor="middle">inline mode, until cutover</text>
+
+  <rect x="20" y="420" width="170" height="120" rx="10" class="saas"/>
+  <text x="105" y="448" class="name" text-anchor="middle">Internet SaaS</text>
+  <text x="105" y="470" class="body" text-anchor="middle">Clerk (JWKS, API)</text>
+  <text x="105" y="489" class="body" text-anchor="middle">Retell AI (voice)</text>
+  <text x="105" y="508" class="body" text-anchor="middle">Anthropic (Claude)</text>
+
+  <rect x="20" y="800" width="170" height="80" rx="10" class="person"/>
+  <text x="105" y="832" class="name" text-anchor="middle">Operator</text>
+  <text x="105" y="853" class="body" text-anchor="middle">AWS CLI + SSM plugin</text>
+
+  <!-- ===== AWS cloud ===== -->
+  <rect x="230" y="80" width="955" height="880" rx="14" class="cloud"/>
+  <text x="246" y="102" class="zoneAws">AWS Cloud · us-east-1</text>
+
+  <!-- Row A: regional / edge managed services -->
+  <rect x="270" y="116" width="180" height="112" rx="10" class="aws"/>
+  <text x="360" y="140" class="name" text-anchor="middle">CloudFront</text>
+  <text x="360" y="160" class="body" text-anchor="middle">api.usedentabill.xyz</text>
+  <text x="360" y="178" class="small" text-anchor="middle">PriceClass_100 · HTTP/3</text>
+  <text x="360" y="196" class="small" text-anchor="middle">CachingDisabled</text>
+  <text x="360" y="214" class="small" text-anchor="middle">no compression (SSE)</text>
+
+  <rect x="510" y="116" width="180" height="112" rx="10" class="aws"/>
+  <text x="600" y="140" class="name" text-anchor="middle">Function URL</text>
+  <text x="600" y="160" class="body" text-anchor="middle">on dentabill-api</text>
+  <text x="600" y="178" class="small" text-anchor="middle">invoke mode</text>
+  <text x="600" y="196" class="small" text-anchor="middle">RESPONSE_STREAM</text>
+  <text x="600" y="214" class="small" text-anchor="middle">auth NONE (app does auth)</text>
+
+  <rect x="750" y="116" width="180" height="112" rx="10" class="aws"/>
+  <text x="840" y="140" class="name" text-anchor="middle">SQS dentabill-jobs</text>
+  <text x="840" y="160" class="body" text-anchor="middle">standard · SSE-SQS</text>
+  <text x="840" y="178" class="small" text-anchor="middle">visibility 960 s</text>
+  <text x="840" y="196" class="small" text-anchor="middle">long poll 20 s</text>
+  <text x="840" y="214" class="small" text-anchor="middle">retention 4 days</text>
+
+  <rect x="1000" y="116" width="165" height="112" rx="10" class="aws"/>
+  <text x="1082" y="140" class="name" text-anchor="middle">Dead-letter queue</text>
+  <text x="1082" y="160" class="body" text-anchor="middle">dentabill-jobs-dlq</text>
+  <text x="1082" y="178" class="small" text-anchor="middle">maxReceiveCount 3</text>
+  <text x="1082" y="196" class="small" text-anchor="middle">retention 14 days</text>
+
+  <rect x="1000" y="262" width="165" height="98" rx="10" class="aws"/>
+  <text x="1082" y="285" class="name" text-anchor="middle">CloudWatch</text>
+  <text x="1082" y="305" class="body" text-anchor="middle">logs, 14-day retention</text>
+  <text x="1082" y="324" class="small" text-anchor="middle">alarm: DLQ depth ≥ 1</text>
+  <text x="1082" y="342" class="small" text-anchor="middle">alarm: errors ≥ 5 / 5 min</text>
+
+  <!-- Left managed column -->
+  <rect x="260" y="600" width="190" height="104" rx="10" class="aws"/>
+  <text x="355" y="624" class="name" text-anchor="middle">Secrets Manager</text>
+  <text x="355" y="644" class="body" text-anchor="middle">dentabill/clerk</text>
+  <text x="355" y="662" class="body" text-anchor="middle">dentabill/app</text>
+  <text x="355" y="680" class="small" text-anchor="middle">RDS-managed master pw</text>
+  <text x="355" y="697" class="small" text-anchor="middle">→ Lambda env at deploy</text>
+
+  <rect x="260" y="800" width="190" height="96" rx="10" class="aws"/>
+  <text x="355" y="826" class="name" text-anchor="middle">SSM Session Manager</text>
+  <text x="355" y="846" class="small" text-anchor="middle">port-forward through the</text>
+  <text x="355" y="863" class="small" text-anchor="middle">NAT instance to :5432</text>
+  <text x="355" y="880" class="small" text-anchor="middle">(migrations, admin)</text>
+
+  <!-- ===== VPC ===== -->
+  <rect x="480" y="384" width="685" height="560" rx="12" class="vpc"/>
+
+  <rect x="492" y="414" width="326" height="518" rx="8" class="az"/>
+  <text x="506" y="432" class="small">AZ us-east-1a</text>
+  <rect x="830" y="414" width="323" height="518" rx="8" class="az"/>
+  <text x="844" y="432" class="small">AZ us-east-1b</text>
+
+  <!-- public subnet -->
+  <rect x="504" y="444" width="122" height="98" rx="8" class="pub"/>
+  <text x="512" y="461" class="small">public subnet</text>
+  <rect x="514" y="470" width="102" height="62" rx="8" class="aws"/>
+  <text x="565" y="494" class="name" text-anchor="middle">fck-nat</text>
+  <text x="565" y="512" class="small" text-anchor="middle">t4g.nano</text>
+  <text x="565" y="527" class="small" text-anchor="middle">ASG of 1</text>
+
+  <!-- IGW -->
+  <rect x="466" y="487" width="28" height="28" rx="4" class="aws"/>
+  <text x="458" y="482" class="small" text-anchor="end">IGW</text>
+
+  <!-- private subnets -->
+  <rect x="504" y="560" width="302" height="360" rx="8" class="priv"/>
+  <text x="512" y="577" class="small">private subnet</text>
+  <rect x="842" y="560" width="299" height="360" rx="8" class="priv"/>
+  <text x="1133" y="577" class="small" text-anchor="end">private subnet</text>
+
+  <!-- Lambda ENI band -->
+  <rect x="520" y="588" width="606" height="152" rx="10" class="band"/>
+
+  <rect x="534" y="616" width="266" height="112" rx="10" class="aws"/>
+  <text x="667" y="640" class="name" text-anchor="middle">λ dentabill-api</text>
+  <text x="667" y="660" class="body" text-anchor="middle">Fastify 5 + Lambda Web Adapter</text>
+  <text x="667" y="679" class="small" text-anchor="middle">nodejs22.x · 1024 MB · 900 s</text>
+  <text x="667" y="697" class="small" text-anchor="middle">readiness /v1/healthz</text>
+  <text x="667" y="715" class="small" text-anchor="middle">SSE capped at 780 s, client reconnects</text>
+
+  <rect x="856" y="616" width="256" height="112" rx="10" class="aws"/>
+  <text x="984" y="640" class="name" text-anchor="middle">λ dentabill-worker</text>
+  <text x="984" y="660" class="body" text-anchor="middle">call.place · summary.generate</text>
+  <text x="984" y="679" class="small" text-anchor="middle">nodejs22.x · 1024 MB · 900 s</text>
+  <text x="984" y="697" class="small" text-anchor="middle">batch 1 · ReportBatchItemFailures</text>
+  <text x="984" y="715" class="small" text-anchor="middle">max concurrency 5</text>
+
+  <!-- Aurora -->
+  <rect x="534" y="794" width="578" height="108" rx="10" class="aws"/>
+  <text x="823" y="820" class="name" text-anchor="middle">Aurora Serverless v2 · PostgreSQL 17.11 · cluster apps-pg</text>
+  <text x="823" y="842" class="body" text-anchor="middle">0–4 ACU · auto-pause after 300 s idle · force_ssl · 7-day backups</text>
+  <text x="823" y="862" class="small" text-anchor="middle">database dentabill, role dentabill_app (Prisma connection_limit=3)</text>
+  <text x="823" y="880" class="small" text-anchor="middle">same cluster hosts another app (Tally) in its own database and role</text>
+
+  <!-- ===== Edges ===== -->
+  <!-- 1 browser -> vercel -->
+  <line x1="105" y1="180" x2="105" y2="228" class="edge" marker-end="url(#arr)"/>
+  <circle cx="122" cy="205" r="8.5" class="badge"/><text x="122" y="209" class="badgeNum" text-anchor="middle">1</text><text x="135" y="209" class="lbl">HTTPS</text>
+
+  <!-- 2 browser -> cloudfront -->
+  <line x1="190" y1="150" x2="268" y2="150" class="edge" marker-end="url(#arr)"/>
+  <circle cx="207" cy="137" r="8.5" class="badge"/><text x="207" y="141" class="badgeNum" text-anchor="middle">2</text><text x="219" y="141" class="lbl">HTTPS</text>
+
+  <!-- 3 cloudfront -> function url -->
+  <line x1="450" y1="160" x2="508" y2="160" class="edge" marker-end="url(#arr)"/>
+  <circle cx="463" cy="147" r="8.5" class="badge"/><text x="463" y="151" class="badgeNum" text-anchor="middle">3</text><text x="475" y="151" class="lbl">TLS</text>
+  <text x="479" y="178" class="small" text-anchor="middle">60 s read</text>
+
+  <!-- 4 function url -> api -->
+  <line x1="640" y1="228" x2="640" y2="614" class="edge" marker-end="url(#arr)"/>
+  <circle cx="658" cy="296" r="8.5" class="badge"/><text x="658" y="300" class="badgeNum" text-anchor="middle">4</text><text x="671" y="300" class="lbl">invoke,</text>
+  <text x="671" y="317" class="lbl">streamed</text>
+
+  <!-- 5 api -> sqs -->
+  <line x1="780" y1="616" x2="780" y2="230" class="edge" marker-end="url(#arr)"/>
+  <circle cx="798" cy="296" r="8.5" class="badge"/><text x="798" y="300" class="badgeNum" text-anchor="middle">5</text><text x="811" y="300" class="lbl">SendMessage</text>
+  <text x="811" y="317" class="small">(via NAT)</text>
+
+  <!-- 6 sqs -> worker -->
+  <line x1="900" y1="228" x2="900" y2="614" class="edge" marker-end="url(#arr)"/>
+  <circle cx="918" cy="466" r="8.5" class="badge"/><text x="918" y="470" class="badgeNum" text-anchor="middle">6</text><text x="931" y="470" class="lbl">event source mapping</text>
+  <text x="931" y="488" class="small">polls SQS, invokes worker;</text>
+  <text x="931" y="505" class="small">worker re-enqueues summaries</text>
+
+  <!-- 7 sqs -> dlq -->
+  <line x1="930" y1="160" x2="998" y2="160" class="edge" marker-end="url(#arr)"/>
+  <circle cx="945" cy="147" r="8.5" class="badge"/><text x="945" y="151" class="badgeNum" text-anchor="middle">7</text><text x="957" y="151" class="lbl">after</text>
+  <text x="964" y="178" class="small" text-anchor="middle">3 receives</text>
+
+  <!-- dlq -> cloudwatch -->
+  <line x1="1082" y1="228" x2="1082" y2="260" class="edge" marker-end="url(#arr)"/>
+  <text x="1090" y="249" class="small">metric</text>
+
+  <!-- 8 lambdas -> aurora -->
+  <line x1="667" y1="728" x2="667" y2="792" class="edge" marker-end="url(#arr)"/>
+  <line x1="984" y1="728" x2="984" y2="792" class="edge" marker-end="url(#arr)"/>
+  <circle cx="735" cy="766" r="8.5" class="badge"/><text x="735" y="770" class="badgeNum" text-anchor="middle">8</text><text x="748" y="770" class="lbl">PostgreSQL :5432 over TLS</text>
+
+  <!-- 9 egress -->
+  <line x1="600" y1="588" x2="600" y2="534" class="edge" marker-end="url(#arr)"/>
+  <line x1="514" y1="501" x2="192" y2="501" class="edge" marker-end="url(#arr)"/>
+  <circle cx="265" cy="487" r="8.5" class="badge"/><text x="265" y="491" class="badgeNum" text-anchor="middle">9</text><text x="278" y="491" class="lbl">egress via fck-nat + IGW</text>
+  <text x="265" y="520" class="small">Clerk · Retell · Anthropic · SQS</text>
+
+  <!-- deploy-time secrets -->
+  <line x1="450" y1="652" x2="518" y2="652" class="edgeMuted" marker-end="url(#arrMuted)"/>
+  <text x="484" y="644" class="small" text-anchor="middle">deploy</text>
+
+  <!-- admin path -->
+  <line x1="190" y1="840" x2="258" y2="840" class="edgeMuted" marker-end="url(#arrMuted)"/>
+  <text x="224" y="831" class="small" text-anchor="middle">IAM</text>
+  <line x1="450" y1="848" x2="532" y2="848" class="edgeMuted" marker-end="url(#arrMuted)"/>
+  <text x="491" y="839" class="small" text-anchor="middle">tunnel</text>
+
+  <!-- labels drawn over edges -->
+  <text x="496" y="404" class="zone halo">VPC 10.40.0.0/16 · shared platform stack (aws-platform) · S3 gateway endpoint</text>
+  <text x="823" y="605" class="small halo" text-anchor="middle">both functions attach ENIs in both private subnets · db-client security group</text>
+
+  <!-- Legend -->
+  <g transform="translate(24,976)">
+    <rect x="0" y="0" width="22" height="16" rx="3" class="aws"/>
+    <text x="30" y="13" class="small">AWS-managed</text>
+    <rect x="140" y="0" width="22" height="16" rx="3" class="vercel"/>
+    <text x="170" y="13" class="small">Vercel</text>
+    <rect x="240" y="0" width="22" height="16" rx="3" class="saas"/>
+    <text x="270" y="13" class="small">External SaaS</text>
+    <rect x="380" y="0" width="22" height="16" rx="3" class="vpc"/>
+    <text x="410" y="13" class="small">VPC</text>
+    <rect x="460" y="0" width="22" height="16" rx="3" class="pub"/>
+    <text x="490" y="13" class="small">Public subnet</text>
+    <rect x="590" y="0" width="22" height="16" rx="3" class="priv"/>
+    <text x="620" y="13" class="small">Private subnet</text>
+    <line x1="730" y1="8" x2="770" y2="8" class="edge" marker-end="url(#arr)"/>
+    <text x="778" y="13" class="small">Data path</text>
+    <line x1="860" y1="8" x2="900" y2="8" class="edgeMuted" marker-end="url(#arrMuted)"/>
+    <text x="908" y="13" class="small">Deploy / admin path</text>
+  </g>
+</svg>

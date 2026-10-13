@@ -71,3 +71,46 @@ export async function tryAcquire(
 export async function release(redis: Redis, lock: CostGuardLock): Promise<void> {
   await redis.eval(RELEASE_LUA, 1, lockKey(lock.orgId, lock.billingDay), lock.token);
 }
+
+/**
+ * Mutex surface the summary handler actually needs (ADR-053). The Redis
+ * implementation is the production default; the in-memory one exists for
+ * serverless deployments that run without Redis.
+ */
+export interface CostGuard {
+  tryAcquire(orgId: string, billingDay: string): Promise<CostGuardLock | null>;
+  release(lock: CostGuardLock): Promise<void>;
+}
+
+export function createRedisCostGuard(redis: Redis): CostGuard {
+  return {
+    tryAcquire: (orgId, billingDay) => tryAcquire(redis, orgId, billingDay),
+    release: (lock) => release(redis, lock),
+  };
+}
+
+/**
+ * Process-local lock. Serialises concurrent summaries for the same org
+ * inside ONE process / function instance only — two serverless instances
+ * can still both pass the budget check at the same moment, so the daily
+ * token budget becomes a soft cap (worst case overshoot: one summary's
+ * tokens per concurrent instance). Acceptable for the no-Redis demo
+ * topology; documented in docs/DEPLOY_VERCEL.md.
+ */
+export function createInMemoryCostGuard(): CostGuard {
+  const held = new Map<string, string>();
+  return {
+    tryAcquire(orgId, billingDay): Promise<CostGuardLock | null> {
+      const key = lockKey(orgId, billingDay);
+      if (held.has(key)) return Promise.resolve(null);
+      const token = `${String(process.pid)}.${String(Date.now())}.${Math.random().toString(36).slice(2)}`;
+      held.set(key, token);
+      return Promise.resolve({ orgId, billingDay, token });
+    },
+    release(lock): Promise<void> {
+      const key = lockKey(lock.orgId, lock.billingDay);
+      if (held.get(key) === lock.token) held.delete(key);
+      return Promise.resolve();
+    },
+  };
+}

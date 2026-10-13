@@ -28,14 +28,9 @@ export function AuthFallback({ mode }: AuthFallbackProps): React.ReactElement {
   return (
     <section
       aria-label={mode === 'sign-in' ? 'Sign in availability' : 'Sign up availability'}
-      className="hairline-edge shadow-card rounded-[20px] bg-white px-6 py-10 sm:px-8"
+      className="hairline-edge shadow-card rounded-card-large bg-white px-6 py-10 sm:px-8"
     >
-      <p className="text-caption text-gray-warm mb-3 uppercase tracking-[0.14em]">
-        {mode === 'sign-in' ? 'Sign in' : 'Sign up'}
-      </p>
-      <h2 className="font-display mb-3 text-[22px] font-light leading-[1.2] tracking-[-0.005em] text-black">
-        {headline}
-      </h2>
+      <h2 className="font-display mb-3 text-xl font-medium text-black">{headline}</h2>
       <p className="text-body text-gray-dark mb-7">
         DentaBill is rolling out to a small group of dental practices first so we can keep call
         quality where it needs to be. Tell us about your practice and we will turn on access as soon

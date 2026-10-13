@@ -1,44 +1,104 @@
 # Session Context
 
-_Last updated: 2026-05-06 (Phase 4 closeout)._
+_Last updated: 2026-08-22 (go-live execution session)._
 
 ## What was just done
 
-**Phase 4 shipped end-to-end** across PRs #101–#121 over ~3 weeks. The voice-agent value loop is now closed: completed call → structured `CallSummary` → claim transition (gated by feature flag) → operator notification → metered `BillingUsageRecord`. Live-transcript SSE streams turns to the dashboard. Clerk webhook + reconciliation script + JWT.orgId assertion land the multi-seat tenancy foundation. SLOs + Phase-4 retro ADR (#050) close the phase.
+**Executed `docs/GOLIVE_PLAN.md` tracks A, B, C, D and E1–E2** on branch `phase-5/golive-demo`, using parallel agent swarms (three workflows, 20 agents) with hand verification and repair after each wave.
 
-Twelve focused PRs landed:
+Shipped: the demo data engine (deterministic builders + idempotent "Bright Smile Dental" seed + `DEMO.md`), the live-call simulator, the FakeRetell autopilot, `GET /v1/reports/summary`, `GET /v1/audit-logs`, a real `/v1/readyz`, the reports UI, the audit-log viewer, the free-forever `/pricing` rewrite, billing→usage, copy de-jargon, error states, three Dockerfiles, `docs/DEPLOY.md`, and the Track C token sweep (two new `@dentabill/ui` primitives plus per-file conformance across the web app).
 
-- W1 schema migrations (#101–#103): `CallSummary.organizationId` + multi-tenant intercept; `BillingUsageRecord` table; `Claim.subscriberId` expand-only.
-- W2 summarizer (#104–#108, #113): `packages/summarizer` (port + FakeClaude + LiveClaude with prompt caching + versioned prompts + denial-code allow-list), `apps/summary-worker` with cost-guard Redis lock + auto-transition policy, `packages/notifier` + summary dispatch.
-- W3 billing (#115–#118): `packages/billing` (port + FakeStripe + LiveStripe), `apps/billing-worker` daily reconciliation, `/v1/billing/usage` + `/v1/billing/portal` + `/v1/webhooks/stripe`, `/dashboard/settings/billing` web surface.
-- W4 Clerk Orgs (#119): `POST /v1/webhooks/clerk` (Svix-signed), `apps/api/scripts/migrate-clerk-orgs.mts` reconciliation, JWT.orgId vs DB.organizationId assertion.
-- W5 SSE (#120): `GET /v1/calls/:id/events/stream` with Postgres replay + Redis pub/sub, `useCallEventStream` hook, `TranscriptStream` component (flag-gated).
-- W7 prep (#114): Cancel channel via `Call.cancelRequestedAt` + worker poll; Retell webhook signature parity test.
-- W8 docs (this PR): `docs/SLOS.md` (metric names + thresholds + budget policy), Phase-4 oncall scenarios in `docs/RUNBOOK.md`, retro ADR-050.
+**The pipeline is proven end-to-end, not asserted.** A real enqueue on localhost produced: `HTTP 202` → claim `PENDING → CALLING → DENIED → MANUAL_REVIEW` → call `COMPLETED` (42s, 16 CallEvents) → `CallSummary` (outcome denied, confidence 0.88) → 2 audit rows, the second carrying `summaryId` + `confidence` + `promptVersion`. That is demo-script step 7 working for real. The api Docker image was also booted and served `/v1/readyz` 200 with live Postgres + Redis probes from inside the container.
 
-Final repo-wide state: api 133/133 + web 267/267 vitest green; typecheck + lint clean.
+## What the agents got wrong (read this before trusting a swarm report)
+
+Every item below passed typecheck and the unit suites, and was reported "complete":
+
+- **All three Docker images were unstartable** — they copied the Prisma client from a content-hashed `.pnpm` path, and invoked `tsx` at the repo-root `node_modules/.bin` where pnpm never puts it. Now generated in-image, run via the per-app bin, with build-time assertions for both.
+- **The audit-log API and UI disagreed across the seam** — filter named `entityType` server-side, `resourceType` client-side (silently dropped); `from`/`to` demanded ISO datetimes while `<input type="date">` emits bare dates (every date filter 400'd). Both typechecked because the UI cast through `unknown`.
+- **The reports page** introduced blue and orange outside the locked palette, raw hex instead of tokens, `system-ui` instead of Inter, and the only `dark:` variants in the app; its three tests were written and never run, and failed.
+- **The seed crashed at runtime** — `@prisma/client` imported directly by a package that depends on `@dentabill/db`.
+- **The headline KPI read $0.00** — claims seeded at `randInt(150,2000)/100` ($1.50–$20.00), and no claim used `RESOLVED`, the status `/v1/calls/stats` actually sums.
+- **The simulator's transcript was scrambled** — each event stamped with `start + its own inter-event delay` instead of a running total, so timestamps went backwards and duration computed 0s.
+- **74 ESLint errors** accumulated because no agent ran lint; the repo gates at `--max-warnings=0`.
+
+Four further defects were invisible to any static check and are recorded as **ADR-052**: the payer business-hours guard 422s the demo evenings/weekends; `FakeClaude` is fixture-driven and cannot summarize a real call; `FakeRetell`'s per-process id counter collides with the `retellCallId` UNIQUE constraint after any restart; and `node dist/server.js` is unreachable because all seven workspace packages ship TypeScript sources.
 
 ## Current state of the repo
 
-- Branch: `phase-4/w8-slos-runbook-retro` ready for merge as the W8 doc closeout.
-- All Phase-4 feature work is on `main`. Default-OFF feature flags keep every auto-decision dormant in prod until explicit owner approval.
+- Branch `phase-5/golive-demo`, one commit landed (`aeaa835`) plus a second in progress covering Track C and the ADR-052 fixes.
+- Gates: typecheck 16/16 packages; ESLint clean; ~840 tests green across api / web / payer-ivr / ui / call-worker / summary-worker / summarizer.
+- Three demo flags, each interlocked so configuring the real dependency wins: `DEMO_AUTOPILOT`, `DEMO_IGNORE_PAYER_HOURS` (both inert once `RETELL_API_KEY` is set), `DEMO_SUMMARIZER_FALLBACK` (inert once `ANTHROPIC_API_KEY` is set).
+- Token drift closed: `rounded-[20px]` 12 files → 0, `border-black/*` 22 → 0, zero `dark:` variants, no user-facing "Phase N".
 
-## Next task (Phase 5 kickoff)
+## Next task
 
-**P5-T0 — Phase 5 plan + ADR cluster.** Phase 5 is the deployment + hardening phase per `docs/PHASE_PLAN.md`. Concrete kickoff items:
+> **Start at `docs/HANDOFF.md`.** It supersedes this section: it records what is
+> actually deployed on Railway, the five verified gaps blocking real telephony,
+> where `GOLIVE_PLAN.md` is now wrong, and the traps that cost this session real
+> time. Read it before touching anything. In particular: **Railway's edge range is
+> unreachable from the owner's home network** — a failing local `curl` against
+> `*.up.railway.app` does not mean the deploy is broken. This was retested after
+> the region move and is **not** region-related; verify from inside the container
+> via `railway ssh` instead.
 
-1. Carry-over from ADR-050: per-suite Postgres test schemas (P4-prep-2), Playwright SSE chaos coverage, golden-set eval fixtures + nightly workflow, Phase-4.5 LiveResend + React Email templates, Prometheus + Grafana wiring, branch protection on `main`, Anthropic BAA signing.
-2. Cloud target selection (Render / Fly / AWS Fargate) per the deferred parts of ADR-001.
-3. Real Stripe staging account + product/price IDs (owner-action carry-over).
-4. Migration playbook for orgs currently on synthetic `local_*` clerkOrgId — run `apps/api/scripts/migrate-clerk-orgs.mts --dry-run` against staging first.
+Remaining after the deploy session — full detail in `docs/HANDOFF.md` §3:
+
+1. ~~Migrations~~ **DONE.** All six migrations applied and `seed:demo` run against
+   the Railway database; `/v1/readyz` reports postgres + redis ok and the org,
+   40 claims, 25 calls and 25 summaries are queryable in the deployed DB. All
+   five services now run in `us-west2`. A pre-deploy migrate step is configured
+   on the api service but **verified not to run** on this Railway plan — after
+   any schema change, apply the migration by hand with the `railway ssh` command
+   in `docs/HANDOFF.md` §7.
+2. **Vercel** — blocked only on an owner login. The CLI works once npm points at
+   a writable cache (npm trap in `docs/HANDOFF.md` §8). Then the SSE cross-origin
+   check (G-E6, riskiest) and `NEXT_PUBLIC_SSE_LIVE_TRANSCRIPT_ENABLED=true` —
+   without it the transcript panel renders a disabled placeholder, not the live
+   stream the demo film is built around.
+3. Track F: security check, adversarial review, Playwright baselines, PR.
+4. Real telephony: wire the guards, then compile the IVR maps into Retell
+   `press_digit` tools + states.
+
+## Demo film work (this session)
+
+Decision: the demo video shows **simulated** calls, clearly labelled, aimed at
+dental-practice prospects. Real IVR navigation is not built (§5 of the handoff),
+so the alternative was a week-plus of telephony work plus per-payer calibration.
+
+Shipped (`27c1619`): a six-scenario demo call library
+(`packages/payer-ivr/src/retell/demo-scenarios.ts`) replacing the autopilot's two
+inline outcomes, so concurrent demo calls read as six different conversations
+across three payers. Fixed three defects found on the way — inverted Retell
+speaker roles, `pickRole` mapping every `user` turn to `agent`, and a transcript
+UI that rendered no speaker at all. `QUEUE_CONCURRENCY=6` set on the Railway
+call-worker so six calls genuinely run in parallel.
+
+Shooting script (7 beats, VO, capture runbook, 58s cutdown):
+<https://claude.ai/code/artifact/cf2412ac-9c50-4526-98eb-06c49010cb9d>
+
+Open question for the owner: the script leaves every statistic blank
+(`‹your figure›`) rather than inventing hold-time or hours-saved numbers.
+
+Superseded ordering from the planning session:
+
+1. `/security-check` + security-reviewer over the branch diff (new endpoints, new scripts, three demo flags).
+2. Adversarial code review over the full diff; fix confirmed findings only.
+3. Playwright — visual baselines will need one deliberate regeneration after the token sweep, with a one-line justification in the same commit.
+4. PR to `main`, squash after CI green.
+5. **E3–E7 need owner credentials** (plan §10): Railway token, Vercel token, Clerk dev-instance keys, optional `ANTHROPIC_API_KEY`. Nothing else blocks deploy.
 
 ## Open questions / ambiguities
 
-- **Stripe pricing tier numbers** still owner-action. ADR-043 records the mechanism; the per-claim fee × plan tier multipliers need decisive numbers before the LiveStripe flag flips.
-- **Anthropic BAA** signed yet? Hard prereq before `LiveClaude` ships to prod (PHI in inference path).
-- **Test-DB concurrency** still requires `--concurrency=1` in `turbo.json`. P4-prep-2 deferred to Phase 5.
-- **Branch protection on `main`** still owner-action carry-over from Phase 3.
+- Owner must supply the four credentials above. Everything up to "push the button" is done.
+- Riskiest remaining integration is still SSE from the Vercel origin to the Railway api (plan G-E6) — a bare `EventSource` cannot set auth headers, so verify cross-origin auth early and proxy through a Next.js route handler if it fails.
+- The autopilot call runs ~42s rather than the plan's ~75s. Left as-is: shorter is better on stage.
 
-## Trap to avoid
+## Traps to avoid
 
-When iterating in autonomous mode, env-cache traps re-bite. `getEnv()` is process-cached; `vitest.setup.ts` deletes Clerk keys before tests run, but the `loadEnv` fallback resolves `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` → `CLERK_PUBLISHABLE_KEY`, so a test that sets the public flavour without also unsetting the canonical name accidentally activates the Clerk auth path. Always delete all three Clerk envs explicitly in `beforeAll`, even after ADR-049's empty-string normalisation.
+- **A green gate is not a working feature.** Fakes built for tests are driven _by_ tests. Anything named `Fake*` must be exercised by a real end-to-end run before it is called done — that single assumption produced three of the four ADR-052 defects.
+- `getEnv()` is process-cached and the Clerk env fallback chain bites in tests — delete all three Clerk envs explicitly in `beforeAll`.
+- `tsx -e` transpiles to CJS, so top-level await is a syntax error; wrap ad-hoc probe scripts in an async IIFE.
+- Prisma logs its connection pool to stdout, so scripted DB probes need a marker line (`PROBE=`) rather than positional parsing.
+- This machine runs a 2-slot `ci-slot` queue shared with other repos. Long commands queue behind unrelated projects; scope test/lint commands to the files you changed.
+- Killing a backgrounded service by its subshell pid orphans the `tsx` child, which keeps holding :3010/:3011 and breaks the next run with `EADDRINUSE`. Kill the process group.

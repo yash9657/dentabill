@@ -272,9 +272,74 @@ Rules:
 - [x] Phase-4 retro ADR (ADR-050) merged.
 - [ ] Staging canary (5% orgs) ran 7 days with no SLO page. _Deferred — Phase 5 deployment prereq._
 
-## Phase 5 — Deployment & cloud target (queued)
+## Phase 5 — Go-live for investor demo (active 2026-08-21)
 
-The cloud target decision lands here (per ADR-004): Railway vs AWS, Dockerfiles, secret-store wiring, Sentry DSN.
+> Plan: `docs/GOLIVE_PLAN.md` (ADR-051 cluster — all decisions taken; overrides ADR-004's open cloud question: **Railway + Vercel**). Tasks below mirror the plan's IDs; full specs + acceptance live in the plan. Branch: `phase-5/golive-demo`, one PR (D8). Cut-line: MUST = A, B, E, C9–C10, D3–D4.
+
+### Track A — Stabilize (MUST)
+
+- [x] **G-A1** Delete 7 stale untracked duplicate files → lint fully green
+- [x] **G-A2** Branch `phase-5/golive-demo`
+
+### Track B — Demo data engine (MUST)
+
+- [x] **G-B1** `apps/api/scripts/lib/demo-builders.mts`
+- [x] **G-B2** `demo-seed.mts` — "Bright Smile Dental", ~40 claims/30 days, summaries, non-zero KPIs
+- [x] **G-B3** `simulate-live-call.mts` — scripted CallEvents + Redis publish, paced
+- [x] **G-B4** `seed:demo` / `demo:call` scripts + `DEMO.md`
+- [x] **G-B5** FakeRetell `DEMO_AUTOPILOT` mode (time-driven ~75s scenario; guard: only when `RETELL_API_KEY` empty)
+- [x] **G-B6** Local end-to-end proof + timings
+
+### Track C — Anti-slop UI sweep (C9–C10 MUST, rest SHOULD)
+
+- [x] **G-C1** `<DashboardPageHeading>` + replace ~15 sites
+- [x] **G-C2** `<StatTile>` unification
+- [x] **G-C3** `rounded-[20px]` → `rounded-card-large` (13 files)
+- [x] **G-C4** `border-black/5|6|8` → `border-border-subtle` (~30 sites)
+- [ ] **G-C5** Named warmStone opacity tokens _(not done: `bg-warm-stone/40|50` remain at ~3 sites. Needs new token variants in tokens.ts + theme.css + preset, which is a design-system change rather than a sweep — deliberately not invented mid-sweep.)_
+- [x] **G-C6** Typography sizes/tracking/leading to DESIGN.md spec
+- [x] **G-C7** Focus-ring + interactive-opacity standardization
+- [x] **G-C8** Card padding rule (p-6 / p-4 / p-8)
+- [x] **G-C9** Remove all user-facing "Phase N" copy; roadmap-polish stubs (MUST)
+- [x] **G-C10** OverviewKpiTiles error state + OrganizationSettingsForm loading/error (MUST)
+- [ ] **G-C11** `impeccable` audit → polish pass; regenerate visual baselines once _(open — needs the app running; Playwright baselines still need one deliberate regeneration after the token sweep.)_
+
+### Track D — New surfaces + free pivot (D3–D4 MUST)
+
+- [x] **G-D1a** `GET /v1/reports/summary` + tests + SDK regen
+- [x] **G-D1b** `/dashboard/reports` UI (dataviz skill, budget-respecting)
+- [x] **G-D2** `/dashboard/settings/audit-log` viewer _(plan said the read API existed; it did not — `GET /v1/audit-logs` was built too)_
+- [x] **G-D3** `/pricing` → "Free for practices. Forever." + landing/FAQ updates (MUST)
+- [x] **G-D4** Billing → Usage rename + redirect + portal CTA removal (MUST)
+- [x] **G-D5** Team/integrations/notifications roadmap polish (with G-C9)
+
+### Track G — Defects found by execution (ADR-052)
+
+- [x] **G-G1** `DEMO_IGNORE_PAYER_HOURS` — the ADR-037 business-hours guard 422s "Call Now" evenings and weekends. Interlocked against `RETELL_API_KEY`; logged at warn.
+- [x] **G-G2** `DEMO_SUMMARIZER_FALLBACK` — `FakeClaude` is fixture-driven and cannot summarize a real call, so the job dead-lettered and no claim ever transitioned. Added transcript-derived summaries, default off.
+- [x] **G-G3** Per-process `retellCallId` namespacing — `FakeRetell`'s counter restarts at 1 each boot and `Call.retellCallId` is UNIQUE, so any worker restart broke the next call.
+- [x] **G-G4** Audit-log API/UI contract reconciliation — `entityType` vs `resourceType`, and bare-date `from`/`to` support.
+- [x] **G-G5** Seed KPI correctness — claim amounts were 100× too small and no claim used `RESOLVED`, so "recovered this week" read $0.00.
+- [x] **G-G6** Simulator timestamp monotonicity — events were stamped with their own inter-event delay, not a running total.
+- [x] **G-G7** Delete an 8th stale macOS artifact (`packages/summarizer/src/prompts 2/`) that Track A's list of 7 missed.
+
+### Track E — Deploy (MUST; E3+ needs owner credentials)
+
+- [x] **G-E1** Real `/v1/readyz` (SELECT 1 + PING, 800ms, 503)
+- [x] **G-E2** Dockerfiles + `.dockerignore` + `docs/DEPLOY.md`; all three images build AND the api image boots serving readyz 200 _(entrypoint is `tsx`, not `node dist/…` — see ADR-052)_
+- [ ] **G-E3** Railway: PG16 + Redis7 + 3 services + healthchecks + env (plan §7)
+- [ ] **G-E4** `prisma migrate deploy` + `seed:demo` against Railway PG
+- [ ] **G-E5** Vercel web + Clerk allowed origin
+- [ ] **G-E6** Prod smoke; verify SSE auth/CORS/streaming Vercel→Railway (riskiest point)
+- [ ] **G-E7** Full autopilot call on production; deploy freeze
+
+### Track F — Verify + rehearse (MUST, last)
+
+- [ ] **G-F1** Full local gates incl. Playwright + bundle budget + build
+- [ ] **G-F2** `/security-check` + security-reviewer over diff
+- [ ] **G-F3** Adversarial code-review workflow over branch diff
+- [ ] **G-F4** PR → CI green → squash → deploy → docs closeout
+- [ ] **G-F5** Two timed rehearsals of the demo script (plan §9)
 
 ---
 

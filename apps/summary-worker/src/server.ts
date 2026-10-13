@@ -62,6 +62,7 @@ export async function bootSummaryWorker(
     createSummarizerPort({
       anthropicApiKey: env.ANTHROPIC_API_KEY,
       maxOutputTokens: env.SUMMARIZER_MAX_OUTPUT_TOKENS,
+      deriveWhenUnregistered: env.DEMO_SUMMARIZER_FALLBACK === 'true',
     }).summarizer;
   // Phase 4 ships FakeResend only — the live adapter throws on
   // construction with a key. Phase 4.5 swaps in LiveResend.

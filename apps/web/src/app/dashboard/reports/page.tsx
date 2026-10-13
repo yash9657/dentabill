@@ -2,17 +2,20 @@ import type { Metadata } from 'next';
 import * as React from 'react';
 
 import { DashboardEmptyState, SkeletonTable } from '../../../components/dashboard/index.js';
+import { ReportsPage } from '../../../components/dashboard/reports/reports-page.js';
 
 export const metadata: Metadata = { title: 'Reports' };
 
 export default function DashboardReportsPage(): React.ReactElement {
-  return (
-    <DashboardEmptyState
-      eyebrow="Reports"
-      title="Recovery and aging analytics"
-      body="Recovery totals, denial trends, aging buckets, and per-payer outcomes. The first analytics views ship in Phase 4 once we have meaningful call volume to summarise."
-      previewChildren={<SkeletonTable rows={5} columns={4} />}
-      primaryCta={{ label: 'Open overview', href: '/dashboard/overview' }}
-    />
-  );
+  if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
+    return (
+      <DashboardEmptyState
+        eyebrow="Reports"
+        title="See the bigger picture"
+        body="Sign in to review recovery trends, payer outcomes, and claim aging across your practice."
+        previewChildren={<SkeletonTable rows={4} columns={3} />}
+        primaryCta={{ label: 'Sign in', href: '/sign-in' }}
+      />
+    );
+  return <ReportsPage />;
 }

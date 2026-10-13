@@ -22,6 +22,9 @@ import { DashboardSearch } from './dashboard-search.js';
 export function DashboardTopbar(): React.ReactElement {
   return (
     <div className="flex items-center justify-end gap-2">
+      <span className="text-caption text-gray-dark mr-auto hidden font-medium md:block">
+        Your practice workspace
+      </span>
       <DashboardSearch />
       <DashboardNotifications />
       <span aria-hidden className="bg-black/8 mx-1 hidden h-6 w-px sm:inline-block" />

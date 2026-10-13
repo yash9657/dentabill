@@ -1,7 +1,7 @@
 import { hashPatientDOB, prisma } from '@dentabill/db';
 import { createLogger } from '@dentabill/logger';
 import { FakeRetell } from '@dentabill/payer-ivr';
-import type { CallJobData } from '@dentabill/queue';
+import { type CallJobData, createBullMqJobDispatcher } from '@dentabill/queue';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { loadWorkerEnv } from './env.js';
@@ -340,8 +340,7 @@ describe('createCallJobHandler — summary emission (P4-T2G)', () => {
       retellPort: fake,
       env,
       outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      summariesQueue: summariesQueue as any,
+      jobDispatcher: createBullMqJobDispatcher({ summariesQueue }),
     });
     const data: CallJobData = {
       organizationId: orgId,
@@ -381,8 +380,7 @@ describe('createCallJobHandler — summary emission (P4-T2G)', () => {
       retellPort: fake,
       env,
       outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      summariesQueue: failingQueue as any,
+      jobDispatcher: createBullMqJobDispatcher({ summariesQueue: failingQueue }),
     });
     const data: CallJobData = {
       organizationId: orgId,

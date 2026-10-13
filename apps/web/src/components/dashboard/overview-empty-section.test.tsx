@@ -16,7 +16,7 @@ describe('<OverviewEmptySection />', () => {
     );
     expect(screen.getByText(/recent claims/i)).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { level: 2, name: /nothing in the queue yet/i }),
+      screen.getByRole('heading', { level: 3, name: /nothing in the queue yet/i }),
     ).toBeInTheDocument();
     expect(screen.getByText(/upload a csv to get started/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /open claims/i })).toHaveAttribute(

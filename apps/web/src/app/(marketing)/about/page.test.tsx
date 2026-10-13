@@ -9,7 +9,7 @@ describe('/about', () => {
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: /billing teams should not spend their day on hold/i,
+        name: /built for the people behind the practice/i,
       }),
     ).toBeInTheDocument();
   });
@@ -31,7 +31,7 @@ describe('/about', () => {
     render(<AboutPage />);
     const demo = screen.getByRole('link', { name: /book a 20-minute demo/i });
     expect(demo).toHaveAttribute('href', '/contact');
-    const trial = screen.getByRole('link', { name: /start free trial/i });
+    const trial = screen.getByRole('link', { name: /get started free/i });
     expect(trial).toHaveAttribute('href', '/sign-up');
   });
 });

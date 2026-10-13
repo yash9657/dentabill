@@ -144,12 +144,12 @@ export class LiveClaude implements SummarizerPort {
     this.#loader =
       options.anthropicLoader ??
       ((): Promise<AnthropicCtor> => {
-        // Lazy-load via the bracket form so bundlers/tsc don't try to
-        // resolve `@anthropic-ai/sdk` in environments that don't have
-        // it installed (dev/test). The package becomes a runtime
-        // dependency only on production summary-worker boxes.
-        const moduleId = '@anthropic-ai/sdk';
-        return import(moduleId).then((m: { default: AnthropicCtor }) => m.default);
+        // Lazy-loaded so the SDK is only evaluated when a live summary
+        // is actually generated (tests inject `anthropicLoader`). The
+        // specifier is a literal so bundlers (the Lambda / Vercel
+        // esbuild bundles) inline the package instead of leaving a
+        // runtime lookup that the deployment artifact cannot satisfy.
+        return import('@anthropic-ai/sdk').then((m) => m.default as unknown as AnthropicCtor);
       });
   }
 

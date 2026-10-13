@@ -1,7 +1,7 @@
 /*
  * DentaBill Tailwind v4 preset.
  *
- * Aggregates the @theme tokens (DESIGN.md / ADR-013) plus DentaBill-specific
+ * Aggregates the @theme tokens (DESIGN.md) plus DentaBill-specific
  * @utility and @keyframes directives into one file. Apps import this once and
  * get the full DentaBill design system:
  *
@@ -22,9 +22,8 @@
  * ─────────────────────────────────────────────────────────────────── */
 
 /*
- * The only motion the design system uses by default. Calm and predictable
- * (ADR-013 / DESIGN.md "no bounce, no elastic"). Used by the active-call
- * status indicator — the one place the teal accent appears.
+ * A restrained pulse identifies active calls. The reduced-motion reset below
+ * keeps this and the loading shimmer still when requested.
  */
 @keyframes status-pulse {
   0%,

@@ -13,8 +13,7 @@ import * as React from 'react';
  * Each stat carries:
  *   • `label` — short noun phrase, capitalised once. The eyebrow.
  *   • `value` — the headline number. Em-dash placeholder when empty
- *     so the layout does not jump when real numbers land in P2-T41
- *     (claims) and Phase 3 (calls).
+ *     so the layout does not jump when real numbers arrive.
  *   • `caption` — small contextual line under the value (delta,
  *     period, or cohort reference). Optional.
  *
@@ -36,15 +35,15 @@ export function OverviewStatStrip({ stats }: OverviewStatStripProps): React.Reac
   return (
     <section
       aria-label="Headline metrics"
-      className="hairline-edge bg-stone-warm/30 grid grid-cols-2 gap-px overflow-hidden rounded-[20px] md:grid-cols-4"
+      className="hairline-edge bg-border-light rounded-card-large grid grid-cols-2 gap-px overflow-hidden md:grid-cols-4"
     >
       {stats.map((stat) => (
         <div key={stat.label} className="bg-white px-5 py-5 sm:px-6 sm:py-6">
-          <p className="text-caption text-gray-warm uppercase tracking-[0.14em]">{stat.label}</p>
-          <p className="font-display mt-2 text-[28px] font-extralight leading-[1.1] tracking-[-0.01em] text-black sm:text-[32px]">
+          <p className="text-caption text-gray-dark font-medium">{stat.label}</p>
+          <p className="font-body mt-2 text-[28px] font-semibold tabular-nums leading-[1.1] tracking-[-0.01em] text-black sm:text-[32px]">
             {stat.value}
           </p>
-          {stat.caption ? <p className="text-caption text-gray-warm mt-1">{stat.caption}</p> : null}
+          {stat.caption ? <p className="text-gray-warm mt-2 text-xs">{stat.caption}</p> : null}
         </div>
       ))}
     </section>

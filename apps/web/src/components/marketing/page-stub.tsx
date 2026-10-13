@@ -33,7 +33,7 @@ export function MarketingPageStub({
     <main>
       <section className="mx-auto max-w-3xl px-4 pb-24 pt-24 sm:px-6 sm:pt-32 lg:px-8">
         <p className="text-caption text-gray-warm mb-4 uppercase tracking-[0.14em]">{eyebrow}</p>
-        <h1 className="font-display mb-6 text-balance text-[40px] font-extralight leading-[1.08] tracking-[-0.02em] text-black sm:text-[48px]">
+        <h1 className="font-display mb-6 text-balance text-[40px] font-normal leading-[1.08] tracking-[-0.02em] text-black sm:text-[48px]">
           {heading}
         </h1>
         <p className="text-body-large text-gray-dark mb-10 max-w-2xl">{body}</p>
