@@ -52,7 +52,7 @@
   <path d="M32,251 L40,237 L48,251 z" fill="#FFFFFF"/>
   <text x="56" y="249" class="vercelHead">Vercel</text>
   <text x="105" y="280" class="name" text-anchor="middle">Web · Next.js 15</text>
-  <text x="105" y="300" class="body" text-anchor="middle">dentabill.site</text>
+  <text x="105" y="300" class="body" text-anchor="middle">usedentabill.xyz</text>
   <text x="105" y="324" class="small" text-anchor="middle">legacy API project:</text>
   <text x="105" y="341" class="small" text-anchor="middle">inline mode, until cutover</text>
 
@@ -73,7 +73,7 @@
   <!-- Row A: regional / edge managed services -->
   <rect x="270" y="116" width="180" height="112" rx="10" class="aws"/>
   <text x="360" y="140" class="name" text-anchor="middle">CloudFront</text>
-  <text x="360" y="160" class="body" text-anchor="middle">api.dentabill.site</text>
+  <text x="360" y="160" class="body" text-anchor="middle">api.usedentabill.xyz</text>
   <text x="360" y="178" class="small" text-anchor="middle">PriceClass_100 · HTTP/3</text>
   <text x="360" y="196" class="small" text-anchor="middle">CachingDisabled</text>
   <text x="360" y="214" class="small" text-anchor="middle">no compression (SSE)</text>

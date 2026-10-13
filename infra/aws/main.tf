@@ -40,19 +40,19 @@ data "terraform_remote_state" "platform" {
 }
 
 variable "api_domain" {
-  description = "Custom domain for CloudFront, e.g. api.dentabill.site. Empty until the certificate is wanted."
+  description = "Custom domain for CloudFront, e.g. api.usedentabill.xyz. Empty until the certificate is wanted."
   type        = string
-  default     = "api.dentabill.site"
+  default     = "api.usedentabill.xyz"
 }
 
 variable "app_url" {
   type    = string
-  default = "https://dentabill.site"
+  default = "https://usedentabill.xyz"
 }
 
 variable "public_api_url" {
   type    = string
-  default = "https://api.dentabill.site"
+  default = "https://api.usedentabill.xyz"
 }
 
 variable "retell_webhook_api_key_secret_id" {
