@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 950" width="1200" height="950" role="img" aria-labelledby="t d">
+  <title id="t">DentaBill job pipeline on AWS</title>
+  <desc id="d">The API moves a claim to IN_QUEUE and sends a call.place message to the SQS dentabill-jobs queue. The worker Lambda takes an atomic database lease (IN_QUEUE to CALLING), places the call, records call events, sets the claim outcome and sends a summary.generate message. The summary job writes a CallSummary and applies the transition policy. Failed attempts are retried by setting the message visibility; the third failure is handled in code; unhandled messages move to the dead-letter queue after three receives. Live call events reach the browser over SSE by polling Postgres.</desc>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <style>
+      text { font-family: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #0F172A; }
+      .h1 { font-size: 22px; font-weight: 700; }
+      .sub { font-size: 13px; fill: #475569; }
+      .sec { font-size: 15px; font-weight: 700; fill: #0F172A; }
+      .name { font-size: 14px; font-weight: 700; }
+      .body { font-size: 12.5px; fill: #334155; }
+      .small { font-size: 12px; fill: #475569; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; fill: #0F172A; }
+      .num { font-weight: 700; fill: #B45309; }
+      .lbl { font-size: 12px; fill: #1E293B; font-weight: 600; stroke: #FFFFFF; stroke-width: 4px; stroke-linejoin: round; paint-order: stroke; }
+      .app { fill: #F1F5F9; stroke: #475569; stroke-width: 1.5; }
+      .aws { fill: #FFF7EB; stroke: #FF9900; stroke-width: 2; }
+      .chip { fill: #FFFFFF; stroke: #FF9900; stroke-width: 1.5; }
+      .person { fill: #F8FAFC; stroke: #0F172A; stroke-width: 1.5; }
+      .ok { fill: #F0FDF4; stroke: #16A34A; stroke-width: 1.5; }
+      .warn { fill: #FFFBEB; stroke: #D97706; stroke-width: 1.5; }
+      .bad { fill: #FEF2F2; stroke: #DC2626; stroke-width: 1.5; }
+      .rule { stroke: #E2E8F0; stroke-width: 1; }
+      .edge { fill: none; stroke: #334155; stroke-width: 1.6; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="950" rx="16" fill="#FFFFFF"/>
+
+  <text x="24" y="40" class="h1">Job pipeline: claim → call → summary → claim transition</text>
+  <text x="24" y="63" class="sub">JOB_DISPATCH_MODE=sqs. One standard queue carries both job types; correctness comes from database-level idempotency, not queue ordering.</text>
+
+  <!-- ================= Section 1 ================= -->
+  <text x="30" y="98" class="sec">1 · Happy path</text>
+
+  <!-- API -->
+  <rect x="30" y="112" width="260" height="196" rx="10" class="app"/>
+  <text x="44" y="138" class="name">API λ · POST /v1/claims/:id/calls</text>
+  <text x="44" y="163" class="body">Clerk JWT → orgId; org-scoped lookup</text>
+  <text x="44" y="183" class="body">payer business-hours guard</text>
+  <text x="44" y="203" class="body">claim PENDING → <tspan font-weight="700">IN_QUEUE</tspan></text>
+  <text x="44" y="223" class="body">JobDispatcher.dispatchCall()</text>
+  <text x="44" y="243" class="body">respond 202 to the browser</text>
+  <text x="44" y="268" class="small">If the send fails, the claim is</text>
+  <text x="44" y="285" class="small">rolled back to its previous status.</text>
+
+  <!-- SQS -->
+  <rect x="370" y="112" width="210" height="410" rx="10" class="aws"/>
+  <text x="475" y="138" class="name" text-anchor="middle">SQS dentabill-jobs</text>
+  <text x="475" y="157" class="small" text-anchor="middle">standard · at-least-once</text>
+
+  <rect x="386" y="174" width="178" height="80" rx="8" class="chip"/>
+  <text x="475" y="196" class="mono" text-anchor="middle" font-weight="700">call.place</text>
+  <text x="475" y="216" class="small" text-anchor="middle">body {type, data}</text>
+  <text x="475" y="234" class="small" text-anchor="middle">attr idempotencyKey</text>
+
+  <rect x="386" y="378" width="178" height="80" rx="8" class="chip"/>
+  <text x="475" y="400" class="mono" text-anchor="middle" font-weight="700">summary.generate</text>
+  <text x="475" y="420" class="small" text-anchor="middle">same envelope,</text>
+  <text x="475" y="438" class="small" text-anchor="middle">sent by the worker</text>
+
+  <text x="475" y="487" class="small" text-anchor="middle">visibility 960 s</text>
+  <text x="475" y="505" class="small" text-anchor="middle">redrive to DLQ after 3</text>
+
+  <!-- Worker: call -->
+  <rect x="660" y="112" width="515" height="196" rx="10" class="aws"/>
+  <text x="676" y="138" class="name">Worker λ · call.place</text>
+  <text x="676" y="163" class="body"><tspan class="num">1 </tspan> Lease: claim <tspan font-weight="700">IN_QUEUE → CALLING</tspan> in one conditional UPDATE</text>
+  <text x="690" y="181" class="small">a redelivery may also take CALLING; 0 rows updated → skip, delete</text>
+  <text x="676" y="204" class="body"><tspan class="num">2 </tspan> Place the call via RetellPort, persist each CallEvent</text>
+  <text x="690" y="222" class="small">demo: DEMO_AUTOPILOT simulates the call (about 47 s end to end)</text>
+  <text x="676" y="245" class="body"><tspan class="num">3 </tspan> Call ends → claim <tspan font-weight="700">COMPLETED</tspan>, <tspan font-weight="700">DENIED</tspan> or <tspan font-weight="700">MANUAL_REVIEW</tspan></text>
+  <text x="676" y="268" class="body"><tspan class="num">4 </tspan> dispatchSummary() → SQS</text>
+  <text x="676" y="291" class="body"><tspan class="num">5 </tspan> Return success → the event source mapping deletes the message</text>
+
+  <!-- Worker: summary -->
+  <rect x="660" y="330" width="515" height="192" rx="10" class="aws"/>
+  <text x="676" y="356" class="name">Worker λ · summary.generate</text>
+  <text x="676" y="381" class="body"><tspan class="num">1 </tspan> Skip if a CallSummary already exists (CallSummary.callId is unique)</text>
+  <text x="676" y="403" class="body"><tspan class="num">2 </tspan> Per-org cost guard and daily token budget</text>
+  <text x="676" y="425" class="body"><tspan class="num">3 </tspan> Summarize the transcript with Claude (demo: transcript-derived fallback)</text>
+  <text x="676" y="447" class="body"><tspan class="num">4 </tspan> Persist CallSummary; if confidence ≥ 0.95: RESOLVED → RESOLVED,</text>
+  <text x="690" y="465" class="small">SUBMIT_DOCS → NEEDS_INFO; anything else → MANUAL_REVIEW</text>
+  <text x="676" y="488" class="body"><tspan class="num">5 </tspan> Update claim + write a claim.transition audit row</text>
+  <text x="676" y="510" class="body"><tspan class="num">6 </tspan> Return success → message deleted</text>
+
+  <!-- edges section 1 -->
+  <line x1="290" y1="214" x2="384" y2="214" class="edge" marker-end="url(#arr)"/>
+  <text x="330" y="205" class="lbl" text-anchor="middle">send</text>
+  <line x1="564" y1="214" x2="658" y2="214" class="edge" marker-end="url(#arr)"/>
+  <text x="620" y="205" class="lbl" text-anchor="middle">batch of 1</text>
+  <path d="M660,268 H620 V398 H566" class="edge" marker-end="url(#arr)"/>
+  <line x1="564" y1="442" x2="658" y2="442" class="edge" marker-end="url(#arr)"/>
+
+  <line x1="24" y1="545" x2="1176" y2="545" class="rule"/>
+
+  <!-- ================= Section 2 ================= -->
+  <text x="30" y="574" class="sec">2 · When an attempt does not succeed</text>
+  <text x="330" y="574" class="small">one attempt per receive; attempt number = ApproximateReceiveCount; JOBS_MAX_RECEIVE_COUNT = 3 = redrive maxReceiveCount</text>
+
+  <rect x="30" y="590" width="270" height="168" rx="10" class="ok"/>
+  <text x="44" y="615" class="name">Duplicate delivery</text>
+  <text x="44" y="639" class="body">SQS standard can deliver twice.</text>
+  <text x="44" y="659" class="body">Call: receive 1 needs IN_QUEUE; later</text>
+  <text x="44" y="677" class="body">receives also accept CALLING. Any</text>
+  <text x="44" y="695" class="body">other claim state → skip, no redial.</text>
+  <text x="44" y="715" class="body">Summary: CallSummary exists → skip.</text>
+  <text x="44" y="739" class="body">Skipped messages are deleted.</text>
+
+  <rect x="316" y="590" width="270" height="168" rx="10" class="warn"/>
+  <text x="330" y="615" class="name">Failure on receive 1 or 2</text>
+  <text x="330" y="639" class="body">Worker sets the message visibility</text>
+  <text x="330" y="657" class="body">to the BullMQ-equivalent backoff:</text>
+  <text x="330" y="677" class="body">calls 30 s then 60 s,</text>
+  <text x="330" y="695" class="body">summaries 15 s then 30 s,</text>
+  <text x="330" y="715" class="body">and reports it in batchItemFailures.</text>
+  <text x="330" y="739" class="body">SQS redelivers after the delay.</text>
+
+  <rect x="602" y="590" width="270" height="168" rx="10" class="warn"/>
+  <text x="616" y="615" class="name">Failure on receive 3</text>
+  <text x="616" y="639" class="body">Terminal hand-off runs in code:</text>
+  <text x="616" y="659" class="body">call → claim MANUAL_REVIEW,</text>
+  <text x="616" y="677" class="body">Call.dlqReason, call.dlq event</text>
+  <text x="616" y="697" class="body">summary → error logged</text>
+  <text x="616" y="721" class="body">Then the message is deleted, so a</text>
+  <text x="616" y="739" class="body">handled failure never hits the DLQ.</text>
+
+  <rect x="888" y="590" width="282" height="168" rx="10" class="bad"/>
+  <text x="902" y="615" class="name">Never handled</text>
+  <text x="902" y="639" class="body">Unparseable body, crash outside the</text>
+  <text x="902" y="657" class="body">processor, or the 900 s Lambda timeout:</text>
+  <text x="902" y="677" class="body">the message is never deleted. After</text>
+  <text x="902" y="695" class="body">3 receives SQS moves it to</text>
+  <text x="902" y="715" class="body">dentabill-jobs-dlq → CloudWatch</text>
+  <text x="902" y="739" class="body">alarm (depth ≥ 1) → operator.</text>
+
+  <line x1="24" y1="780" x2="1176" y2="780" class="rule"/>
+
+  <!-- ================= Section 3 ================= -->
+  <text x="30" y="809" class="sec">3 · Live call view (no Redis on AWS)</text>
+
+  <rect x="30" y="826" width="190" height="62" rx="10" class="aws"/>
+  <text x="125" y="851" class="name" text-anchor="middle">Worker λ</text>
+  <text x="125" y="871" class="small" text-anchor="middle">writes CallEvent rows</text>
+
+  <rect x="290" y="826" width="190" height="62" rx="10" class="aws"/>
+  <text x="385" y="851" class="name" text-anchor="middle">Aurora PostgreSQL</text>
+  <text x="385" y="871" class="small" text-anchor="middle">CallEvent (durable)</text>
+
+  <rect x="560" y="826" width="250" height="62" rx="10" class="app"/>
+  <text x="685" y="851" class="name" text-anchor="middle">API λ · SSE route</text>
+  <text x="685" y="871" class="small" text-anchor="middle">replay on connect, then poll</text>
+
+  <rect x="870" y="826" width="170" height="62" rx="10" class="aws"/>
+  <text x="955" y="851" class="name" text-anchor="middle">Function URL</text>
+  <text x="955" y="871" class="small" text-anchor="middle">+ CloudFront</text>
+
+  <rect x="1080" y="826" width="90" height="62" rx="10" class="person"/>
+  <text x="1125" y="851" class="name" text-anchor="middle">Browser</text>
+  <text x="1125" y="871" class="small" text-anchor="middle">EventSource</text>
+
+  <line x1="220" y1="857" x2="288" y2="857" class="edge" marker-end="url(#arr)"/>
+  <text x="254" y="848" class="lbl" text-anchor="middle">INSERT</text>
+  <line x1="560" y1="857" x2="482" y2="857" class="edge" marker-end="url(#arr)"/>
+  <text x="521" y="848" class="lbl" text-anchor="middle">poll 1 s</text>
+  <line x1="810" y1="857" x2="868" y2="857" class="edge" marker-end="url(#arr)"/>
+  <text x="839" y="848" class="lbl" text-anchor="middle">stream</text>
+  <line x1="1040" y1="857" x2="1078" y2="857" class="edge" marker-end="url(#arr)"/>
+
+  <text x="30" y="914" class="small">A 15 s heartbeat keeps CloudFront's 60 s origin read timeout from firing. The stream closes when the call reaches a terminal status, or is cut at 780 s;</text>
+  <text x="30" y="932" class="small">the client reconnects, the route replays from Postgres, and the client de-duplicates by event id.</text>
+</svg>
