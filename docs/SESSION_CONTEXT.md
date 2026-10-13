@@ -1,6 +1,147 @@
 # Session Context
 
-_Last updated: 2026-08-22 (go-live execution session)._
+_Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
+
+## Current session — W0 implementation on AWS baseline
+
+**Goal remains active:** complete the nine-workstream parity program, not just provider replacement.
+User authorized implementation, local tests, branches/commits/draft PRs; no production cutover,
+real third-party calls, actual claim/payment mutations, or destructive production migrations.
+User explicitly allows ElevenLabs speech/orchestration; Fireworks open-weight business inference
+remains required. **No clinic yet: use fake patient data.** Real-clinic/end-to-end evidence and
+billing-expert adjudication remain blocked, not waived.
+
+**Checkout:** started at `25e82a7` on `deploy/vercel-serverless` with dirty audit docs.
+Created `codex/w0-containment`. On user correction, fetched origin: `origin/main=55a1896`
+was already an ancestor; AWS work actually lives at `origin/infra/aws=bfd4e8f`.
+Fast-forwarded the working branch to that revision and reapplied all WIP without conflicts.
+A safety stash named `w0 containment and pre-existing audit before AWS fast-forward` is retained.
+No user audit work was discarded. `pnpm install --frozen-lockfile` completed on the AWS lockfile.
+W0 implementation is committed as `2c8bcdd`; all commit hooks passed. The final
+Lambda bundles were rebuilt successfully after the zero-filled-week correction.
+
+### Implemented locally; not merged, deployed, or parity-complete
+
+- FW-01/02: reproduced duplicate face-value reporting (two calls on a $300 claim became
+  $600 "recovered" despite only a $100 payer-reported partial payment). API/SDK/UI now
+  separate call counts, unique claims, workflow dispositions, and unavailable verified
+  payment data (`amountCents:null`). No claim face value is represented as cash.
+- FW-03: high-confidence model `RESOLVED` advice requires review; protected states and
+  changed claim versions/newer calls are preserved. Summary/state/audit/usage tally commit
+  in one Postgres transaction. Sequential redelivery skips duplicate inference. A real DB
+  audit-trigger failure test proves rollback/retry. Notifications describe required review,
+  not payment recovery. Nonterminal calls cannot create a permanent partial summary.
+- FW-05: no subscriber-ID fallback; missing/blank subscriber or provider NPI prevents
+  enqueue/dial. Worker records `NEEDS_INFO` with scoped CAS and audit. Inline, BullMQ, and
+  AWS SQS paths handle this as non-retryable. Lambda acknowledges without dialing or
+  overwriting the missing-data state, including on final receives.
+- FW-04: corrected existing code-list annotations using current X12 references; raw
+  unknown codes (bounded to 64 characters) survive adapter/schema parsing and force
+  review. Historical v1 prompt can still omit unfamiliar codes; Fireworks migration
+  must remove that limitation. No licensed dictionary or real-domain accuracy claim.
+- FW-06: SDK-signed documented Retell envelopes now have committed synthetic fixtures;
+  two expected-failure tests explicitly show parser rejection. Signature checks pass,
+  but FW-07 live webhook normalization/signing-key provisioning remain unimplemented.
+
+### Access and actual infrastructure evidence
+
+See [PROVIDER_EVIDENCE.md](./PROVIDER_EVIDENCE.md) for the capability matrix, primary
+vendor sources, model candidates, measured-vs-documented distinction, and probe manifest.
+GitHub, Vercel, Railway, and AWS CLI authentication work. Local PG16/Redis7 run; isolated
+`dentabill_w0_summary`, `dentabill_w0_identity`, `dentabill_w0_finance` databases received
+all six existing migrations. No production migrations ran.
+
+Read-only AWS queries find active `dentabill-api`/`dentabill-worker` in `us-east-1`, Node22,
+900-second timeout, 1024 MB. SQS mapping is Enabled, batch1, ReportBatchItemFailures.
+Worker is demo mode and has no voice/inference provider keys. Aurora `apps-pg` is available,
+Postgres17.11, encrypted, 7-day backup retention; restore has not been tested. Direct Lambda
+`/v1/readyz` first reported PG unavailable, then returned HTTP200 with PG healthy on retry
+(0.67s); cold-start sensitivity is an inference, not a confirmed diagnosis. Custom
+`api.dentabill.site` DNS failed locally, so custom-domain readiness is unverified.
+
+Local `.env`, `apps/api/.env`, `apps/web/.env.local`, and `packages/db/.env` resolve to the
+same root env. At inventory time Fireworks/ElevenLabs keys were absent, Telnyx key/number
+empty, Retell configured. Subsequent Retell phone inventory proved the configured outbound
+number is Retell-managed Twilio (`retell-twilio`), not Telnyx. User has never added a Telnyx
+key; Telnyx remains a prospective candidate and setup is deferred. User received a hidden-input command to add candidate keys; later told to skip Telnyx
+for now after actual carrier verification.
+Recheck presence without displaying secrets before concluding access is still blocked.
+Retell read-only agent GET succeeded: Retell-hosted LLM, GPT-4.1 post-call analysis,
+retention `everything`, max duration 60 minutes. Clerk instance metadata probe returned
+403; configured key presence does not establish working account access.
+
+### Remaining consequential gaps
+
+No financial ledger/allocations/reversals, version-bound approvals, real electronic/PMS
+connectors, or verified provider replacement yet. SQS delivery exists but the call runtime
+can redial after ambiguous `CALLING` redelivery; process-local completion and unwired
+hard-duration/hold controls remain. Summary notification delivery needs an outbox. The
+usage tally is not an inference billing ledger: failed commits can omit incurred spend,
+and Lambda's process-local cost lock cannot enforce a global cap. Separate-process
+crash/concurrency proof remains required. Existing summary retry deletion needs durable
+versioned replacements. Real-time evaluation, clinic, reference-content licenses, BAAs,
+ElevenLabs custom-LLM/ZRM entitlement, and intended payer products/regions remain unverified.
+
+### Exact next step
+
+W0 focused checks and independent review are recorded below. Next implement FW-07 provider-path containment and W2 transactional call intents/inbox/outbox
+against SQS, alongside the Fireworks gateway using synthetic inputs once keys are present.
+Do not restart the old Vercel-only runner decision or claim passing fake tests establish parity.
+
+### Verification record
+
+- Summary worker: **46 tests passed**, including real Postgres fault injection,
+  sequential replay, stale edits/newer calls, active-call rejection, and unknown code
+  preservation. Typecheck/lint passed. No cross-process or real model accuracy claim.
+- Identity: payer-ivr163, shared types26, worker handler18 and real BullMQ/Postgres e2e4
+  passed. On AWS baseline, inline runtime16 + Lambda worker11 passed with real DB
+  at the runtime/batch boundary; no real AWS messages or third-party calls were sent.
+- Summarizer78 and payer-ivr163 passed for raw codes/reference corrections; both typecheck/lint pass.
+- Queue56 and notifier6 passed. Financial API45, web25, SDK19 focused checks passed;
+  API/web/SDK typechecks and scoped lint passed. One Playwright signed-out dashboard
+  regression passed using installed Chrome on local :3015. Authenticated browser E2E
+  remains unverified. Independent review found sparse-week chart distortion; corrected
+  to eight UTC buckets with gap/boundary/future/cross-tenant regressions. Follow-up
+  reports API6 and component11 tests passed; no additional financial behavior changed.
+- Retell contract suite: **11 passing assertions and 2 expected failures** for the
+  documented-but-unsupported raw envelope. This is blocker reproduction, not compatibility.
+- AWS local packaging succeeded: API38.4MB/worker30.4MB unzipped, zip11.2MB/9.7MB.
+  Artifacts are local only; no deploy performed and no Lambda emulator smoke yet.
+- Full API suite: **232 tests passed**, including the two expected FW-07 failures,
+  before the final zero-filled-week follow-up. API typecheck/lint and web typecheck pass.
+
+## Previous session — 2026-10-12 audit (preserved)
+
+The user requested a blunt comparison with Lunabill, current dental/AI web research,
+and a detailed implementation plan using open-weight models hosted on Fireworks for
+all AI. The deliverable is [FIREWORKS_IMPLEMENTATION_PLAN.md](./FIREWORKS_IMPLEMENTATION_PLAN.md):
+18 ranked gaps with code evidence, current primary sources, model/voice feasibility,
+target data/workflow architecture, evaluation gates, nine workstreams, 24 first-sprint
+implementation slices, staffing estimates, and unit economics. ADR-054 records the
+accepted model requirement separately from proposed architecture.
+
+**No runtime implementation or deployment occurred.** Baseline was `25e82a7`.
+Current production state and signed contracts were not inspected. The older reports
+below describe historical demo/deployment sessions, not present verification.
+ADR-053 contains the newer Vercel-only demo topology and hosting-budget constraint.
+
+Key blockers: model-only `RESOLVED` transitions; face-value “recovery” reporting;
+raw Retell webhook/schema mismatch; process-local call completion; duplicate/partial
+side-effect windows; incorrect N370 mapping; missing dental lines, payment ledger,
+durable follow-ups, source sync, and review workflows. The strict Fireworks requirement
+also needs a verified open-weight streaming ASR/TTS path before autonomous voice.
+
+Validation this session: summarizer 70 tests passed; payer-ivr 153 tests passed;
+synthetic documented-shape Retell webhook rejected by the exported parser, reproducing
+the contract mismatch. These 223 tests do not validate live calling or model quality.
+
+**Next work:** W0 containment and vendor/voice feasibility, seed evaluation cases,
+and a durable-runner decision. Use the FW-01–24 backlog in `docs/TASKS.md`; do not
+interpret this plan as authorization to buy infrastructure, change pricing, or
+enable real PHI/automated submissions. Small US Open Dental practices are a planning
+assumption; agency/DSO requirements would change scope. No application gap is marked fixed.
+
+## Historical context — August 2026
 
 ## What was just done
 

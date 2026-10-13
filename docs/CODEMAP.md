@@ -176,3 +176,12 @@ end-to-end. Fastify-based health probe at `:3010/healthz`.
 - Security & HIPAA: `docs/SECURITY.md`
 - ADRs: `docs/DECISIONS.md`
 - Patterns / gotchas: `docs/PATTERNS.md` _(created on first `/learn` save)_
+
+## W0 additions (2026-10-13)
+
+- `packages/payer-ivr/src/call-identity.ts`: shared required subscriber/NPI validation.
+- `apps/api/src/lib/financial-reporting.ts`: explicit verified-payment unavailability contract.
+- `apps/api/test/fixtures/retell/`: synthetic documented vendor envelopes and contract limits.
+- `docs/PROVIDER_EVIDENCE.md`: capability matrix, account/provider contracts and blocked probes.
+- `docs/CODE_REFERENCE_EVIDENCE.md`: existing code annotation corrections and licensing/provenance limits.
+- `apps/api/src/lambda-worker.ts`, `packages/queue/src/sqs.ts`, `infra/aws/`: current AWS delivery/deployment baseline.

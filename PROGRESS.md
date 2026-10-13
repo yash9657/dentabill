@@ -2,7 +2,36 @@
 
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
-**Last updated:** 2026-08-22
+**Last updated:** 2026-10-13
+**Current work:** implementing W0 containment on AWS baseline `bfd4e8f`, branch
+`codex/w0-containment`. The full parity goal is active; no overall completion claim.
+[Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
+[session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
+actual account probes, and blocked end-to-end capabilities.
+
+**Implemented locally:** honest operational reporting with verified payments unavailable;
+model-only financial closure blocked; stale summary states protected; atomic summary/state/
+audit commit; missing subscriber/NPI blocks enqueue/dial without fallback or retry across
+BullMQ/inline/AWS SQS. Unknown raw codes are preserved for review and erroneous reference
+annotations corrected. Full API232, summary46, summarizer78 tests passed; two API tests
+explicitly expect the unresolved Retell-envelope failure. No production deploy or real calls ran.
+
+**User direction:** ElevenLabs speech/orchestration is permitted, business inference stays
+on Fireworks open weights. There is no pilot clinic yet: all development uses fake patient
+data. AWS Lambda/SQS/Aurora is the current backend; the Vercel-only notes below are historical.
+The frontend remains on Vercel. The live worker is configured for demo mode. AWS readiness
+passed on a second direct Function URL probe; custom API-domain readiness remains unverified.
+
+**Still required:** real financial reconciliation, source sync/electronic connectors,
+version-bound reviewed actions, durable external-intent recovery, Fireworks gateway/evals,
+voice contract/behavior proof, PHI agreements, production validation and authorized clinic evidence.
+
+### Historical go-live report — 2026-08-22
+
+The following test counts, deploy tasks, and completion claims describe that earlier
+session. They are not a current audit of production readiness. ADR-053 supersedes the
+older deployment target for the zero-extra-hosting demo.
+
 **Current phase:** Phase 5 — Go-live for investor demo (**tracks A–E2 executed; deploy + telephony next**). Plan: `docs/GOLIVE_PLAN.md` (ADR-051); execution findings: **ADR-052**. All gates green: typecheck 16/16 packages, ESLint 0 errors, **1,006 tests passing**, three Docker images building, api image verified booting and serving `/v1/readyz` 200 with live Postgres + Redis probes.
 **Proven end-to-end, not asserted:** one real enqueue drove `PENDING→CALLING→DENIED→MANUAL_REVIEW`, a 42s call with 16 CallEvents, a CallSummary at 0.88 confidence, and an audit row carrying `summaryId` + `confidence` + `promptVersion` — demo-script step 7 working for real.
 **Next task:** Deploy to Railway + Vercel (E3–E7), then real telephony. Retell is further along than the docs claimed: the API key works, all three payer agents already exist in the account, and the outbound number + agent IDs are configured. The remaining telephony gap is that the agents carry only an `end_call` tool — **no `press_digit`** — so they can talk to a rep but cannot navigate an IVR. Fix is a compiler from `packages/payer-ivr/src/ivr/maps/*` (already a `WAIT`/`DTMF`/`COLLECT_VOICE_INPUT`/`WAIT_FOR_HUMAN` step machine) into Retell `press_digit` tools + states. The hold detector, duration guard and a `waitForCallEnd` timeout also remain unwired — no real call should be placed until they are.

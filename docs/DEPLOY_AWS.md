@@ -99,3 +99,36 @@ curl -XPOST localhost:9000/2015-03-31/functions/function/invocations -d @sqs-eve
 
 - A call job runs the whole phone call inside one worker invocation. If a call outlives the 900 s Lambda timeout, the invocation dies and SQS redelivers the job after the visibility timeout. The redelivery is allowed to take the `CALLING` lease and dials again, the same as a stalled BullMQ job. The duration and hold guards in `apps/call-worker` (`createDurationGuard`, `createHoldDetector`) exist but are not wired into the call handler yet, so `MAX_CALL_DURATION_MS` / `MAX_HOLD_MS` do not currently bound a call. Wire them in with caps well under 900 s before running real telephony on Lambda.
 - SQS ignores BullMQ priority, so call jobs run in arrival order.
+
+## W0 containment release validation (2026-10-13)
+
+Current intended baseline is `infra/aws` at `bfd4e8f`; W0 changes are local on
+`codex/w0-containment`, not deployed. See ADR-055/056 and `SESSION_CONTEXT.md`.
+
+The reporting API contract removes legacy recovered-value fields. Deploy matching
+API/SDK/frontend builds together after authorization; do not point the updated web
+client at an older stats/report API. Verified payment data is explicitly unavailable.
+
+Missing subscriber ID or NPI now blocks enqueue/dial and SQS acknowledges the blocked
+job while preserving NEEDS_INFO. Source imports must supply actual identity; never
+backfill it from claim number. Synthetic demo builders provide synthetic subscriber IDs.
+Model-reported payment routes to review; old automatically resolved rows are not changed
+by this code release and must not be treated as verified collections.
+
+Local check commands (dedicated synthetic database required):
+
+```bash
+TEST_DATABASE_URL='postgresql://dentabill:dentabill@localhost:5432/dentabill_w0_finance?schema=public' pnpm --filter @dentabill/api test
+TEST_DATABASE_URL='postgresql://dentabill:dentabill@localhost:5432/dentabill_w0_summary?schema=public' pnpm --filter @dentabill/summary-worker test
+pnpm --filter @dentabill/api typecheck
+pnpm --filter @dentabill/web typecheck
+pnpm --filter @dentabill/api build:lambda
+```
+
+These tests include destructive cleanup of their local fixture tables: never configure
+them with the production database. No new migration is required for this W0 slice.
+A successful build does not prove deployment or external behavior. Require coordinated
+preview/API browser checks before release, and retain prior artifacts for rollback.
+The raw Retell envelope remains unsupported (two explicit expected-failure contract
+checks); do not enable live telephony based on synthetic worker tests. Provider
+credentials alone do not satisfy runtime, signer, duration, consent or agreement gates.

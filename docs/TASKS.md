@@ -9,6 +9,60 @@ Rules:
 
 ---
 
+## Fireworks / dental recovery program — active 2026-10-13
+
+Detailed scope, evidence, dependencies, estimates, and acceptance criteria live in
+[FIREWORKS_IMPLEMENTATION_PLAN.md](./FIREWORKS_IMPLEMENTATION_PLAN.md), especially
+§9–10. ADR-054 records the user-required open-weight Fireworks direction. These items
+are tracked below; historical phase checkmarks do not imply production readiness.
+Checkboxes remain unchecked until merged; local implementation is recorded explicitly.
+Each FW item is a 1–3 hour slice; larger workstreams require further decomposition.
+
+- [ ] **FW-01** Regression: repeated calls, distinct claims, and unsupported recovery metrics. _Local regression reproduced; verified with real isolated Postgres._
+- [ ] **FW-02** Correct financial labels/denominators in API and UI (depends FW-01). _Implemented locally across API/SDK/UI; final verification in session context._
+- [ ] **FW-03** Contain model-only financial closure and stale-state transitions. _Implemented locally; atomic commit, stale-state and fault-injection tests._
+- [ ] **FW-04** Correct denial-code semantics; preserve raw/unmapped codes. _Implemented locally/tested; historical v1 prompt omission remains a W1 dependency._
+- [ ] **FW-05** Remove subscriber-ID fallback; block dialing on missing identity. _Implemented locally and verified across BullMQ/inline/AWS SQS; not deployed._
+- [ ] **FW-06** Real-envelope webhook/signature contract fixture. _Reproduced with documented synthetic envelopes, 11 passing assertions/2 expected FW-07 failures; no compatibility claim._
+- [ ] **FW-07** Transitional webhook normalization or explicit live-path disablement (FW-06).
+- [ ] **FW-08** Separate-process call/fault-injection integration harness.
+- [ ] **FW-09** Fireworks ASR/TTS, license, region, and contractual feasibility record.
+- [ ] **FW-10** Typed model gateway and fake with evidence/model-release contracts.
+- [ ] **FW-11** Synthetic Fireworks adapter with host/model allowlist (FW-10).
+- [ ] **FW-12** Structured output, truncation, and semantic validation (FW-11).
+- [ ] **FW-13** Bounded retries/deadlines/cancellation and vendor failure fixtures (FW-11).
+- [ ] **FW-14** Redacted inference telemetry and PHI/secret log-capture regression.
+- [ ] **FW-15** Annotation schema and first 25 adjudicated synthetic edge cases.
+- [ ] **FW-16** Deterministic evaluation runner and report (FW-15).
+- [ ] **FW-17** Intent/inbox/outbox persistence and scoped uniqueness contracts.
+- [ ] **FW-18** Atomic state/audit/outbox commit and crash/replay test (FW-17).
+- [ ] **FW-19** Canonical source identity and non-destructive duplicate report.
+- [ ] **FW-20** Validated uniqueness migration and concurrent import regression (FW-19).
+- [ ] **FW-21** Claim-line, coverage, partial-payment, and reversal fixtures.
+- [ ] **FW-22** PHI vendor/control evidence register and security-copy reconciliation.
+- [ ] **FW-23** Durable runner decision within documented hosting constraints.
+- [ ] **FW-24** Evidence-backed action preview with approval/version invalidation.
+
+Prioritize FW-01–06, FW-09, FW-15, FW-22, and FW-23. Autonomous voice cannot launch
+until its business inference uses approved Fireworks open weights and the explicitly
+permitted ElevenLabs speech/orchestration path is measured and contractually suitable. Live workflows
+require durable execution and applicable PHI agreements even for an unpaid pilot.
+
+### Follow-on slices discovered during implementation
+
+- [ ] **FW-25** SQS call intent ownership, ambiguous-acceptance reconciliation, and no-redial separate-process proof (AWS already deployed; updates FW-23 assumption).
+- [ ] **FW-26** Durable notification outbox and inference-attempt usage ledger; failed DB commits must not erase incurred provider spend.
+- [ ] **FW-27** Versioned summary replacement/retry; preserve prior evidence and reject nonterminal-call retries.
+- [ ] **FW-28** Reconcile Retell webhook-badged signing key vs generated deployment secret; verify stop-call API vs delete-call/data before any live termination.
+- [ ] **FW-29** Verify custom API DNS and cold readiness behavior, restore test, and actual deployment settings without relying on Terraform alone.
+- [ ] **FW-30** Investigate API rate-limit hook ordering; authenticated requests may share the pre-auth anon bucket.
+
+No pilot clinic yet (user confirmed); fake data is authorized. Real connector/clinic evidence
+is visibly blocked pending a test partner and authorized system access. Open Dental is a rollout
+sequence; the broader capability matrix remains in scope.
+
+---
+
 ## Phase 1 — Foundations (complete)
 
 > Phase 1 was reshaped during the 2026-04-24 planning session — UI tasks moved to Phase 2; cloud target deferred to Phase 5; CI, commit enforcement, HIPAA primitives, architecture docs added. See `docs/PHASE_PLAN.md` and ADR-004 / ADR-005 / ADR-006. **All 12 implementation tasks landed by 2026-04-25.**

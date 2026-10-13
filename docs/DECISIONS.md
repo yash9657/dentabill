@@ -680,3 +680,94 @@ The corresponding workaround is removed from each app's `vitest.setup.ts`. `TEST
 - The daily summary token budget becomes a soft cap across instances; rate limiting stays per instance.
 - SSE costs ~2 queries/s per open stream on Neon; streams self-close at call end.
 - Deployment Protection blocks self-calls to `*.vercel.app` deployment URLs: production uses the production domain (`INTERNAL_API_BASE_URL` / `VERCEL_PROJECT_PRODUCTION_URL`); previews need Protection Bypass for Automation, whose secret the dispatcher forwards.
+
+## ADR-054 — Fireworks-hosted open-weight AI direction; production plan and feasibility gates
+
+**Date:** 2026-10-12. **Status:** accepted product constraint; implementation architecture proposed.
+**Plan:** [FIREWORKS_IMPLEMENTATION_PLAN.md](./FIREWORKS_IMPLEMENTATION_PLAN.md).
+
+**Context.** The user requested a candid gap analysis against Lunabill, current domain
+and AI research, an industry-grade implementation plan, and open-weight models hosted
+on Fireworks for all AI. The repository contains a working simulated call/summary path
+and an Anthropic/Retell implementation; this request supersedes the prior provider
+direction for future model inference, but does not itself deploy a replacement.
+
+**Accepted decisions.**
+
+1. All future production model inference is to use approved open-weight models hosted
+   by Fireworks: text, vision, embeddings, reranking, model-based evaluation, and voice
+   inference if available. No hidden proprietary-model or other-provider fallback.
+2. Model/provider migration must preserve reviewability, evidence, tenant boundaries,
+   and historical data. Existing summaries remain readable. A previously approved
+   Fireworks release or human handling is the rollback path.
+3. The audit/implementation plan is the current planning baseline. It does not mark
+   any discovered runtime defect fixed or certify production readiness.
+
+**Proposed, not yet implemented or purchased.** A typed model gateway; dental
+line/coverage/evidence/payment entities; transactional inbox/outbox and durable
+execution; electronic-channel-first source sync; evidence review and version-bound
+approvals; quality/reliability release gates. Initial model candidates and the small
+Open Dental practice segment require evaluation and pilot validation.
+
+**Unresolved gates.** Confirm Fireworks-hosted open-weight streaming ASR and TTS,
+model/deployment identity and region, applicable agreements and content licenses,
+PMS/clearinghouse access, and a funded durable runner. Audio-input support alone does
+not establish TTS. If voice is unavailable under the strict requirement, ship the
+electronic-channel/human-review scope first. ADR-053's existing hosting constraint
+and free-forever pricing remain in force pending separate decisions; the plan does
+not authorize infrastructure spend or change pricing.
+
+**Consequences.** Future implementation starts with containment of unsupported
+financial metrics, model-only claim closure, identity fallback, and external-contract
+gaps, alongside vendor feasibility and evaluations. Durable production workflows
+cannot rely on the demo inline executor. The 14–18 week estimate is conditional on
+three engineers, billing expertise, vendor access, and a deliberately narrow scope;
+it is not a parity or autonomy promise.
+
+## ADR-055 — AWS baseline and the ElevenLabs speech/orchestration exception
+
+**Date:** 2026-10-13. **Status:** accepted user direction; provider choice unverified.
+
+User explicitly permits ElevenLabs speech models and voice orchestration while requiring
+Fireworks-hosted open-weight business reasoning, extraction, vision, retrieval and evaluation.
+This amends ADR-054's all-Fireworks voice constraint; it does not approve hidden fallback LLMs,
+post-call analysis models, or a production provider switch. Existing Retell remains available
+for controlled comparison; no real third-party calls were authorized. See
+[provider evidence](./PROVIDER_EVIDENCE.md) for account/contract/behavior gates.
+
+User also corrected the backend to AWS. Fetch confirmed `origin/main` was already included;
+actual newest backend revision was `origin/infra/aws=bfd4e8f`, incorporated with all prior
+work preserved. Lambda API and SQS worker plus shared Aurora are the current baseline;
+Vercel remains the frontend and historical inline mode remains supported. ADR-053's
+Vercel-only assumption must not drive new production work. Existing budgets remain binding:
+no service purchase, expansion, or production cutover is authorized by this decision.
+
+The user has no pilot clinic yet and directs development with fake patient data. This enables
+synthetic development but leaves real workflow/connector, billing-expert and PHI launch
+verification incomplete. No eventual PMS/payer/product/region scope was silently removed.
+
+## ADR-056 — Financial containment, identity gates, and summary commit boundaries
+
+**Date:** 2026-10-13. **Status:** implemented locally; release and live workflow proof pending.
+
+Claim workflow disposition, call completion, payer-reported amounts, and actual matched cash
+are distinct facts. Remove unsupported recovered-revenue sums rather than relabel uncertain
+payments as zero. Reports expose operational unique-claim/call counts and unavailable verified
+payments until reconciliation exists. This is containment, not a payment ledger.
+
+A model's `RESOLVED` advice never closes a claim. Eligible terminal-call observations can route
+to review or nonfinancial information gathering; protected claim states, intervening edits,
+and newer calls prevent stale transitions. Summary persistence, conditional state change,
+audit, and existing usage tally commit atomically; sequential replay does not re-run committed
+inference. Notifications request review. Active calls cannot persist a partial final summary.
+
+Missing/blank subscriber or provider NPI blocks enqueue and dialing without substituting a
+claim number. Worker failure records NEEDS_INFO with scoped CAS/audit and is non-retryable in
+BullMQ, inline, and SQS; it must not be overwritten by final-receive DLQ escalation.
+
+Limits remain explicit: approved amount is not actual payment; exact evidence-bound action
+approval and financial reconciliation are unimplemented. A DB transaction does not make
+external inference/notifications transactional. Incurred inference cost needs its own ledger,
+notifications need an outbox, and external call acceptance needs durable intents/reconciliation.
+Separate-process crashes, real vendor behavior, and authorized clinic end-to-end runs remain
+required. Current synthetic tests do not establish production accuracy or recovery attribution.
