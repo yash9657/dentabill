@@ -12,7 +12,7 @@ import type { RetellEventListener, RetellPort } from './port.js';
  * Internal narrow shape of the `retell-sdk` default export. We declare
  * exactly the methods we depend on so a minor SDK version bump that
  * adds new methods (or renames internal types) doesn't ripple into
- * this package — only `createPhoneCall` and `delete` are load-bearing.
+ * this package — only `createPhoneCall` and `stop` are load-bearing.
  */
 interface RetellLikeClient {
   readonly call: {
@@ -23,7 +23,10 @@ interface RetellLikeClient {
       readonly metadata?: unknown;
       readonly retell_llm_dynamic_variables?: Record<string, unknown>;
     }): Promise<{ readonly call_id: string }>;
-    delete(callId: string): Promise<void>;
+    stop(
+      callId: string,
+      options: { readonly maxRetries: number; readonly timeout: number },
+    ): Promise<void>;
   };
 }
 
@@ -114,12 +117,11 @@ export class LiveRetell implements RetellPort {
     const validation = EndCallInputSchema.safeParse(input);
     if (!validation.success) throw validation.error;
     const client = await this.#getClient();
-    // Retell's SDK exposes `client.call.delete(callId)` which terminates
-    // the active call AND removes the call record. We accept the record
-    // removal because we already persist the call lifecycle into our own
-    // CallEvent rows; the canonical record is in our DB, not Retell's.
-    // Idempotent at the Retell API level — repeat deletes return success.
-    await client.call.delete(input.retellCallId);
+    // Stop Call terminates an ongoing call; Delete Call removes its data.
+    // https://docs.retellai.com/api-references/stop-call
+    // Keep failures visible to the caller for reconciliation: neither
+    // a timeout nor a generic 4xx proves the call has already ended.
+    await client.call.stop(input.retellCallId, { maxRetries: 0, timeout: 10_000 });
   }
 
   subscribe(retellCallId: string, listener: RetellEventListener): () => void {

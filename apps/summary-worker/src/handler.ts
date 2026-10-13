@@ -1,7 +1,6 @@
 import {
   audit,
   getOrgScopedDb,
-  type CallEvent,
   type ClaimStatus,
   type NextAction,
   type prisma,
@@ -16,6 +15,7 @@ import {
   type SummarizerPort,
   type SummarizeInput,
 } from '@dentabill/summarizer';
+import { selectCallTranscript } from '@dentabill/types';
 import type { Job } from 'bullmq';
 import type { Redis } from 'ioredis';
 
@@ -209,7 +209,12 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
         where: { callId: call.id, call: { organizationId: data.organizationId } },
         orderBy: { timestamp: 'asc' },
       });
-      const transcriptTurns = transcriptFromEvents(events);
+      const transcript = selectCallTranscript(events);
+      const transcriptTurns = transcript.turns.map((turn) => ({
+        role: turn.role,
+        text: turn.text,
+        timestamp: turn.observedAt,
+      }));
 
       // PHI read — the events contain transcript text. Audit the read
       // before any further processing so a downstream throw still
@@ -221,6 +226,19 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
         organizationId: data.organizationId,
         metadata: { transcriptTurnCount: transcriptTurns.length, jobId: job.id ?? null },
       });
+
+      if (
+        transcript.kind === 'provisional' ||
+        transcript.kind === 'unavailable' ||
+        !transcriptTurns.some((turn) => turn.text.trim().length > 0)
+      ) {
+        return {
+          summaryId: null,
+          outcome: 'TRANSCRIPT_UNAVAILABLE',
+          tokensUsed: 0,
+          promptVersion: data.promptVersion,
+        };
+      }
 
       // Guard: the call must have a payerCode-bearing Claim in scope.
       const claim = await orgScoped.claim.findFirst({ where: { id: call.claimId } });
@@ -318,7 +336,8 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
                 ? null
                 : (summarizeResult.summary.amountApprovedCents / 100).toFixed(2),
             notes: summarizeResult.summary.notes,
-            rawTranscript: transcriptTurns.map((t) => `[${t.role}] ${t.text}`).join('\n'),
+            rawTranscript:
+              transcript.rawText ?? transcriptTurns.map((t) => `[${t.role}] ${t.text}`).join('\n'),
             claudeSummary: stringifyClaudeSummary(summarizeResult.summary),
           },
         });
@@ -406,39 +425,6 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
 function isStaleResetDay(prev: Date | null, billingDay: string): boolean {
   if (!prev) return true;
   return prev.toISOString().slice(0, 10) !== billingDay;
-}
-
-interface TranscriptTurn {
-  readonly role: 'agent' | 'representative' | 'system';
-  readonly text: string;
-  readonly timestamp: Date;
-}
-
-function transcriptFromEvents(events: readonly CallEvent[]): readonly TranscriptTurn[] {
-  const turns: TranscriptTurn[] = [];
-  for (const ev of events) {
-    if (ev.eventType !== 'call.transcript') continue;
-    const data = ev.data as Record<string, unknown> | null;
-    const role = pickRole(data);
-    const text = typeof data?.text === 'string' ? data.text : '';
-    if (text.length === 0) continue;
-    turns.push({ role, text, timestamp: ev.timestamp });
-  }
-  return turns;
-}
-
-function pickRole(data: Record<string, unknown> | null): TranscriptTurn['role'] {
-  const raw = typeof data?.role === 'string' ? data.role.toLowerCase() : '';
-  // `user` is Retell's own wire vocabulary for the human on the far end of the
-  // call — the payer representative. Without it here the fallthrough labelled
-  // every rep line `agent`, so the transcript handed to the summarizer (and
-  // the `rawTranscript` persisted alongside the summary) attributed the
-  // payer's words to our own agent.
-  if (raw === 'representative' || raw === 'rep' || raw === 'human' || raw === 'user') {
-    return 'representative';
-  }
-  if (raw === 'system') return 'system';
-  return 'agent';
 }
 
 function stringifyClaudeSummary(summary: {

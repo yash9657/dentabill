@@ -17,6 +17,8 @@ import {
   type RetellCallEndedEvent,
   type RetellPort,
   RetellCallEndReason,
+  RetellEventSchema,
+  reconcileRetellWebhookInbox,
   type StartCallInput,
   validateCallIdentity,
 } from '@dentabill/payer-ivr';
@@ -253,18 +255,24 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
     const finalCallStatus = endReasonToCallStatus(ended.endReason);
     const finalClaimStatus = endReasonToClaimStatus(ended);
     await deps.prisma.call.updateMany({
-      where: { id: call.id, organizationId: data.organizationId },
+      where: {
+        id: call.id,
+        organizationId: data.organizationId,
+        status: { notIn: ['COMPLETED', 'FAILED', 'VOICEMAIL'] },
+      },
       data: {
         status: finalCallStatus,
-        endedAt: new Date(ended.endedAt),
+        endedAt: ended.endedAt === null ? null : new Date(ended.endedAt),
         durationSeconds: ended.durationSeconds,
-        humanReached:
-          ended.endReason === RetellCallEndReason.COMPLETED ||
-          ended.endReason === RetellCallEndReason.AGENT_HANGUP,
       },
     });
     await deps.prisma.claim.updateMany({
-      where: { id: claim.id, organizationId: data.organizationId },
+      where: {
+        id: claim.id,
+        organizationId: data.organizationId,
+        status: 'CALLING',
+        calls: { none: { createdAt: { gt: call.createdAt } } },
+      },
       data: { status: finalClaimStatus },
     });
 
@@ -413,8 +421,12 @@ function waitForCallEnd(args: WaitForCallEndArgs): Promise<RetellCallEndedEvent>
     };
     let cancelTimer: ReturnType<typeof setInterval> | null = null;
     let cancelInFlight = false;
+    let pollInFlight = false;
+    let settled = false;
+    const isSettled = (): boolean => settled;
 
     const cleanup = (): void => {
+      settled = true;
       unsubscribe();
       if (cancelTimer) {
         clearInterval(cancelTimer);
@@ -427,13 +439,35 @@ function waitForCallEnd(args: WaitForCallEndArgs): Promise<RetellCallEndedEvent>
     // before this listener opens. The marker column survives reboots
     // and is checked at entry + every cancelPollIntervalMs ms.
     const checkCancelMarker = async (): Promise<void> => {
-      if (cancelInFlight) return;
+      if (pollInFlight || isSettled()) return;
+      pollInFlight = true;
       try {
-        const row = await args.prisma.call.findUnique({
-          where: { id: args.callId },
+        await reconcileRetellWebhookInbox(args.prisma, {
+          organizationId: args.organizationId,
+          callId: args.callId,
+          retellCallId: args.retellCallId,
+        });
+        const terminal = await args.prisma.callEvent.findFirst({
+          where: {
+            callId: args.callId,
+            call: { organizationId: args.organizationId },
+            eventType: 'webhook.call.ended',
+          },
+          orderBy: [{ timestamp: 'asc' }, { id: 'asc' }],
+        });
+        if (terminal && !isSettled()) {
+          const parsed = RetellEventSchema.safeParse(terminal.data);
+          if (parsed.success && parsed.data.type === 'call.ended') {
+            cleanup();
+            resolve(parsed.data);
+            return;
+          }
+        }
+        const row = await args.prisma.call.findFirst({
+          where: { id: args.callId, organizationId: args.organizationId },
           select: { cancelRequestedAt: true },
         });
-        if (row?.cancelRequestedAt) {
+        if (row?.cancelRequestedAt && !cancelInFlight && !isSettled()) {
           cancelInFlight = true;
           // Tell Retell to terminate; the natural call.ended event
           // will resolve the outer promise. Failures here are logged
@@ -448,21 +482,24 @@ function waitForCallEnd(args: WaitForCallEndArgs): Promise<RetellCallEndedEvent>
               { retellCallId: args.retellCallId, callId: args.callId },
               'cancel marker observed — endCall issued',
             );
-          } catch (err) {
+          } catch {
             args.logger.warn(
-              { err, retellCallId: args.retellCallId },
+              { retellCallId: args.retellCallId },
               'cancel marker observed — endCall failed, awaiting natural end',
             );
           }
         }
-      } catch (err) {
-        args.logger.error({ err }, 'cancel marker poll failed; continuing');
+      } catch {
+        args.logger.error({ callId: args.callId }, 'call event/cancel poll failed; continuing');
+      } finally {
+        pollInFlight = false;
       }
     };
 
     unsubscribe = args.retellPort.subscribe(args.retellCallId, (event) => {
-      chain = chain.then(async () => {
-        try {
+      chain = chain
+        .then(async () => {
+          if (isSettled()) return;
           await args.prisma.callEvent.create({
             data: {
               callId: args.callId,
@@ -470,31 +507,33 @@ function waitForCallEnd(args: WaitForCallEndArgs): Promise<RetellCallEndedEvent>
               data: event as object,
             },
           });
-        } catch (err) {
-          args.logger.error(
-            { err, retellCallId: args.retellCallId },
-            'failed to persist CallEvent',
-          );
-        }
-        if (event.type === 'call.transcript') {
-          // Reaching this branch means the agent / rep is talking;
-          // the call is at minimum NAVIGATING_IVR. We do not flip
-          // status to ON_HOLD / HUMAN_REACHED here — those transitions
-          // belong to the navigator (P3-T11) which has more context.
-          await args.prisma.call.updateMany({
-            where: { id: args.callId, organizationId: args.organizationId },
-            data: { status: 'NAVIGATING_IVR' },
-          });
-        }
-        if (event.type === 'call.ended') {
+          if (event.type === 'call.transcript') {
+            // Reaching this branch means the agent / rep is talking;
+            // the call is at minimum NAVIGATING_IVR. We do not flip
+            // status to ON_HOLD / HUMAN_REACHED here — those transitions
+            // belong to the navigator (P3-T11) which has more context.
+            await args.prisma.call.updateMany({
+              where: {
+                id: args.callId,
+                organizationId: args.organizationId,
+                status: { notIn: ['COMPLETED', 'FAILED', 'VOICEMAIL'] },
+              },
+              data: { status: 'NAVIGATING_IVR' },
+            });
+          }
+          if (event.type === 'call.ended') {
+            cleanup();
+            resolve(event);
+          }
+          if (event.type === 'call.error') {
+            cleanup();
+            reject(new Error('Retell reported a call error.'));
+          }
+        })
+        .catch(() => {
           cleanup();
-          resolve(event);
-        }
-        if (event.type === 'call.error') {
-          cleanup();
-          reject(new Error(`Retell call.error ${event.code}: ${event.message}`));
-        }
-      });
+          reject(new Error('Call event persistence failed.'));
+        });
     });
 
     // Entry-time check + ongoing poll.
@@ -517,6 +556,7 @@ function endReasonToCallStatus(reason: RetellCallEndedEvent['endReason']): Call[
       return 'COMPLETED';
     case RetellCallEndReason.NO_ANSWER:
     case RetellCallEndReason.BUSY:
+    case RetellCallEndReason.VOICEMAIL:
       return 'VOICEMAIL';
     case RetellCallEndReason.ERROR:
       return 'FAILED';
@@ -529,6 +569,7 @@ function endReasonToClaimStatus(ended: RetellCallEndedEvent): ClaimStatus {
   if (
     ended.endReason === RetellCallEndReason.NO_ANSWER ||
     ended.endReason === RetellCallEndReason.BUSY ||
+    ended.endReason === RetellCallEndReason.VOICEMAIL ||
     ended.endReason === RetellCallEndReason.ERROR
   ) {
     return 'MANUAL_REVIEW';

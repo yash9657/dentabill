@@ -98,7 +98,8 @@ export interface SummarizeInput {
   readonly callId: string;
   readonly payerCode: string;
   readonly transcriptTurns: readonly {
-    readonly role: 'agent' | 'representative' | 'system';
+    // Remote speech can be a representative or IVR; source is unsplit provider text.
+    readonly role: 'agent' | 'representative' | 'system' | 'remote' | 'source';
     readonly text: string;
     readonly timestamp: Date;
   }[];

@@ -26,11 +26,9 @@ const OUTPUT = join(REPO_ROOT, 'packages', 'api-sdk', 'openapi.json');
 // Stub env vars BEFORE any code path that touches `process.env` — in
 // particular before `@dentabill/db` (Prisma) is imported, because the
 // Prisma client autoloads `.env` from the project's working directory
-// and our root `.env` ships keys present-but-empty (`RETELL_WEBHOOK_SECRET=`)
-// for safe template defaults. An empty string slips past `??=` and would
-// then trip `getEnv()`'s `.min(16)` Zod check at boot. So we both
-// undefined-fill AND replace empty strings here, mirroring the
-// `vitest.setup.ts` fallback policy.
+// and our root `.env` ships keys present-but-empty for safe template
+// defaults. An empty string slips past `??=`, so both absent and empty
+// values receive these offline-only stubs.
 const OPENAPI_DUMP_DEFAULTS: Record<string, string> = {
   // `test` so the queue plugin (P3-T16) installs the in-process stub
   // instead of opening a real BullMQ connection — the dump only needs
@@ -41,9 +39,8 @@ const OPENAPI_DUMP_DEFAULTS: Record<string, string> = {
   REDIS_URL: 'redis://localhost:6379',
   NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
   NEXT_PUBLIC_API_URL: 'http://localhost:3001',
-  // `RETELL_WEBHOOK_SECRET` is `.min(16)`-validated by Zod (P3-T17).
-  // The dump script never verifies a real webhook, so any 16+ char
-  // placeholder suffices.
+  // Offline fixture only: this script never verifies provider webhooks.
+  // Deployments must supply Retell's webhook-designated API key instead.
   RETELL_WEBHOOK_SECRET: 'openapi-dump-placeholder-secret-v1',
 };
 for (const [key, value] of Object.entries(OPENAPI_DUMP_DEFAULTS)) {

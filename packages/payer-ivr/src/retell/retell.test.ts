@@ -18,7 +18,10 @@ import {
 const SECRET = 'whsec_test_dentabill_phase3_demo_only';
 
 function signPayload(secret: string, body: string): string {
-  return createHmac('sha256', secret).update(body).digest('hex');
+  const timestamp = Date.now();
+  return `v=${String(timestamp)},d=${createHmac('sha256', secret)
+    .update(body + String(timestamp))
+    .digest('hex')}`;
 }
 
 describe('RetellEventSchema', () => {
@@ -132,7 +135,7 @@ describe('verifyRetellWebhookSignature', () => {
     },
   });
 
-  it('accepts a valid hex signature', () => {
+  it('accepts a timestamped SDK-format signature', () => {
     const sig = signPayload(SECRET, body);
     expect(verifyRetellWebhookSignature({ rawBody: body, signature: sig, secret: SECRET })).toBe(
       true,
@@ -190,46 +193,137 @@ describe('verifyRetellWebhookSignature', () => {
   });
 });
 
-describe('parseRetellWebhookEnvelope', () => {
-  const validEnvelope: RetellWebhookEnvelope = {
-    eventId: 'wh_abc',
-    deliveredAt: '2026-04-28T15:00:00.000Z',
-    event: {
-      type: 'call.started',
-      retellCallId: 'call_1',
-      agentId: 'agent_delta_dental_ppo',
-      toNumberE164: '+18007656003',
-      startedAt: '2026-04-28T15:00:00.000Z',
-    },
+describe('parseRetellWebhookEnvelope — provider wire format', () => {
+  const call = {
+    call_id: 'call_1',
+    agent_id: 'agent_synthetic',
+    direction: 'outbound',
+    to_number: '+12025550101',
+    start_timestamp: 1791892800000,
   };
-
-  it('parses a well-formed JSON body', () => {
-    const parsed = parseRetellWebhookEnvelope(JSON.stringify(validEnvelope));
-    expect(parsed).toEqual(validEnvelope);
+  it('normalizes call_started without trusting metadata or inventing delivery IDs', () => {
+    const parsed = parseRetellWebhookEnvelope(JSON.stringify({ event: 'call_started', call }));
+    expect(parsed).toEqual({
+      eventId: 'retell:call_started:call_1',
+      retellCallId: 'call_1',
+      eventType: 'call_started',
+      event: {
+        type: 'call.started',
+        retellCallId: 'call_1',
+        agentId: 'agent_synthetic',
+        toNumberE164: '+12025550101',
+        startedAt: new Date(call.start_timestamp).toISOString(),
+      },
+    });
   });
-
-  it('parses a Buffer body identically', () => {
-    const parsed = parseRetellWebhookEnvelope(Buffer.from(JSON.stringify(validEnvelope), 'utf8'));
-    expect(parsed.eventId).toBe('wh_abc');
+  it('parses Buffer input', () => {
+    expect(
+      parseRetellWebhookEnvelope(Buffer.from(JSON.stringify({ event: 'call_started', call })))
+        .eventId,
+    ).toBe('retell:call_started:call_1');
   });
-
-  it('throws RetellWebhookParseError on invalid JSON', () => {
-    expect(() => parseRetellWebhookEnvelope('not json')).toThrow(RetellWebhookParseError);
+  it('preserves unknown duration and timestamps instead of inventing a successful call', () => {
+    const parsed = parseRetellWebhookEnvelope(
+      JSON.stringify({
+        event: 'call_ended',
+        call: {
+          call_id: 'call_1',
+          direction: 'outbound',
+          call_status: 'not_connected',
+          disconnection_reason: 'dial_failed',
+        },
+      }),
+    );
+    expect(parsed.event).toMatchObject({
+      type: 'call.ended',
+      endedAt: null,
+      durationSeconds: null,
+      endReason: 'error',
+      providerEndReason: 'dial_failed',
+    });
   });
-
-  it('throws RetellWebhookParseError on schema mismatch', () => {
+  it.each([
+    ['dial_no_answer', 'no_answer'],
+    ['dial_busy', 'busy'],
+    ['voicemail_reached', 'voicemail'],
+    ['call_transfer', 'error'],
+    ['max_duration_reached', 'error'],
+    ['new_unknown_reason', 'error'],
+  ])('maps %s conservatively and preserves source reason', (reason, mapped) => {
+    const parsed = parseRetellWebhookEnvelope(
+      JSON.stringify({
+        event: 'call_ended',
+        call: {
+          ...call,
+          call_status: 'ended',
+          end_timestamp: call.start_timestamp + 30_123,
+          disconnection_reason: reason,
+        },
+      }),
+    );
+    expect(parsed.event).toMatchObject({
+      endReason: mapped,
+      providerEndReason: reason,
+      durationSeconds: 30,
+    });
+  });
+  it.each([
+    'not JSON',
+    '{"event":"call_started","call":{"call_id":"call_1"}}',
+    '{"eventId":"fake","event":{"type":"call.started"}}',
+  ])('rejects malformed or internal simulation envelopes', (raw) => {
+    expect(() => parseRetellWebhookEnvelope(raw)).toThrow(RetellWebhookParseError);
+  });
+  it('rejects reversed terminal timestamps', () => {
     expect(() =>
       parseRetellWebhookEnvelope(
-        JSON.stringify({ ...validEnvelope, event: { type: 'call.started' } }),
+        JSON.stringify({
+          event: 'call_ended',
+          call: {
+            ...call,
+            call_status: 'ended',
+            end_timestamp: 0,
+            disconnection_reason: 'agent_hangup',
+          },
+        }),
       ),
     ).toThrow(RetellWebhookParseError);
   });
-
-  it('throws RetellWebhookParseError on missing eventId (replay-protection invariant)', () => {
-    const { eventId: _omit, ...withoutEventId } = validEnvelope;
-    expect(() => parseRetellWebhookEnvelope(JSON.stringify(withoutEventId))).toThrow(
-      RetellWebhookParseError,
+  it('preserves repeated speakers and excludes tool output and call analysis', () => {
+    const parsed = parseRetellWebhookEnvelope(
+      JSON.stringify({
+        event: 'transcript_updated',
+        call: {
+          ...call,
+          transcript_object: [
+            { role: 'agent', content: 'First' },
+            { role: 'agent', content: 'Second' },
+          ],
+          transcript_with_tool_calls: [
+            { role: 'tool_call_result', content: 'fabricated paid status' },
+          ],
+          call_analysis: { claimStatus: 'paid' },
+        },
+      }),
     );
+    expect(parsed.event).toMatchObject({
+      transcript: {
+        text: null,
+        turns: [
+          { role: 'agent', text: 'First', startOffsetSeconds: null },
+          { role: 'agent', text: 'Second', startOffsetSeconds: null },
+        ],
+      },
+    });
+    expect(JSON.stringify(parsed)).not.toContain('paid');
+  });
+  it('distinguishes different cumulative snapshots but deduplicates identical evidence', () => {
+    const parse = (text: string) =>
+      parseRetellWebhookEnvelope(
+        JSON.stringify({ event: 'transcript_updated', call: { ...call, transcript: text } }),
+      );
+    expect(parse('First').eventId).toBe(parse('First').eventId);
+    expect(parse('First').eventId).not.toBe(parse('First Second').eventId);
   });
 });
 

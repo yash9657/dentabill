@@ -14,9 +14,9 @@ import type { EndCallInput, RetellEvent, StartCallInput, StartCallResult } from 
  *      assigned `retellCallId` immediately; lifecycle events arrive
  *      asynchronously via `subscribe`.
  *   2. `endCall` — requests termination of an in-flight call.
- *      Idempotent — the adapter swallows "already ended" errors so the
- *      call worker can safely re-issue on a hold-cap breach + a near-
- *      simultaneous `call.ended` webhook.
+ *      A successful response acknowledges the stop request. Completion
+ *      requires terminal provider evidence; ambiguous errors propagate
+ *      for reconciliation rather than deleting call data or retrying blindly.
  *   3. `subscribe` — the worker listens for events on a specific
  *      `retellCallId`. The HTTP webhook route fans out to subscribers
  *      after HMAC-verifying + parsing inbound deliveries; FakeRetell

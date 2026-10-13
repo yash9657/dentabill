@@ -152,7 +152,8 @@ describe('createCallJobHandler — happy path', () => {
     expect(callRow.organizationId).toBe(orgId);
     expect(callRow.claimId).toBe(claimId);
     expect(callRow.status).toBe('COMPLETED');
-    expect(callRow.humanReached).toBe(true);
+    // A hangup/completion event alone does not prove a human was reached.
+    expect(callRow.humanReached).toBe(false);
     expect(callRow.attemptNumber).toBe(1);
     expect(callRow.endedAt).not.toBeNull();
     expect(callRow.durationSeconds).not.toBeNull();

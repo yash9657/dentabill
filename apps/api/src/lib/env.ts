@@ -37,15 +37,13 @@ const envSchema = z.object({
    */
   DOB_HASH_SECRET: z.string().min(16).default('dev-only-dob-hash-secret-rotate-before-production'),
   /**
-   * Shared secret used to verify HMAC-SHA256 signatures on inbound
-   * Retell webhooks (P3-T17 / ADR-036). Required in production —
-   * the webhook route refuses to verify with an empty secret. Defaulted
-   * in dev/test so suites can craft signatures with a known value.
+   * Retell API key marked with the webhook badge in the Retell dashboard.
+   * The legacy variable name is retained for deployment compatibility;
+   * this is NOT an independently generated signing secret. Required when
+   * real telephony is configured. With no key, inbound webhooks fail closed
+   * while the no-key demo can still boot. See Retell's secure-webhook docs.
    */
-  RETELL_WEBHOOK_SECRET: z
-    .string()
-    .min(16)
-    .default('dev-only-retell-webhook-secret-rotate-before-production'),
+  RETELL_WEBHOOK_SECRET: z.string().trim().min(1).optional(),
   /**
    * Svix-signed webhook secret used to verify inbound Clerk webhooks
    * (organizationMembership.deleted, organization.deleted). Optional
@@ -55,11 +53,11 @@ const envSchema = z.object({
    */
   CLERK_WEBHOOK_SECRET: z.string().optional(),
   /**
-   * Telephony vendor key. The api never places calls itself; it reads this
-   * only to know whether real telephony is configured, which gates the
-   * demo-only overrides below.
+   * Outbound telephony API key. Also gates the demo-only overrides below.
+   * It need not be the dashboard's webhook-designated key, so verification
+   * never falls back to it implicitly.
    */
-  RETELL_API_KEY: z.string().optional(),
+  RETELL_API_KEY: z.string().trim().min(1).optional(),
   /**
    * Demo-only: skip the ADR-037 payer business-hours guard at enqueue.
    *
@@ -153,9 +151,9 @@ export function loadEnv(): Env {
   const parsed = envSchema.safeParse(raw);
 
   if (parsed.success) {
-    const modeErrors = dispatchModeErrors(parsed.data);
-    if (modeErrors.length > 0) {
-      throw new Error(`Invalid environment: ${modeErrors.join('; ')}`);
+    const configErrors = [...dispatchModeErrors(parsed.data), ...retellConfigErrors(parsed.data)];
+    if (configErrors.length > 0) {
+      throw new Error(`Invalid environment: ${configErrors.join('; ')}`);
     }
   }
 
@@ -215,6 +213,15 @@ function dispatchModeErrors(candidate: Env): string[] {
     errors.push('JOBS_QUEUE_URL: required when JOB_DISPATCH_MODE=sqs');
   }
   return errors;
+}
+
+function retellConfigErrors(candidate: Env): string[] {
+  if (candidate.RETELL_API_KEY && !candidate.RETELL_WEBHOOK_SECRET) {
+    return [
+      'RETELL_WEBHOOK_SECRET: set the Retell API key marked for webhooks when RETELL_API_KEY is configured',
+    ];
+  }
+  return [];
 }
 
 /**

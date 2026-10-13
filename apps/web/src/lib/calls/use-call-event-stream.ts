@@ -40,20 +40,32 @@ const MAX_BACKOFF_MS = 30_000;
 
 export function useCallEventStream(opts: UseCallEventStreamOptions): UseCallEventStreamResult {
   const { callId, enabled, bearerToken, baseUrl } = opts;
-  const [events, setEvents] = React.useState<CallStreamEvent[]>([]);
-  const [status, setStatus] = React.useState<CallStreamStatus>('idle');
   const [reconnectKey, setReconnectKey] = React.useState(0);
+  const scope = React.useMemo(
+    () => ({ callId, enabled, bearerToken, baseUrl, reconnectKey }),
+    [callId, enabled, bearerToken, baseUrl, reconnectKey],
+  );
+  const [stream, setStream] = React.useState<{
+    scope: typeof scope;
+    events: CallStreamEvent[];
+    status: CallStreamStatus;
+  }>({ scope, events: [], status: 'idle' });
 
   const reconnect = React.useCallback(() => {
     setReconnectKey((n) => n + 1);
   }, []);
 
   React.useEffect(() => {
+    const { callId, enabled, bearerToken, baseUrl } = scope;
+    setStream({ scope, events: [], status: 'idle' });
+    const setStatus = (status: CallStreamStatus): void => {
+      setStream((prev) => (prev.scope === scope ? { ...prev, status } : prev));
+    };
     if (!enabled || callId.length === 0) {
-      setStatus('idle');
       return;
     }
     let cancelled = false;
+    const isCancelled = (): boolean => cancelled;
     let controller = new AbortController();
     let backoff = INITIAL_BACKOFF_MS;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -68,6 +80,10 @@ export function useCallEventStream(opts: UseCallEventStreamOptions): UseCallEven
           const headers: Record<string, string> = {};
           if (bearerToken) headers.authorization = `Bearer ${bearerToken}`;
           const response = await fetch(url, { method: 'GET', headers, signal: controller.signal });
+          if (isCancelled()) {
+            await response.body?.cancel();
+            return;
+          }
           if (!response.ok || !response.body) {
             throw new Error(`SSE connect failed: ${String(response.status)}`);
           }
@@ -77,11 +93,13 @@ export function useCallEventStream(opts: UseCallEventStreamOptions): UseCallEven
           let buffer = '';
           while (!cancelled) {
             const { value, done } = await reader.read();
+            if (isCancelled()) return;
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
             const frames = buffer.split('\n\n');
             buffer = frames.pop() ?? '';
             for (const frame of frames) {
+              if (cancelled) break;
               const parsed = parseFrame(frame);
               if (!parsed) continue;
               if (parsed.event === 'replay-end') {
@@ -94,7 +112,9 @@ export function useCallEventStream(opts: UseCallEventStreamOptions): UseCallEven
                 const evt = toStreamEvent(parsedEvent);
                 if (evt && !seen.has(evt.id)) {
                   seen.add(evt.id);
-                  setEvents((prev) => [...prev, evt]);
+                  setStream((prev) =>
+                    prev.scope === scope ? { ...prev, events: [...prev.events, evt] } : prev,
+                  );
                 }
               }
               if (parsed.event === 'close') {
@@ -123,11 +143,15 @@ export function useCallEventStream(opts: UseCallEventStreamOptions): UseCallEven
       cancelled = true;
       controller.abort();
       if (retryTimer !== null) clearTimeout(retryTimer);
-      setStatus('closed');
     };
-  }, [callId, enabled, bearerToken, baseUrl, reconnectKey]);
+  }, [scope]);
 
-  return { events, status, reconnect };
+  // Hide the previous scope synchronously, before the new effect connects.
+  return {
+    events: stream.scope === scope ? stream.events : [],
+    status: stream.scope === scope ? stream.status : enabled ? 'connecting' : 'idle',
+    reconnect,
+  };
 }
 
 interface SseFrame {

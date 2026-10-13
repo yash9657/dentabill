@@ -644,3 +644,145 @@ describe('unmapped code preservation', () => {
     expect(transition.metadata).toMatchObject({ reason: 'UNMAPPED_CODE', autoTransitioned: false });
   });
 });
+
+describe('canonical final provider transcript', () => {
+  it('uses final source text once and preserves it exactly despite later cumulative snapshots', async () => {
+    const seeded = await seedOrgClaimCall();
+    const text = '  Agent: Hello.\nUser: Payment is unverified.\n\n';
+    await prisma.callEvent.createMany({
+      data: [
+        {
+          callId: seeded.callId,
+          eventType: 'webhook.call.ended',
+          data: { transcript: { text, turns: null } },
+          timestamp: new Date('2026-10-13T12:00:00Z'),
+        },
+        {
+          callId: seeded.callId,
+          eventType: 'webhook.call.transcript_snapshot',
+          data: { transcript: { text: 'STALE SNAPSHOT', turns: null } },
+          timestamp: new Date('2026-10-13T12:01:00Z'),
+        },
+        { callId: seeded.callId, eventType: 'tool.result', data: { text: 'MODEL OUTPUT' } },
+      ],
+    });
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      redis,
+      summarizer: fake,
+      env: baseEnv,
+    });
+    const result = await handler(
+      jobFor({
+        organizationId: seeded.orgId,
+        callId: seeded.callId,
+        promptVersion: 'v1',
+        idempotencyKey: 'canonical-final',
+      }),
+    );
+    expect(result.summaryId).not.toBeNull();
+    expect(fake.invocations).toHaveLength(1);
+    expect(fake.invocations[0]?.transcriptTurns).toEqual([
+      { role: 'source', text, timestamp: new Date('2026-10-13T12:00:00Z') },
+    ]);
+    expect(
+      await prisma.callSummary.findFirstOrThrow({
+        where: { organizationId: seeded.orgId, callId: seeded.callId },
+      }),
+    ).toMatchObject({ rawTranscript: text });
+  });
+
+  it('preserves structured final turns and distinguishes remote speech from confirmed human speech', async () => {
+    const seeded = await seedOrgClaimCall();
+    await prisma.callEvent.create({
+      data: {
+        callId: seeded.callId,
+        eventType: 'webhook.call.ended',
+        data: {
+          transcript: {
+            text: null,
+            turns: [
+              { role: 'agent', text: '  Hello. ', startOffsetSeconds: 0 },
+              { role: 'user', text: 'Press 1.\n', startOffsetSeconds: 2.5 },
+            ],
+          },
+        },
+      },
+    });
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      redis,
+      summarizer: fake,
+      env: baseEnv,
+    });
+    await handler(
+      jobFor({
+        organizationId: seeded.orgId,
+        callId: seeded.callId,
+        promptVersion: 'v1',
+        idempotencyKey: 'structured-final',
+      }),
+    );
+    expect(fake.invocations[0]?.transcriptTurns.map(({ role, text }) => ({ role, text }))).toEqual([
+      { role: 'agent', text: '  Hello. ' },
+      { role: 'remote', text: 'Press 1.\n' },
+    ]);
+  });
+
+  it.each([
+    { eventType: 'webhook.call.ended', data: {} },
+    { eventType: 'webhook.call.ended', data: { transcript: { text: '', turns: [] } } },
+    {
+      eventType: 'webhook.call.transcript_snapshot',
+      data: { transcript: { text: 'Provisional only', turns: null } },
+    },
+  ])(
+    'abstains on missing, empty, or provisional evidence without inference or financial effects (%j)',
+    async (source) => {
+      const seeded = await seedOrgClaimCall();
+      await prisma.callEvent.create({ data: { callId: seeded.callId, ...source } });
+      const fake = new FakeClaude();
+      fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+      const handler = createSummaryJobHandler({
+        logger: silentLogger,
+        prisma,
+        redis,
+        summarizer: fake,
+        env: baseEnv,
+      });
+      const result = await handler(
+        jobFor({
+          organizationId: seeded.orgId,
+          callId: seeded.callId,
+          promptVersion: 'v1',
+          idempotencyKey: 'unavailable-final',
+        }),
+      );
+      expect(result).toMatchObject({
+        outcome: 'TRANSCRIPT_UNAVAILABLE',
+        summaryId: null,
+        tokensUsed: 0,
+      });
+      expect(fake.invocations).toHaveLength(0);
+      expect(
+        await prisma.callSummary.count({
+          where: { organizationId: seeded.orgId, callId: seeded.callId },
+        }),
+      ).toBe(0);
+      expect(
+        await prisma.claim.findFirstOrThrow({
+          where: { id: seeded.claimId, organizationId: seeded.orgId },
+        }),
+      ).toMatchObject({ status: 'COMPLETED' });
+      expect(
+        await prisma.organization.findUniqueOrThrow({ where: { id: seeded.orgId } }),
+      ).toMatchObject({ summaryTokensUsed: 0 });
+    },
+  );
+});

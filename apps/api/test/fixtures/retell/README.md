@@ -22,15 +22,12 @@ Sources:
 `retell-webhook-contract.test.ts` signs the committed raw bytes with a synthetic key
 and fixed clock. It rejects same-length byte tampering, reserialized JSON, an unrelated
 key and an expired timestamp. No network client is created, and no signature is logged.
-Plain-hex acceptance is labeled legacy fixture behavior, not the provider contract.
+Untimestamped plain-hex signatures are rejected; simulation envelopes are not accepted over HTTP.
 
-**FW06 reproduced; FW07 unimplemented.** The exact parser used by the webhook route
-rejects both documented envelopes: it expects internal `eventId`, `deliveredAt`, and
-an object-valued `event`. Two `it.fails` cases specify the desired normalization and
-are deliberately labeled **BLOCKED**; ordinary diagnosis assertions also identify the
-current mismatch. A green Vitest run therefore means the known incompatibility was
-reproduced, not that provider ingestion works. When FW07 lands, replace the mismatch
-assertions and remove `it.fails`; do not merely delete or skip these cases.
+**FW06/FW07 local contract implemented.** Both documented envelopes now normalize
+into source events. The eleven contract assertions pass without expected failures.
+Lifecycle identity comes from event type plus call ID; cumulative snapshots use a
+content hash and remain provisional until the terminal transcript arrives.
 
 Run locally without vendor access:
 
@@ -38,8 +35,11 @@ Run locally without vendor access:
 pnpm --filter @dentabill/api exec vitest run test/integration/retell-webhook-contract.test.ts
 ```
 
-This suite does not start Fastify or touch a database. HTTP ingestion, raw-body plugin,
-durable inbox/replay, event mapping, transcript delivery, cross-process call completion
-and real signed provider delivery remain unverified by it. The route's
-`RETELL_WEBHOOK_SECRET` must separately be reconciled with the provider-designated
-signing key: an arbitrary Terraform-generated value does not establish that contract.
+This contract suite does not start Fastify or touch a database. Separate
+`retell-webhook.test.ts` checks the HTTP/raw-body boundary, tenant binding, concurrent
+redelivery, early delivery, actual Postgres rollback/retry, and out-of-order lifecycle
+updates. `retell-webhook-process.test.ts` verifies receipt persistence before Call
+registration, producer SIGKILL, worker completion from Postgres without callback events,
+and replay after producer restart. These remain synthetic, not captured provider events.
+The designated signing-key configuration and live telephony still require authorized
+external validation. Worker crash/no-redial and durable summary dispatch remain W2 gaps.

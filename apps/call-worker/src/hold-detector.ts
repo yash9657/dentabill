@@ -124,9 +124,9 @@ export const MAX_ATTEMPTS_PER_CLAIM_PER_DAY = 2;
 export async function resolveHoldBreach(
   input: ResolveHoldBreachInput,
 ): Promise<ResolveHoldBreachResult> {
-  // 1. End the live call so we stop accruing duration on a stuck line.
-  //    Idempotent on the FakeRetell + LiveRetell side — a duplicate
-  //    end-call is a silent no-op, matching production.
+  // Request termination. Live adapter failures propagate; a stop response
+  // alone does not confirm termination. W2 must reconcile terminal evidence
+  // before any new attempt. This helper is not wired into the live handler.
   await input.retellPort.endCall({
     retellCallId: input.retellCallId,
     reason: 'hold_cap_exceeded',

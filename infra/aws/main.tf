@@ -55,6 +55,13 @@ variable "public_api_url" {
   default = "https://api.dentabill.site"
 }
 
+variable "retell_webhook_api_key_secret_id" {
+  description = "Optional existing Secrets Manager secret ID/ARN containing only the Retell API key marked for webhooks (plain text, not JSON). Empty keeps webhooks disabled for the no-key demo."
+  type        = string
+  default     = ""
+  nullable    = false
+}
+
 locals {
   name     = "dentabill"
   platform = data.terraform_remote_state.platform.outputs
@@ -80,15 +87,20 @@ resource "random_password" "dob_hash" {
   special = false
 }
 
-resource "random_password" "retell_webhook" {
-  length  = 48
-  special = false
+# Retell signs with its webhook-designated account API key. Never generate
+# this credential: a random password cannot verify Retell's signatures.
+data "aws_secretsmanager_secret_version" "retell_webhook_api_key" {
+  count     = var.retell_webhook_api_key_secret_id == "" ? 0 : 1
+  secret_id = var.retell_webhook_api_key_secret_id
 }
 
 locals {
   clerk = jsondecode(data.aws_secretsmanager_secret_version.clerk.secret_string)
   # Small Prisma pool per Lambda instance; Aurora caps connections by ACU.
   database_url = "postgresql://dentabill_app:${random_password.db_role.result}@${local.platform.db_endpoint}:5432/dentabill?sslmode=require&connection_limit=3&pool_timeout=30&connect_timeout=30"
+  retell_webhook_env = var.retell_webhook_api_key_secret_id == "" ? {} : {
+    RETELL_WEBHOOK_SECRET = data.aws_secretsmanager_secret_version.retell_webhook_api_key[0].secret_string
+  }
 }
 
 resource "aws_secretsmanager_secret" "app" {
@@ -99,10 +111,9 @@ resource "aws_secretsmanager_secret" "app" {
 resource "aws_secretsmanager_secret_version" "app" {
   secret_id = aws_secretsmanager_secret.app.id
   secret_string = jsonencode({
-    DATABASE_URL          = local.database_url
-    DB_ROLE_PASSWORD      = random_password.db_role.result
-    DOB_HASH_SECRET       = random_password.dob_hash.result
-    RETELL_WEBHOOK_SECRET = random_password.retell_webhook.result
+    DATABASE_URL     = local.database_url
+    DB_ROLE_PASSWORD = random_password.db_role.result
+    DOB_HASH_SECRET  = random_password.dob_hash.result
   })
 }
 
@@ -218,7 +229,7 @@ resource "aws_lambda_function" "api" {
   }
 
   environment {
-    variables = merge(local.common_env, {
+    variables = merge(local.common_env, local.retell_webhook_env, {
       AWS_LAMBDA_EXEC_WRAPPER      = "/opt/bootstrap"
       AWS_LWA_PORT                 = "8080"
       AWS_LWA_INVOKE_MODE          = "response_stream"
@@ -229,7 +240,6 @@ resource "aws_lambda_function" "api" {
       CLERK_SECRET_KEY             = local.clerk.CLERK_SECRET_KEY
       CLERK_PUBLISHABLE_KEY        = local.clerk.CLERK_PUBLISHABLE_KEY
       DOB_HASH_SECRET              = random_password.dob_hash.result
-      RETELL_WEBHOOK_SECRET        = random_password.retell_webhook.result
     })
   }
 

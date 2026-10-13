@@ -30,12 +30,33 @@ export const RetellCallEndReason = {
   USER_HANGUP: 'user_hangup',
   NO_ANSWER: 'no_answer',
   BUSY: 'busy',
+  VOICEMAIL: 'voicemail',
   ERROR: 'error',
 } as const;
 
 export type RetellCallEndReason = (typeof RetellCallEndReason)[keyof typeof RetellCallEndReason];
 
 const isoDateTime = z.string().datetime();
+
+export const RetellTranscriptSchema = z.object({
+  text: z.string().max(1_000_000).nullable(),
+  turns: z
+    .array(
+      z.object({
+        role: z.enum(['agent', 'user']),
+        text: z.string().max(100_000),
+        startOffsetSeconds: z.number().finite().nonnegative().nullable(),
+      }),
+    )
+    .max(20_000)
+    .nullable(),
+});
+
+const retellCallTranscriptSnapshotSchema = z.object({
+  type: z.literal('call.transcript_snapshot'),
+  retellCallId: z.string().min(1),
+  transcript: RetellTranscriptSchema,
+});
 
 const retellCallStartedEventSchema = z.object({
   type: z.literal('call.started'),
@@ -60,18 +81,22 @@ const retellCallTranscriptEventSchema = z.object({
 const retellCallEndedEventSchema = z.object({
   type: z.literal('call.ended'),
   retellCallId: z.string().min(1),
-  endedAt: isoDateTime,
-  durationSeconds: z.number().int().min(0),
+  endedAt: isoDateTime.nullable(),
+  durationSeconds: z.number().int().min(0).nullable(),
   endReason: z.enum([
     RetellCallEndReason.COMPLETED,
     RetellCallEndReason.AGENT_HANGUP,
     RetellCallEndReason.USER_HANGUP,
     RetellCallEndReason.NO_ANSWER,
     RetellCallEndReason.BUSY,
+    RetellCallEndReason.VOICEMAIL,
     RetellCallEndReason.ERROR,
   ]),
   /** Optional structured outcome the agent extracted (claim status etc). */
   collectedInfo: z.record(z.unknown()).optional(),
+  providerEndReason: z.string().max(128).optional(),
+  startedAt: isoDateTime.optional(),
+  transcript: RetellTranscriptSchema.optional(),
 });
 
 const retellCallErrorEventSchema = z.object({
@@ -86,6 +111,7 @@ const retellCallErrorEventSchema = z.object({
 export const RetellEventSchema = z.discriminatedUnion('type', [
   retellCallStartedEventSchema,
   retellCallTranscriptEventSchema,
+  retellCallTranscriptSnapshotSchema,
   retellCallEndedEventSchema,
   retellCallErrorEventSchema,
 ]);
@@ -97,9 +123,8 @@ export type RetellCallEndedEvent = z.infer<typeof retellCallEndedEventSchema>;
 export type RetellCallErrorEvent = z.infer<typeof retellCallErrorEventSchema>;
 
 /**
- * Webhook envelope. Retell wraps every event in an envelope carrying its
- * own delivery `eventId` (used for replay protection per ADR-036) and a
- * `deliveredAt` timestamp.
+ * Internal simulation envelope only. Retell's HTTP wire format is
+ * {event: string, call: {...}} and does not provide a delivery event ID.
  */
 export const RetellWebhookEnvelopeSchema = z.object({
   /** Unique per delivered webhook; index column for replay protection. */

@@ -1,11 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-import {
-  parseRetellWebhookEnvelope,
-  RetellWebhookParseError,
-  verifyRetellWebhookSignature,
-} from '@dentabill/payer-ivr';
+import { parseRetellWebhookEnvelope, verifyRetellWebhookSignature } from '@dentabill/payer-ivr';
 import { symmetric } from 'retell-sdk/lib/webhook_auth.js';
 import { describe, expect, it } from 'vitest';
 
@@ -89,35 +85,20 @@ describe.each(fixtures)('Retell documented $name envelope — synthetic, SDK 5.1
     ).toBe(false);
   });
 
-  it('reproduces FW06: the route parser requires fields absent from the documented envelope', () => {
-    const parsed: unknown = JSON.parse(fixture.rawBody.toString('utf8'));
-    expect(parsed).toMatchObject({
-      event: fixture.name,
-      call: { call_id: 'call_synthetic_contract_01' },
-    });
-    expect(parsed).not.toHaveProperty('eventId');
-    expect(parsed).not.toHaveProperty('deliveredAt');
-    expect(() => parseRetellWebhookEnvelope(fixture.rawBody)).toThrow(RetellWebhookParseError);
-    expect(() => parseRetellWebhookEnvelope(fixture.rawBody)).toThrow(
-      /eventId: Required; deliveredAt: Required; event: Expected object, received string/,
-    );
-  });
-
-  // FW07 is unimplemented. An unexpected pass forces removal of this marker
-  // and replacement of the mismatch diagnosis above after a real normalizer lands.
-  it.fails('FW07 BLOCKED: normalizes the documented raw envelope into an internal event', () => {
+  it('normalizes the documented raw envelope into source evidence', () => {
     const envelope = parseRetellWebhookEnvelope(fixture.rawBody);
-    expect(envelope.event.type).toBe(fixture.internalType);
-    expect(envelope.event.retellCallId).toBe('call_synthetic_contract_01');
+    expect(envelope.event?.type).toBe(fixture.internalType);
+    expect(envelope.event?.retellCallId).toBe('call_synthetic_contract_01');
+    expect(envelope.eventId).toBe(`retell:${fixture.name}:call_synthetic_contract_01`);
   });
 });
 
 describe('Legacy fixture signing — not the documented Retell wire contract', () => {
-  it('retains the existing plain-hex verifier path without treating it as provider evidence', () => {
+  it('rejects untimestamped signatures rather than weakening replay protection for fixtures', () => {
     const rawBody = '{"localFixture":true}';
     const signature = createHmac('sha256', TEST_SIGNING_KEY).update(rawBody).digest('hex');
     expect(verifyRetellWebhookSignature({ rawBody, signature, secret: TEST_SIGNING_KEY })).toBe(
-      true,
+      false,
     );
   });
 });

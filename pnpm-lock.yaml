@@ -239,6 +239,9 @@ importers:
       '@dentabill/summarizer':
         specifier: workspace:*
         version: link:../../packages/summarizer
+      '@dentabill/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       bullmq:
         specifier: ^5.34.0
         version: 5.76.2

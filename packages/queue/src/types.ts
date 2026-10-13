@@ -66,7 +66,7 @@ export const CallJobResultSchema = z.object({
   callId: z.string().min(1),
   retellCallId: z.string().min(1).nullable(),
   outcome: z.enum(['COMPLETED', 'ESCALATED', 'RESCHEDULED', 'CANCELLED']),
-  durationSeconds: z.number().int().min(0),
+  durationSeconds: z.number().int().min(0).nullable(),
 });
 
 export type CallJobResult = z.infer<typeof CallJobResultSchema>;
@@ -110,7 +110,8 @@ export const SummaryJobResultSchema = z.object({
   /**
    * Routing outcomes describe workflow decisions, never collected cash.
    * STALE_RESULT preserves newer/reviewed state; ALREADY_PROCESSED skips
-   * duplicate inference; CALL_NOT_TERMINAL refuses a partial transcript.
+   * duplicate inference; CALL_NOT_TERMINAL refuses an active call;
+   * TRANSCRIPT_UNAVAILABLE abstains when finalized evidence is missing or empty.
    * DLQ is non-retryable output validation; BUDGET_EXCEEDED skips inference.
    */
   outcome: z.enum([
@@ -121,6 +122,7 @@ export const SummaryJobResultSchema = z.object({
     'STALE_RESULT',
     'ALREADY_PROCESSED',
     'CALL_NOT_TERMINAL',
+    'TRANSCRIPT_UNAVAILABLE',
   ]),
   tokensUsed: z.number().int().min(0),
   promptVersion: z.string().min(1),

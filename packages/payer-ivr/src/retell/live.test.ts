@@ -1,3 +1,4 @@
+import Retell, { type ClientOptions } from 'retell-sdk';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RetellCtor } from './live.js';
@@ -27,15 +28,18 @@ const sampleInput = (overrides: Partial<StartCallInput> = {}): StartCallInput =>
 
 /**
  * Build a stub `Retell` constructor whose only behaviours we exercise
- * are `call.createPhoneCall` and `call.delete`. Cast to the SDK's
+ * are `call.createPhoneCall` and `call.stop`. Cast to the SDK's
  * default-export type just enough to satisfy LiveRetell's loader.
  */
 type StubCreatePhoneCall = (body: Record<string, unknown>) => Promise<{ call_id: string }>;
-type StubDeleteCall = (callId: string) => Promise<void>;
+type StubStopCall = (
+  callId: string,
+  options: { readonly maxRetries: number; readonly timeout: number },
+) => Promise<void>;
 
 function buildStubRetell(opts: {
   createPhoneCall?: StubCreatePhoneCall;
-  deleteCall?: StubDeleteCall;
+  stopCall?: StubStopCall;
 }): RetellCtor {
   const ctor = vi.fn(function StubRetell(_config: { apiKey: string }) {
     return {
@@ -43,11 +47,26 @@ function buildStubRetell(opts: {
         createPhoneCall:
           opts.createPhoneCall ??
           (async (_body: Record<string, unknown>) => ({ call_id: 'retell_call_stub_1' })),
-        delete: opts.deleteCall ?? (async (_callId: string) => undefined),
+        stop: opts.stopCall ?? (async (_callId: string) => undefined),
       },
     };
   }) as unknown as RetellCtor;
   return ctor;
+}
+
+type RetellFetch = NonNullable<ClientOptions['fetch']>;
+// The SDK's DOM Response includes bytes(), absent from the repo's Node type version.
+// These synthetic responses only exercise status, headers, and text handling.
+type RetellResponse = Awaited<ReturnType<RetellFetch>>;
+
+/** Real installed SDK with an injected transport: no provider request can leave this test. */
+function buildSdkRetell(fetch: RetellFetch): LiveRetell {
+  class TestRetell extends Retell {
+    constructor(config: { apiKey: string }) {
+      super({ ...config, fetch, baseURL: 'https://api.retellai.com', logLevel: 'off' });
+    }
+  }
+  return new LiveRetell({ apiKey: 'synthetic-test-key', retellLoader: async () => TestRetell });
 }
 
 describe('LiveRetell — construction', () => {
@@ -103,7 +122,7 @@ describe('LiveRetell — startCall', () => {
           createPhoneCall: async (_body: Record<string, unknown>) => ({
             call_id: 'retell_call_x',
           }),
-          delete: async (_id: string) => undefined,
+          stop: async (_id: string) => undefined,
         },
       };
     });
@@ -126,20 +145,120 @@ describe('LiveRetell — startCall', () => {
 });
 
 describe('LiveRetell — endCall', () => {
-  it('calls client.call.delete with the retellCallId', async () => {
-    const deleteCall = vi.fn<StubDeleteCall>(async (_callId) => undefined);
-    const loader = vi.fn(async () => buildStubRetell({ deleteCall }));
+  it('requests stop with a bounded timeout and no SDK retries', async () => {
+    const stopCall = vi.fn<StubStopCall>(async (_callId) => undefined);
+    const loader = vi.fn(async () => buildStubRetell({ stopCall }));
     const live = new LiveRetell({ apiKey: 'rk_test', retellLoader: loader });
 
     await live.endCall({ retellCallId: 'retell_call_xyz', reason: 'duration_cap_exceeded' });
 
-    expect(deleteCall).toHaveBeenCalledWith('retell_call_xyz');
+    expect(stopCall).toHaveBeenCalledTimes(1);
+    expect(stopCall).toHaveBeenCalledWith('retell_call_xyz', {
+      maxRetries: 0,
+      timeout: 10_000,
+    });
   });
 
   it('rejects malformed input asynchronously', async () => {
     const loader = vi.fn(async () => buildStubRetell({}));
     const live = new LiveRetell({ apiKey: 'rk_test', retellLoader: loader });
     await expect(live.endCall({ retellCallId: 'r', reason: 'made_up' as never })).rejects.toThrow();
+    expect(loader).not.toHaveBeenCalled();
+  });
+});
+
+describe('LiveRetell — installed SDK stop-call contract (synthetic transport)', () => {
+  // Verified against https://docs.retellai.com/api-references/stop-call (2026-10-13).
+  // Delete Call removes call data and is not the hard-hangup API.
+  it('sends POST /v2/stop-call/{call_id}, accepts 204, and does not synthesize lifecycle events', async () => {
+    const fetch = vi.fn<RetellFetch>(
+      async () => new Response(null, { status: 204 }) as RetellResponse,
+    );
+    const live = buildSdkRetell(fetch);
+    const listener = vi.fn();
+    live.subscribe('call_synthetic_fw28', listener);
+
+    await expect(
+      live.endCall({ retellCallId: 'call_synthetic_fw28', reason: 'duration_cap_exceeded' }),
+    ).resolves.toBeUndefined();
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = fetch.mock.calls[0]!;
+    const request = new Request(url, init);
+    expect(request.url).toBe('https://api.retellai.com/v2/stop-call/call_synthetic_fw28');
+    expect(request.method).toBe('POST');
+    expect(await request.text()).toBe('');
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it.each([400, 401, 404, 422, 429, 500])(
+    'propagates HTTP %s without retry or data-deletion fallback',
+    async (status) => {
+      const fetch = vi.fn<RetellFetch>(
+        async () =>
+          Response.json(
+            { status: 'error', message: 'Synthetic provider rejection' },
+            { status },
+          ) as RetellResponse,
+      );
+      const live = buildSdkRetell(fetch);
+
+      await expect(
+        live.endCall({ retellCallId: 'call_synthetic_fw28', reason: 'operator_cancel' }),
+      ).rejects.toMatchObject({ status });
+
+      expect(fetch).toHaveBeenCalledTimes(1);
+      const [url, init] = fetch.mock.calls[0]!;
+      const request = new Request(url, init);
+      expect(request.method).toBe('POST');
+      expect(request.url).toBe('https://api.retellai.com/v2/stop-call/call_synthetic_fw28');
+    },
+  );
+
+  it('propagates ambiguous transport failure without retry or data deletion', async () => {
+    const cause = new TypeError('Synthetic connection failure');
+    const fetch = vi.fn<RetellFetch>(async () => {
+      throw cause;
+    });
+    const live = buildSdkRetell(fetch);
+
+    await expect(
+      live.endCall({ retellCallId: 'call_synthetic_fw28', reason: 'hold_cap_exceeded' }),
+    ).rejects.toMatchObject({ cause });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('aborts a stalled stop request after ten seconds without retry', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn<RetellFetch>(
+        async (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              'abort',
+              () => {
+                reject(new DOMException('Synthetic timeout', 'AbortError'));
+              },
+              { once: true },
+            );
+          }),
+      );
+      const live = buildSdkRetell(fetch);
+      const outcome = live
+        .endCall({ retellCallId: 'call_synthetic_fw28', reason: 'duration_cap_exceeded' })
+        .catch((error: unknown) => error);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(await Promise.race([outcome, Promise.resolve('still pending')])).toBeInstanceOf(
+        Retell.APIConnectionTimeoutError,
+      );
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(fetch.mock.calls[0]![1]?.signal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
