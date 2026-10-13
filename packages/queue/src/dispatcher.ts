@@ -14,14 +14,25 @@ import { CALL_JOB_NAME, SUMMARY_JOB_NAME, type CallJobData, type SummaryJobData 
  *   - `inline`: no queue and no worker process. The job is POSTed to an
  *     authenticated internal API route that runs the same processor to
  *     completion inside its own serverless invocation (see `inline.ts`).
+ *   - `sqs`: one Amazon SQS standard queue consumed by the worker Lambda,
+ *     one attempt per receive with SQS-driven retries (see `sqs.ts`).
  *
- * Both implementations use `data.idempotencyKey` as the job id.
+ * Every implementation uses `data.idempotencyKey` as the job id.
  */
-export const JOB_DISPATCH_MODES = ['bullmq', 'inline'] as const;
+export const JOB_DISPATCH_MODES = ['bullmq', 'inline', 'sqs'] as const;
 export type JobDispatchMode = (typeof JOB_DISPATCH_MODES)[number];
 
-export interface DispatchCallOptions {
-  /** BullMQ priority (min-first). Ignored by the inline dispatcher. */
+export interface DispatchOptions {
+  /**
+   * Hold the job back for this long before it may run. BullMQ: `delay`.
+   * SQS: `DelaySeconds`, rounded up and clamped to 900 s (the SQS max).
+   * Inline: ignored — the job is triggered immediately.
+   */
+  readonly delayMs?: number;
+}
+
+export interface DispatchCallOptions extends DispatchOptions {
+  /** BullMQ priority (min-first). Ignored by the inline and SQS dispatchers. */
   readonly priority?: number;
 }
 
@@ -29,7 +40,7 @@ export interface JobDispatcher {
   readonly mode: JobDispatchMode;
   /** Returns the job id (always `data.idempotencyKey` unless BullMQ says otherwise). */
   dispatchCall(data: CallJobData, opts?: DispatchCallOptions): Promise<string>;
-  dispatchSummary(data: SummaryJobData): Promise<string>;
+  dispatchSummary(data: SummaryJobData, opts?: DispatchOptions): Promise<string>;
 }
 
 export interface CreateBullMqJobDispatcherOptions {
@@ -56,15 +67,17 @@ export function createBullMqJobDispatcher(
       const job = await options.callsQueue.add(CALL_JOB_NAME, data, {
         jobId: data.idempotencyKey,
         ...(opts?.priority !== undefined && { priority: opts.priority }),
+        ...(opts?.delayMs !== undefined && opts.delayMs > 0 && { delay: opts.delayMs }),
       });
       return job.id ?? data.idempotencyKey;
     },
-    async dispatchSummary(data): Promise<string> {
+    async dispatchSummary(data, opts): Promise<string> {
       if (!options.summariesQueue) {
         throw new Error('bullmq dispatcher: summaries queue not configured');
       }
       const job = await options.summariesQueue.add(SUMMARY_JOB_NAME, data, {
         jobId: data.idempotencyKey,
+        ...(opts?.delayMs !== undefined && opts.delayMs > 0 && { delay: opts.delayMs }),
       });
       return job.id ?? data.idempotencyKey;
     },
@@ -75,7 +88,7 @@ export function createBullMqJobDispatcher(
 export function parseJobDispatchMode(raw: string | undefined): JobDispatchMode {
   if (raw === undefined || raw.trim() === '') return 'bullmq';
   const value = raw.trim().toLowerCase();
-  if (value === 'bullmq' || value === 'inline') return value;
+  if (value === 'bullmq' || value === 'inline' || value === 'sqs') return value;
   throw new Error(
     `JOB_DISPATCH_MODE must be one of ${JOB_DISPATCH_MODES.join(', ')}; got "${raw}"`,
   );

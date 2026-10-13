@@ -33,13 +33,14 @@ describe('parseJobDispatchMode', () => {
     expect(parseJobDispatchMode('')).toBe('bullmq');
   });
 
-  it('accepts inline / bullmq case-insensitively', () => {
+  it('accepts inline / bullmq / sqs case-insensitively', () => {
     expect(parseJobDispatchMode('INLINE')).toBe('inline');
+    expect(parseJobDispatchMode(' SQS ')).toBe('sqs');
     expect(parseJobDispatchMode('bullmq')).toBe('bullmq');
   });
 
   it('rejects anything else', () => {
-    expect(() => parseJobDispatchMode('sqs')).toThrow(/JOB_DISPATCH_MODE/);
+    expect(() => parseJobDispatchMode('kafka')).toThrow(/JOB_DISPATCH_MODE/);
   });
 });
 
@@ -60,6 +61,23 @@ describe('createBullMqJobDispatcher', () => {
     const dispatcher = createBullMqJobDispatcher({ summariesQueue: { add } as never });
     await expect(dispatcher.dispatchSummary(summaryData)).resolves.toBe('call.call_1');
     expect(add).toHaveBeenCalledWith('summary.generate', summaryData, { jobId: 'call.call_1' });
+  });
+
+  it('passes a positive delayMs through as the BullMQ delay', async () => {
+    const add = vi.fn(async () => ({ id: 'x' }));
+    const dispatcher = createBullMqJobDispatcher({
+      callsQueue: { add } as never,
+      summariesQueue: { add } as never,
+    });
+    await dispatcher.dispatchCall(callData, { delayMs: 5_000 });
+    await dispatcher.dispatchSummary(summaryData, { delayMs: 0 });
+    expect(add).toHaveBeenNthCalledWith(1, 'call.place', callData, {
+      jobId: callData.idempotencyKey,
+      delay: 5_000,
+    });
+    expect(add).toHaveBeenNthCalledWith(2, 'summary.generate', summaryData, {
+      jobId: 'call.call_1',
+    });
   });
 
   it('throws when the target queue is not configured', async () => {

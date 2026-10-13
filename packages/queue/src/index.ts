@@ -59,6 +59,7 @@ export {
   parseJobDispatchMode,
   type CreateBullMqJobDispatcherOptions,
   type DispatchCallOptions,
+  type DispatchOptions,
   type JobDispatcher,
   type JobDispatchMode,
 } from './dispatcher.js';
@@ -75,3 +76,13 @@ export {
   type InlineJobOutcome,
   type RunInlineJobOptions,
 } from './inline.js';
+export {
+  createSqsJobDispatcher,
+  parseSqsJobMessage,
+  SQS_MAX_DELAY_SECONDS,
+  SqsJobMessageSchema,
+  toSqsDelaySeconds,
+  type CreateSqsJobDispatcherOptions,
+  type SqsJobMessage,
+  type SqsSendClient,
+} from './sqs.js';
