@@ -16,6 +16,7 @@
     "build": "echo 'no build for stub'"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@dentabill/db": "workspace:*",
     "@dentabill/payer-ivr": "workspace:*",
     "zod": "^3.24.1"
