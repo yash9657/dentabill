@@ -4,7 +4,81 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: FW-25 submission ownership and FW-31 streaming
+### Latest continuation: FW-35 durable delivery and FW-32 pending cancellation
+
+The goal remains active. Implementation commit: `bd519a8` on `codex/w0-containment`.
+This continuation made tested progress; no production deployment, schedule activation or external calls.
+A fresh fetch confirms `origin/main=55a1896` and `origin/infra/aws=c34e970` are already
+included. The existing Retell key/carrier answer is unchanged: Retell-managed Twilio;
+Telnyx is not a current dependency. No new credential probe or key change occurred.
+
+- Additive migration `20261013120000_job_outbox` creates tenant-scoped immutable queue
+  commands, hash/key uniqueness, pending/delivered/quarantined states, availability and
+  token-fenced leases. Only isolated localhost identity/runtime/process/summary/receipts
+  databases were migrated; Prisma now has ten migrations.
+- New call reservation commits claim/intent/audit/outbox together. HTTP202 confirms the
+  saved request even if immediate transport delivery fails. Active retry retains the
+  identical command/backoff; legacy READY requests can backfill their command. A redundant
+  postcommit outbox write no longer makes a committed new reservation return500.
+- Final call state/intent/audit and summary obligation commit atomically, even without an
+  immediate dispatcher. A finalization/outbox failure rolls back and resumes from saved
+  terminal evidence without redial. Summary retry locks the scoped terminal Call to
+  serialize retry count, command and audit; transport failure leaves recoverable work.
+- Relay validates hash/scope/command, leases with a unique token, persists attempts before
+  dispatch, times out transport, backs off and quarantines poison/exhausted work. Losing
+  an acknowledgement permits the same command to replay; stale owners cannot overwrite
+  a newer lease. It processes at most 25 rows per 20-second work budget (not a hard DB-query
+  timeout), default 5-second send bound/30-second lease and ten delivery attempts.
+- BullMQ boot starts a nonoverlapping five-second sweep and drains it before closing queues.
+  Awaiting queue/worker readiness fixes immediate-shutdown Redis rejection exposed by tests.
+  The private AWS worker accepts only an exact fixed relay event or valid SQS envelope.
+  Terraform prepares a scoped EventBridge rule, disabled by default; no schedule was enabled.
+- Inline dispatch now awaits a matching HTTP200 completion receipt with bounded response/body
+  timeout. HTTP202, lost responses and unconfirmed execution keep the outbox pending. Call
+  receipts additionally verify the exact saved tenant command is TERMINAL/CANCELLED/UNKNOWN;
+  concurrent READY/SUBMITTING/ACCEPTED short-circuits cannot prematurely acknowledge work.
+  A secret-authenticated fixed-bound relay route is available; external recurrence is not set up.
+- Cancellation atomically records only a request marker/event/audit plus version-conditional
+  CALLING-claim review. It preserves provider terminal facts and newer reviewed claim state.
+  The service stores the actual Clerk actor. SDK exposes cancelRequestedAt; detail/list UI
+  show pending cancellation, disable duplicate requests and wait for provider confirmation.
+  A delayed cancellation response cannot replace already cached terminal state.
+
+**Final verification:** full API **325/27 files**, call-worker **99/14**, database **66/6**,
+queue **65/5**, SDK **19/2**, and all call UI/library tests **73/8** passed. Worker coverage
+includes eighteen leased-relay regressions and two new separate-process crash boundaries:
+producer SIGKILL before first dispatch, and relay SIGKILL after an independent synthetic
+broker fsyncs acceptance but before acknowledgement. Fresh relay sends the identical command;
+two fresh consumers produce one independent synthetic provider acceptance. API includes real
+Postgres transaction failure/replay/concurrency tests; cancellation service has 18 race/rollback
+checks and route/UI tests cover both directions of terminal/cancellation races. DB testing
+also exposed a test-module identity leak from the global Prisma cache; teardown now clears
+its disconnected cache before the next isolated file, preserving strict error-class checks.
+Affected typechecks/lints, SDK regeneration and Lambda packaging passed (API 38.5MB/11.2MB zip;
+worker 31.9MB/10.0MB zip). Terraform fmt/backend-disabled validate passed using locked providers,
+without plan/apply. Synthetic desktop/mobile cancellation layouts were checked with no overflow.
+Independent review found premature inline receipts, a redundant postcommit write and wrong
+actor identifier; all were fixed with regressions before this checkpoint.
+
+**Limits:** DELIVERED is transport receipt, not completed work. A timeout can still produce a
+late duplicate transport delivery; CallIntent protects dialing, but concurrent summary inference
+and incurred-cost accounting remain FW-26. The inline path still needs recurrence and may
+quarantine a long-running command whose receipt repeatedly times out. AWS scheduled recovery
+and real Retell stopping remain unverified. No full parity claim: provider-ID reconciliation,
+persisted observer/termination deadlines, operating alerts/quarantine review, source connectors,
+financial ledger, approved Fireworks inference/evals and authorized clinic evidence remain open.
+Existing missing historical commands are not reconstructed. Preserve evidence on rollback;
+pre-intent workers are unsafe against unresolved submissions. See ADR-059/DEPLOY_AWS.md.
+
+**Exact next task:** FW-34 — implement scoped ambiguous provider-ID reconciliation against
+current Retell v3 metadata/list contracts, matching the stored request's exact agent/number
+identity. Multiple matches require review; empty/incomplete lookup never authorizes redial.
+Then FW-36 persisted observer ownership/termination/reconciliation deadlines and FW-37 outbox
+operating controls. Continue synthetic Fireworks gateway work independently of missing keys.
+The user has no clinic and authorized fake data; real connector/domain validation remains
+blocked without a test partner/qualified reviewer, while independent implementation continues.
+
+### Earlier continuation: FW-25 submission ownership and FW-31 streaming
 
 The goal remains active. Implementation commit: `d77eb18`; AWS merge: `57608ad`.
 This turn made tested implementation progress; neither complete parity nor full durable

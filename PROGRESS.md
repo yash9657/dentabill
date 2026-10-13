@@ -20,9 +20,13 @@ passes across separate processes. Stop-call replaces data deletion; signing conf
 uses the provider-designated API key. Call intents now fence submissions before the provider request; two separate-process worker
 crash tests verify one synthetic acceptance with no redial. Accepted calls resume; uncertain
 calls remain reserved for reconciliation. SSE catches up across replay/Redis gaps and waits
-for actual terminal evidence. All remain local and synthetic; automated unknown-ID recovery,
-outbox delivery, persisted deadlines, and authorized real provider tests are still pending. Detailed test
-counts and limits are in the session record. No production deploy or real calls ran.
+for actual terminal evidence. Call/summary delivery now commits through a leased transactional
+outbox; separate-process producer/relay crashes recover the same command without a second
+synthetic call. Inline receipts wait for durable disposition. Cancellation remains visibly
+pending until provider confirmation. All remain local and synthetic; automated unknown-ID
+recovery, persisted deadlines, quarantine operations, deployed recovery and authorized real
+provider tests are still pending. Exact tests/limits are in the session record. No production
+deploy, recovery schedule activation or real calls ran.
 
 **User direction:** ElevenLabs speech/orchestration is permitted, business inference stays
 on Fireworks open weights. There is no pilot clinic yet: all development uses fake patient
@@ -73,6 +77,12 @@ older deployment target for the zero-extra-hosting demo.
 - [ ] Step 12 — Cloud Deployment (Phase 5; cloud target deferred per ADR-004)
 
 ## Recent activity
+
+- 2026-10-13 — Local transactional call/summary outbox and bounded leased recovery; AWS
+  schedule prepared but disabled, inline premature receipt fixed, cancellation made atomic
+  and pending in the UI. API 325, worker 99, DB 66, queue 65, SDK 19 and call UI 73 checks pass;
+  types/lint/Lambda packaging and Terraform validation passed. Separate-process crash proof
+  uses synthetic broker/provider ledgers. No production changes. See ADR-059.
 
 - 2026-10-13 — Local call intents now prevent blind redial after ambiguous acceptance and
   resume accepted calls across worker crashes; two process-crash regressions use an independent

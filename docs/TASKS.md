@@ -34,8 +34,8 @@ Each FW item is a 1–3 hour slice; larger workstreams require further decomposi
 - [ ] **FW-14** Redacted inference telemetry and PHI/secret log-capture regression.
 - [ ] **FW-15** Annotation schema and first 25 adjudicated synthetic edge cases.
 - [ ] **FW-16** Deterministic evaluation runner and report (FW-15).
-- [ ] **FW-17** Intent/inbox/outbox persistence and scoped uniqueness contracts. _Retell pending inbox and scoped call intents implemented locally; transactional outbox remains pending._
-- [ ] **FW-18** Atomic state/audit/outbox commit and crash/replay test (FW-17).
+- [ ] **FW-17** Intent/inbox/outbox persistence and scoped uniqueness contracts. _Retell pending inbox and scoped call intents implemented locally; transactional call/summary outbox now implemented locally with lease/backoff/quarantine and crash evidence; deployment pending._
+- [ ] **FW-18** Atomic state/audit/outbox commit and crash/replay test (FW-17). _Local call/summary producer transactions and independent broker/consumer crash tests pass; scheduled production proof pending._
 - [ ] **FW-19** Canonical source identity and non-destructive duplicate report.
 - [ ] **FW-20** Validated uniqueness migration and concurrent import regression (FW-19).
 - [ ] **FW-21** Claim-line, coverage, partial-payment, and reversal fixtures.
@@ -57,12 +57,14 @@ require durable execution and applicable PHI agreements even for an unpaid pilot
 - [ ] **FW-29** Verify custom API DNS and cold readiness behavior, restore test, and actual deployment settings without relying on Terraform alone.
 - [ ] **FW-30** Investigate API rate-limit hook ordering; authenticated requests may share the pre-auth anon bucket.
 - [ ] **FW-31** Fix SSE stable `(timestamp,id)` pagination, >200-event catch-up, and replay/subscription race; UI scope isolation is locally fixed. _Implemented locally, 13 regressions pass including cancellation-before-final; full-history polling IO remains an optimization limit._
-- [ ] **FW-32** Make cancellation atomic and version-conditional; never overwrite a concurrently committed provider terminal time or reviewed claim state.
+- [ ] **FW-32** Make cancellation atomic and version-conditional; never overwrite a concurrently committed provider terminal time or reviewed claim state. _Implemented locally: request-only marker/event/audit, conditional claim update, pending UI and race/rollback tests; live stop confirmation pending._
 - [ ] **FW-33** Operate the Retell pending inbox: scoped account reconciliation, unmatched-event retention/deletion, age/count alerts, conflicting lifecycle evidence review, and safe replay tooling.
 
 - [ ] **FW-34** Reconcile ambiguous call intent IDs using verified provider metadata and exact agent/number identity; quarantine multiple matches and never redial on an empty lookup.
-- [ ] **FW-35** Transactional call/summary outbox and bounded leased relay with crash-after-send replay, including inline acknowledgement and AWS recovery scheduling (FW-18 concrete next slice).
+- [ ] **FW-35** Transactional call/summary outbox and bounded leased relay with crash-after-send replay, including inline acknowledgement and AWS recovery scheduling (FW-18 concrete next slice). _Implemented locally with bounded relay, two crash boundaries, inline completed receipts, BullMQ recurrence and disabled AWS schedule; deployment/schedule activation unverified._
 - [ ] **FW-36** Persist observer leases and hard termination/reconciliation deadlines; stale workers must not lose accepted calls or infer terminal evidence.
+
+- [ ] **FW-37** Scoped outbox operating visibility, age/quarantine alerts and audited recovery controls; distinguish transport receipt from completion and review legacy missing commands.
 
 No pilot clinic yet (user confirmed); fake data is authorized. Real connector/clinic evidence
 is visibly blocked pending a test partner and authorized system access. Open Dental is a rollout

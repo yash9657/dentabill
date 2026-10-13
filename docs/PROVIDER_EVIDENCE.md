@@ -50,6 +50,16 @@ Do not silently mix these contracts. No negative-lookup consistency guarantee wa
 empty, incomplete or timed-out lookup cannot prove no external call exists. Metadata recovery
 is still FW-34; SDK create-field passthrough does not establish list compatibility.
 
+FW-35 adds transactional call/summary delivery with bounded leased recovery and immutable
+commands. Two local process tests kill a producer before dispatch and a relay after a
+separate broker fsyncs acceptance before acknowledging; redelivery carries the identical
+command, and fresh consumers produce one synthetic provider action. The AWS relay event
+and disabled scheduled-rule configuration have local contract tests and Terraform validation;
+no deployed scheduled recovery was measured. FW-32 adds atomic cancellation-request evidence
+and pending UI; it does not claim provider termination until provider evidence arrives.
+Outbox quarantine operations, observer deadlines and ambiguous provider-ID recovery remain
+open. Summary inference cost/duplicate execution is a separate FW-26 limitation.
+
 ## Public capability baseline
 
 Lunabill currently markets hospital/RCM AR automation. Its public workflow includes eligibility, portal checks, payer calls, denials/appeals with records, corrected resubmissions, and EHR payment/notes posting. It names Epic, Cerner, GoRev, Waystar, and Availity. These are **vendor claims**, not proof of dental coverage or DentaBill functionality. Its recovery-based pricing describes net collections, which must not be equated with claim face value. [Lunabill product](https://lunabill.com/)

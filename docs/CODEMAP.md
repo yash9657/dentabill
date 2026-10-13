@@ -204,3 +204,14 @@ end-to-end. Fastify-based health probe at `:3010/healthz`.
 - `apps/call-worker/src/call-intents.test.ts` — concurrency, rollback, stale-version and tenant constraints.
 - `apps/call-worker/src/call-intent-process.test.ts` and fixture — worker crash/restart against an independent synthetic acceptance ledger.
 - `apps/api/src/routes/v1/calls-sse.ts` — stable paginated DB replay/catch-up; provider terminal evidence before close.
+
+### FW-35 transactional delivery and FW-32 cancellation (2026-10-13)
+
+- `packages/db/prisma/migrations/20261013120000_job_outbox/` — tenant-scoped immutable delivery commands, retry state and expiring leases.
+- `apps/call-worker/src/job-outbox.ts` and tests — atomic enqueue helper, bounded leased relay, backoff/quarantine and owner fencing.
+- `apps/call-worker/src/job-outbox-process.test.ts` and fixture — producer/relay SIGKILL and independent broker/provider acceptance ledgers.
+- `apps/call-worker/src/server.ts` — startup/periodic BullMQ recovery; worker finalization saves summary obligation transactionally.
+- `apps/api/src/lambda-worker.ts` and `infra/aws/main.tf` — fixed private relay invocation and disabled-by-default scheduled recovery.
+- `packages/queue/src/inline.ts`, `apps/api/src/routes/v1/internal-jobs.ts` — verified completion receipt and authenticated fixed-bound recovery endpoint.
+- `apps/api/src/lib/cancel-call.ts` and tests — atomic request marker, conditional claim state, provider-terminal race handling.
+- `apps/web/src/lib/calls/use-cancel-call.ts` — request mutation and pending-cancellation UI in call detail/list.

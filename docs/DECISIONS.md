@@ -832,3 +832,44 @@ contract tests separate. This is synthetic no-redial evidence, not real Retell/A
 or completed durable delivery. Next add transactional outbox/relay, scoped provider recovery,
 observer leases/deadlines, versioned HTTP request replay and PHI snapshot retention. An old
 worker that ignores these records is not a safe rollback while intents remain unresolved.
+
+## ADR-059 — Commit delivery obligations with state; cancellation waits for evidence
+
+**Date:** 2026-10-13. **Status:** implemented locally; deployment and real-provider verification pending.
+
+Persist a tenant-scoped JobOutbox row with every new CallIntent and with terminal call
+finalization/summary fan-out. Summary retry reservations serialize on the scoped terminal
+Call and commit their audit and command together. A broker failure after commit returns
+HTTP202 for the saved request; queue availability does not decide whether work exists.
+Payloads contain validated queue routing fields and opaque IDs, with an immutable hash and
+unique `(organizationId, kind, idempotencyKey)`. They do not contain transcripts.
+
+Deliver at least once through a token-fenced, expiring lease. Persist each attempt before
+sending; use bounded transport timeouts, exponential backoff and quarantine after ten
+attempts. Invalid/hash-conflicting payloads never dispatch. Broker acceptance followed by
+a crash leaves the same command eligible for replay. DELIVERED means transport receipt,
+not a completed phone call or inference. External-action deduplication remains the consumer's
+responsibility: the CallIntent fence prevents redial, while concurrent summary inference
+and incurred-cost accounting still require FW-26. A timed-out transport may complete later.
+
+The BullMQ worker sweeps at startup and every five seconds without overlapping its own
+sweeps. AWS reuses the private worker Lambda and existing SQS dispatcher through a fixed
+EventBridge event, 25 rows and a 20-second work budget. The schedule is disabled by default;
+no cloud resource was deployed or enabled. DB operations are not preempted by this work
+budget. Leases handle concurrent/repeated invocations; they do not establish exactly-once
+transport. Old inline HTTP202/fire-and-forget is not a durable receipt: await a matching
+HTTP200 only after the runtime records a disposition, otherwise retain pending delivery.
+Its authenticated fixed-bound relay endpoint still needs an operator-configured scheduler.
+
+Cancellation atomically saves a request marker, event and audit, with a conditional
+CALLING-claim transition to review. It never invents terminal status, end time or duration.
+Duplicate requests are no-ops; a committed provider terminal event wins. The frontend shows
+pending cancellation and keeps polling; Stop Call acceptance alone is not termination.
+
+Local separate-process tests kill the producer before first delivery and the relay after an
+independent broker fsyncs acceptance but before its acknowledgement. A fresh relay replays
+the identical command; two consumers produce one synthetic provider acceptance. This proves
+these crash boundaries, not real AWS/Retell behavior. Persisted observer deadlines,
+ambiguous provider-ID reconciliation, quarantine operations/alerts and authorized external
+validation remain required. Keep additive evidence on rollback; never deploy an old worker
+that ignores unresolved intents as a supposed safe recovery.

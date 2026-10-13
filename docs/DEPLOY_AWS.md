@@ -134,7 +134,7 @@ curl -XPOST localhost:9000/2015-03-31/functions/function/invocations -d @sqs-eve
 
 ## W0 containment release validation (2026-10-13)
 
-Current intended baseline is `infra/aws` at `bfd4e8f`; W0 changes are local on
+Current intended baseline is `infra/aws` through `c34e970`; W0 changes are local on
 `codex/w0-containment`, not deployed. See ADR-055/056 and `SESSION_CONTEXT.md`.
 
 The reporting API contract removes legacy recovered-value fields. Deploy matching
@@ -180,3 +180,61 @@ event is durably pending, but operational unmatched-event reconciliation/retenti
 age alerts are not implemented yet (FW-33). The row payload clears after successful
 binding; its tenant-bound CallEvent follows the existing transcript lifecycle. Real
 provider stop confirmation, actual AWS worker recovery and summary outbox remain unverified. Later FW-25 local worker-crash tests establish synthetic no-redial only.
+
+## Transactional delivery and cancellation release gate (FW-35 / FW-32)
+
+Local code adds `20261013120000_job_outbox` after the two CallIntent migrations. All ten
+migrations are required for the new API/worker. Only dedicated local synthetic databases
+have been migrated. Deploy coordinated API, worker and generated SDK/web builds after
+explicit release authorization; the new call response includes nullable `cancelRequestedAt`.
+Cancellation leaves provider status/end time intact until terminal evidence arrives.
+
+Terraform prepares an EventBridge `rate(1 minute)` rule targeting the existing private worker
+with exact input `{"type":"outbox.relay","version":1}`. `outbox_relay_schedule_enabled`
+defaults to `false`. Enabling it is a separate release/configuration action with recurring
+Lambda/database usage; no schedule has been enabled by this work. Lambda permission is
+scoped to the rule ARN and source account. EventBridge retries are zero with a 60-second
+age; Lambda's independent asynchronous retry behavior may still duplicate invocations.
+The relay handles duplicates with DB leases, not assumptions about schedule delivery.
+Current contracts: [target input](https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Target.html),
+[resource policy](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html),
+[retry policy](https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_RetryPolicy.html),
+[Lambda asynchronous retries](https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-error-handling.html).
+
+The trusted relay selects at most 25 eligible commands, uses 30-second leases, waits up to 5
+seconds per transport receipt and stops starting work after a 20-second budget. Slow DB
+operations are not forcibly interrupted. Attempts persist before dispatch; failures back off
+from 1 second to a 300-second cap; ten attempts quarantine the row. No raw payload/error is
+included in relay logs. Sweep counters are `selected`, `sent`, `failed`, `quarantined`.
+Inspect tenant-scoped state/age without selecting payloads, for example:
+
+```sql
+SELECT "state", count(*), min("availableAt") AS oldest_available,
+       max("deliveryAttempts") AS most_attempts
+FROM "JobOutbox"
+WHERE "organizationId" = '<authorized organization id>'
+GROUP BY "state";
+```
+
+Pending eligible work should recover on a later sweep. DELIVERED proves transport receipt,
+not business completion. QUARANTINED is not success: inspect its error code, intent state,
+provider evidence and transport health before any reviewed replay. Do not reset UNKNOWN or
+SUBMITTING call intents or manufacture a new job key to force a dial. A supported recovery
+UI, alerts and reviewed quarantine replay remain follow-on work; there is no automatic reset.
+Existing READY intents from older code have no inferred outbox history; the API backfills an
+identical command on a repeated request. Historical lost summary jobs are not reconstructed.
+
+For local BullMQ development the call-worker starts a nonoverlapping five-second sweep and
+drains it before closing queues. For retained inline deployments, authenticated
+`POST /v1/internal/jobs/outbox/relay` accepts only an empty object and fixed server limits;
+configure a trusted recurrence separately. No inline scheduler was provisioned. Long-running
+inline calls may lose the bounded HTTP receipt and retry/quarantine despite eventual
+completion; the intent fence prevents redial, and operator reconciliation remains necessary.
+SQS is the intended AWS transport. Keep transport acceptance and terminal evidence distinct.
+
+Before an authorized release: retain prior artifacts, apply reviewed additive migrations,
+deploy matching code with the rule disabled, verify synthetic receipt/recovery and pending
+cancellation through the actual API/worker, then enable and observe the scheduled sweep.
+Do not roll back by dropping outbox/inbox/intent evidence or deploying pre-intent workers
+against unresolved work. Local type/tests/build and backend-disabled Terraform validate
+are not a deployed AWS recovery test.
