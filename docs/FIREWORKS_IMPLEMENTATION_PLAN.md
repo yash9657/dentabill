@@ -5,8 +5,9 @@
 > is approved or selected by production jobs. FW-26 adds durable synthetic inference ownership
 > (ADR-064), FW-41 adds awaited native per-send admission/receipts and crash recovery (ADR-065),
 > and FW-27 adds immutable findings/reviews (ADR-066) and explicitly approved same-call
-> regeneration with durable recovery (ADR-067), all local.
-> Automatic routing, notification outbox (FW-40), live model
+> regeneration with durable recovery (ADR-067), plus explicit automatic native job routing and
+> visible post-call status (ADR-068), all local and disabled by default.
+> Notification outbox (FW-40), live model
 > evaluation and provider approval remain open.
 > Fireworks/ElevenLabs credentials are now present locally. FW-37 adds scoped operations and audited delivery
 > recovery (ADR-062); current Fireworks gateway requirements are in FIREWORKS_GATEWAY_CONTRACT.md.

@@ -1230,3 +1230,48 @@ Real Postgres, native synthetic transports and a separate-process SIGKILL proof 
 execution/recovery; browser checks use mocked auth/API. These are not live dental quality,
 provider contract evidence or production parity. AWS remains unchanged. Automatic native job
 routing, release evaluation/approval, voice and supported real connectors remain open.
+
+## ADR-068 — Automatic native findings through durable post-call jobs
+
+**Date:** 2026-10-13. **Status:** accepted for local implementation; not deployed.
+
+The durable native adapter and approved regeneration API did not participate in ordinary
+post-call jobs. Existing consumers, delivery retry, operations recovery and call detail understood
+only legacy summaries, so a native response could remain invisible or lack a safe completion path.
+
+1. Reuse `summary.generate` across BullMQ, inline and AWS SQS. Select new work explicitly with
+   `SUMMARY_ANALYSIS_PROVIDER` (default SYNTHETIC) and `OBSERVATION_RELEASE_ID`. Existing generation
+   one runs always retain their persisted provider/request. There is no provider fallback and
+   queue payloads cannot select models, sources, data class or generations. A concurrent provider
+   selection mismatch is retryable, never a successful unsupported-provider disposition.
+2. Build native requests from scoped terminal calls and the latest final event on that call.
+   Default to PROTECTED; synthetic data class and transports are trusted constructor-only test
+   seams. Native publication produces immutable findings, not fabricated legacy summary fields
+   or financial state transitions. Delayed analysis of an older call is permitted; existing
+   chronology/currentness rules prevent it from displacing newer evidence.
+3. Migration22 stores an immutable serialized release manifest on InferenceRun. New native
+   reservations bind it, and each new HTTP attempt rechecks approval/artifact/current claim and
+   final transcript. Saved raw responses recover with the archived manifest and matching current
+   implementation artifact, even after expiry or catalog removal, in no-send replay mode. Fresh
+   sends still require the exact release to remain approved in the current catalog. Final
+   results publish without configuration. Legacy null snapshots are not backfilled; generation2
+   can rely on its existing immutable authorization snapshot.
+4. Busy owners, missing/unapproved configuration, admission budget/source problems before a
+   terminal result, and persistence failures remain delivery failures. A durable terminal
+   rejection (including stale source or retry-budget denial after reservation) is not resent.
+   UNKNOWN/REJECTED completes delivery only after a review marker and
+   safe audit commit; no claim/financial transition follows. Unknown acceptance is never resent.
+   Expired zero-attempt reservations settle from saved identity without keys or artifact config.
+   Native publication and review dispositions can close a quarantined operations command only
+   after its exact durable evidence is bound to the reviewed recovery snapshot.
+5. Expose safe provider/observation/review status to authenticated same-organization users.
+   Owner/Admin delivery retry can recover saved results/raw receipts or persist missing review
+   effects after ownership expiry, without submitting another model request;
+   it never creates a replacement generation. Call detail uses bounded visible polling, explicit
+   refresh and a link to claim findings; findings refresh respects organization/user cache scope.
+
+Checked-in model releases remain CANDIDATE. Credentials and a selector cannot establish approval,
+dental quality, provider-contract suitability or production readiness. Validation uses localhost
+Postgres and synthetic providers; no paid inference, real calls or AWS deployment is implied.
+Model evaluation/approval, notification outbox, operational monitoring, voice and supported
+connectors remain required by the full objective.

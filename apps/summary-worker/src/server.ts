@@ -6,12 +6,14 @@ import {
   createSummariesWorker,
   createRedisConnection,
 } from '@dentabill/queue';
-import { createSummarizerPort, type SummarizerPort } from '@dentabill/summarizer';
+import type { SummarizerPort } from '@dentabill/summarizer';
 import type { Redis } from 'ioredis';
 
 import { loadSummaryWorkerEnv, type SummaryWorkerEnv } from './env.js';
 import { createSummaryJobHandler, type DbClient } from './handler.js';
 import { startHealthServer, type HealthServerHandle } from './health.js';
+import type { ObservationJobConfig } from './observation-handler.js';
+import { createRuntimeSummarizer } from './runtime-summarizer.js';
 
 /**
  * Boot the summary-worker. Mirrors `apps/call-worker/src/server.ts`:
@@ -29,6 +31,7 @@ export interface BootSummaryWorkerOptions {
   readonly prisma?: DbClient;
   readonly summarizer?: SummarizerPort;
   readonly notifier?: NotifierPort;
+  readonly observationConfig?: ObservationJobConfig;
 }
 
 export interface SummaryWorkerHandle {
@@ -57,13 +60,7 @@ export async function bootSummaryWorker(
   await connection.ping();
 
   const prismaClient = options.prisma ?? prisma;
-  const summarizer =
-    options.summarizer ??
-    createSummarizerPort({
-      anthropicApiKey: env.ANTHROPIC_API_KEY,
-      maxOutputTokens: env.SUMMARIZER_MAX_OUTPUT_TOKENS,
-      deriveWhenUnregistered: env.DEMO_SUMMARIZER_FALLBACK === 'true',
-    }).summarizer;
+  const summarizer = options.summarizer ?? createRuntimeSummarizer(env);
   // Phase 4 ships FakeResend only — the live adapter throws on
   // construction with a key. Phase 4.5 swaps in LiveResend.
   const notifier = options.notifier ?? createNotifierPort({}).notifier;
@@ -87,6 +84,7 @@ export async function bootSummaryWorker(
       env,
       notifier,
       resolveRecipient,
+      ...(options.observationConfig ? { observationConfig: options.observationConfig } : {}),
     }),
   });
 

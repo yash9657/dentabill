@@ -4,7 +4,66 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: FW-27 reviewed same-call regeneration
+### Latest continuation: automatic native generation1 jobs (ADR-068)
+
+The full parity goal remains active on `codex/w0-containment`. Fresh fetch confirms zero commits
+behind main `4497459`; both pre-existing stashes remain intact. The user asked how much remains:
+the full assignment still requires substantial model, voice, connector and production work.
+No clinic exists; all implementation evidence here uses fake data. No new vendor API probe,
+paid inference, speech, call, production migration, deployment or account change ran.
+
+- Shared summary routing now honors stored generation1 provider identity before the explicit
+  new-job selector. Default is SYNTHETIC; FIREWORKS additionally needs release ID, approved
+  scoped manifest, artifact pin and key. Queue payloads are strict and cannot select provider,
+  model, source, data class or generation. Production native requests default PROTECTED; fake
+  data class and transports are trusted constructor seams only. Legacy factory construction
+  is lazy so a historical Anthropic setting cannot block native receipt recovery.
+- Migration22 saves immutable native release manifests. Fresh sends recheck current catalog
+  approval, artifact, claim version/amount and latest final event on the call. Older calls may
+  receive delayed first analysis without displacing newer evidence. Raw receipts replay with
+  the archived manifest/current artifact and no send even after expiry/catalog removal; final
+  results publish without configuration. Unknown acceptance retains liability; zero-attempt
+  expiry refunds under the org lock without a key/artifact. All22 migrations are local only.
+- Native jobs publish ClaimObservation without a CallSummary or financial mutation. Missing
+  admission/configuration and persistence failures remain retryable; durable rejected/unknown
+  outcomes ACK only after review marker/audit commit. A provider-selection race now throws
+  instead of incorrectly acknowledging native work from a stale synthetic choice. Already
+  published historical findings return their audited immutable receipt after transcript
+  correction; new publication still verifies the source and stale review warnings remain.
+- API/runtime status and recovery recognize native completion, preserve legacy evidence and
+  audit safe status access. Owner/Admin delivery retry keeps generation1 and its frozen identity,
+  including retrying failed persistence of review effects without another model request.
+  Operations close requires exact audited publication/review; a late raw response invalidates
+  an earlier review-only close snapshot. The call-detail panel has bounded visible polling,
+  owner retry, explicit refresh and a findings link; claim findings have scoped refresh.
+- Browser checks use actual CSS/fonts with mocked auth/API at 1280/390; no overflow/page errors,
+  full source hashes wrap, 44px controls and retry-to-published/refresh flow verified. Screenshots:
+  `/private/tmp/dentabill-observation-visual-WE4K6l/analysis-1280.png` and `analysis-390.png`.
+  This is component evidence, not deployed Clerk-to-provider validation.
+
+**Verification:** database **164/11 files**, API **463/33**, queue **81/6**, SDK **30/2** and
+call-worker recovery/outbox **47/2** pass. The final API settlement change also passes calls/native
+**73/2**, with native **8/1** repeated after type/lint correction. The summary-worker broad run
+passed **123/124**; its sole failure was an outdated provider-disabled expectation, corrected to
+the intentional retryable busy outcome. The affected handler file then passed **32/32**, covering
+all 124 worker cases across the broad run and affected rerun. This includes 18 automatic-handler
+tests and 11 native process cases, with two new automatic-job SIGKILL/restart proofs: one saved
+response publishes once; uncertain acceptance retains liability/review without a second send.
+UI checks passed **61/3**, then the final status component **21/21** after recovery wording and
+role regressions. An initial API run exposed an outdated fresh-generation fixture ID; it was
+corrected to canonical `.g1`, retaining historical null-snapshot bindings. After lint-only
+corrections, the native handler passes **18/18** again and shared typecheck/lint passes
+**30/30** with concurrency 2. Both Lambda packages build: API **35.6 MB / 10.7 MB zip**,
+worker **28.7 MB / 9.4 MB zip**. Checks were serialized to respect local memory limits.
+
+**Exact next task:** release evaluation infrastructure (FW-15/16): versioned annotation/evaluation
+inputs, deterministic reports and evidence-bound approval artifacts, followed by authorized
+synthetic provider contract probes. Do not approve a production model from fixture success;
+domain-adjudicated quality and applicable provider contract/region/retention/spend evidence
+remain missing. FW-39 monitoring, FW-40 notification outbox, voice and supported connectors
+remain open. Defaults stay synthetic and checked-in model manifests remain CANDIDATE.
+
+### Earlier continuation: FW-27 reviewed same-call regeneration
 
 The parity goal remains active on `codex/w0-containment`; main `4497459` is incorporated.
 The user asked how much remains: the local feature is one slice; automatic routing, evaluation,

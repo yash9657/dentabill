@@ -188,6 +188,9 @@ async function evaluate(
     if (lockDomain) {
       await db.$queryRaw`SELECT id FROM "Call" WHERE id = ${data.callId} AND "organizationId" = ${row.organizationId} FOR SHARE`;
       await db.$queryRaw`SELECT id FROM "CallSummary" WHERE "callId" = ${data.callId} AND "organizationId" = ${row.organizationId} FOR SHARE`;
+      await db.$queryRaw`SELECT id FROM "InferenceRun" WHERE "callId" = ${data.callId} AND "organizationId" = ${row.organizationId} AND generation = 1 FOR SHARE`;
+      await db.$queryRaw`SELECT a.id FROM "InferenceAttempt" a JOIN "InferenceRun" r ON r.id = a."runId" AND r."organizationId" = a."organizationId" WHERE r."callId" = ${data.callId} AND r."organizationId" = ${row.organizationId} AND r.generation = 1 FOR SHARE OF a`;
+      await db.$queryRaw`SELECT id FROM "ClaimObservation" WHERE "callId" = ${data.callId} AND "organizationId" = ${row.organizationId} FOR SHARE`;
     }
     const call = await db.call.findFirst({
       where: { id: data.callId, organizationId: row.organizationId },
@@ -197,7 +200,53 @@ async function evaluate(
       where: { callId: data.callId, organizationId: row.organizationId },
       select: { id: true, callId: true, createdAt: true },
     });
-    domain = { call, summary };
+    const run = await db.inferenceRun.findFirst({
+      where: { organizationId: row.organizationId, callId: data.callId, generation: 1 },
+      select: {
+        id: true,
+        provider: true,
+        state: true,
+        claimId: true,
+        reviewAppliedAt: true,
+        updatedAt: true,
+        attempts: {
+          orderBy: { attemptNumber: 'desc' },
+          take: 1,
+          select: { id: true, responseHash: true, responseRecordedAt: true, completionHash: true },
+        },
+      },
+    });
+    const observation =
+      run?.provider === 'FIREWORKS' && run.state === 'APPLIED' && call
+        ? await db.claimObservation.findFirst({
+            where: {
+              organizationId: row.organizationId,
+              callId: call.id,
+              claimId: call.claimId,
+              inferenceRunId: run.id,
+            },
+            select: { id: true, digest: true, createdAt: true },
+          })
+        : null;
+    const reviewComplete =
+      run?.provider === 'FIREWORKS' &&
+      run.reviewAppliedAt !== null &&
+      ['UNKNOWN', 'REJECTED'].includes(run.state) &&
+      !(run.state === 'UNKNOWN' && run.attempts[0]?.responseRecordedAt) &&
+      run.claimId === call?.claimId;
+    const dispositionId = observation?.id ?? (reviewComplete ? run.id : null);
+    const dispositionAudit = dispositionId
+      ? await db.auditLog.findFirst({
+          where: {
+            organizationId: row.organizationId,
+            resourceType: observation ? 'ClaimObservation' : 'InferenceRun',
+            resourceId: dispositionId,
+            action: observation ? 'claimObservation.published' : 'inference.review_applied',
+          },
+          select: { id: true, createdAt: true },
+        })
+      : null;
+    domain = { call, summary, run, observation, dispositionAudit };
     const baseKey = `call.${data.callId}`;
     const retryPrefix = `${baseKey}.retry.`;
     const boundKey =
@@ -205,7 +254,10 @@ async function evaluate(
       (data.idempotencyKey.startsWith(retryPrefix) &&
         /^[1-9][0-9]*$/.test(data.idempotencyKey.slice(retryPrefix.length)));
     if (!call || !boundKey) blockedReason = 'DOMAIN_BINDING_MISMATCH';
-    else if (summary) action = 'CLOSE';
+    else if (run?.provider === 'FIREWORKS') {
+      if (dispositionAudit && (observation || reviewComplete)) action = 'CLOSE';
+      else blockedReason = 'SUMMARY_RETRY_UNSAFE';
+    } else if (summary) action = 'CLOSE';
     else blockedReason = 'SUMMARY_RETRY_UNSAFE';
   }
   if (action === 'RETRY' && row.deliveryAttempts < row.deliveryAttemptLimit) {

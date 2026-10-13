@@ -4,9 +4,8 @@ import { z } from 'zod';
  * Summary-worker process env. Validated at boot; the worker crashes
  * fast on bad config rather than failing later inside a job.
  *
- * Phase 4 ships with `ANTHROPIC_API_KEY` optional — empty / unset
- * selects the synthetic adapter. A configured legacy key is rejected by
- * the production factory; approved Fireworks summary wiring is separate.
+ * Shared by BullMQ and inline/SQS runtimes. New work needs an explicit
+ * provider selection; credentials alone cannot approve a native release.
  */
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -15,6 +14,15 @@ const envSchema = z.object({
 
   /** Empty selects the synthetic baseline; configured legacy credentials fail closed. */
   ANTHROPIC_API_KEY: z.string().optional().default(''),
+
+  /** Explicit selector for new work; existing runs keep their persisted provider. */
+  SUMMARY_ANALYSIS_PROVIDER: z.enum(['SYNTHETIC', 'FIREWORKS']).default('SYNTHETIC'),
+  OBSERVATION_RELEASE_ID: z.string().min(1).max(256).optional(),
+  FIREWORKS_API_KEY: z.string().optional(),
+  OBSERVATION_IMPLEMENTATION_ARTIFACT_SHA256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
 
   /**
    * Demo-only: let FakeClaude derive a summary from the transcript instead of

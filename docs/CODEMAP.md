@@ -176,9 +176,10 @@ end-to-end. Fastify-based health probe at `:3010/healthz`.
 
 ### `@dentabill/summary-worker` — apps/summary-worker
 
-**Purpose:** Frozen-input synthetic summary processing with durable inference ownership.
+**Purpose:** Frozen-input synthetic summaries and explicitly selected native findings with durable ownership.
 **Entry:** `apps/summary-worker/src/index.ts`.
-**Key files:** `handler.ts` validates fixed synthetic provenance, reserves before submission,
+**Key files:** `handler.ts` routes by stored generation1 provider before the new-job selector,
+then validates fixed synthetic provenance, reserves before submission,
 saves usage independently, and resumes response/review effects with original claim guards.
 `inference-process.test.ts` / fixture use child processes, localhost HTTP and fsynced provider
 receipts to prove SIGKILL recovery boundaries. Legacy Redis cost guards are unused by production
@@ -199,7 +200,13 @@ migrations 20/21 enforce immutable approvals and per-send currentness. API
 `observation-regenerations.ts` exposes preview/approve/resume with audited evidence and a 30-second
 response budget; web `observation-regeneration-controls.tsx` preserves submission identity and
 requires explicit recovery. `model-gateway/replay.test.ts` verifies expired/no-key receipt
-recovery cannot send. Production jobs still do not select native inference.
+recovery cannot send. `observation-handler.ts` builds native generation1 requests from final
+events, recovers stored receipts and publishes findings or commits review disposition.
+`runtime-summarizer.ts` defers legacy factory construction so it cannot prevent native recovery.
+Migration22 adds immutable native release snapshots; admission rechecks claim/source/approval
+before fresh sends. `call-analysis-status.tsx` shows bounded processing status and links findings;
+the status/retry API and operations recovery recognize native durable completion. Checked-in
+manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
 
 ## Cross-cutting integrations
 

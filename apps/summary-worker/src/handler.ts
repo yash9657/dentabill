@@ -30,6 +30,10 @@ import { z } from 'zod';
 
 import { billingDayUtc, type CostGuard } from './cost-guard.js';
 import type { SummaryWorkerEnv } from './env.js';
+import { createObservationJobHandler, type ObservationJobConfig } from './observation-handler.js';
+import { SummaryInferenceBusyError } from './summary-errors.js';
+
+export { SummaryInferenceBusyError } from './summary-errors.js';
 
 /** Inference ownership and usage commit before the separately retryable summary application. */
 
@@ -46,6 +50,7 @@ export interface SummaryHandlerDeps {
   readonly costGuard?: CostGuard;
   readonly summarizer: SummarizerPort;
   readonly env: SummaryWorkerEnv;
+  readonly observationConfig?: ObservationJobConfig;
   readonly clock?: () => Date;
   /**
    * Optional notifier — when present, the handler dispatches a
@@ -134,15 +139,38 @@ const knownTokens = (value: unknown): number | null => {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 };
 
-export class SummaryInferenceBusyError extends Error {
-  public readonly code = 'SUMMARY_INFERENCE_BUSY';
-  public constructor() {
-    super('Summary inference ownership is busy.');
-    this.name = 'SummaryInferenceBusyError';
-  }
+export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandler {
+  const synthetic = createSyntheticSummaryJobHandler(deps);
+  const native = createObservationJobHandler(deps);
+  return async (job) => {
+    const parsed = SummaryJobDataSchema.safeParse(job.data);
+    if (!parsed.success)
+      return { summaryId: null, outcome: 'DLQ', tokensUsed: 0, promptVersion: 'unknown' };
+    const { organizationId, callId } = parsed.data;
+    const run = await deps.prisma.inferenceRun.findFirst({
+      where: { organizationId, callId, generation: 1 },
+      select: { provider: true },
+    });
+    if (!run) {
+      const summary = await deps.prisma.callSummary.findFirst({
+        where: { organizationId, callId },
+        select: { id: true },
+      });
+      if (summary)
+        return {
+          summaryId: summary.id,
+          outcome: 'ALREADY_PROCESSED',
+          tokensUsed: 0,
+          promptVersion: parsed.data.promptVersion,
+        };
+    }
+    return (run?.provider ?? deps.env.SUMMARY_ANALYSIS_PROVIDER) === 'FIREWORKS'
+      ? native(job)
+      : synthetic(job);
+  };
 }
 
-export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandler {
+function createSyntheticSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandler {
   const clock = deps.clock ?? ((): Date => new Date());
   return async function handle(job: SummaryJobLike): Promise<SummaryJobResult> {
     const validated = SummaryJobDataSchema.safeParse(job.data);
@@ -158,11 +186,6 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
       tokensUsed,
       promptVersion: data.promptVersion,
     });
-    if (
-      deps.summarizer.inference.provider !== 'SYNTHETIC' ||
-      deps.summarizer.inference.releaseId !== 'synthetic-summary.v1'
-    )
-      return result('PROVIDER_DISABLED');
     const billingDay = billingDayUtc(clock());
     const orgScoped = getOrgScopedDb(data.organizationId);
     const existingSummary = await orgScoped.callSummary.findFirst({
@@ -172,6 +195,16 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
     const existingRun = await deps.prisma.inferenceRun.findFirst({
       where: { organizationId: data.organizationId, callId: data.callId, generation: 1 },
     });
+    if (
+      existingRun &&
+      (existingRun.provider !== 'SYNTHETIC' || existingRun.releaseId !== 'synthetic-summary.v1')
+    )
+      throw new SummaryInferenceBusyError();
+    if (
+      deps.summarizer.inference.provider !== 'SYNTHETIC' ||
+      deps.summarizer.inference.releaseId !== 'synthetic-summary.v1'
+    )
+      return result('PROVIDER_DISABLED');
     let captured: z.infer<typeof CapturedRequestSchema>;
     if (existingRun) {
       await audit({
@@ -181,8 +214,6 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
         organizationId: data.organizationId,
         metadata: { callId: data.callId, generation: existingRun.generation },
       });
-      if (existingRun.provider !== 'SYNTHETIC' || existingRun.releaseId !== 'synthetic-summary.v1')
-        return result('PROVIDER_DISABLED');
       const parsed = CapturedRequestSchema.safeParse(existingRun.requestPayload);
       if (
         !parsed.success ||

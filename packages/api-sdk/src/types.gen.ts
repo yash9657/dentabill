@@ -2040,7 +2040,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Fetch the structured CallSummary for a Call, if one exists. Returns 404 when the Call is not found in the caller’s org OR no summary has been persisted yet (the dashboard polls for both states with the same handler). */
+        /** @description Fetch a saved legacy CallSummary. Returns 404 when the scoped call or summary is absent; use summary/status for processing state and native observation links. */
         get: {
             parameters: {
                 query?: never;
@@ -2096,7 +2096,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description OWNER/ADMIN view of generation 1 summary work. No transcript, request, or provider response is returned. */
+        /** @description Organization-scoped generation 1 analysis status. Only stored OWNER/ADMIN users may retry. No transcript, request, or provider response is returned. */
         get: {
             parameters: {
                 query?: never;
@@ -2121,6 +2121,10 @@ export interface paths {
                             /** @enum {string} */
                             state: "NOT_REQUESTED" | "RESERVED" | "SUBMITTING" | "UNKNOWN" | "RESPONDED" | "REJECTED" | "APPLIED";
                             summaryId: string | null;
+                            /** @enum {string|null} */
+                            provider: "SYNTHETIC" | "FIREWORKS" | null;
+                            observationId: string | null;
+                            reviewRequired: boolean;
                             canRetry: boolean;
                             lastErrorCode: string | null;
                             /** Format: date-time */

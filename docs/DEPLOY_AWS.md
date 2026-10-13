@@ -74,11 +74,10 @@ Preserve all snapshots, receipts, unknown liabilities and existing summaries on 
 restoring a worker that blindly resubmits is unsafe. These migrations have run only on
 isolated localhost databases; this runbook is not deployment authorization.
 
-The current worker accepts only `synthetic-summary.v1`. Nonempty `ANTHROPIC_API_KEY` makes
-production summarizer creation fail with `SUMMARY_PROVIDER_DISABLED`; there is no silent
-fake or proprietary fallback. Do not enable Fireworks by adding its key: released model
-approval and automatic job routing remain open; explicit reviewed replacement is local only. Awaited durable per-HTTP-send hooks are
-implemented locally in the explicit observation adapter (ADR-065), not selected by job routing.
+New jobs default to `synthetic-summary.v1`; the local ADR-068 router can explicitly select
+approved Fireworks findings. Existing runs retain their provider. Legacy Anthropic inference
+remains disabled; its lazy factory cannot prevent recovery of a saved native result. A key
+does not approve or select a model. Reviewed releases and authorized rollout remain required.
 `SUMMARIZER_DAILY_TOKEN_BUDGET` is operational admission, not a verified dollar ceiling.
 Unknown usage remains held across UTC days; legacy `summaryTokensUsed` is a display projection,
 not the admission authority. Review notifications still need a durable outbox (FW-40).
@@ -92,9 +91,9 @@ Fireworks receipt with an exact final CallEvent and text-hash binding. Unbound o
 fail closed. Only localhost identity/runtime/summary/process databases have this migration.
 
 The new APIs publish saved results and record biller reviews without requesting inference,
-changing claim status, confirming payments or sending messages. Native inference remains an
-explicit server adapter with unapproved checked-in releases and no production job selector.
-Automatic dispatch remains open. Rollback retains the new tables, source snapshots and reviews; immutable records must
+changing claim status, confirming payments or sending messages. Native inference has unapproved
+checked-in releases; the local automatic selector described below remains disabled by default.
+Rollback retains the new tables, source snapshots and reviews; immutable records must
 not be rewritten or deleted by old application code. No production release was authorized.
 
 ### Explicit regeneration release (not executed)
@@ -119,6 +118,36 @@ cannot approve a model or activate automatic production routing. An evaluated sc
 provider approvals and an explicitly authorized coordinated rollout are still required.
 Rollback preserves approvals, findings, reviews and all known/unknown usage. No production
 migration, deployment or real model request was performed for this slice.
+
+### Automatic native job release (not executed; ADR-068)
+
+Apply additive `20261014000000_native_release_snapshot` after migration21, then deploy matching
+API/worker/web artifacts in a coordinated release. All22 migrations ran only on localhost
+identity/runtime/summary/process databases. Preserve nullable historical snapshots; do not
+invent approvals or rewrite old inference identities.
+
+`SUMMARY_ANALYSIS_PROVIDER=SYNTHETIC` is the default. A future approved native deployment also
+requires `SUMMARY_ANALYSIS_PROVIDER=FIREWORKS`, `OBSERVATION_RELEASE_ID`, `FIREWORKS_API_KEY`,
+`OBSERVATION_IMPLEMENTATION_ARTIFACT_SHA256`, a reviewed scoped manifest and the existing token
+budget. This code has no approved production manifest. New queued native work uses PROTECTED;
+there is no environment switch to relabel real patient data synthetic. API/queue clients cannot
+choose any of these controls. The shared handler is used by BullMQ and the inline/SQS runtime.
+
+Changing the selector affects only calls with no stored generation1 run. Existing runs keep
+their provider, request and release snapshot; this selector is not a kill switch for admitted
+work. Withdraw the current release approval or live send configuration/artifact permission to prevent further sends, while
+preserving receipts and accounting. Raw replay needs the saved approved manifest and matching
+current artifact; final-result publication and proven-unsent/unknown settlement need no key.
+No fallback creates another provider request or generation. Separate approved regeneration is
+still required for replacement findings.
+
+Validate through staging: native publication and claim-detail link; duplicate delivery; failed
+publication with intact usage; process loss after saved raw response with no second send;
+unknown acceptance retained for review; missing approval/budget left retryable through SQS
+redrive; owner retry of failed review persistence without another send; scoped operations close.
+Monitor durable work, not just broker
+delivery receipts. Retain all new tables/evidence on rollback; old consumers cannot safely
+interpret native completion. Production deployment and scheduler activation remain unperformed.
 
 ## Infrastructure expectations
 
@@ -426,14 +455,14 @@ slice does not authorize production migration, scheduler activation or real paye
 ## Fireworks text gateway rollout boundary (ADR-063/065)
 
 `@dentabill/model-gateway` now has an explicit durable adapter exported by summary-worker,
-plus scoped saved-result publication and review APIs, but no new Lambda runtime selection. Adding local `FIREWORKS_API_KEY` /
+plus scoped saved-result publication/review APIs and the explicit local ADR-068 runtime selector. Adding local `FIREWORKS_API_KEY` /
 `ELEVENLABS_API_KEY` does not modify
 AWS secrets or enable either provider. Both checked-in model releases are CANDIDATE. Existing
 AWS demo/Retell configuration remains as deployed; Telnyx is not required for the current
 Retell-managed Twilio numbers (the outbound number variable still has its legacy name).
 
-FW-26/41 now implement local reservations/attempt/usage accounting; complete FW-27 versioned
-summary replacement before automatic job integration. A trusted server caller must authorize and load evidence,
+FW-26/41 implement local reservations/attempt/usage accounting; FW-27 now includes versioned
+findings, reviewed regeneration and automatic job integration. A trusted server caller must authorize and load evidence,
 derive the organization/data class and exact claim version, load a reviewed scoped manifest,
 provide the deployed implementation artifact SHA-256, and inject the server-only Fireworks key.
 Do not accept manifest, artifact hash, data class or provider settings from an untrusted request.

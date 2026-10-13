@@ -109,6 +109,16 @@ function ObservationHistory({
           Review what the payer reported and the transcript behind it. A review records your
           assessment; it does not submit a claim or verify a payment.
         </p>
+        <button
+          className={`${buttonClass} mt-3`}
+          type="button"
+          disabled={query.isFetching}
+          onClick={() => {
+            void query.refetch();
+          }}
+        >
+          {query.isFetching ? 'Refreshing findings…' : 'Refresh findings'}
+        </button>
       </div>
       {query.isPending ? (
         <p role="status" className="text-gray-warm text-sm">

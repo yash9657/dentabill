@@ -121,7 +121,7 @@ async function seed(role: UserRole = 'OWNER') {
   const chosen = release(organization.id);
   const request: GatewayRequest = {
     organizationId: organization.id,
-    invocationId: `observation.${call.id}`,
+    invocationId: `observation.${call.id}.g1`,
     releaseId: chosen.policy.id,
     task: 'claim-observation.v1',
     dataClass: 'SYNTHETIC',

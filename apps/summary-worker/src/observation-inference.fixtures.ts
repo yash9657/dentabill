@@ -55,7 +55,7 @@ export async function seedObservation(
     callId: call.id,
     request: {
       organizationId: org.id,
-      invocationId: `observation.${call.id}`,
+      invocationId: `observation.${call.id}.g1`,
       releaseId: 'synthetic-durable-observation.v1',
       task: 'claim-observation.v1',
       dataClass: 'SYNTHETIC',

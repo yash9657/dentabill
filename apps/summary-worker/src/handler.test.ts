@@ -1112,14 +1112,14 @@ describe('durable inference admission and receipts', () => {
       dailyTokenLimit: 1000,
     });
     const fake = new FakeClaude();
-    expect(
-      await createSummaryJobHandler({
+    await expect(
+      createSummaryJobHandler({
         logger: silentLogger,
         prisma,
         summarizer: fake,
         env: baseEnv,
       })(jobFor(payload(seeded))),
-    ).toMatchObject({ outcome: 'PROVIDER_DISABLED', tokensUsed: 0 });
+    ).rejects.toMatchObject({ code: 'SUMMARY_INFERENCE_BUSY' });
     expect(fake.invocations).toHaveLength(0);
     expect(await prisma.inferenceAttempt.count({ where: { organizationId: seeded.orgId } })).toBe(
       0,

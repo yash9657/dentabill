@@ -12,6 +12,9 @@ const getMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const postMock = vi.fn();
 let profileRole: 'OWNER' | 'ADMIN' | 'BILLING_STAFF' = 'BILLING_STAFF';
 
+// Analysis status has its own scoped API/polling tests; keep cancellation fixtures independent.
+vi.mock('./call-analysis-status.js', () => ({ CallAnalysisStatus: () => null }));
+
 vi.mock('../../../lib/api-client.js', () => ({
   useDentaBillApi: () => ({
     client: {

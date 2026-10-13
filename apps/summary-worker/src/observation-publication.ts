@@ -35,6 +35,37 @@ export async function publishStoredObservation(options: {
   if (!run) throw new ClaimObservationConflictError('NOT_FOUND');
   if (run.provider !== 'FIREWORKS' || !['RESPONDED', 'APPLIED'].includes(run.state))
     throw new ClaimObservationConflictError('INFERENCE_NOT_READY');
+  if (run.state === 'APPLIED') {
+    const observation = await options.prisma.claimObservation.findFirst({
+      where: {
+        organizationId: run.organizationId,
+        inferenceRunId: run.id,
+        claimId: run.claimId,
+        callId: run.callId,
+        claimVersion: run.claimVersion,
+        sourceHash: run.sourceHash,
+        requestHash: run.requestHash,
+        releaseId: run.releaseId,
+        provider: run.provider,
+        promptVersion: run.promptVersion,
+      },
+    });
+    const publicationAudit = observation
+      ? await options.prisma.auditLog.findFirst({
+          where: {
+            organizationId: run.organizationId,
+            action: 'claimObservation.published',
+            resourceType: 'ClaimObservation',
+            resourceId: observation.id,
+            metadata: { path: ['inferenceRunId'], equals: run.id },
+          },
+          select: { id: true },
+        })
+      : null;
+    if (!run.appliedAt || !observation || !publicationAudit)
+      throw new ClaimObservationConflictError('INVALID_INFERENCE_RESULT');
+    return { kind: 'ALREADY_PUBLISHED', observation };
+  }
   const request = GatewayRequestSchema.safeParse(run.requestPayload);
   const result = GatewayResultSchema.safeParse(run.resultPayload);
   if (

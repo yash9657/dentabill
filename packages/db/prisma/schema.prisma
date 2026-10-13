@@ -412,6 +412,7 @@ model InferenceRun {
   maxAttempts         Int               @default(1)
   executionDeadlineAt DateTime?
   releasePolicyHash   String?           @db.VarChar(64)
+  releaseSnapshot     Json?
   wireRequestHash     String?           @db.VarChar(64)
   claimVersion        DateTime
   sourceHash          String            @db.VarChar(64)

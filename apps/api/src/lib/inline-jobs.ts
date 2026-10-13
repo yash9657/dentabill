@@ -42,12 +42,15 @@ import {
   type SummaryJobData,
   type SummaryJobResult,
 } from '@dentabill/queue';
-import { createSummarizerPort, type SummarizerPort } from '@dentabill/summarizer';
+import type { SummarizerPort } from '@dentabill/summarizer';
 import {
   type CostGuard,
   createSummaryJobHandler,
+  createRuntimeSummarizer,
   loadSummaryWorkerEnv,
+  ObservationJobError,
   SummaryInferenceBusyError,
+  type ObservationJobConfig,
 } from '@dentabill/summary-worker';
 import type { Redis } from 'ioredis';
 
@@ -153,6 +156,8 @@ export interface CreateInlineJobRuntimeDeps {
   /** Test seams. */
   readonly retellPort?: RetellPort;
   readonly summarizer?: SummarizerPort;
+  /** Trusted native fixture/release configuration; never taken from job payloads. */
+  readonly observationConfig?: ObservationJobConfig;
   readonly costGuard?: CostGuard;
   readonly callJobOptions?: JobOptions;
   readonly summaryJobOptions?: JobOptions;
@@ -180,13 +185,7 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
       apiKey: callEnv.RETELL_API_KEY,
       demoAutopilot: callEnv.DEMO_AUTOPILOT === 'true',
     }).port;
-  const summarizer =
-    deps.summarizer ??
-    createSummarizerPort({
-      anthropicApiKey: summaryEnv.ANTHROPIC_API_KEY,
-      maxOutputTokens: summaryEnv.SUMMARIZER_MAX_OUTPUT_TOKENS,
-      deriveWhenUnregistered: summaryEnv.DEMO_SUMMARIZER_FALLBACK === 'true',
-    }).summarizer;
+  const summarizer = deps.summarizer ?? createRuntimeSummarizer(summaryEnv);
   const callHandler = createCallJobHandler({
     logger,
     prisma,
@@ -202,11 +201,16 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
     ...(deps.costGuard && { costGuard: deps.costGuard }),
     summarizer,
     env: summaryEnv,
+    ...(deps.observationConfig ? { observationConfig: deps.observationConfig } : {}),
   });
 
   const errInfo = (err: unknown): { code: string } => ({
     code:
-      err instanceof SummaryInferenceBusyError ? 'SUMMARY_INFERENCE_BUSY' : 'JOB_ATTEMPT_FAILED',
+      err instanceof SummaryInferenceBusyError
+        ? 'SUMMARY_INFERENCE_BUSY'
+        : err instanceof ObservationJobError
+          ? 'OBSERVATION_DELIVERY_UNCONFIRMED'
+          : 'JOB_ATTEMPT_FAILED',
   });
 
   const callJobOptions = deps.callJobOptions ?? CALLS_DEFAULT_JOB_OPTIONS;
@@ -266,6 +270,12 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
 
   /** Delivery retries never replace existing summary evidence. */
   const summaryAlreadyExists = async (data: SummaryJobData): Promise<boolean> => {
+    const stored = await prisma.inferenceRun.findFirst({
+      where: { callId: data.callId, organizationId: data.organizationId, generation: 1 },
+      select: { provider: true },
+    });
+    // Native publication may coexist with historical summary evidence.
+    if (stored?.provider === 'FIREWORKS') return false;
     const existing = await prisma.callSummary.findFirst({
       where: { callId: data.callId, organizationId: data.organizationId },
       select: { id: true },
@@ -285,6 +295,32 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
     data: SummaryJobData;
   }): Promise<SummaryJobResult> => {
     const result = await summaryHandler(job);
+    if (result.outcome === 'OBSERVATION_PUBLISHED') {
+      const observation = result.observationId
+        ? await prisma.claimObservation.findFirst({
+            where: {
+              id: result.observationId,
+              organizationId: job.data.organizationId,
+              callId: job.data.callId,
+              inferenceRun: { generation: 1, provider: 'FIREWORKS', state: 'APPLIED' },
+            },
+            select: { id: true },
+          })
+        : null;
+      const publicationAudit = observation
+        ? await prisma.auditLog.findFirst({
+            where: {
+              organizationId: job.data.organizationId,
+              resourceType: 'ClaimObservation',
+              resourceId: observation.id,
+              action: 'claimObservation.published',
+            },
+            select: { id: true },
+          })
+        : null;
+      if (!observation || !publicationAudit || result.summaryId !== null)
+        throw new Error('Native observation disposition is unconfirmed.');
+    }
     if (result.outcome === 'INFERENCE_REVIEW_REQUIRED') {
       const disposition = await prisma.inferenceRun.findFirst({
         where: {
@@ -294,9 +330,36 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
           state: { in: ['UNKNOWN', 'REJECTED'] },
           reviewAppliedAt: { not: null },
         },
-        select: { id: true },
+        select: {
+          id: true,
+          provider: true,
+          state: true,
+          attempts: {
+            orderBy: { attemptNumber: 'desc' },
+            take: 1,
+            select: { responseRecordedAt: true },
+          },
+        },
       });
-      if (!disposition) throw new Error('Summary inference disposition is unconfirmed.');
+      const reviewAudit = disposition
+        ? await prisma.auditLog.findFirst({
+            where: {
+              organizationId: job.data.organizationId,
+              resourceType: 'InferenceRun',
+              resourceId: disposition.id,
+              action: 'inference.review_applied',
+            },
+            select: { id: true },
+          })
+        : null;
+      if (
+        !disposition ||
+        !reviewAudit ||
+        (disposition.provider === 'FIREWORKS' &&
+          disposition.state === 'UNKNOWN' &&
+          disposition.attempts[0]?.responseRecordedAt)
+      )
+        throw new Error('Summary inference disposition is unconfirmed.');
     }
     return result;
   };

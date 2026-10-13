@@ -55,6 +55,19 @@ beforeEach(() => {
 });
 
 describe('Versioned claim observations', () => {
+  it('refreshes findings published after the page loaded without creating analysis', async () => {
+    const user = userEvent.setup();
+    mocks.get.mockResolvedValueOnce(
+      success({ ...observationListFixture(), items: [], publishableCalls: [] }),
+    );
+    mount();
+    await screen.findByText(/No versioned findings yet/);
+    await user.click(screen.getByRole('button', { name: 'Refresh findings' }));
+    expect(await screen.findByText('Payment reported by payer')).toBeVisible();
+    expect(mocks.get).toHaveBeenCalledTimes(2);
+    expect(mocks.post).not.toHaveBeenCalled();
+  });
+
   it('separates payer-reported money from verified payment and shows exact source evidence', async () => {
     const user = userEvent.setup();
     const version = observationListFixture().items[0]!.sources[0]!.version;

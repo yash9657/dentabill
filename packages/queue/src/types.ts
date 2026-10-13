@@ -97,29 +97,33 @@ export type SummaryJobName = typeof SUMMARY_JOB_NAME;
  *
  * `callId` is the DentaBill `Call.id`. The worker re-loads the Call
  * with `getOrgScopedDb(organizationId)` so cross-tenant routing is
- * impossible even with a forged job. `promptVersion` allows the
- * call-worker to pin a specific prompt at enqueue time (default
- * `v1`); the audit log records what the worker actually used.
+ * impossible even with a forged job. `promptVersion` pins the legacy
+ * synthetic prompt (default `v1`). Native findings use the approved
+ * release's fixed prompt; the result records the version actually used.
  */
-export const SummaryJobDataSchema = z.object({
-  organizationId: z.string().min(1),
-  callId: z.string().min(1),
-  /** Audit + diagnostics — surfaces in `metadata.prompt`. */
-  promptVersion: z.string().min(1).default('v1'),
-  /**
-   * Idempotency key — used as BullMQ jobId — to prevent double-enqueue.
-   * Same rules as CallJobData.idempotencyKey.
-   */
-  idempotencyKey: z
-    .string()
-    .min(1)
-    .regex(/^[A-Za-z0-9_.-]+$/, 'idempotencyKey must match /^[A-Za-z0-9_.-]+$/'),
-});
+export const SummaryJobDataSchema = z
+  .object({
+    organizationId: z.string().min(1),
+    callId: z.string().min(1),
+    /** Audit + diagnostics — surfaces in `metadata.prompt`. */
+    promptVersion: z.string().min(1).default('v1'),
+    /**
+     * Idempotency key — used as BullMQ jobId — to prevent double-enqueue.
+     * Same rules as CallJobData.idempotencyKey.
+     */
+    idempotencyKey: z
+      .string()
+      .min(1)
+      .regex(/^[A-Za-z0-9_.-]+$/, 'idempotencyKey must match /^[A-Za-z0-9_.-]+$/'),
+  })
+  .strict();
 
 export type SummaryJobData = z.infer<typeof SummaryJobDataSchema>;
 
 export const SummaryJobResultSchema = z.object({
   summaryId: z.string().min(1).nullable(),
+  /** Immutable native observation; legacy summary results may omit this field. */
+  observationId: z.string().min(1).nullable().optional(),
   /**
    * Routing outcomes describe workflow decisions, never collected cash.
    * STALE_RESULT preserves newer/reviewed state; ALREADY_PROCESSED skips
@@ -138,6 +142,7 @@ export const SummaryJobResultSchema = z.object({
     'TRANSCRIPT_UNAVAILABLE',
     'INFERENCE_REVIEW_REQUIRED',
     'PROVIDER_DISABLED',
+    'OBSERVATION_PUBLISHED',
   ]),
   tokensUsed: z.number().int().min(0).nullable(),
   promptVersion: z.string().min(1),

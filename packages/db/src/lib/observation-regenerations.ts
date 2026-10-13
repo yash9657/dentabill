@@ -199,13 +199,14 @@ function validRelease(
   );
 }
 
-async function currentBinding(
+export async function checkObservationRequestBinding(
   tx: Tx,
   input: Omit<
     ObservationRegenerationAdmissionInput,
     'regenerationId' | 'implementationArtifactSha256' | 'now'
   >,
   generation: number,
+  options: { requireLatestCall?: boolean } = {},
 ): Promise<ObservationRegenerationCode | null> {
   const claim = await tx.claim.findFirst({
     where: { id: input.claimId, organizationId: input.organizationId },
@@ -217,14 +218,16 @@ async function currentBinding(
   });
   if (!call || !['COMPLETED', 'FAILED', 'VOICEMAIL'].includes(call.status))
     return 'AUTHORIZATION_INVALID';
-  const sourceOrderAt = call.intent?.createdAt ?? call.createdAt;
-  const newer = await tx.$queryRaw<{ id: string }[]>`
+  if (options.requireLatestCall !== false) {
+    const sourceOrderAt = call.intent?.createdAt ?? call.createdAt;
+    const newer = await tx.$queryRaw<{ id: string }[]>`
     SELECT c."id" FROM "Call" c
     LEFT JOIN "CallIntent" i ON i."callId" = c."id" AND i."claimId" = c."claimId" AND i."organizationId" = c."organizationId"
     WHERE c."organizationId" = ${input.organizationId} AND c."claimId" = ${input.claimId}
       AND (COALESCE(i."createdAt", c."createdAt") > ${sourceOrderAt}
         OR (COALESCE(i."createdAt", c."createdAt") = ${sourceOrderAt} AND c."id" > ${input.callId})) LIMIT 1`;
-  if (newer.length) return 'NEWER_CALL';
+    if (newer.length) return 'NEWER_CALL';
+  }
   const request = object(input.requestPayload);
   const claimSnapshot = object(request?.claim);
   if (!request || !claimSnapshot || !Array.isArray(request.sources) || request.sources.length !== 1)
@@ -382,7 +385,7 @@ async function preview(
     blockedReason = 'AUTHORIZATION_PENDING';
   if (!blockedReason && !validRelease(input.releaseSnapshot, input, now))
     blockedReason = 'AUTHORIZATION_INVALID';
-  blockedReason ??= await currentBinding(
+  blockedReason ??= await checkObservationRequestBinding(
     tx,
     { ...input, claimId: observation.claimId },
     generation,
@@ -550,5 +553,5 @@ export async function checkObservationRegenerationAdmission(
     select: { id: true },
   });
   if (newer) return 'AUTHORIZATION_SUPERSEDED';
-  return currentBinding(tx, input, authorization.generation);
+  return checkObservationRequestBinding(tx, input, authorization.generation);
 }

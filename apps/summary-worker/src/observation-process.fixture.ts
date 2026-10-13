@@ -2,19 +2,27 @@ import { open } from 'node:fs/promises';
 import { createServer } from 'node:http';
 
 import { prisma } from '@dentabill/db';
+import { createLogger } from '@dentabill/logger';
 import {
   createFireworksTransport,
   type GatewayRequest,
   type GatewayResult,
 } from '@dentabill/model-gateway';
+import type { SummaryJobResult } from '@dentabill/queue';
+import { FakeClaude } from '@dentabill/summarizer';
 
+import { loadSummaryWorkerEnv } from './env.js';
+import { createSummaryJobHandler } from './handler.js';
 import {
   OBSERVATION_TEST_ARTIFACT,
   observationRelease,
   observationResponse,
   type ObservationResponseVariant,
 } from './observation-inference.fixtures.js';
-import { createDurableObservationGateway } from './observation-inference.js';
+import {
+  createDurableObservationGateway,
+  type DurableObservationGatewayOptions,
+} from './observation-inference.js';
 import { publishStoredObservation } from './observation-publication.js';
 
 export type ObservationProcessCommand =
@@ -32,6 +40,7 @@ export type ObservationProcessCommand =
       pause?: 'raw-response' | 'second-admission' | 'before-first-admission';
       deadlineMs?: number;
       regenerationId?: string;
+      jobMode?: 'new' | 'recover';
     }
   | { type: 'worker.cancel' };
 export type ObservationProcessReply =
@@ -42,6 +51,7 @@ export type ObservationProcessReply =
       boundary: 'raw-response' | 'second-admission' | 'before-first-admission';
     }
   | { type: 'worker.result'; result: GatewayResult; sends: number }
+  | { type: 'job.result'; result: SummaryJobResult; sends: number }
   | { type: 'fixture.failed' };
 
 function reply(value: ObservationProcessReply): void {
@@ -117,7 +127,7 @@ async function execute(command: ObservationProcessCommand): Promise<void> {
       return fetch(endpoint, init);
     },
   });
-  const gateway = createDurableObservationGateway({
+  const gatewayOptions: DurableObservationGatewayOptions = {
     prisma,
     callId: command.callId,
     ...(command.regenerationId ? { regenerationId: command.regenerationId } : {}),
@@ -165,7 +175,46 @@ async function execute(command: ObservationProcessCommand): Promise<void> {
         },
       });
     },
-  });
+  };
+  if (command.jobMode) {
+    const handler = createSummaryJobHandler({
+      prisma,
+      logger: createLogger({ level: 'fatal' }),
+      summarizer: new FakeClaude(),
+      env: loadSummaryWorkerEnv({
+        DATABASE_URL: process.env.DATABASE_URL,
+        REDIS_URL: 'redis://localhost:6379',
+        NODE_ENV: 'test',
+        SUMMARY_ANALYSIS_PROVIDER: command.jobMode === 'new' ? 'FIREWORKS' : 'SYNTHETIC',
+      }),
+      observationConfig: {
+        dailyTokenLimit: 1_000_000,
+        implementationArtifactSha256: OBSERVATION_TEST_ARTIFACT,
+        dataClass: 'SYNTHETIC',
+        ...(command.jobMode === 'new'
+          ? {
+              apiKey: gatewayOptions.apiKey,
+              releases: gatewayOptions.releases,
+              releaseId: command.request.releaseId,
+            }
+          : {}),
+        ...(gatewayOptions.transport ? { transport: gatewayOptions.transport } : {}),
+      },
+    });
+    const result = await handler({
+      id: `call.${command.callId}`,
+      data: {
+        callId: command.callId,
+        organizationId: command.request.organizationId,
+        idempotencyKey: `call.${command.callId}`,
+        promptVersion: 'v1',
+      },
+    });
+    reply({ type: 'job.result', result, sends });
+    await prisma.$disconnect();
+    process.exit(0);
+  }
+  const gateway = createDurableObservationGateway(gatewayOptions);
   const result = await gateway.generate(command.request, { signal: cancellation.signal });
   if (command.regenerationId && result.status !== 'FAILED') {
     const run = await prisma.inferenceRun.findFirstOrThrow({

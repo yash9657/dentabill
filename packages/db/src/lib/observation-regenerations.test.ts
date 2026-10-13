@@ -461,7 +461,7 @@ describe('audited observation regeneration authorization', () => {
     });
   });
 
-  it.each(['claim', 'source', 'role', 'artifact', 'expiry'] as const)(
+  it.each(['claim', 'source', 'call', 'role', 'artifact', 'expiry'] as const)(
     'rechecks %s before attempt admission and retains saved work without sending',
     async (change) => {
       const base = await fixture();
@@ -482,6 +482,16 @@ describe('audited observation regeneration authorization', () => {
         await prisma.callEvent.update({
           where: { id: base.event.id },
           data: { data: { transcript: { text: 'Changed', turns: null } } },
+        });
+      if (change === 'call')
+        await prisma.call.create({
+          data: {
+            organizationId: base.organization.id,
+            claimId: base.claim.id,
+            retellCallId: randomUUID(),
+            status: 'COMPLETED',
+            createdAt: new Date(base.call.createdAt.getTime() + 1),
+          },
         });
       if (change === 'role')
         await prisma.user.update({
@@ -536,9 +546,14 @@ describe('audited observation regeneration authorization', () => {
       }),
     ).toMatchObject({ kind: 'BLOCKED' });
     const later = new Date(base.now.getTime() + 16 * 60000);
-    const replay = await reserveFireworksInferenceRun(prisma, { ...approved.input, now: later });
+    const replay = await reserveFireworksInferenceRun(prisma, {
+      ...approved.input,
+      releaseSnapshot: base.releaseSnapshot,
+      now: later,
+    });
     expect(replay).toMatchObject({ kind: 'REPLAY', run: { generation: 2, reservedTokens: 100n } });
     if (replay.kind !== 'REPLAY') throw new Error('TEST_EXPECTED_REPLAY');
+    expect(replay.run.releaseSnapshot).toBeNull();
     expect(
       await beginFireworksAttempt(prisma, {
         organizationId: base.organization.id,

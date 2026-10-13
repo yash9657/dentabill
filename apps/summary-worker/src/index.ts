@@ -1,4 +1,7 @@
 export { loadSummaryWorkerEnv, type SummaryWorkerEnv } from './env.js';
+export { createRuntimeSummarizer } from './runtime-summarizer.js';
+export { ObservationJobError } from './summary-errors.js';
+export { type ObservationJobConfig } from './observation-handler.js';
 export {
   publishStoredObservation,
   generateAndPublishObservation,

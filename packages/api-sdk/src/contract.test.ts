@@ -50,6 +50,8 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/reports/summary',
   '/v1/calls/{id}',
   '/v1/calls/{id}/cancel',
+  '/v1/calls/{id}/summary/status',
+  '/v1/calls/{id}/summary/retry',
   '/v1/webhooks/retell',
   '/v1/ingest/claims',
 ];
@@ -187,6 +189,25 @@ describe('OpenAPI ↔ generated types contract', () => {
     ])
       expect(spec.paths['/v1/observations/{id}/regeneration-preview']).toHaveProperty([
         ...preview,
+        field,
+      ]);
+  });
+
+  it('exposes native processing provenance and role-aware retry status without inference payloads', () => {
+    const properties = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    for (const field of ['provider', 'observationId', 'reviewRequired', 'canRetry', 'summaryId'])
+      expect(spec.paths['/v1/calls/{id}/summary/status']).toHaveProperty([...properties, field]);
+    for (const field of ['requestPayload', 'resultPayload', 'responsePayload', 'releaseSnapshot'])
+      expect(spec.paths['/v1/calls/{id}/summary/status']).not.toHaveProperty([
+        ...properties,
         field,
       ]);
   });

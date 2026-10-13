@@ -9,13 +9,14 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice:** explicit Owner/Admin same-call regeneration now preserves the original
-finding/review, binds approval to current claim/transcript/release, and reuses a saved authorization
-across interrupted requests. New generations use the existing native journal and retain unknown
-liability. Saved final/raw results recover without another provider send; expired unused work
-requires proven-unsent accounting before another approval. API/SDK/UI and migrations 20/21 are
-implemented locally (ADR-067). Production remains unchanged; automatic native routing, approved
-model evaluation, voice and real connectors remain open. Final verification is in session context.
+**Latest local slice:** automatic native post-call jobs now publish immutable findings through
+the shared worker runtime and expose safe status, owner recovery, operations completion and a
+claim-findings link (ADR-068). Persisted provider/request identity survives duplicate delivery
+and configuration changes. Migration22 archives release approvals for no-send receipt recovery;
+fresh sends require current approval and claim/source checks. Historical audited findings stay
+recoverable after transcript correction and remain visibly stale for review. Defaults remain
+synthetic; checked-in models are unapproved. Production is unchanged. Final local verification
+is in session context; model evaluation/approval, voice and real connectors remain open.
 
 **Implemented locally:** honest operational reporting with verified payments unavailable;
 model-only financial closure blocked; stale summary states protected; atomic summary/state/

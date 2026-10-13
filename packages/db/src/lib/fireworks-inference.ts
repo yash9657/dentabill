@@ -6,7 +6,10 @@ import type { prisma } from '../client.js';
 
 import { audit } from './audit.js';
 import type { InferenceOwnership, ReserveInferenceInput } from './inference.js';
-import { checkObservationRegenerationAdmission } from './observation-regenerations.js';
+import {
+  checkObservationRegenerationAdmission,
+  checkObservationRequestBinding,
+} from './observation-regenerations.js';
 
 type Db = typeof prisma;
 type Tx = Parameters<Parameters<Db['$transaction']>[0]>[0];
@@ -73,6 +76,8 @@ export type ReserveFireworksInferenceInput = Omit<ReserveInferenceInput, 'provid
   executionDeadlineAt: Date;
   releasePolicyHash: string;
   wireRequestHash: string;
+  /** Exact serialized ReleaseSchema output, kept as a JSON string to preserve policy order. */
+  releaseSnapshot?: string;
   regenerationId?: string;
   implementationArtifactSha256?: string;
 };
@@ -150,6 +155,76 @@ function canonical(value: unknown): string {
 }
 function digest(value: unknown): string {
   return createHash('sha256').update(canonical(value)).digest('hex');
+}
+function object(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+function validReleaseSnapshot(
+  snapshot: unknown,
+  input: {
+    organizationId: string;
+    releaseId: string;
+    releasePolicyHash: string | null;
+    promptVersion: string;
+    implementationArtifactSha256?: string;
+    requestPayload: Prisma.JsonValue | Prisma.InputJsonValue;
+  },
+  now: Date,
+): boolean {
+  if (typeof snapshot !== 'string' || Buffer.byteLength(snapshot, 'utf8') > 131072) return false;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(snapshot);
+  } catch {
+    return false;
+  }
+  const release = object(parsed);
+  const policy = object(release?.policy);
+  const approval = object(release?.approval);
+  const request = object(input.requestPayload);
+  if (
+    !policy ||
+    !approval ||
+    !request ||
+    !input.implementationArtifactSha256 ||
+    !/^[a-f0-9]{64}$/.test(input.implementationArtifactSha256) ||
+    policy.implementationArtifactSha256 !== input.implementationArtifactSha256 ||
+    policy.id !== input.releaseId ||
+    policy.task !== 'claim-observation.v1' ||
+    policy.promptVersion !== input.promptVersion ||
+    (policy.state !== 'APPROVED' && policy.state !== 'SYNTHETIC_EVALUATION') ||
+    createHash('sha256').update(JSON.stringify(policy)).digest('hex') !== input.releasePolicyHash ||
+    approval.policySha256 !== input.releasePolicyHash ||
+    !Array.isArray(policy.organizations) ||
+    !policy.organizations.includes(input.organizationId) ||
+    request.organizationId !== input.organizationId ||
+    request.releaseId !== input.releaseId ||
+    request.task !== policy.task ||
+    (request.dataClass !== 'SYNTHETIC' && request.dataClass !== 'PROTECTED') ||
+    typeof approval.reviewedAt !== 'string' ||
+    typeof approval.expiresAt !== 'string'
+  )
+    return false;
+  const reviewed = Date.parse(approval.reviewedAt);
+  const expires = Date.parse(approval.expiresAt);
+  if (
+    !Number.isFinite(reviewed) ||
+    !Number.isFinite(expires) ||
+    reviewed > now.getTime() ||
+    expires <= now.getTime() ||
+    expires <= reviewed
+  )
+    return false;
+  const evidence = object(policy.evidence);
+  return (
+    evidence !== null &&
+    (request.dataClass === 'SYNTHETIC' ||
+      (policy.state === 'APPROVED' &&
+        typeof evidence.protectedDataApprovalId === 'string' &&
+        evidence.protectedDataApprovalId.length > 0))
+  );
 }
 function json(value: Prisma.InputJsonValue): void {
   const stack: { value: unknown; depth: number }[] = [{ value, depth: 0 }];
@@ -287,6 +362,12 @@ export async function reserveFireworksInferenceRun(
   )
     fail();
   json(input.requestPayload);
+  if (
+    input.releaseSnapshot !== undefined &&
+    (typeof input.releaseSnapshot !== 'string' ||
+      Buffer.byteLength(input.releaseSnapshot, 'utf8') > 131072)
+  )
+    fail();
   return db.$transaction(async (tx) => {
     if (!(await lockOrg(tx, input.organizationId))) return { kind: 'NOT_FOUND', run: null };
     const authorization = input.regenerationId
@@ -295,6 +376,12 @@ export async function reserveFireworksInferenceRun(
         })
       : null;
     if (input.regenerationId !== undefined && !authorization)
+      return { kind: 'AUTHORIZATION_DENIED', run: null };
+    if (
+      authorization &&
+      input.releaseSnapshot !== undefined &&
+      authorization.releaseSnapshot !== input.releaseSnapshot
+    )
       return { kind: 'AUTHORIZATION_DENIED', run: null };
     const generation = authorization?.generation ?? 1;
     const existing = await tx.inferenceRun.findFirst({
@@ -313,9 +400,17 @@ export async function reserveFireworksInferenceRun(
         existing.releasePolicyHash !== input.releasePolicyHash ||
         existing.wireRequestHash !== input.wireRequestHash ||
         existing.regenerationId !== (input.regenerationId ?? null) ||
+        (existing.releaseSnapshot !== null && existing.releaseSnapshot !== input.releaseSnapshot) ||
         canonical(existing.requestPayload) !== canonical(input.requestPayload)
       )
         fail();
+      if (
+        existing.releaseSnapshot === null &&
+        !authorization &&
+        input.releaseSnapshot !== undefined &&
+        !validReleaseSnapshot(input.releaseSnapshot, input, now)
+      )
+        return { kind: 'AUTHORIZATION_DENIED', run: existing };
       if (existing.state === 'APPLIED') return { kind: 'ALREADY_APPLIED', run: existing };
       const journal = await attempts(tx, existing);
       if (
@@ -373,6 +468,12 @@ export async function reserveFireworksInferenceRun(
       }
       if (
         !last &&
+        existing.releaseSnapshot !== null &&
+        !validReleaseSnapshot(existing.releaseSnapshot, input, now)
+      )
+        return { kind: 'AUTHORIZATION_DENIED', run: existing };
+      if (
+        !last &&
         input.regenerationId &&
         (await checkObservationRegenerationAdmission(tx, {
           ...input,
@@ -394,6 +495,11 @@ export async function reserveFireworksInferenceRun(
       return { kind: last ? 'REPLAY' : 'OWNED', run, leaseToken, attempts: journal };
     }
     if (now >= input.executionDeadlineAt) return { kind: 'DEADLINE_EXCEEDED', run: null };
+    if (
+      input.releaseSnapshot !== undefined &&
+      !validReleaseSnapshot(input.releaseSnapshot, input, now)
+    )
+      return { kind: 'AUTHORIZATION_DENIED', run: null };
     if (
       input.regenerationId &&
       (await checkObservationRegenerationAdmission(tx, {
@@ -450,6 +556,7 @@ export async function reserveFireworksInferenceRun(
         maxAttempts: input.maxAttempts,
         executionDeadlineAt: input.executionDeadlineAt,
         releasePolicyHash: input.releasePolicyHash,
+        ...(input.releaseSnapshot === undefined ? {} : { releaseSnapshot: input.releaseSnapshot }),
         wireRequestHash: input.wireRequestHash,
         leaseToken,
         leaseExpiresAt: new Date(now.getTime() + LEASE_MS),
@@ -486,6 +593,35 @@ export async function beginFireworksAttempt(
       return { kind: 'BLOCKED', attempt: null };
     if (!run.executionDeadlineAt || now >= run.executionDeadlineAt)
       return { kind: 'DEADLINE_EXCEEDED', attempt: null };
+    if (
+      run.releaseSnapshot !== null &&
+      !validReleaseSnapshot(
+        run.releaseSnapshot,
+        {
+          ...run,
+          ...(input.implementationArtifactSha256 === undefined
+            ? {}
+            : { implementationArtifactSha256: input.implementationArtifactSha256 }),
+        },
+        now,
+      )
+    )
+      return { kind: 'BLOCKED', attempt: null };
+    if (
+      run.releaseSnapshot !== null &&
+      !run.regenerationId &&
+      (await checkObservationRequestBinding(
+        tx,
+        {
+          ...run,
+          requestPayload: run.requestPayload as Prisma.InputJsonValue,
+          releasePolicyHash: run.releasePolicyHash ?? '',
+        },
+        run.generation,
+        { requireLatestCall: false },
+      ))
+    )
+      return { kind: 'BLOCKED', attempt: null };
     if (
       run.regenerationId &&
       (await checkObservationRegenerationAdmission(tx, {

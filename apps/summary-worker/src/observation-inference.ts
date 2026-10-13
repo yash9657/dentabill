@@ -16,6 +16,7 @@ import {
   createFireworksGateway,
   GatewayResultSchema,
   PROMPT_VERSION,
+  ReleaseSchema,
   TransportAttemptSchema,
   type FireworksTransport,
   type GatewayJournalFactory,
@@ -177,6 +178,11 @@ export function createDurableObservationGateway(
         wireRequestHash: binding.wireRequestHash,
         ...(authorization ? { regenerationId: authorization.id } : {}),
         implementationArtifactSha256: options.implementationArtifactSha256,
+        releaseSnapshot: JSON.stringify(
+          ReleaseSchema.parse(
+            options.releases.find((release) => release.policy.id === request.releaseId),
+          ),
+        ),
       });
       if (isAborted(context.signal)) return { kind: 'DENIED', code: 'CANCELLED' };
       if (

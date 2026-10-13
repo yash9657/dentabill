@@ -17,6 +17,8 @@ describe('loadSummaryWorkerEnv', () => {
     expect(env.SUMMARIZER_DAILY_TOKEN_BUDGET).toBe(1_000_000);
     expect(env.SUMMARIZER_AUTO_TRANSITION_ENABLED).toBe(false);
     expect(env.ANTHROPIC_API_KEY).toBe('');
+    expect(env.SUMMARY_ANALYSIS_PROVIDER).toBe('SYNTHETIC');
+    expect(env.OBSERVATION_RELEASE_ID).toBeUndefined();
   });
 
   it('coerces numeric overrides from string', () => {
@@ -27,6 +29,19 @@ describe('loadSummaryWorkerEnv', () => {
     });
     expect(env.SUMMARIZER_MAX_OUTPUT_TOKENS).toBe(6000);
     expect(env.SUMMARIZER_DAILY_TOKEN_BUDGET).toBe(500_000);
+  });
+
+  it('keys do not select native work and invalid provider/artifact configuration is rejected', () => {
+    expect(
+      loadSummaryWorkerEnv({ ...baseValid, FIREWORKS_API_KEY: 'synthetic-key' })
+        .SUMMARY_ANALYSIS_PROVIDER,
+    ).toBe('SYNTHETIC');
+    expect(() => loadSummaryWorkerEnv({ ...baseValid, SUMMARY_ANALYSIS_PROVIDER: 'AUTO' })).toThrow(
+      /SUMMARY_ANALYSIS_PROVIDER/,
+    );
+    expect(() =>
+      loadSummaryWorkerEnv({ ...baseValid, OBSERVATION_IMPLEMENTATION_ARTIFACT_SHA256: 'invalid' }),
+    ).toThrow(/OBSERVATION_IMPLEMENTATION_ARTIFACT_SHA256/);
   });
 
   it('treats KEY="" as absent (ADR-049)', () => {

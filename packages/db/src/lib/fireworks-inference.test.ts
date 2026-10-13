@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
@@ -26,6 +26,8 @@ const UNKNOWN = {
   totalTokens: null,
   cachedInputTokens: null,
 };
+const ARTIFACT = 'e'.repeat(64);
+const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 
 async function fixture(organizationId?: string): Promise<ReserveFireworksInferenceInput> {
   const organization =
@@ -74,6 +76,88 @@ async function fixture(organizationId?: string): Promise<ReserveFireworksInferen
     now: NOW,
   };
 }
+async function snapshotFixture() {
+  const base = await fixture();
+  const event = await prisma.callEvent.create({
+    data: {
+      callId: base.callId,
+      eventType: 'webhook.call.ended',
+      data: { transcript: { text: 'Synthetic payer transcript.', turns: null } },
+    },
+  });
+  const sources = [
+    {
+      id: `transcript.${event.id}`,
+      organizationId: base.organizationId,
+      claimId: base.claimId,
+      claimVersion: base.claimVersion.toISOString(),
+      version: sha('Synthetic payer transcript.'),
+      kind: 'FINAL_CALL_TRANSCRIPT',
+      text: 'Synthetic payer transcript.',
+    },
+  ];
+  const requestPayload = {
+    organizationId: base.organizationId,
+    invocationId: `observation.${base.callId}.g1`,
+    releaseId: base.releaseId,
+    task: 'claim-observation.v1',
+    dataClass: 'SYNTHETIC',
+    claim: {
+      id: base.claimId,
+      organizationId: base.organizationId,
+      version: base.claimVersion.toISOString(),
+      billedMinorUnits: 10000,
+      currency: 'USD',
+    },
+    sources,
+  };
+  const policy = {
+    id: base.releaseId,
+    state: 'SYNTHETIC_EVALUATION',
+    endpoint: 'https://us.api.fireworks.ai/inference/v1/chat/completions',
+    requestModel: 'accounts/fireworks/routers/glm-5p3-flash-us',
+    responseModels: ['synthetic-model'],
+    task: 'claim-observation.v1',
+    promptVersion: base.promptVersion,
+    schemaVersion: 'claim-observation-schema.v1',
+    fingerprints: { prompt: ARTIFACT, schema: ARTIFACT, validator: ARTIFACT },
+    implementationArtifactSha256: ARTIFACT,
+    organizations: [base.organizationId],
+    limits: {
+      requestBytes: 131072,
+      responseBytes: 131072,
+      outputTokens: 1000,
+      deadlineMs: 30000,
+      maxAttempts: 2,
+    },
+    evidence: { protectedDataApprovalId: null },
+  };
+  const releasePolicyHash = sha(JSON.stringify(policy));
+  const release = {
+    policy,
+    approval: {
+      policySha256: releasePolicyHash,
+      reviewerId: 'synthetic',
+      evaluationId: 'synthetic',
+      runAuthorizationId: 'synthetic',
+      reviewedAt: new Date(NOW.getTime() - 1000).toISOString(),
+      expiresAt: new Date(NOW.getTime() + 1000).toISOString(),
+    },
+  };
+  return {
+    release,
+    event,
+    input: {
+      ...base,
+      requestPayload,
+      requestHash: sha(JSON.stringify(requestPayload)),
+      sourceHash: sha(JSON.stringify(sources)),
+      releasePolicyHash,
+      releaseSnapshot: JSON.stringify(release),
+      implementationArtifactSha256: ARTIFACT,
+    },
+  };
+}
 async function owned(input: ReserveFireworksInferenceInput) {
   const reservation = await reserveFireworksInferenceRun(prisma, input);
   if (!['OWNED', 'REPLAY', 'RESUME'].includes(reservation.kind) || !('leaseToken' in reservation))
@@ -112,6 +196,9 @@ async function submit(input: ReserveFireworksInferenceInput) {
       ...owner.ownership,
       attemptNumber: 1,
       wireRequestHash: input.wireRequestHash,
+      ...(input.implementationArtifactSha256 === undefined
+        ? {}
+        : { implementationArtifactSha256: input.implementationArtifactSha256 }),
     }),
   ).toMatchObject({ kind: 'ADMITTED' });
   return owner;
@@ -146,6 +233,286 @@ async function budget(organizationId: string, billingDay = '2026-10-13') {
 }
 
 describe('native Fireworks durable attempt journal', () => {
+  it('pins generation-one release snapshots immutably and replays raw evidence after approval expiry without another send', async () => {
+    const { input, event } = await snapshotFixture();
+    const owner = await submit(input);
+    expect(owner.run.releaseSnapshot).toBe(input.releaseSnapshot);
+    await expect(
+      prisma.inferenceRun.update({
+        where: { id: owner.run.id, organizationId: input.organizationId },
+        data: { releaseSnapshot: `${input.releaseSnapshot} ` },
+      }),
+    ).rejects.toThrow();
+    await response(owner);
+    await prisma.claim.update({
+      where: { id: input.claimId, organizationId: input.organizationId },
+      data: { updatedAt: new Date(input.claimVersion.getTime() + 1) },
+    });
+    await prisma.callEvent.update({
+      where: { id: event.id },
+      data: { data: { transcript: { text: 'Changed after response.', turns: null } } },
+    });
+    await expect(
+      reserveFireworksInferenceRun(prisma, {
+        ...input,
+        releaseSnapshot: `${input.releaseSnapshot} `,
+        now: EXPIRED,
+      }),
+    ).rejects.toThrow('FIREWORKS_INFERENCE_CONFLICT');
+    const replay = await owned({ ...input, now: EXPIRED });
+    expect(replay.kind).toBe('REPLAY');
+    expect(replay.run.releaseSnapshot).toBe(input.releaseSnapshot);
+    expect(
+      await beginFireworksAttempt(prisma, {
+        ...replay.ownership,
+        attemptNumber: 1,
+        wireRequestHash: input.wireRequestHash,
+      }),
+    ).toMatchObject({ kind: 'REPLAY' });
+    await finishFireworksAttempt(prisma, {
+      ...replay.ownership,
+      attempt: completed(),
+      errorCode: null,
+    });
+    await finalizeFireworksInference(prisma, {
+      ...replay.ownership,
+      status: 'VALIDATED',
+      resultPayload: result(input, [completed()]),
+      errorCode: null,
+    });
+    expect((await owned({ ...input, now: EXPIRED })).kind).toBe('RESUME');
+    expect(
+      await prisma.inferenceAttempt.count({ where: { organizationId: input.organizationId } }),
+    ).toBe(1);
+    expect(await budget(input.organizationId)).toMatchObject({
+      knownTokens: 37n,
+      reservedTokens: 0n,
+    });
+  });
+
+  it.each(['policy', 'scope', 'task', 'artifact', 'expiry', 'future', 'dataClass'] as const)(
+    'rejects invalid %s release snapshot bindings before allocating a native budget',
+    async (mismatch) => {
+      const { input, release } = await snapshotFixture();
+      if (mismatch === 'policy') release.policy.id = 'changed-release';
+      if (mismatch === 'scope') release.policy.organizations = ['different-organization'];
+      if (mismatch === 'task') release.policy.task = 'unsupported-task';
+      if (mismatch === 'artifact') input.implementationArtifactSha256 = 'f'.repeat(64);
+      if (mismatch === 'expiry') release.approval.expiresAt = NOW.toISOString();
+      if (mismatch === 'future')
+        release.approval.reviewedAt = new Date(NOW.getTime() + 1).toISOString();
+      if (mismatch === 'dataClass') input.requestPayload.dataClass = 'PROTECTED';
+      if (mismatch !== 'policy') {
+        input.releasePolicyHash = sha(JSON.stringify(release.policy));
+        release.approval.policySha256 = input.releasePolicyHash;
+      }
+      input.releaseSnapshot = JSON.stringify(release);
+      expect(await reserveFireworksInferenceRun(prisma, input)).toMatchObject({
+        kind: 'AUTHORIZATION_DENIED',
+        run: null,
+      });
+      expect(
+        await prisma.inferenceRun.count({ where: { organizationId: input.organizationId } }),
+      ).toBe(0);
+      expect(
+        await prisma.inferenceBudget.count({ where: { organizationId: input.organizationId } }),
+      ).toBe(0);
+    },
+  );
+
+  it('requires a pinned artifact for fresh admission and blocks retry after approval expiry while retaining earlier liability', async () => {
+    const { input } = await snapshotFixture();
+    const owner = await owned(input);
+    const first = {
+      ...owner.ownership,
+      attemptNumber: 1 as const,
+      wireRequestHash: input.wireRequestHash,
+    };
+    expect(await beginFireworksAttempt(prisma, first)).toMatchObject({ kind: 'BLOCKED' });
+    expect(
+      await beginFireworksAttempt(prisma, {
+        ...first,
+        implementationArtifactSha256: 'f'.repeat(64),
+      }),
+    ).toMatchObject({ kind: 'BLOCKED' });
+    expect(
+      await beginFireworksAttempt(prisma, { ...first, implementationArtifactSha256: ARTIFACT }),
+    ).toMatchObject({ kind: 'ADMITTED' });
+    await response(owner, 503);
+    await finishFireworksAttempt(prisma, {
+      ...owner.ownership,
+      attempt: completed(1, 503, null),
+      errorCode: 'HTTP_ERROR',
+    });
+    expect(
+      await beginFireworksAttempt(prisma, {
+        ...first,
+        attemptNumber: 2,
+        now: NEXT_DAY,
+        implementationArtifactSha256: ARTIFACT,
+      }),
+    ).toMatchObject({ kind: 'BLOCKED' });
+    expect(
+      await prisma.inferenceAttempt.count({ where: { organizationId: input.organizationId } }),
+    ).toBe(1);
+    expect(await budget(input.organizationId)).toMatchObject({
+      knownTokens: 0n,
+      reservedTokens: 100n,
+    });
+  });
+
+  it('keeps legacy null snapshots unchanged and requires current supplied approval for bound receipt replay', async () => {
+    const { input } = await snapshotFixture();
+    const { releaseSnapshot: _snapshot, ...legacyInput } = input;
+    const owner = await submit(legacyInput);
+    expect(owner.run.releaseSnapshot).toBeNull();
+    await response(owner);
+    await finishFireworksAttempt(prisma, {
+      ...owner.ownership,
+      attempt: completed(),
+      errorCode: null,
+    });
+    await finalizeFireworksInference(prisma, {
+      ...owner.ownership,
+      status: 'VALIDATED',
+      resultPayload: result(input, [completed()]),
+      errorCode: null,
+    });
+    expect((await owned(input)).run.releaseSnapshot).toBeNull();
+    expect(await reserveFireworksInferenceRun(prisma, { ...input, now: EXPIRED })).toMatchObject({
+      kind: 'AUTHORIZATION_DENIED',
+    });
+    await expect(
+      prisma.inferenceRun.update({
+        where: { id: owner.run.id, organizationId: input.organizationId },
+        data: { releaseSnapshot: input.releaseSnapshot },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it.each(['claimVersion', 'claimAmount', 'boundSource', 'latestSource'] as const)(
+    'rechecks %s after reservation before admitting a generation-one native send',
+    async (change) => {
+      const { input, event } = await snapshotFixture();
+      const owner = await owned(input);
+      if (change === 'claimVersion')
+        await prisma.claim.update({
+          where: { id: input.claimId, organizationId: input.organizationId },
+          data: { updatedAt: new Date(input.claimVersion.getTime() + 1) },
+        });
+      if (change === 'claimAmount')
+        await prisma.claim.update({
+          where: { id: input.claimId, organizationId: input.organizationId },
+          data: { claimAmount: '101.00', updatedAt: input.claimVersion },
+        });
+      if (change === 'boundSource')
+        await prisma.callEvent.update({
+          where: { id: event.id },
+          data: { data: { transcript: { text: 'Changed before admission.', turns: null } } },
+        });
+      if (change === 'latestSource')
+        await prisma.callEvent.create({
+          data: {
+            callId: input.callId,
+            eventType: 'call.ended',
+            timestamp: new Date(event.timestamp.getTime() + 1),
+            data: { transcript: { text: 'Corrected final transcript.', turns: null } },
+          },
+        });
+      expect(
+        await beginFireworksAttempt(prisma, {
+          ...owner.ownership,
+          attemptNumber: 1,
+          wireRequestHash: input.wireRequestHash,
+          implementationArtifactSha256: ARTIFACT,
+        }),
+      ).toMatchObject({ kind: 'BLOCKED' });
+      expect(
+        await prisma.inferenceAttempt.count({ where: { organizationId: input.organizationId } }),
+      ).toBe(0);
+      expect(await budget(input.organizationId)).toMatchObject({
+        knownTokens: 0n,
+        reservedTokens: 100n,
+      });
+    },
+  );
+
+  it('allows delayed generation-one analysis of an older call while its exact claim and final source remain current', async () => {
+    const { input } = await snapshotFixture();
+    const owner = await owned(input);
+    const original = await prisma.call.findFirstOrThrow({
+      where: { id: input.callId, organizationId: input.organizationId },
+    });
+    await prisma.call.create({
+      data: {
+        organizationId: input.organizationId,
+        claimId: input.claimId,
+        retellCallId: randomUUID(),
+        status: 'COMPLETED',
+        createdAt: new Date(original.createdAt.getTime() + 1),
+      },
+    });
+    expect(
+      await beginFireworksAttempt(prisma, {
+        ...owner.ownership,
+        attemptNumber: 1,
+        wireRequestHash: input.wireRequestHash,
+        implementationArtifactSha256: ARTIFACT,
+      }),
+    ).toMatchObject({ kind: 'ADMITTED' });
+  });
+
+  it('rechecks source freshness for retry two without dropping the first unknown usage reservation', async () => {
+    const { input, event } = await snapshotFixture();
+    const owner = await submit(input);
+    await response(owner, 503);
+    await finishFireworksAttempt(prisma, {
+      ...owner.ownership,
+      attempt: completed(1, 503, null),
+      errorCode: 'HTTP_ERROR',
+    });
+    await prisma.callEvent.update({
+      where: { id: event.id },
+      data: { data: { transcript: { text: 'Changed before retry.', turns: null } } },
+    });
+    expect(
+      await beginFireworksAttempt(prisma, {
+        ...owner.ownership,
+        attemptNumber: 2,
+        wireRequestHash: input.wireRequestHash,
+        implementationArtifactSha256: ARTIFACT,
+      }),
+    ).toMatchObject({ kind: 'BLOCKED' });
+    expect(
+      await prisma.inferenceAttempt.count({ where: { organizationId: input.organizationId } }),
+    ).toBe(1);
+    expect(await budget(input.organizationId)).toMatchObject({
+      knownTokens: 0n,
+      reservedTokens: 100n,
+    });
+  });
+
+  it('marks an expired submitted run without raw evidence UNKNOWN using the archived snapshot without an artifact or current approval', async () => {
+    const { input } = await snapshotFixture();
+    const owner = await submit(input);
+    const { implementationArtifactSha256: _artifact, ...recovery } = input;
+    expect(await reserveFireworksInferenceRun(prisma, { ...recovery, now: EXPIRED })).toMatchObject(
+      {
+        kind: 'REVIEW_REQUIRED',
+        run: { id: owner.run.id, state: 'UNKNOWN', reservedTokens: 100n, totalTokens: null },
+      },
+    );
+    expect(
+      await prisma.inferenceAttempt.findFirstOrThrow({
+        where: { organizationId: input.organizationId, runId: owner.run.id },
+      }),
+    ).toMatchObject({ state: 'UNKNOWN', responseHash: null, totalTokens: null });
+    expect(await budget(input.organizationId)).toMatchObject({
+      knownTokens: 0n,
+      reservedTokens: 100n,
+    });
+  });
+
   it('stores raw evidence before completion and replays after the original deadline without another admission', async () => {
     const input = await fixture();
     const owner = await submit(input);

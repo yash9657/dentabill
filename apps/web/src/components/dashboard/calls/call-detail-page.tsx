@@ -20,6 +20,7 @@ import { payerLabel } from '../../../lib/claims/types.js';
 import { DashboardEmptyState } from '../dashboard-empty-state.js';
 import { SkeletonList } from '../skeleton-list.js';
 
+import { CallAnalysisStatus } from './call-analysis-status.js';
 import { CheckCallStatusControl } from './check-call-status-control.js';
 
 export interface CallDetailPageProps {
@@ -102,6 +103,7 @@ function DetailLayout({ call }: { readonly call: CallDetailResponse }): React.Re
         <CheckCallStatusControl call={call} />
       </div>
       <SummaryCard call={call} />
+      <CallAnalysisStatus call={call} />
       <Timeline events={call.events} />
     </section>
   );

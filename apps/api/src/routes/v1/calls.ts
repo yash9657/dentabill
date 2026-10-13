@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
 import { enqueueJobOutbox, relayJobOutbox } from '@dentabill/call-worker';
-import { audit, type CallIntent, getOrgScopedDb, prisma } from '@dentabill/db';
+import {
+  audit,
+  type CallIntent,
+  getOrgScopedDb,
+  parseFireworksRawResponse,
+  prisma,
+  type Prisma,
+} from '@dentabill/db';
 import { checkPayerHours, validateCallIdentity } from '@dentabill/payer-ivr';
 import type { CallJobData, SummaryJobData } from '@dentabill/queue';
 import { ApiError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@dentabill/types';
@@ -220,10 +227,67 @@ const SummaryStatusResponseSchema = z.object({
     'APPLIED',
   ]),
   summaryId: z.string().nullable(),
+  provider: z.enum(['SYNTHETIC', 'FIREWORKS']).nullable(),
+  observationId: z.string().nullable(),
+  reviewRequired: z.boolean(),
   canRetry: z.boolean(),
   lastErrorCode: z.string().nullable(),
   updatedAt: z.iso.datetime().nullable(),
 });
+
+const SummaryRunSelect = {
+  id: true,
+  state: true,
+  provider: true,
+  lastErrorCode: true,
+  updatedAt: true,
+  leaseExpiresAt: true,
+  reviewAppliedAt: true,
+  resultPayload: true,
+  receiptHash: true,
+  observation: { select: { id: true } },
+  attempts: {
+    orderBy: { attemptNumber: 'desc' },
+    take: 1,
+    select: { id: true, responsePayload: true, responseHash: true, responseRecordedAt: true },
+  },
+} satisfies Prisma.InferenceRunSelect;
+type ProcessingRun = Prisma.InferenceRunGetPayload<{ select: typeof SummaryRunSelect }>;
+
+function processingDisposition(run: ProcessingRun | null, now = new Date()) {
+  const activeLease = !!run?.leaseExpiresAt && run.leaseExpiresAt > now;
+  const last = run?.attempts[0];
+  const rawReceipt =
+    run?.provider === 'FIREWORKS' &&
+    !!last?.responseRecordedAt &&
+    !!last.responseHash &&
+    parseFireworksRawResponse(last.responsePayload) !== null;
+  const resumableRaw = rawReceipt && (run.state === 'SUBMITTING' || run.state === 'UNKNOWN');
+  const finalReceipt = run?.provider !== 'FIREWORKS' || (!!run.resultPayload && !!run.receiptHash);
+  // A native attempt permanently fixes submission identity. Expired attempts
+  // resume saved evidence or apply review effects; they never authorize a send.
+  const nativeSettlement =
+    run?.provider === 'FIREWORKS' &&
+    (((run.state === 'UNKNOWN' || run.state === 'REJECTED') && !run.reviewAppliedAt) ||
+      (run.state === 'SUBMITTING' && !!last));
+  const canRetry =
+    !activeLease &&
+    (!run ||
+      run.state === 'RESERVED' ||
+      (run.state === 'RESPONDED' && finalReceipt) ||
+      resumableRaw ||
+      nativeSettlement);
+  return {
+    activeLease,
+    canRetry: canRetry && !run?.observation,
+    reviewRequired:
+      !!run &&
+      !run.observation &&
+      (run.state === 'REJECTED' ||
+        ((run.state === 'UNKNOWN' || (run.state === 'SUBMITTING' && !activeLease)) &&
+          !resumableRaw)),
+  };
+}
 
 interface CallSummaryRowForResponse {
   id: string;
@@ -937,7 +1001,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       preHandler: requireAuth,
       schema: {
         description:
-          'Fetch the structured CallSummary for a Call, if one exists. Returns 404 when the Call is not found in the caller’s org OR no summary has been persisted yet (the dashboard polls for both states with the same handler).',
+          'Fetch a saved legacy CallSummary. Returns 404 when the scoped call or summary is absent; use summary/status for processing state and native observation links.',
         security,
         params: CallIdParamSchema,
         response: { 200: CallSummaryResponseSchema },
@@ -980,7 +1044,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       preHandler: requireAuth,
       schema: {
         description:
-          'OWNER/ADMIN view of generation 1 summary work. No transcript, request, or provider response is returned.',
+          'Organization-scoped generation 1 analysis status. Only stored OWNER/ADMIN users may retry. No transcript, request, or provider response is returned.',
         security,
         params: CallIdParamSchema,
         response: { 200: SummaryStatusResponseSchema },
@@ -993,8 +1057,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
         where: { id: auth.userId, organizationId: auth.orgId },
         select: { role: true },
       });
-      if (!actor || !['OWNER', 'ADMIN'].includes(actor.role))
-        throw new ApiError('FORBIDDEN', 'Only OWNER or ADMIN may inspect summary processing.');
+      if (!actor) throw new ApiError('FORBIDDEN', 'An organization user is required.');
       const call = await prisma.call.findFirst({
         where: {
           id: (request.params as z.infer<typeof CallIdParamSchema>).id,
@@ -1006,22 +1069,34 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const [run, summary] = await Promise.all([
         prisma.inferenceRun.findFirst({
           where: { organizationId: auth.orgId, callId: call.id, generation: 1 },
-          select: { state: true, lastErrorCode: true, updatedAt: true },
+          select: SummaryRunSelect,
         }),
         prisma.callSummary.findFirst({
           where: { organizationId: auth.orgId, callId: call.id },
           select: { id: true, createdAt: true },
         }),
       ]);
+      const disposition = processingDisposition(run);
+      await audit({
+        organizationId: auth.orgId,
+        userId: auth.userId,
+        action: 'callSummary.status.read',
+        resourceType: 'Call',
+        resourceId: call.id,
+      });
       return {
         callId: call.id,
         generation: 1,
-        state: summary ? 'APPLIED' : (run?.state ?? 'NOT_REQUESTED'),
+        state: run?.state ?? (summary ? 'APPLIED' : 'NOT_REQUESTED'),
         summaryId: summary?.id ?? null,
+        provider: run?.provider ?? null,
+        observationId: run?.observation?.id ?? null,
+        reviewRequired: disposition.reviewRequired,
         canRetry:
-          !summary &&
+          ['OWNER', 'ADMIN'].includes(actor.role) &&
+          (!summary || run?.provider === 'FIREWORKS') &&
           TERMINAL_CALL_STATUSES.has(call.status) &&
-          (!run || run.state === 'RESERVED' || run.state === 'RESPONDED'),
+          disposition.canRetry,
         lastErrorCode: run?.lastErrorCode ? 'INFERENCE_REVIEW_REQUIRED' : null,
         updatedAt: (run?.updatedAt ?? summary?.createdAt)?.toISOString() ?? null,
       };
@@ -1090,22 +1165,31 @@ export function callsRoutes(fastify: FastifyInstance): void {
         await tx.$queryRaw`SELECT id FROM "InferenceRun" WHERE "organizationId" = ${orgId} AND "callId" = ${id} AND generation = 1 FOR UPDATE`;
         const run = await tx.inferenceRun.findFirst({
           where: { organizationId: orgId, callId: id, generation: 1 },
+          select: SummaryRunSelect,
         });
         const existing = await tx.callSummary.findFirst({
           where: { organizationId: orgId, callId: id },
           select: { id: true },
         });
-        if (existing || run?.state === 'APPLIED')
+        if (
+          (existing && run?.provider !== 'FIREWORKS') ||
+          run?.state === 'APPLIED' ||
+          run?.observation
+        )
           throw new ApiError(
             'SUMMARY_ALREADY_EXISTS',
-            'A summary already exists. Retrying will not replace it.',
+            'Saved analysis already exists. Retrying will not replace it.',
           );
-        if (run?.state === 'SUBMITTING')
+        const disposition = processingDisposition(run);
+        if (
+          disposition.activeLease ||
+          (run?.state === 'SUBMITTING' && run.provider === 'SYNTHETIC')
+        )
           throw new ApiError(
             'SUMMARY_INFERENCE_BUSY',
             'Summary processing has already started. Another inference will not be submitted.',
           );
-        if (run?.state === 'UNKNOWN' || run?.state === 'REJECTED')
+        if (!disposition.canRetry)
           throw new ApiError(
             'SUMMARY_INFERENCE_REVIEW_REQUIRED',
             'This summary requires review. Another inference will not be submitted.',

@@ -1994,7 +1994,7 @@ describe('GET /v1/calls/:id/summary + POST /v1/calls/:id/summary/retry', () => {
     expect(summariesAddSpy).not.toHaveBeenCalled();
   });
 
-  it('shows safe processing state only to a stored owner/admin role without snapshots or raw errors', async () => {
+  it('shows safe processing state to billing staff without granting retry or exposing snapshots', async () => {
     const seed = await seedSummaryFixture();
     await seedInferenceState(seed, 'UNKNOWN');
     const response = await server.inject({
@@ -2016,12 +2016,19 @@ describe('GET /v1/calls/:id/summary + POST /v1/calls/:id/summary/retry', () => {
       where: { organizationId: seed.orgId, clerkUserId: seed.clerkUserId },
       data: { role: 'BILLING_STAFF' },
     });
-    const denied = await server.inject({
+    const staff = await server.inject({
       method: 'GET',
       url: `/v1/calls/${seed.callId}/summary/status`,
       headers: { 'x-test-user-id': seed.clerkUserId, 'x-test-role': 'OWNER' },
     });
-    expect(denied.statusCode).toBe(403);
+    expect(staff.statusCode).toBe(200);
+    expect(staff.json()).toMatchObject({
+      canRetry: false,
+      provider: 'SYNTHETIC',
+      observationId: null,
+      reviewRequired: true,
+    });
+    expect(staff.body).not.toContain('PRIVATE');
   });
 
   it('returns404 for another tenant summary processing state', async () => {

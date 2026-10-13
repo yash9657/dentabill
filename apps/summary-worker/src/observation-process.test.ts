@@ -178,6 +178,75 @@ afterAll(async () => {
 });
 
 describe('Native observation inference across fresh processes', () => {
+  it.each(['valid', 'hold'] as const)(
+    'recovers an automatic %s job after SIGKILL using its saved provider identity',
+    async (mode) => {
+      const input = await seed();
+      const external = await provider(input, mode);
+      const first = fixture();
+      first.send({
+        type: 'worker.run',
+        ...input,
+        providerUrl: external.url,
+        jobMode: 'new',
+        ...(mode === 'valid' ? { pause: 'raw-response' } : {}),
+      });
+      if (mode === 'valid') await first.reply('worker.paused');
+      else await external.reply('provider.accepted');
+      first.child.kill('SIGKILL');
+      await first.exited();
+      await expire(input);
+      immutableRowsCreated = mode === 'valid';
+      let observationId: string | null | undefined;
+      for (let delivery = 0; delivery < 2; delivery++) {
+        const restarted = fixture();
+        restarted.send({
+          type: 'worker.run',
+          ...input,
+          providerUrl: external.url,
+          jobMode: 'recover',
+        });
+        const recovered = await restarted.reply('job.result');
+        expect(recovered).toMatchObject({
+          sends: 0,
+          result: {
+            summaryId: null,
+            outcome: mode === 'valid' ? 'OBSERVATION_PUBLISHED' : 'INFERENCE_REVIEW_REQUIRED',
+          },
+        });
+        if (delivery === 0) observationId = recovered.result.observationId;
+        else expect(recovered.result.observationId).toBe(observationId);
+        await restarted.exited();
+      }
+      expect(await external.ledger()).toEqual([{ ordinal: 1 }]);
+      const run = await prisma.inferenceRun.findFirstOrThrow({
+        where: {
+          organizationId: input.request.organizationId,
+          callId: input.callId,
+          generation: 1,
+        },
+        include: { attempts: true },
+      });
+      expect(run.attempts).toHaveLength(1);
+      if (mode === 'valid')
+        expect(run).toMatchObject({ state: 'APPLIED', totalTokens: 31n, reservedTokens: 0n });
+      else {
+        expect(run).toMatchObject({
+          state: 'UNKNOWN',
+          totalTokens: null,
+          reservedTokens: run.tokenAllowance,
+        });
+        expect(run.reviewAppliedAt).not.toBeNull();
+      }
+      expect(
+        await prisma.claim.findFirst({
+          where: { id: input.request.claim.id, organizationId: input.request.organizationId },
+        }),
+      ).toMatchObject({ status: 'COMPLETED' });
+    },
+    20000,
+  );
+
   it('recovers approved generation two after raw-response SIGKILL and publishes once with one independent HTTP acceptance', async () => {
     const input = await seed();
     const organizationId = input.request.organizationId;
