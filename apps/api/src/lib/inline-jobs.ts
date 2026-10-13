@@ -14,6 +14,7 @@ import { createRetellPort, type RetellPort } from '@dentabill/payer-ivr';
 import {
   asBullMqJob,
   CALL_JOB_NAME,
+  computeBackoffMs,
   type CallJobData,
   CALLS_DEFAULT_JOB_OPTIONS,
   DLQ_JOB_NAME,
@@ -68,9 +69,46 @@ export type InlineRunReport =
       readonly dlq: boolean;
     };
 
+/**
+ * One delivery of a job by an external queue (SQS) that owns the retry
+ * policy. `attempt` is 1-based (SQS `ApproximateReceiveCount`).
+ */
+export interface JobAttempt {
+  readonly attempt: number;
+  /** Deliveries after which the job is treated as exhausted (SQS `maxReceiveCount`). */
+  readonly maxAttempts: number;
+}
+
+export type AttemptReport =
+  | { readonly status: 'completed'; readonly attempt: number }
+  | { readonly status: 'skipped'; readonly reason: string }
+  | {
+      /** Failed, attempts remain — the caller must make the queue redeliver. */
+      readonly status: 'retry';
+      readonly attempt: number;
+      /** Backoff the job's BullMQ options would have applied before the next attempt. */
+      readonly retryDelayMs: number;
+      readonly error: unknown;
+    }
+  | {
+      /** Failed on the last attempt; terminal handling already ran. */
+      readonly status: 'failed';
+      readonly attempt: number;
+      readonly dlq: boolean;
+    };
+
 export interface InlineJobRuntime {
+  /** Inline mode: every attempt + backoff in-process (BullMQ policy replay). */
   runCall(data: CallJobData): Promise<InlineRunReport>;
   runSummary(data: SummaryJobData): Promise<InlineRunReport>;
+  /**
+   * SQS mode: exactly one attempt. Retries are the queue's job — on
+   * `retry` the caller leaves the message undeleted; on the final attempt
+   * the terminal hand-off (call DLQ escalation / summary failure log) runs
+   * here and the report is `failed`, so the caller can delete the message.
+   */
+  runCallAttempt(data: CallJobData, attempt: JobAttempt): Promise<AttemptReport>;
+  runSummaryAttempt(data: SummaryJobData, attempt: JobAttempt): Promise<AttemptReport>;
 }
 
 export interface CreateInlineJobRuntimeDeps {
@@ -140,34 +178,108 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
   const errInfo = (err: unknown): unknown =>
     err instanceof Error ? { message: err.message, name: err.name } : err;
 
+  const callJobOptions = deps.callJobOptions ?? CALLS_DEFAULT_JOB_OPTIONS;
+  const summaryJobOptions = deps.summaryJobOptions ?? SUMMARIES_DEFAULT_JOB_OPTIONS;
+
+  /**
+   * Duplicate suppression. BullMQ collapsed duplicate jobIds in Redis;
+   * here the claim row is the lease: the enqueue route flips the claim to
+   * IN_QUEUE, and exactly one trigger can move it IN_QUEUE → CALLING. A
+   * replayed or doubled trigger finds it already CALLING and stops.
+   * Hold-detector reschedules run while the claim is CALLING and carry a
+   * deterministic `-r<n>` key, so they bypass the lease.
+   *
+   * `isRetry` (SQS redelivery after a failed attempt): the failed attempt
+   * already moved the claim to CALLING, so CALLING is accepted too — but a
+   * claim that reached any other state (resolved, manual review, …) is
+   * never redialled.
+   */
+  const acquireCallLease = async (data: CallJobData, isRetry: boolean): Promise<boolean> => {
+    const jobId = data.idempotencyKey;
+    if (RESCHEDULE_KEY.test(jobId)) return true;
+    const lease = await prisma.claim.updateMany({
+      where: {
+        id: data.claimId,
+        organizationId: data.organizationId,
+        status: isRetry ? { in: ['IN_QUEUE', 'CALLING'] } : 'IN_QUEUE',
+      },
+      data: { status: 'CALLING' },
+    });
+    if (lease.count === 0) {
+      logger.warn(
+        { jobId, claimId: data.claimId, isRetry },
+        'call job skipped — claim is not in a dialable state (duplicate or stale trigger)',
+      );
+      return false;
+    }
+    return true;
+  };
+
+  /**
+   * Terminal call failure → the same escalation the DLQ consumer performs
+   * for `calls-dlq`, invoked directly (there is no DLQ queue here). Returns
+   * whether the escalation succeeded.
+   */
+  const escalateCallToDlq = async (
+    data: CallJobData,
+    attemptsMade: number,
+    error: unknown,
+  ): Promise<boolean> => {
+    const jobId = data.idempotencyKey;
+    const dlqData: DlqJobData = {
+      originalJobId: jobId,
+      originalQueueName: 'calls',
+      originalJobName: CALL_JOB_NAME,
+      originalData: data,
+      reason: DLQ_REASONS.EXCEEDED_MAX_ATTEMPTS,
+      attemptsMade,
+      enqueuedAt: new Date().toISOString(),
+      ...(error instanceof Error && { failedReason: error.message }),
+    };
+    try {
+      await dlqHandler(
+        asBullMqJob({ id: jobId, name: DLQ_JOB_NAME, data: dlqData, attemptsMade: 0 }),
+      );
+      return true;
+    } catch (err) {
+      logger.error({ jobId, err: errInfo(err) }, 'DLQ handling failed — manual recovery required');
+      return false;
+    }
+  };
+
+  /**
+   * `CallSummary.callId` is UNIQUE, so a second run for the same call can
+   * only fail. Skip duplicates of the automatic `call.<id>` job; operator
+   * retries (`.retry.<n>`) keep their BullMQ-era behaviour.
+   */
+  const summaryAlreadyExists = async (data: SummaryJobData): Promise<boolean> => {
+    if (SUMMARY_RETRY_KEY.test(data.idempotencyKey)) return false;
+    const existing = await prisma.callSummary.findFirst({
+      where: { callId: data.callId, organizationId: data.organizationId },
+      select: { id: true },
+    });
+    if (existing) {
+      logger.warn(
+        { jobId: data.idempotencyKey, callId: data.callId },
+        'summary job skipped — summary exists',
+      );
+      return true;
+    }
+    return false;
+  };
+
   return {
     async runCall(data): Promise<InlineRunReport> {
       const jobId = data.idempotencyKey;
-      // Duplicate suppression. BullMQ collapsed duplicate jobIds in Redis;
-      // here the claim row is the lease: the enqueue route flips the claim
-      // to IN_QUEUE, and exactly one trigger can move it IN_QUEUE → CALLING.
-      // A replayed or doubled trigger finds it already CALLING and stops.
-      // Hold-detector reschedules run while the claim is CALLING and carry
-      // a deterministic `-r<n>` key, so they bypass the lease.
-      if (!RESCHEDULE_KEY.test(jobId)) {
-        const lease = await prisma.claim.updateMany({
-          where: { id: data.claimId, organizationId: data.organizationId, status: 'IN_QUEUE' },
-          data: { status: 'CALLING' },
-        });
-        if (lease.count === 0) {
-          logger.warn(
-            { jobId, claimId: data.claimId },
-            'inline call job skipped — claim is not IN_QUEUE (duplicate or stale trigger)',
-          );
-          return { status: 'skipped', reason: 'claim_not_in_queue' };
-        }
+      if (!(await acquireCallLease(data, false))) {
+        return { status: 'skipped', reason: 'claim_not_in_queue' };
       }
 
       const outcome = await runInlineJob({
         id: jobId,
         name: CALL_JOB_NAME,
         data,
-        jobOptions: deps.callJobOptions ?? CALLS_DEFAULT_JOB_OPTIONS,
+        jobOptions: callJobOptions,
         budgetMs,
         ...(deps.sleep && { sleep: deps.sleep }),
         process: (job) => callHandler(asBullMqJob(job)),
@@ -183,30 +295,7 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
         return { status: 'completed', attemptsMade: outcome.attemptsMade };
       }
 
-      // Terminal failure → the same escalation the DLQ consumer performs
-      // for `calls-dlq`, invoked directly (there is no DLQ queue here).
-      const dlqData: DlqJobData = {
-        originalJobId: jobId,
-        originalQueueName: 'calls',
-        originalJobName: CALL_JOB_NAME,
-        originalData: data,
-        reason: DLQ_REASONS.EXCEEDED_MAX_ATTEMPTS,
-        attemptsMade: outcome.attemptsMade,
-        enqueuedAt: new Date().toISOString(),
-        ...(outcome.error instanceof Error && { failedReason: outcome.error.message }),
-      };
-      let dlq = false;
-      try {
-        await dlqHandler(
-          asBullMqJob({ id: jobId, name: DLQ_JOB_NAME, data: dlqData, attemptsMade: 0 }),
-        );
-        dlq = true;
-      } catch (err) {
-        logger.error(
-          { jobId, err: errInfo(err) },
-          'inline DLQ handling failed — manual recovery required',
-        );
-      }
+      const dlq = await escalateCallToDlq(data, outcome.attemptsMade, outcome.error);
       return {
         status: 'failed',
         attemptsMade: outcome.attemptsMade,
@@ -217,28 +306,15 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
 
     async runSummary(data): Promise<InlineRunReport> {
       const jobId = data.idempotencyKey;
-      // `CallSummary.callId` is UNIQUE, so a second run for the same call
-      // can only fail. Skip duplicates of the automatic `call.<id>` job;
-      // operator retries (`.retry.<n>`) keep their BullMQ-era behaviour.
-      if (!SUMMARY_RETRY_KEY.test(jobId)) {
-        const existing = await prisma.callSummary.findFirst({
-          where: { callId: data.callId, organizationId: data.organizationId },
-          select: { id: true },
-        });
-        if (existing) {
-          logger.warn(
-            { jobId, callId: data.callId },
-            'inline summary job skipped — summary exists',
-          );
-          return { status: 'skipped', reason: 'summary_exists' };
-        }
+      if (await summaryAlreadyExists(data)) {
+        return { status: 'skipped', reason: 'summary_exists' };
       }
 
       const outcome = await runInlineJob({
         id: jobId,
         name: SUMMARY_JOB_NAME,
         data,
-        jobOptions: deps.summaryJobOptions ?? SUMMARIES_DEFAULT_JOB_OPTIONS,
+        jobOptions: summaryJobOptions,
         budgetMs,
         ...(deps.sleep && { sleep: deps.sleep }),
         process: (job) => summaryHandler(job),
@@ -269,6 +345,60 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
         budgetExhausted: outcome.budgetExhausted,
         dlq: false,
       };
+    },
+
+    async runCallAttempt(data, { attempt, maxAttempts }): Promise<AttemptReport> {
+      const jobId = data.idempotencyKey;
+      if (!(await acquireCallLease(data, attempt > 1))) {
+        return { status: 'skipped', reason: 'claim_not_in_queue' };
+      }
+      try {
+        await callHandler(
+          asBullMqJob({ id: jobId, name: CALL_JOB_NAME, data, attemptsMade: attempt - 1 }),
+        );
+        logger.info({ jobId, attempt }, 'call job completed');
+        return { status: 'completed', attempt };
+      } catch (err) {
+        logger.error({ jobId, attempt, maxAttempts, err: errInfo(err) }, 'call job attempt failed');
+        if (attempt < maxAttempts) {
+          return {
+            status: 'retry',
+            attempt,
+            retryDelayMs: computeBackoffMs(callJobOptions.backoff, attempt),
+            error: err,
+          };
+        }
+        const dlq = await escalateCallToDlq(data, attempt, err);
+        return { status: 'failed', attempt, dlq };
+      }
+    },
+
+    async runSummaryAttempt(data, { attempt, maxAttempts }): Promise<AttemptReport> {
+      const jobId = data.idempotencyKey;
+      if (await summaryAlreadyExists(data)) {
+        return { status: 'skipped', reason: 'summary_exists' };
+      }
+      try {
+        const result = await summaryHandler({ id: jobId, data });
+        logger.info({ jobId, attempt, outcome: result.outcome }, 'summary job completed');
+        return { status: 'completed', attempt };
+      } catch (err) {
+        logger.error(
+          { jobId, attempt, maxAttempts, err: errInfo(err) },
+          'summary job attempt failed',
+        );
+        if (attempt < maxAttempts) {
+          return {
+            status: 'retry',
+            attempt,
+            retryDelayMs: computeBackoffMs(summaryJobOptions.backoff, attempt),
+            error: err,
+          };
+        }
+        // Parity with BullMQ / inline mode: no summaries DLQ consumer; the
+        // operator retries via POST /v1/calls/:id/summary/retry.
+        return { status: 'failed', attempt, dlq: false };
+      }
     },
   };
 }

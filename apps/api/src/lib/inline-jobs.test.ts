@@ -170,6 +170,59 @@ describe('createInlineJobRuntime — calls', () => {
   });
 });
 
+describe('createInlineJobRuntime — single attempts (SQS mode)', () => {
+  it('first attempt fails with attempts left → retry with the backoff, claim stays CALLING', async () => {
+    const { runtime } = runtimeWith();
+    const { data, claimId } = await seed({ npi: null });
+
+    const report = await runtime.runCallAttempt(data, { attempt: 1, maxAttempts: 3 });
+
+    expect(report).toMatchObject({ status: 'retry', attempt: 1, retryDelayMs: 30_000 });
+    const claim = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
+    expect(claim.status).toBe('CALLING');
+  });
+
+  it('a redelivery may re-take the CALLING lease, and the final attempt escalates to DLQ', async () => {
+    const { runtime } = runtimeWith();
+    const { data, claimId } = await seed({ npi: null });
+    await runtime.runCallAttempt(data, { attempt: 1, maxAttempts: 3 });
+
+    await expect(
+      runtime.runCallAttempt(data, { attempt: 2, maxAttempts: 3 }),
+    ).resolves.toMatchObject({ status: 'retry', attempt: 2, retryDelayMs: 60_000 });
+    await expect(runtime.runCallAttempt(data, { attempt: 3, maxAttempts: 3 })).resolves.toEqual({
+      status: 'failed',
+      attempt: 3,
+      dlq: true,
+    });
+    const claim = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
+    expect(claim.status).toBe('MANUAL_REVIEW');
+  });
+
+  it('never redials a claim that left IN_QUEUE / CALLING, even on a redelivery', async () => {
+    const { runtime, retell } = runtimeWith();
+    const { data } = await seed({ status: 'PENDING' });
+    for (const attempt of [1, 2]) {
+      await expect(runtime.runCallAttempt(data, { attempt, maxAttempts: 3 })).resolves.toEqual({
+        status: 'skipped',
+        reason: 'claim_not_in_queue',
+      });
+    }
+    expect(retell.startedCalls).toHaveLength(0);
+  });
+
+  it('a successful attempt completes the call', async () => {
+    const { runtime, retell, retellCallId } = runtimeWith();
+    const { data } = await seed();
+
+    const running = runtime.runCallAttempt(data, { attempt: 1, maxAttempts: 3 });
+    await waitFor(() => retell.startedCalls.length === 1);
+    await retell.simulateHappyPath(retellCallId);
+
+    await expect(running).resolves.toEqual({ status: 'completed', attempt: 1 });
+  });
+});
+
 describe('createInlineJobRuntime — summaries', () => {
   async function seedEndedCall(): Promise<{ orgId: string; callId: string }> {
     const { orgId, claimId } = await seed({ status: 'PENDING' });
@@ -230,5 +283,22 @@ describe('createInlineJobRuntime — summaries', () => {
       status: 'skipped',
       reason: 'summary_exists',
     });
+    await expect(runtime.runSummaryAttempt(data, { attempt: 2, maxAttempts: 3 })).resolves.toEqual({
+      status: 'skipped',
+      reason: 'summary_exists',
+    });
+  });
+
+  it('runs a single summary attempt (SQS mode)', async () => {
+    const { runtime } = runtimeWith();
+    const { orgId, callId } = await seedEndedCall();
+
+    const report = await runtime.runSummaryAttempt(
+      { organizationId: orgId, callId, promptVersion: 'v1', idempotencyKey: `call.${callId}` },
+      { attempt: 1, maxAttempts: 3 },
+    );
+
+    expect(report).toEqual({ status: 'completed', attempt: 1 });
+    await expect(prisma.callSummary.count({ where: { callId } })).resolves.toBe(1);
   });
 });

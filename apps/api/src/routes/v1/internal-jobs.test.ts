@@ -55,7 +55,12 @@ describe('POST /v1/internal/jobs/*', () => {
     process.env.INTERNAL_JOB_SECRET = SECRET;
     initEnv();
     server = await buildServer({ logger: false });
-    server.inlineJobRuntime = { runCall, runSummary };
+    server.inlineJobRuntime = {
+      runCall,
+      runSummary,
+      runCallAttempt: vi.fn<InlineJobRuntime['runCallAttempt']>(),
+      runSummaryAttempt: vi.fn<InlineJobRuntime['runSummaryAttempt']>(),
+    };
   });
 
   afterAll(async () => {
