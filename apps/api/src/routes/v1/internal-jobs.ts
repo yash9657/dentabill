@@ -118,6 +118,19 @@ export function internalJobsRoutes(fastify: FastifyInstance): void {
       const report = await work;
       logReport(kind, jobId, report);
       if (report.status === 'failed' && !report.dlq) return await unconfirmed(reply);
+      if (!('claimId' in data) && report.status === 'inference_review_required') {
+        const run = await prisma.inferenceRun.findFirst({
+          where: {
+            organizationId: data.organizationId,
+            callId: data.callId,
+            generation: 1,
+            state: { in: ['UNKNOWN', 'REJECTED'] },
+            reviewAppliedAt: { not: null },
+          },
+          select: { id: true },
+        });
+        if (!run) return await unconfirmed(reply);
+      }
       if ('claimId' in data) {
         if (data.resume && data.idempotencyKey !== `call.resume.${data.resume.intentId}`) {
           return await unconfirmed(reply);

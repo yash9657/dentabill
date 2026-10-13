@@ -40,7 +40,11 @@ interface AnthropicClientLike {
   };
 }
 
-type AnthropicCtor = new (options: { apiKey: string }) => AnthropicClientLike;
+type AnthropicCtor = new (options: {
+  apiKey: string;
+  maxRetries: number;
+  timeout: number;
+}) => AnthropicClientLike;
 
 type AnthropicLoader = () => Promise<AnthropicCtor>;
 
@@ -130,6 +134,10 @@ const TOOL_INPUT_SCHEMA: Record<string, unknown> = {
 };
 
 export class LiveClaude implements SummarizerPort {
+  public readonly inference = {
+    provider: 'UNAPPROVED',
+    releaseId: 'legacy-claude-unapproved',
+  } as const;
   readonly #apiKey: string;
   readonly #maxOutputTokens: number;
   readonly #loader: AnthropicLoader;
@@ -172,11 +180,20 @@ export class LiveClaude implements SummarizerPort {
       tool_choice: { type: 'tool', name: TOOL_NAME },
     });
 
-    const summary = parseToolCallOutput(input.callId, response);
-    const tokensUsed =
-      response.usage.input_tokens +
-      response.usage.output_tokens +
-      (response.usage.cache_creation_input_tokens ?? 0);
+    const tokensUsed = knownTokenUsage(response.usage);
+    let summary;
+    try {
+      summary = parseToolCallOutput(input.callId, response);
+    } catch (error) {
+      if (error instanceof SummaryValidationError) {
+        throw new SummaryValidationError(input.callId, error.issues, tokensUsed);
+      }
+      throw new SummaryValidationError(
+        input.callId,
+        [{ path: 'response', message: 'Invalid response structure' }],
+        tokensUsed,
+      );
+    }
 
     return {
       summary,
@@ -189,10 +206,30 @@ export class LiveClaude implements SummarizerPort {
   async #getClient(): Promise<AnthropicClientLike> {
     if (!this.#client) {
       const Ctor = await this.#loader();
-      this.#client = new Ctor({ apiKey: this.#apiKey });
+      this.#client = new Ctor({ apiKey: this.#apiKey, maxRetries: 0, timeout: 30_000 });
     }
     return this.#client;
   }
+}
+
+function knownTokenUsage(usage: unknown): number | null {
+  if (usage === null || typeof usage !== 'object') return null;
+  const fields = usage as Record<string, unknown>;
+  const counts = [
+    'input_tokens',
+    'output_tokens',
+    'cache_creation_input_tokens',
+    'cache_read_input_tokens',
+  ].map((key) => fields[key]);
+  if (
+    !counts.every(
+      (count): count is number =>
+        typeof count === 'number' && Number.isSafeInteger(count) && count >= 0,
+    )
+  )
+    return null;
+  const total = counts.reduce((sum, count) => sum + count, 0);
+  return Number.isSafeInteger(total) ? total : null;
 }
 
 function renderUserMessage(input: SummarizeInput): string {

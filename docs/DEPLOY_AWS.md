@@ -26,17 +26,21 @@ Body: `{"type":"call.place"|"summary.generate","data":<job payload>}`, validated
 
 The worker runs **one attempt per receive**; the attempt number is `ApproximateReceiveCount`.
 
-| Result of the attempt                                 | Worker action                                                                                                                                                                                  |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| success, duplicate, or fenced uncertainty             | message deleted                                                                                                                                                                                |
-| failure, receive count < `JOBS_MAX_RECEIVE_COUNT` (3) | visibility timeout set to the BullMQ backoff (calls 30 s, 60 s; summaries 15 s, 30 s), returned in `batchItemFailures`                                                                         |
-| failure on the final receive                          | calls: atomically cancel only exact READY intent and conditionally route claim to review; submitted/unknown calls stay protected. Failed persistence stays retryable. Summaries: error logged. |
-| unparseable body, or a crash outside the processor    | returned in `batchItemFailures` with no visibility change, and never deleted, so the redrive policy moves it to the SQS DLQ                                                                    |
+| Result of the attempt                                 | Worker action                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| success, duplicate, or fenced uncertainty             | message deleted                                                                                                                                                                                                                                                                           |
+| failure, receive count < `JOBS_MAX_RECEIVE_COUNT` (3) | visibility timeout set to the BullMQ backoff (calls 30 s, 60 s; summaries 15 s, 30 s), returned in `batchItemFailures`                                                                                                                                                                    |
+| failure on the final receive                          | calls: atomically cancel only exact READY intent and conditionally route claim to review; submitted/unknown calls stay protected. Failed persistence stays retryable. Summaries: remain batch failures/redrive; an exception is never acknowledged merely because attempts are exhausted. |
+| unparseable body, or a crash outside the processor    | returned in `batchItemFailures` with no visibility change, and never deleted, so the redrive policy moves it to the SQS DLQ                                                                                                                                                               |
 
 Call submission ownership is a persisted CallIntent, shared by all dispatch modes. API
 reservation/claim version/audit commit before delivery; the worker commits SUBMITTING before
 create and never redials SUBMITTING/UNKNOWN. ACCEPTED resumes the stored call. Legacy jobs
 without an exact reservation fail closed. Summary jobs skip existing CallSummary records.
+Summary generation1 has a separate persisted reservation/attempt/receipt ledger. A busy owner
+remains retryable. UNKNOWN/REJECTED is acknowledgeable only after scoped review effects and
+`reviewAppliedAt` commit. A saved response resumes local application without another request.
+No Redis lease governs summary inference ownership.
 Queue exhaustion does not prove an external call failed.
 
 The SQS DLQ still requires monitored recovery; messages may outlive the processor through
@@ -60,6 +64,23 @@ provider calls. Do not simply restore a worker that blindly reissues create. New
 snapshots contain PHI and require access/retention operating controls before real data use.
 Only isolated local databases have received these migrations; production release still
 requires the user's explicit authorization after remaining release gates are satisfied.
+
+### Coordinated summary-ledger release (not executed)
+
+Apply additive migrations `20261013160000_inference_accounting` and
+`20261013170000_inference_review_application` before deploying the coordinated API/worker
+artifacts. Pause dispatch and drain/review older consumers first: they ignore the ledger.
+Preserve all snapshots, receipts, unknown liabilities and existing summaries on rollback;
+restoring a worker that blindly resubmits is unsafe. These migrations have run only on
+isolated localhost databases; this runbook is not deployment authorization.
+
+The current worker accepts only `synthetic-summary.v1`. Nonempty `ANTHROPIC_API_KEY` makes
+production summarizer creation fail with `SUMMARY_PROVIDER_DISABLED`; there is no silent
+fake or proprietary fallback. Do not enable Fireworks by adding its key: released model
+approval, versioned summary mapping and awaited durable per-HTTP-send hooks remain open.
+`SUMMARIZER_DAILY_TOKEN_BUDGET` is operational admission, not a verified dollar ceiling.
+Unknown usage remains held across UTC days; legacy `summaryTokensUsed` is a display projection,
+not the admission authority. Review notifications still need a durable outbox (FW-40).
 
 ## Infrastructure expectations
 

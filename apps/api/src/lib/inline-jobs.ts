@@ -40,14 +40,14 @@ import {
   SUMMARIES_DEFAULT_JOB_OPTIONS,
   SUMMARY_JOB_NAME,
   type SummaryJobData,
+  type SummaryJobResult,
 } from '@dentabill/queue';
 import { createSummarizerPort, type SummarizerPort } from '@dentabill/summarizer';
 import {
   type CostGuard,
-  createInMemoryCostGuard,
-  createRedisCostGuard,
   createSummaryJobHandler,
   loadSummaryWorkerEnv,
+  SummaryInferenceBusyError,
 } from '@dentabill/summary-worker';
 import type { Redis } from 'ioredis';
 
@@ -68,14 +68,12 @@ export const INLINE_JOB_BUDGET_MS = 760_000;
  */
 const UNUSED_REDIS_URL = 'redis://redis-not-configured.invalid:6379';
 
-/** Operator-initiated summary retries carry `.retry.<n>`; see POST /calls/:id/summary/retry. */
-const SUMMARY_RETRY_KEY = /\.retry\.\d+$/;
-
 export type InlineRunReport =
   | { readonly status: 'completed'; readonly attemptsMade: number }
   | { readonly status: 'rescheduled'; readonly attemptsMade: number }
   | { readonly status: 'skipped'; readonly reason: string }
   | { readonly status: 'reconciliation_required'; readonly attemptsMade: number }
+  | { readonly status: 'inference_review_required'; readonly attemptsMade: number }
   | {
       readonly status: 'blocked';
       readonly reason: 'MISSING_CALL_IDENTITY';
@@ -106,6 +104,7 @@ export type AttemptReport =
   | { readonly status: 'rescheduled'; readonly attempt: number }
   | { readonly status: 'skipped'; readonly reason: string }
   | { readonly status: 'reconciliation_required'; readonly attempt: number }
+  | { readonly status: 'inference_review_required'; readonly attempt: number }
   | {
       readonly status: 'blocked';
       readonly reason: 'MISSING_CALL_IDENTITY';
@@ -146,7 +145,7 @@ export interface InlineJobRuntime {
 
 export interface CreateInlineJobRuntimeDeps {
   readonly jobDispatcher: JobDispatcher;
-  /** Shared Redis for the summary cost guard; `null` → process-local guard. */
+  /** Shared queue connection; summary admission is persisted in Postgres. */
   readonly redis: Redis | null;
   readonly logger?: Logger;
   readonly prisma?: DbClient;
@@ -188,9 +187,6 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
       maxOutputTokens: summaryEnv.SUMMARIZER_MAX_OUTPUT_TOKENS,
       deriveWhenUnregistered: summaryEnv.DEMO_SUMMARIZER_FALLBACK === 'true',
     }).summarizer;
-  const costGuard =
-    deps.costGuard ?? (deps.redis ? createRedisCostGuard(deps.redis) : createInMemoryCostGuard());
-
   const callHandler = createCallJobHandler({
     logger,
     prisma,
@@ -203,13 +199,15 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
   const summaryHandler = createSummaryJobHandler({
     logger,
     prisma,
-    costGuard,
+    ...(deps.costGuard && { costGuard: deps.costGuard }),
     summarizer,
     env: summaryEnv,
   });
 
-  const errInfo = (err: unknown): unknown =>
-    err instanceof Error ? { message: err.message, name: err.name } : err;
+  const errInfo = (err: unknown): { code: string } => ({
+    code:
+      err instanceof SummaryInferenceBusyError ? 'SUMMARY_INFERENCE_BUSY' : 'JOB_ATTEMPT_FAILED',
+  });
 
   const callJobOptions = deps.callJobOptions ?? CALLS_DEFAULT_JOB_OPTIONS;
   const summaryJobOptions = deps.summaryJobOptions ?? SUMMARIES_DEFAULT_JOB_OPTIONS;
@@ -266,13 +264,8 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
     }
   };
 
-  /**
-   * `CallSummary.callId` is UNIQUE, so a second run for the same call can
-   * only fail. Skip duplicates of the automatic `call.<id>` job; operator
-   * retries (`.retry.<n>`) keep their BullMQ-era behaviour.
-   */
+  /** Delivery retries never replace existing summary evidence. */
   const summaryAlreadyExists = async (data: SummaryJobData): Promise<boolean> => {
-    if (SUMMARY_RETRY_KEY.test(data.idempotencyKey)) return false;
     const existing = await prisma.callSummary.findFirst({
       where: { callId: data.callId, organizationId: data.organizationId },
       select: { id: true },
@@ -285,6 +278,27 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
       return true;
     }
     return false;
+  };
+
+  const checkedSummaryHandler = async (job: {
+    id?: string;
+    data: SummaryJobData;
+  }): Promise<SummaryJobResult> => {
+    const result = await summaryHandler(job);
+    if (result.outcome === 'INFERENCE_REVIEW_REQUIRED') {
+      const disposition = await prisma.inferenceRun.findFirst({
+        where: {
+          organizationId: job.data.organizationId,
+          callId: job.data.callId,
+          generation: 1,
+          state: { in: ['UNKNOWN', 'REJECTED'] },
+          reviewAppliedAt: { not: null },
+        },
+        select: { id: true },
+      });
+      if (!disposition) throw new Error('Summary inference disposition is unconfirmed.');
+    }
+    return result;
   };
 
   return {
@@ -357,7 +371,7 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
         jobOptions: summaryJobOptions,
         budgetMs,
         ...(deps.sleep && { sleep: deps.sleep }),
-        process: (job) => summaryHandler(job),
+        process: (job) => checkedSummaryHandler(job),
         onAttemptFailed: (err, attemptsMade) => {
           logger.error(
             { jobId, attemptsMade, err: errInfo(err) },
@@ -366,6 +380,9 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
         },
       });
       if (outcome.status === 'completed') {
+        if (outcome.result.outcome === 'INFERENCE_REVIEW_REQUIRED') {
+          return { status: 'inference_review_required', attemptsMade: outcome.attemptsMade };
+        }
         logger.info(
           { jobId, attemptsMade: outcome.attemptsMade, outcome: outcome.result.outcome },
           'inline summary job completed',
@@ -440,7 +457,10 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
         return { status: 'skipped', reason: 'summary_exists' };
       }
       try {
-        const result = await summaryHandler({ id: jobId, data });
+        const result = await checkedSummaryHandler({ id: jobId, data });
+        if (result.outcome === 'INFERENCE_REVIEW_REQUIRED') {
+          return { status: 'inference_review_required', attempt };
+        }
         logger.info({ jobId, attempt, outcome: result.outcome }, 'summary job completed');
         return { status: 'completed', attempt };
       } catch (err) {
@@ -448,17 +468,14 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
           { jobId, attempt, maxAttempts, err: errInfo(err) },
           'summary job attempt failed',
         );
-        if (attempt < maxAttempts) {
-          return {
-            status: 'retry',
-            attempt,
-            retryDelayMs: computeBackoffMs(summaryJobOptions.backoff, attempt),
-            error: err,
-          };
-        }
-        // Parity with BullMQ / inline mode: no summaries DLQ consumer; the
-        // operator retries via POST /v1/calls/:id/summary/retry.
-        return { status: 'failed', attempt, dlq: false };
+        // Only a durable disposition can acknowledge summary delivery. SQS
+        // redrive retains exhausted failures for review without resubmission.
+        return {
+          status: 'retry',
+          attempt,
+          retryDelayMs: computeBackoffMs(summaryJobOptions.backoff, attempt),
+          error: new Error('Summary delivery is unconfirmed.'),
+        };
       }
     },
   };

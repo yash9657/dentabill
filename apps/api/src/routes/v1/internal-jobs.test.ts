@@ -166,6 +166,75 @@ describe('POST /v1/internal/jobs/*', () => {
     return data;
   }
 
+  it.each([
+    'UNKNOWN',
+    'REJECTED',
+    'RESERVED',
+    'SUBMITTING',
+    'RESPONDED',
+    'wrong tenant',
+    'missing',
+    'review not applied',
+  ] as const)(
+    'requires durable scoped summary review evidence before acknowledging: %s',
+    async (state) => {
+      const claim = await prisma.claim.findFirstOrThrow({
+        where: { organizationId: callJob.organizationId, id: callJob.claimId },
+      });
+      const call = await prisma.call.create({
+        data: {
+          organizationId: callJob.organizationId,
+          claimId: callJob.claimId,
+          retellCallId: `synthetic_inference_receipt_${randomUUID()}`,
+          status: 'COMPLETED',
+        },
+      });
+      if (state !== 'missing') {
+        await prisma.inferenceBudget.create({
+          data: {
+            organizationId: callJob.organizationId,
+            billingDay: '2026-10-13',
+            tokenLimit: 100_000n,
+          },
+        });
+        await prisma.inferenceRun.create({
+          data: {
+            organizationId: callJob.organizationId,
+            callId: call.id,
+            claimId: claim.id,
+            claimVersion: claim.updatedAt,
+            generation: 1,
+            provider: 'SYNTHETIC',
+            releaseId: 'synthetic-summary.v1',
+            promptVersion: 'v1',
+            sourceHash: 'a'.repeat(64),
+            requestHash: 'b'.repeat(64),
+            requestPayload: {},
+            billingDay: '2026-10-13',
+            tokenAllowance: 1000n,
+            reservedTokens: 1000n,
+            state: state === 'wrong tenant' || state === 'review not applied' ? 'UNKNOWN' : state,
+            reviewAppliedAt: state === 'review not applied' ? null : new Date(),
+          },
+        });
+      }
+      runSummary.mockResolvedValue({ status: 'inference_review_required', attemptsMade: 1 });
+      const response = await server.inject({
+        method: 'POST',
+        url: '/v1/internal/jobs/summaries',
+        headers: { [HEADER]: SECRET },
+        payload: {
+          ...summaryJob,
+          organizationId: state === 'wrong tenant' ? 'unrelated_org' : callJob.organizationId,
+          callId: call.id,
+          idempotencyKey: `call.${call.id}`,
+        },
+      });
+      expect(response.statusCode).toBe(state === 'UNKNOWN' || state === 'REJECTED' ? 200 : 503);
+      await prisma.inferenceRun.deleteMany({ where: { organizationId: callJob.organizationId } });
+    },
+  );
+
   it.each(['exact', 'wrong key', 'wrong call', 'wrong tenant', 'still accepted'] as const)(
     'acknowledges a recovery receipt only for its exact terminal binding: %s',
     async (variant) => {

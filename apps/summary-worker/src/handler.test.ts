@@ -1,22 +1,21 @@
-import { prisma } from '@dentabill/db';
+import { prisma, reserveInferenceRun } from '@dentabill/db';
 import { createLogger } from '@dentabill/logger';
 import { FakeResend } from '@dentabill/notifier';
 import type { SummaryJobData, SummaryJobResult } from '@dentabill/queue';
-import { FakeClaude } from '@dentabill/summarizer';
+import { FakeClaude, SummaryValidationError, LiveClaude } from '@dentabill/summarizer';
 import type { Job } from 'bullmq';
 import { Redis } from 'ioredis';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { loadSummaryWorkerEnv, type SummaryWorkerEnv } from './env.js';
-import { createSummaryJobHandler } from './handler.js';
+import { createSummaryJobHandler, SummaryInferenceBusyError } from './handler.js';
 
 /**
  * Integration tests for the summary-worker handler.
  *
- * Hits the real `dentabill_test` Postgres + a dedicated Redis DB index
- * so the cost-guard lock, multi-tenant scope, and CallSummary INSERT
- * layers run exactly as in production. The summarizer is `FakeClaude`
- * so we don't pay for real Anthropic calls.
+ * Uses real local Postgres for durable inference ownership, receipts, and
+ * atomic claim effects. Redis remains only for the legacy-lock regression;
+ * inference ownership does not depend on it. All model responses are synthetic.
  */
 
 const silentLogger = createLogger({
@@ -230,7 +229,7 @@ describe('createSummaryJobHandler — cost guard', () => {
     expect(audits).toHaveLength(1);
   });
 
-  it('throws (BullMQ retry path) when another worker holds the cost-guard lock', async () => {
+  it('does not let a stale Redis mutex block durable inference recovery', async () => {
     const seeded = await seedOrgClaimCall();
     const fake = new FakeClaude();
     fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
@@ -254,7 +253,7 @@ describe('createSummaryJobHandler — cost guard', () => {
           idempotencyKey: 'sum-lock-1',
         }),
       ),
-    ).rejects.toThrow(/lock contention/);
+    ).resolves.toMatchObject({ outcome: 'MANUAL_REVIEW' });
   });
 });
 
@@ -417,6 +416,7 @@ describe('summary containment under retries and stale evidence', () => {
       redis,
       env: { ...baseEnv, SUMMARIZER_AUTO_TRANSITION_ENABLED: true },
       summarizer: {
+        inference: fake.inference,
         summarize: async (input) => {
           await prisma.claim.updateMany({
             where: { id: seeded.claimId, organizationId: seeded.orgId },
@@ -474,6 +474,7 @@ describe('summary containment under retries and stale evidence', () => {
       redis,
       env: baseEnv,
       summarizer: {
+        inference: fake.inference,
         summarize: async (input) => {
           await prisma.claim.updateMany({
             where: { id: seeded.claimId, organizationId: seeded.orgId },
@@ -528,16 +529,18 @@ describe('summary containment under retries and stale evidence', () => {
     ).toBe(1);
   });
 
-  it('rolls back summary, claim, and usage if transition audit fails, then recovers on retry', async () => {
+  it('keeps the durable receipt and usage when summary application rolls back, then resumes without inference', async () => {
     const seeded = await seedOrgClaimCall();
     const fake = new FakeClaude();
     fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    let now = new Date();
     const handler = createSummaryJobHandler({
       logger: silentLogger,
       prisma,
       redis,
       summarizer: fake,
       env: baseEnv,
+      clock: () => now,
     });
     await prisma.$executeRawUnsafe(
       `CREATE FUNCTION summary_test_fail_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'claim.transition' THEN RAISE EXCEPTION 'synthetic audit failure'; END IF; RETURN NEW; END $$`,
@@ -555,16 +558,39 @@ describe('summary containment under retries and stale evidence', () => {
           })
         ).status,
       ).toBe('COMPLETED');
+      const run = await prisma.inferenceRun.findFirstOrThrow({
+        where: { organizationId: seeded.orgId, callId: seeded.callId },
+      });
+      expect(run.state).toBe('RESPONDED');
+      expect(run.resultPayload).not.toBeNull();
+      expect(run.totalTokens).not.toBeNull();
       expect(
         (await prisma.organization.findUniqueOrThrow({ where: { id: seeded.orgId } }))
           .summaryTokensUsed,
-      ).toBe(0);
+      ).toBe(Number(run.totalTokens));
+      expect(fake.invocations).toHaveLength(1);
+      now = new Date((run.leaseExpiresAt?.getTime() ?? now.getTime()) + 1);
     } finally {
       await prisma.$executeRawUnsafe(`DROP TRIGGER summary_test_fail_audit ON "AuditLog"`);
       await prisma.$executeRawUnsafe(`DROP FUNCTION summary_test_fail_audit()`);
     }
-    expect((await handler(jobFor(payload(seeded)))).outcome).toBe('MANUAL_REVIEW');
+    await prisma.claim.updateMany({
+      where: { id: seeded.claimId, organizationId: seeded.orgId },
+      data: { status: 'WRITTEN_OFF' },
+    });
+    await prisma.callEvent.deleteMany({
+      where: { callId: seeded.callId, call: { organizationId: seeded.orgId } },
+    });
+    expect((await handler(jobFor(payload(seeded)))).outcome).toBe('STALE_RESULT');
     expect(await prisma.callSummary.count({ where: { organizationId: seeded.orgId } })).toBe(1);
+    expect(fake.invocations).toHaveLength(1);
+    expect(
+      (
+        await prisma.claim.findFirstOrThrow({
+          where: { id: seeded.claimId, organizationId: seeded.orgId },
+        })
+      ).status,
+    ).toBe('WRITTEN_OFF');
   });
 });
 
@@ -785,4 +811,473 @@ describe('canonical final provider transcript', () => {
       ).toMatchObject({ summaryTokensUsed: 0 });
     },
   );
+});
+
+describe('durable inference admission and receipts', () => {
+  function payload(seeded: Seeded): SummaryJobData {
+    return {
+      organizationId: seeded.orgId,
+      callId: seeded.callId,
+      promptVersion: 'v1',
+      idempotencyKey: `call.${seeded.callId}`,
+    };
+  }
+  it('blocks even an explicitly injected unapproved live adapter before reservation or network', async () => {
+    const seeded = await seedOrgClaimCall();
+    const loader = vi.fn(async () => {
+      throw new Error('Synthetic loader must not run.');
+    });
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      summarizer: new LiveClaude({ apiKey: 'synthetic-key', anthropicLoader: loader }),
+      env: baseEnv,
+    });
+    expect(await handler(jobFor(payload(seeded)))).toMatchObject({
+      outcome: 'PROVIDER_DISABLED',
+      tokensUsed: 0,
+    });
+    expect(loader).not.toHaveBeenCalled();
+    expect(await prisma.inferenceRun.count({ where: { organizationId: seeded.orgId } })).toBe(0);
+  });
+
+  it('settles known invalid-output usage once and never regenerates under a fresh delivery key', async () => {
+    const seeded = await seedOrgClaimCall();
+    const fake = new FakeClaude();
+    const summarize = vi.fn(async (input: Parameters<FakeClaude['summarize']>[0]) => {
+      throw new SummaryValidationError(
+        input.callId,
+        [{ path: 'private', message: 'private invalid content' }],
+        55,
+      );
+    });
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      summarizer: { inference: fake.inference, summarize },
+      env: baseEnv,
+    });
+    expect(await handler(jobFor(payload(seeded)))).toMatchObject({
+      outcome: 'DLQ',
+      tokensUsed: 55,
+    });
+    expect(
+      await handler(
+        jobFor({ ...payload(seeded), idempotencyKey: `call.${seeded.callId}.retry.1` }),
+      ),
+    ).toMatchObject({ outcome: 'INFERENCE_REVIEW_REQUIRED', tokensUsed: 55 });
+    expect(summarize).toHaveBeenCalledTimes(1);
+    const run = await prisma.inferenceRun.findFirstOrThrow({
+      where: { organizationId: seeded.orgId, callId: seeded.callId },
+    });
+    expect(run).toMatchObject({ state: 'REJECTED', totalTokens: 55n, reservedTokens: 0n });
+    const budget = await prisma.inferenceBudget.findFirstOrThrow({
+      where: { organizationId: seeded.orgId },
+    });
+    expect(budget).toMatchObject({ knownTokens: 55n, reservedTokens: 0n });
+    expect(
+      JSON.stringify(await prisma.auditLog.findMany({ where: { organizationId: seeded.orgId } })),
+    ).not.toContain('private invalid content');
+  });
+
+  it('retains unknown spend across UTC days without resubmitting after an ambiguous provider failure', async () => {
+    const seeded = await seedOrgClaimCall();
+    const fake = new FakeClaude();
+    let now = new Date('2026-10-13T23:59:59Z');
+    const summarize = vi.fn(async () => {
+      throw new Error('Private provider response was lost.');
+    });
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      summarizer: { inference: fake.inference, summarize },
+      env: baseEnv,
+      clock: () => now,
+    });
+    expect(await handler(jobFor(payload(seeded)))).toMatchObject({
+      outcome: 'INFERENCE_REVIEW_REQUIRED',
+      tokensUsed: null,
+    });
+    const original = await prisma.inferenceRun.findFirstOrThrow({
+      where: { organizationId: seeded.orgId, callId: seeded.callId },
+    });
+    expect(original.state).toBe('UNKNOWN');
+    expect(original.totalTokens).toBeNull();
+    expect(original.reservedTokens).toBeGreaterThan(0n);
+    now = new Date('2026-10-15T00:00:00Z');
+    expect(
+      await handler(
+        jobFor({ ...payload(seeded), idempotencyKey: `call.${seeded.callId}.retry.2` }),
+      ),
+    ).toMatchObject({ outcome: 'INFERENCE_REVIEW_REQUIRED', tokensUsed: null });
+    expect(summarize).toHaveBeenCalledTimes(1);
+    expect(await prisma.inferenceRun.count({ where: { organizationId: seeded.orgId } })).toBe(1);
+    expect(
+      (
+        await prisma.inferenceRun.findFirstOrThrow({
+          where: { id: original.id, organizationId: seeded.orgId },
+        })
+      ).reservedTokens,
+    ).toBe(original.reservedTokens);
+    expect(await prisma.callSummary.count({ where: { organizationId: seeded.orgId } })).toBe(0);
+  });
+
+  it('does not apply valid-looking output with missing usage or report its cost as zero', async () => {
+    const seeded = await seedOrgClaimCall();
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    const summarize = vi.fn(async (input: Parameters<FakeClaude['summarize']>[0]) => ({
+      ...(await fake.summarize(input)),
+      tokensUsed: null,
+    }));
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      summarizer: { inference: fake.inference, summarize },
+      env: baseEnv,
+    });
+    expect(await handler(jobFor(payload(seeded)))).toMatchObject({
+      outcome: 'INFERENCE_REVIEW_REQUIRED',
+      tokensUsed: null,
+    });
+    expect(await prisma.callSummary.count({ where: { organizationId: seeded.orgId } })).toBe(0);
+    const run = await prisma.inferenceRun.findFirstOrThrow({
+      where: { organizationId: seeded.orgId, callId: seeded.callId },
+    });
+    expect(run).toMatchObject({
+      state: 'UNKNOWN',
+      totalTokens: null,
+      lastErrorCode: 'USAGE_UNKNOWN',
+    });
+    expect(run.reservedTokens).toBeGreaterThan(0n);
+  });
+
+  it.each(['REJECTED', 'UNKNOWN'] as const)(
+    'replays %s review effects atomically after an audit failure without resubmitting',
+    async (state) => {
+      const seeded = await seedOrgClaimCall();
+      const fake = new FakeClaude();
+      const summarize = vi.fn(async () => {
+        if (state === 'REJECTED') throw new SummaryValidationError(seeded.callId, [], 37);
+        throw new Error('Synthetic response lost.');
+      });
+      const handler = createSummaryJobHandler({
+        logger: silentLogger,
+        prisma,
+        summarizer: { inference: fake.inference, summarize },
+        env: baseEnv,
+      });
+      await prisma.$executeRawUnsafe(
+        `CREATE FUNCTION summary_test_fail_review() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action IN ('summary.dlq', 'summary.inference_review_required') THEN RAISE EXCEPTION 'synthetic review failure'; END IF; RETURN NEW; END $$`,
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE TRIGGER summary_test_fail_review BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION summary_test_fail_review()`,
+      );
+      try {
+        await expect(handler(jobFor(payload(seeded)))).rejects.toThrow();
+        expect(
+          await prisma.inferenceRun.findFirstOrThrow({ where: { organizationId: seeded.orgId } }),
+        ).toMatchObject({
+          state,
+          reviewAppliedAt: null,
+          totalTokens: state === 'REJECTED' ? 37n : null,
+        });
+        expect(
+          await prisma.claim.findFirstOrThrow({
+            where: { id: seeded.claimId, organizationId: seeded.orgId },
+          }),
+        ).toMatchObject({ status: 'COMPLETED' });
+        expect(
+          await prisma.auditLog.count({
+            where: { organizationId: seeded.orgId, action: 'inference.review_applied' },
+          }),
+        ).toBe(0);
+      } finally {
+        await prisma.$executeRawUnsafe(`DROP TRIGGER summary_test_fail_review ON "AuditLog"`);
+        await prisma.$executeRawUnsafe(`DROP FUNCTION summary_test_fail_review()`);
+      }
+      // Frozen evidence remains usable even if the live transcript is no longer present.
+      await prisma.callEvent.deleteMany({ where: { callId: seeded.callId } });
+      for (const attempt of [1, 2]) {
+        expect(
+          await handler(
+            jobFor({ ...payload(seeded), idempotencyKey: `review-retry.${String(attempt)}` }),
+          ),
+        ).toMatchObject({
+          outcome: 'INFERENCE_REVIEW_REQUIRED',
+          tokensUsed: state === 'REJECTED' ? 37 : null,
+        });
+      }
+      expect(summarize).toHaveBeenCalledTimes(1);
+      expect(
+        await prisma.claim.findFirstOrThrow({
+          where: { id: seeded.claimId, organizationId: seeded.orgId },
+        }),
+      ).toMatchObject({ status: 'MANUAL_REVIEW' });
+      expect(
+        (await prisma.inferenceRun.findFirstOrThrow({ where: { organizationId: seeded.orgId } }))
+          .reviewAppliedAt,
+      ).not.toBeNull();
+      expect(
+        await prisma.auditLog.count({
+          where: { organizationId: seeded.orgId, action: 'inference.review_applied' },
+        }),
+      ).toBe(1);
+      expect(
+        await prisma.auditLog.count({
+          where: { organizationId: seeded.orgId, action: 'inference.snapshot.read' },
+        }),
+      ).toBe(2);
+      expect(await prisma.callSummary.count({ where: { organizationId: seeded.orgId } })).toBe(0);
+      expect(
+        (await prisma.inferenceBudget.findFirstOrThrow({ where: { organizationId: seeded.orgId } }))
+          .knownTokens,
+      ).toBe(state === 'REJECTED' ? 37n : 0n);
+    },
+  );
+
+  it('enforces the original token allowance when a reserved invocation resumes under a larger configuration', async () => {
+    const seeded = await seedOrgClaimCall();
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    let now = new Date();
+    let usage = 0;
+    const summarize = vi.fn(async (input: Parameters<FakeClaude['summarize']>[0]) => ({
+      ...(await fake.summarize(input)),
+      tokensUsed: usage,
+    }));
+    const deps = {
+      logger: silentLogger,
+      prisma,
+      summarizer: { inference: fake.inference, summarize },
+      clock: () => now,
+    };
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION summary_test_fail_attempt() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic pre-submission failure'; END $$`,
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE TRIGGER summary_test_fail_attempt BEFORE INSERT ON "InferenceAttempt" FOR EACH ROW EXECUTE FUNCTION summary_test_fail_attempt()`,
+    );
+    try {
+      await expect(
+        createSummaryJobHandler({ ...deps, env: baseEnv })(jobFor(payload(seeded))),
+      ).rejects.toThrow();
+      const run = await prisma.inferenceRun.findFirstOrThrow({
+        where: { organizationId: seeded.orgId },
+      });
+      expect(run.state).toBe('RESERVED');
+      expect(summarize).not.toHaveBeenCalled();
+      usage = Number(run.tokenAllowance) + 1;
+      now = new Date((run.leaseExpiresAt?.getTime() ?? now.getTime()) + 1);
+    } finally {
+      await prisma.$executeRawUnsafe(
+        `DROP TRIGGER summary_test_fail_attempt ON "InferenceAttempt"`,
+      );
+      await prisma.$executeRawUnsafe(`DROP FUNCTION summary_test_fail_attempt()`);
+    }
+    expect(
+      await createSummaryJobHandler({
+        ...deps,
+        env: { ...baseEnv, SUMMARIZER_MAX_OUTPUT_TOKENS: 100_000 },
+      })(jobFor(payload(seeded))),
+    ).toMatchObject({ outcome: 'DLQ', tokensUsed: usage });
+    expect(summarize).toHaveBeenCalledTimes(1);
+    expect(
+      await prisma.inferenceRun.findFirstOrThrow({ where: { organizationId: seeded.orgId } }),
+    ).toMatchObject({
+      state: 'REJECTED',
+      lastErrorCode: 'TOKEN_BOUND_EXCEEDED',
+      totalTokens: BigInt(usage),
+    });
+    expect(await prisma.callSummary.count({ where: { organizationId: seeded.orgId } })).toBe(0);
+  });
+
+  it('does not resume a frozen run belonging to a different provider release through the synthetic adapter', async () => {
+    const seeded = await seedOrgClaimCall();
+    const claim = await prisma.claim.findFirstOrThrow({
+      where: { id: seeded.claimId, organizationId: seeded.orgId },
+    });
+    await reserveInferenceRun(prisma, {
+      organizationId: seeded.orgId,
+      callId: seeded.callId,
+      claimId: seeded.claimId,
+      claimVersion: claim.updatedAt,
+      sourceHash: 'a'.repeat(64),
+      requestHash: 'b'.repeat(64),
+      provider: 'FIREWORKS',
+      releaseId: 'unapproved-fixture',
+      promptVersion: 'v1',
+      requestPayload: {},
+      reservationTokens: 100,
+      dailyTokenLimit: 1000,
+    });
+    const fake = new FakeClaude();
+    expect(
+      await createSummaryJobHandler({
+        logger: silentLogger,
+        prisma,
+        summarizer: fake,
+        env: baseEnv,
+      })(jobFor(payload(seeded))),
+    ).toMatchObject({ outcome: 'PROVIDER_DISABLED', tokensUsed: 0 });
+    expect(fake.invocations).toHaveLength(0);
+    expect(await prisma.inferenceAttempt.count({ where: { organizationId: seeded.orgId } })).toBe(
+      0,
+    );
+    expect(
+      await prisma.inferenceRun.findFirstOrThrow({ where: { organizationId: seeded.orgId } }),
+    ).toMatchObject({ state: 'RESERVED', provider: 'FIREWORKS' });
+  });
+
+  it('locks the organization before summary writes while another call on the same claim requires review', async () => {
+    const seeded = await seedOrgClaimCall();
+    const acceptedCall = await prisma.call.findFirstOrThrow({
+      where: { id: seeded.callId, organizationId: seeded.orgId },
+    });
+    const rejectedCall = await prisma.call.create({
+      data: {
+        organizationId: seeded.orgId,
+        claimId: seeded.claimId,
+        retellCallId: 'synthetic-concurrent-review',
+        status: 'COMPLETED',
+        createdAt: new Date(acceptedCall.createdAt.getTime() - 1000),
+      },
+    });
+    await prisma.callEvent.createMany({
+      data: [
+        {
+          callId: rejectedCall.id,
+          eventType: 'call.transcript',
+          data: { role: 'representative', text: 'Synthetic review evidence.' },
+        },
+        { callId: rejectedCall.id, eventType: 'call.ended', data: {} },
+      ],
+    });
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', { ...RESOLVED_FIXTURE, nextAction: 'SUBMIT_DOCS' });
+    const valid = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      summarizer: fake,
+      env: { ...baseEnv, SUMMARIZER_AUTO_TRANSITION_ENABLED: true },
+    });
+    const invalid = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      summarizer: {
+        inference: fake.inference,
+        summarize: async () => {
+          throw new SummaryValidationError(rejectedCall.id, [], 37);
+        },
+      },
+      env: baseEnv,
+    });
+    const work: Promise<SummaryJobResult>[] = [];
+    const key = 261338;
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION summary_test_block_insert() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(261338); RETURN NEW; END $$`,
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE TRIGGER summary_test_block_insert BEFORE INSERT ON "CallSummary" FOR EACH ROW EXECUTE FUNCTION summary_test_block_insert()`,
+    );
+    try {
+      await prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(${key})::text`;
+          work.push(valid(jobFor(payload(seeded))));
+          await vi.waitFor(
+            async () => {
+              const rows = await prisma.$queryRaw<{ waiting: number }[]>`
+            SELECT count(*)::int AS waiting FROM pg_locks
+            WHERE locktype = 'advisory' AND objid::bigint = ${BigInt(key)} AND NOT granted
+          `;
+              expect(rows[0]?.waiting).toBeGreaterThan(0);
+            },
+            { timeout: 3000, interval: 20 },
+          );
+          // This lock conflicts with the explicit parent lock, but is compatible
+          // with the FK KEY SHARE lock a child insert alone would otherwise hold.
+          await expect(prisma.$queryRaw`
+          SELECT "id" FROM "Organization" WHERE "id" = ${seeded.orgId} FOR NO KEY UPDATE NOWAIT
+        `).rejects.toMatchObject({ code: 'P2010', meta: { code: '55P03' } });
+          work.push(
+            invalid(
+              jobFor({
+                ...payload(seeded),
+                callId: rejectedCall.id,
+                idempotencyKey: 'concurrent-review',
+              }),
+            ),
+          );
+        },
+        { timeout: 5000 },
+      );
+      const results = await Promise.all(work);
+      expect(results[0]).toMatchObject({ outcome: 'AUTO_TRANSITIONED' });
+      expect(results[1]).toMatchObject({ outcome: 'DLQ' });
+      expect(await prisma.callSummary.count({ where: { organizationId: seeded.orgId } })).toBe(1);
+      expect(
+        await prisma.claim.findFirstOrThrow({
+          where: { id: seeded.claimId, organizationId: seeded.orgId },
+        }),
+      ).toMatchObject({ status: 'NEEDS_INFO' });
+      expect(
+        await prisma.inferenceRun.findFirstOrThrow({
+          where: { organizationId: seeded.orgId, callId: rejectedCall.id },
+        }),
+      ).toMatchObject({ state: 'REJECTED', reviewAppliedAt: expect.any(Date) });
+    } finally {
+      await Promise.allSettled(work);
+      await prisma.$executeRawUnsafe(`DROP TRIGGER summary_test_block_insert ON "CallSummary"`);
+      await prisma.$executeRawUnsafe(`DROP FUNCTION summary_test_block_insert()`);
+    }
+  });
+
+  it('admits one inference across concurrent worker instances and distinct transport retry keys', async () => {
+    const seeded = await seedOrgClaimCall();
+    const fake = new FakeClaude();
+    fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+    let enter!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const summarize = vi.fn(async (input: Parameters<FakeClaude['summarize']>[0]) => {
+      enter();
+      await gate;
+      return fake.summarize(input);
+    });
+    const deps = {
+      logger: silentLogger,
+      prisma,
+      summarizer: { inference: fake.inference, summarize },
+      env: baseEnv,
+    };
+    const first = createSummaryJobHandler(deps)(jobFor(payload(seeded)));
+    await entered;
+    try {
+      const run = await prisma.inferenceRun.findFirstOrThrow({
+        where: { organizationId: seeded.orgId, callId: seeded.callId },
+      });
+      expect(run.state).toBe('SUBMITTING');
+      expect(
+        await prisma.inferenceAttempt.count({
+          where: { organizationId: seeded.orgId, runId: run.id },
+        }),
+      ).toBe(1);
+      await expect(
+        createSummaryJobHandler(deps)(
+          jobFor({ ...payload(seeded), idempotencyKey: `call.${seeded.callId}.retry.1` }),
+        ),
+      ).rejects.toBeInstanceOf(SummaryInferenceBusyError);
+    } finally {
+      release();
+    }
+    expect((await first).outcome).toBe('MANUAL_REVIEW');
+    expect(summarize).toHaveBeenCalledTimes(1);
+    expect(await prisma.callSummary.count({ where: { organizationId: seeded.orgId } })).toBe(1);
+  });
 });

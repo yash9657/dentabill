@@ -1616,6 +1616,9 @@ describe('GET /v1/calls/:id/summary + POST /v1/calls/:id/summary/retry', () => {
 
   it('POST retry: OWNER enqueues summary.generate with deterministic retryNumber', async () => {
     const seed = await seedSummaryFixture('OWNER');
+    await prisma.callSummary.deleteMany({
+      where: { organizationId: seed.orgId, callId: seed.callId },
+    });
     summariesAddSpy.mockImplementationOnce(async (_name, _data, opts) => {
       expect(
         await prisma.auditLog.count({
@@ -1661,6 +1664,9 @@ describe('GET /v1/calls/:id/summary + POST /v1/calls/:id/summary/retry', () => {
 
   it('POST retry: concurrent requests reserve distinct retry numbers with matching audits and outbox commands', async () => {
     const seed = await seedSummaryFixture('OWNER');
+    await prisma.callSummary.deleteMany({
+      where: { organizationId: seed.orgId, callId: seed.callId },
+    });
     const responses = await Promise.all(
       Array.from({ length: 3 }, () =>
         server.inject({
@@ -1702,11 +1708,11 @@ describe('GET /v1/calls/:id/summary + POST /v1/calls/:id/summary/retry', () => {
     'POST retry: %s failure rolls back the retry reservation and preserves evidence',
     async (table) => {
       const seed = await seedSummaryFixture('OWNER');
+      await prisma.callSummary.deleteMany({
+        where: { organizationId: seed.orgId, callId: seed.callId },
+      });
       const before = await prisma.call.findFirstOrThrow({
         where: { id: seed.callId, organizationId: seed.orgId },
-      });
-      const summaryBefore = await prisma.callSummary.findFirstOrThrow({
-        where: { callId: seed.callId, organizationId: seed.orgId },
       });
       await rejectProducerInsert(table);
       const response = await server.inject({
@@ -1723,7 +1729,7 @@ describe('GET /v1/calls/:id/summary + POST /v1/calls/:id/summary/retry', () => {
         await prisma.callSummary.findFirst({
           where: { callId: seed.callId, organizationId: seed.orgId },
         }),
-      ).toEqual(summaryBefore);
+      ).toBeNull();
       expect(await prisma.jobOutbox.count({ where: { organizationId: seed.orgId } })).toBe(0);
       expect(
         await prisma.auditLog.count({
@@ -1735,6 +1741,9 @@ describe('GET /v1/calls/:id/summary + POST /v1/calls/:id/summary/retry', () => {
 
   it('POST retry: transport failure remains durably accepted and relay respects backoff', async () => {
     const seed = await seedSummaryFixture('OWNER');
+    await prisma.callSummary.deleteMany({
+      where: { organizationId: seed.orgId, callId: seed.callId },
+    });
     summariesAddSpy.mockRejectedValueOnce(new Error('synthetic queue unavailable'));
     const response = await server.inject({
       method: 'POST',
@@ -1803,5 +1812,226 @@ describe('GET /v1/calls/:id/summary + POST /v1/calls/:id/summary/retry', () => {
     });
     expect(response.statusCode).toBe(404);
     expect(summariesAddSpy).not.toHaveBeenCalled();
+  });
+
+  it('refuses replacement of an existing summary without deleting evidence or reserving delivery', async () => {
+    const seed = await seedSummaryFixture();
+    const before = await prisma.callSummary.findFirstOrThrow({
+      where: { organizationId: seed.orgId, callId: seed.callId },
+    });
+    const response = await server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seed.callId}/summary/retry`,
+      headers: { 'x-test-user-id': seed.clerkUserId },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(bodyAsError(response).code).toBe('SUMMARY_ALREADY_EXISTS');
+    expect(
+      await prisma.callSummary.findFirst({
+        where: { organizationId: seed.orgId, callId: seed.callId },
+      }),
+    ).toEqual(before);
+    expect(await prisma.jobOutbox.count({ where: { organizationId: seed.orgId } })).toBe(0);
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: seed.orgId, action: 'callSummary.retry' },
+      }),
+    ).toBe(0);
+    expect(summariesAddSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects caller-selected generation or provider request data', async () => {
+    const seed = await seedSummaryFixture();
+    const response = await server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seed.callId}/summary/retry`,
+      headers: { 'x-test-user-id': seed.clerkUserId },
+      payload: { generation: 2, requestPayload: {} },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(summariesAddSpy).not.toHaveBeenCalled();
+  });
+
+  async function seedInferenceState(
+    seed: { orgId: string; callId: string },
+    state: 'RESERVED' | 'SUBMITTING' | 'UNKNOWN' | 'RESPONDED' | 'REJECTED' | 'APPLIED',
+  ) {
+    const call = await prisma.call.findFirstOrThrow({
+      where: { organizationId: seed.orgId, id: seed.callId },
+      include: { claim: true },
+    });
+    await prisma.callSummary.deleteMany({
+      where: { organizationId: seed.orgId, callId: seed.callId },
+    });
+    await prisma.inferenceBudget.create({
+      data: { organizationId: seed.orgId, billingDay: '2026-10-13', tokenLimit: 100_000n },
+    });
+    return prisma.inferenceRun.create({
+      data: {
+        organizationId: seed.orgId,
+        callId: seed.callId,
+        claimId: call.claimId,
+        claimVersion: call.claim.updatedAt,
+        generation: 1,
+        provider: 'SYNTHETIC',
+        releaseId: 'synthetic-summary.v1',
+        promptVersion: 'v1',
+        sourceHash: 'a'.repeat(64),
+        requestHash: 'b'.repeat(64),
+        requestPayload: { protected: 'PRIVATE_INFERENCE_SNAPSHOT' },
+        billingDay: '2026-10-13',
+        tokenAllowance: 1000n,
+        reservedTokens: 1000n,
+        state,
+        lastErrorCode: 'PRIVATE_PROVIDER_ERROR',
+      },
+    });
+  }
+
+  it.each(['SUBMITTING', 'UNKNOWN', 'REJECTED', 'APPLIED'] as const)(
+    'blocks manual retry for %s generation 1 and preserves its immutable identity',
+    async (state) => {
+      const seed = await seedSummaryFixture();
+      const run = await seedInferenceState(seed, state);
+      const response = await server.inject({
+        method: 'POST',
+        url: `/v1/calls/${seed.callId}/summary/retry`,
+        headers: { 'x-test-user-id': seed.clerkUserId },
+      });
+      expect(response.statusCode).toBe(409);
+      expect(bodyAsError(response).code).toBe(
+        state === 'SUBMITTING'
+          ? 'SUMMARY_INFERENCE_BUSY'
+          : state === 'APPLIED'
+            ? 'SUMMARY_ALREADY_EXISTS'
+            : 'SUMMARY_INFERENCE_REVIEW_REQUIRED',
+      );
+      expect(
+        await prisma.inferenceRun.findFirst({ where: { id: run.id, organizationId: seed.orgId } }),
+      ).toEqual(run);
+      expect(await prisma.jobOutbox.count({ where: { organizationId: seed.orgId } })).toBe(0);
+      expect(
+        await prisma.auditLog.count({
+          where: { organizationId: seed.orgId, action: 'callSummary.retry' },
+        }),
+      ).toBe(0);
+      expect(summariesAddSpy).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['RESERVED', 'RESPONDED'] as const)(
+    'requeues %s work without creating another inference run or replacing its saved request',
+    async (state) => {
+      const seed = await seedSummaryFixture();
+      const run = await seedInferenceState(seed, state);
+      const response = await server.inject({
+        method: 'POST',
+        url: `/v1/calls/${seed.callId}/summary/retry`,
+        headers: { 'x-test-user-id': seed.clerkUserId },
+        payload: {},
+      });
+      expect(response.statusCode).toBe(202);
+      expect(
+        await prisma.inferenceRun.findFirst({ where: { id: run.id, organizationId: seed.orgId } }),
+      ).toEqual(run);
+      expect(await prisma.inferenceRun.count({ where: { organizationId: seed.orgId } })).toBe(1);
+      expect(summariesAddSpy).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('waits for the inference organization lock before reserving retry work and rechecks committed submission', async () => {
+    const seed = await seedSummaryFixture();
+    const run = await seedInferenceState(seed, 'RESERVED');
+    let releaseLedger: () => void = () => undefined;
+    let announceLock: (pid: number) => void = () => undefined;
+    const ledgerGate = new Promise<void>((resolve) => {
+      releaseLedger = resolve;
+    });
+    const locked = new Promise<number>((resolve) => {
+      announceLock = resolve;
+    });
+    const ledger = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${seed.orgId} FOR NO KEY UPDATE`;
+      const [backend] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      if (!backend) throw new Error('Synthetic ledger connection is unavailable.');
+      announceLock(backend.pid);
+      await ledgerGate;
+      // A worker can complete its call/run writes while the API waits at the shared org lock.
+      await tx.call.updateMany({
+        where: { organizationId: seed.orgId, id: seed.callId },
+        data: { status: 'COMPLETED' },
+      });
+      await tx.inferenceRun.updateMany({
+        where: { organizationId: seed.orgId, id: run.id },
+        data: { state: 'SUBMITTING', submittedAt: new Date() },
+      });
+    });
+    const backendPid = await locked;
+    const request = server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seed.callId}/summary/retry`,
+      headers: { 'x-test-user-id': seed.clerkUserId },
+    });
+    const response = Promise.resolve(request);
+    try {
+      await vi.waitFor(async () => {
+        const waiting = await prisma.$queryRaw<{ count: bigint }[]>`
+          SELECT count(*) FROM pg_stat_activity
+          WHERE datname = current_database()
+            AND ${backendPid} = ANY(pg_blocking_pids(pid))
+            AND query LIKE 'SELECT id FROM "Organization"%'
+        `;
+        expect(waiting[0]?.count).toBe(1n);
+      });
+    } finally {
+      releaseLedger();
+      await ledger;
+    }
+    const result = await response;
+    expect(result.statusCode).toBe(409);
+    expect(bodyAsError(result).code).toBe('SUMMARY_INFERENCE_BUSY');
+    expect(await prisma.jobOutbox.count({ where: { organizationId: seed.orgId } })).toBe(0);
+    expect(summariesAddSpy).not.toHaveBeenCalled();
+  });
+
+  it('shows safe processing state only to a stored owner/admin role without snapshots or raw errors', async () => {
+    const seed = await seedSummaryFixture();
+    await seedInferenceState(seed, 'UNKNOWN');
+    const response = await server.inject({
+      method: 'GET',
+      url: `/v1/calls/${seed.callId}/summary/status`,
+      headers: { 'x-test-user-id': seed.clerkUserId },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      callId: seed.callId,
+      generation: 1,
+      state: 'UNKNOWN',
+      canRetry: false,
+      summaryId: null,
+      lastErrorCode: 'INFERENCE_REVIEW_REQUIRED',
+    });
+    expect(response.body).not.toContain('PRIVATE');
+    await prisma.user.updateMany({
+      where: { organizationId: seed.orgId, clerkUserId: seed.clerkUserId },
+      data: { role: 'BILLING_STAFF' },
+    });
+    const denied = await server.inject({
+      method: 'GET',
+      url: `/v1/calls/${seed.callId}/summary/status`,
+      headers: { 'x-test-user-id': seed.clerkUserId, 'x-test-role': 'OWNER' },
+    });
+    expect(denied.statusCode).toBe(403);
+  });
+
+  it('returns404 for another tenant summary processing state', async () => {
+    const first = await seedSummaryFixture();
+    const second = await seedSummaryFixture();
+    const response = await server.inject({
+      method: 'GET',
+      url: `/v1/calls/${first.callId}/summary/status`,
+      headers: { 'x-test-user-id': second.clerkUserId },
+    });
+    expect(response.statusCode).toBe(404);
   });
 });

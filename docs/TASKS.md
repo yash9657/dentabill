@@ -51,8 +51,8 @@ require durable execution and applicable PHI agreements even for an unpaid pilot
 ### Follow-on slices discovered during implementation
 
 - [ ] **FW-25** SQS call intent ownership, ambiguous-acceptance reconciliation, and no-redial separate-process proof (AWS already deployed; updates FW-23 assumption). _Local reservation/fence/accepted-resume/DLQ and two worker SIGKILL regressions pass; unknown-ID reconciliation and persisted deadlines split into FW-34/36. Not deployed._
-- [ ] **FW-26** Durable notification outbox and inference-attempt usage ledger; failed DB commits must not erase incurred provider spend.
-- [ ] **FW-27** Versioned summary replacement/retry; preserve prior evidence and reject nonterminal-call retries.
+- [ ] **FW-26** Durable inference ownership/usage ledger; failed summary commits must not erase reported spend. _Implemented locally for synthetic generation1: org admission lock, immutable snapshot, one attempt, independent receipt, unknown liability across days, resumable response/review application and process crash proof. Fireworks per-send integration remains FW-41; notification outbox split into FW-40. No dollar ceiling or live inference claim. ADR-064._
+- [ ] **FW-27** Versioned observation/summary replacement; preserve prior evidence and bind source versions. _Current retry now preserves existing summaries, requires terminal calls, refuses ambiguous/rejected runs and exposes safe Owner/Admin status. Replacement generations and Fireworks observation mapping remain open; legacy confidence/repName fields must not be fabricated._
 - [ ] **FW-28** Reconcile Retell webhook-badged signing key vs generated deployment secret; verify stop-call API vs delete-call/data before any live termination. _Local config and installed-SDK transport tests pass; stop replaces destructive delete, generated secret removed; deployment/live confirmation pending._
 - [ ] **FW-29** Verify custom API DNS and cold readiness behavior, restore test, and actual deployment settings without relying on Terraform alone.
 - [ ] **FW-30** Investigate API rate-limit hook ordering; authenticated requests may share the pre-auth anon bucket.
@@ -69,6 +69,9 @@ require durable execution and applicable PHI agreements even for an unpaid pilot
 - [ ] **FW-38** Allowlist database diagnostic logging and add PHI-bearing error capture regression; _Implemented locally: registered error/warn/info callbacks retain only closed target/timestamp fields; actual SQL-error and synthetic private-payload regressions pass. Caller-thrown error sanitization and full PHI lifecycle remain broader gates._
 
 - [ ] **FW-39** Transport execution and recovery heartbeat monitoring, including delivered-but-unconsumed READY work, current-generation failure evidence across SQS/inline, and authorized alert escalation. FW-37 saved-work counters do not establish worker or scheduler health.
+
+- [ ] **FW-40** Transactional review-notification outbox with stable identity, delivery receipts and crash/retry proof. Existing post-commit notification is best effort and can be lost; no external message is authorized by implementation alone.
+- [ ] **FW-41** Awaited Fireworks per-HTTP-attempt admission and receipt hooks, bound to durable release/source/request identity and workflow version. The gateway's best-effort progress callback is not a durable admission boundary; connect no retrying live transport until each send has a committed reservation. Prove ambiguous response, cancellation, known/rejected usage, response replay and release changes before a capped synthetic evaluation.
 
 No pilot clinic yet (user confirmed); fake data is authorized. Real connector/clinic evidence
 is visibly blocked pending a test partner and authorized system access. Open Dental is a rollout

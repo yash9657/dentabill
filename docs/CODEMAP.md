@@ -79,13 +79,16 @@ protocol/transport faults, cancellation accounting and semantic constraints.
 phone, address) are redacted at the top level and under `req.body` /
 `req.headers`.
 
-### `@dentabill/db` — packages/db (stub)
+### `@dentabill/db` — packages/db
 
-**Purpose:** Prisma schema + generated client + multi-tenant middleware
-
-- audit/org-scope helpers.
-  **Entry:** `packages/db/src/index.ts` (currently exports `{}`).
-  **Lands in:** P1-T4 (schema), P1-T4A (helpers), P1-T5 (middleware).
+**Purpose:** Prisma schema, tenant scope, audit and durable inference accounting.
+**Entry:** `packages/db/src/index.ts`.
+**Inference:** `src/lib/inference.ts` owns organization-locked admission, one submitted
+attempt per call/generation, independent usage receipts, resumable local application and
+atomic review markers. `inference.test.ts` exercises concurrency, midnight liability,
+receipt replay, application rollback and tenant isolation. Migrations fourteen/fifteen
+add the ledger and review marker; snapshots are immutable at the database boundary.
+Allocations are operational units, not provider dollar ceilings (ADR-064).
 
 ### `@dentabill/queue` — packages/queue
 
@@ -163,23 +166,30 @@ end-to-end. Fastify-based health probe at `:3010/healthz`.
   submitted and uncertain provider calls remain protected.
 - `e2e.test.ts` — full lifecycle against real BullMQ + Postgres + FakeRetell.
 
-### `@dentabill/summary-worker` — apps/summary-worker (stub) — Phase 4
+### `@dentabill/summary-worker` — apps/summary-worker
 
-**Purpose:** BullMQ worker that runs Claude post-call analysis.
-**Entry:** `apps/summary-worker/src/index.ts`
+**Purpose:** Frozen-input synthetic summary processing with durable inference ownership.
+**Entry:** `apps/summary-worker/src/index.ts`.
+**Key files:** `handler.ts` validates fixed synthetic provenance, reserves before submission,
+saves usage independently, and resumes response/review effects with original claim guards.
+`inference-process.test.ts` / fixture use child processes, localhost HTTP and fsynced provider
+receipts to prove SIGKILL recovery boundaries. Legacy Redis cost guards are unused by production
+wiring. `@dentabill/summarizer` production factory refuses a configured Anthropic key; explicit
+LiveClaude comparison fixtures remain available. Fireworks observations need a new versioned
+summary contract and awaited per-send accounting before worker integration.
 
 ## Cross-cutting integrations
 
-| Integration            | Used by                               | Notes                                                            |
-| ---------------------- | ------------------------------------- | ---------------------------------------------------------------- |
-| Postgres 16 + Prisma 6 | `@dentabill/db` (consumed everywhere) | Multi-tenant; every query filtered by `organizationId`           |
-| Redis 7 + BullMQ       | api + workers + `@dentabill/queue`    | Local: docker-compose. Prod: TBD per ADR-004                     |
-| Retell AI              | `apps/call-worker`                    | IVR navigation + voice calls (Phase 3)                           |
-| Anthropic Claude       | `apps/summary-worker`                 | Call transcript analysis (Phase 4)                               |
-| Clerk                  | `apps/web`, `apps/api`                | Auth and org membership (Phase 2)                                |
-| Retell-managed Twilio  | `apps/call-worker` (via Retell)       | Verified configured carrier; Telnyx remains a deferred candidate |
-| Resend                 | `apps/api`                            | Transactional email — call-completion notifications (Phase 4)    |
-| Stripe                 | `apps/web`, `apps/api`                | Metered billing (Phase 6)                                        |
+| Integration            | Used by                               | Notes                                                             |
+| ---------------------- | ------------------------------------- | ----------------------------------------------------------------- |
+| Postgres 16 + Prisma 6 | `@dentabill/db` (consumed everywhere) | Multi-tenant; every query filtered by `organizationId`            |
+| Redis 7 + BullMQ       | api + workers + `@dentabill/queue`    | Local: docker-compose. Prod: TBD per ADR-004                      |
+| Retell AI              | `apps/call-worker`                    | IVR navigation + voice calls (Phase 3)                            |
+| Anthropic comparison   | Explicit test/comparison adapter      | Production factory disabled; Fireworks worker integration pending |
+| Clerk                  | `apps/web`, `apps/api`                | Auth and org membership (Phase 2)                                 |
+| Retell-managed Twilio  | `apps/call-worker` (via Retell)       | Verified configured carrier; Telnyx remains a deferred candidate  |
+| Resend                 | `apps/api`                            | Transactional email — call-completion notifications (Phase 4)     |
+| Stripe                 | `apps/web`, `apps/api`                | Metered billing (Phase 6)                                         |
 
 ## Conventions (cross-reference)
 

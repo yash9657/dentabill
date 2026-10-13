@@ -1048,3 +1048,57 @@ occurred. New credentials passed one bounded read-only authenticated account/use
 remaining account policy/entitlement inventory proceeds alongside FW-26. Qualified dental evaluations, source authorization, actual model revision/license/region/
 retention and capped inference authorization remain release gates. Streaming/tools and the
 ElevenLabs voice chain require separate implementation and comparative evidence.
+
+## ADR-064 — Durable inference ownership before summary recovery
+
+**Date:** 2026-10-13. **Status:** implemented locally for synthetic generation1; no live inference or production rollout.
+
+The old summary transaction saved usage only when summary/state/audit writes succeeded.
+Crashes or duplicate transport jobs could also repeat model requests. A Redis lease could not
+preserve provider evidence or distinguish a never-sent request from uncertain acceptance.
+
+1. Add organization-scoped `InferenceBudget`, `InferenceRun`, and `InferenceAttempt` with
+   additive migrations fourteen/fifteen. One call has exactly one generation and one admitted
+   send in this slice; transport retry keys cannot create inference generations. Composite
+   call/claim/organization and run/organization foreign keys enforce ownership. A database
+   trigger preserves request/release/source/claim snapshots; sensitive payloads never enter
+   safe audit/error projections.
+2. Organization row locks serialize token admission, attempt start and settlement. RESERVED
+   can be reclaimed after lease expiry because no send was committed; SUBMITTING becomes
+   UNKNOWN and cannot authorize another send. The original owner may still save a late
+   positive receipt. An attempt marker commits before provider contact. An immutable saved
+   response is resumed from its original claim/source snapshot, with the original claim
+   version and later-call guards controlling application.
+3. Per-day bigint budgets include reported usage plus every outstanding reservation across
+   all days. Existing same-day summary usage is imported once as unattributed baseline.
+   Known usage, including schema-rejected and above-allocation responses, is recorded once
+   independently of summary application. Missing usage stays null and retains its allocation;
+   expiry, timeout, HTTP failure, midnight and absent billing deltas do not prove zero cost.
+   `Organization.summaryTokensUsed` is only a bounded legacy display projection. The synthetic
+   byte/output allocation is an operational admission unit, not an attested token or dollar cap.
+4. Receipt persistence precedes summary/state/audit application. APPLIED commits with those
+   effects; review disposition has its own transactional `reviewAppliedAt` marker so failure
+   after a rejection receipt cannot lose claim-review effects. Replays apply local effects
+   once without model resubmission. No process-local or Redis lock governs ownership.
+5. SQS/inline review acknowledgement requires the exact scoped UNKNOWN/REJECTED run and
+   committed review marker. Busy/unconfirmed exceptions remain retryable/redriveable even on
+   the final delivery attempt. Owner/Admin summary status exposes safe state only; retry
+   preserves existing summaries and refuses submitted/unknown/rejected runs. It never selects
+   a replacement generation. General quarantined-summary recovery remains closed pending its
+   distinct approval/recovery proof.
+6. Only the fixed synthetic summary adapter is accepted. A configured Anthropic key now makes
+   production factory creation fail closed; explicitly constructed LiveClaude comparison
+   fixtures remain, with SDK retries disabled and nullable reported usage. Neither new API
+   key enables inference. Fireworks's observation task cannot honestly populate legacy
+   confidence/representative fields: versioned summary mapping is FW-27. The gateway's void
+   progress callback is best effort, so FW-41 must add awaited admission and receipt storage
+   for every HTTP attempt before any retrying live integration.
+
+Independent review reproduced and fixed lost rejection application, changed-config allowance
+validation and lock-order hazards. PostgreSQL concurrency/rollback and independent-process
+SIGKILL tests use only synthetic localhost requests with fsynced acceptance evidence. They do
+not establish provider idempotency, dental accuracy, spend caps or real recovery parity.
+The best-effort post-commit review notification can still be lost; its transactional outbox is
+split into FW-40. No production deployment, account mutation, paid inference, speech or calls
+were performed. Production rollout must drain old consumers and preserve this evidence on
+rollback; this ADR does not authorize deployment or messaging.

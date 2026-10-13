@@ -7,6 +7,7 @@ import {
   CALLS_DEFAULT_JOB_OPTIONS,
   loadQueueEnv,
   QUEUE_NAMES,
+  SummaryJobResultSchema,
 } from './index.js';
 
 describe('@dentabill/queue — wire surface', () => {
@@ -14,6 +15,27 @@ describe('@dentabill/queue — wire surface', () => {
     expect(QUEUE_NAMES.CALLS).toBe('calls');
     expect(QUEUE_NAMES.CALLS_DLQ).toBe('calls-dlq');
     expect(CALL_JOB_NAME).toBe('call.place');
+  });
+});
+
+describe('SummaryJobResultSchema', () => {
+  it('preserves unknown inference usage and review disposition without coercing to zero', () => {
+    expect(
+      SummaryJobResultSchema.parse({
+        summaryId: null,
+        outcome: 'INFERENCE_REVIEW_REQUIRED',
+        tokensUsed: null,
+        promptVersion: 'v1',
+      }).tokensUsed,
+    ).toBeNull();
+    expect(
+      SummaryJobResultSchema.parse({
+        summaryId: null,
+        outcome: 'PROVIDER_DISABLED',
+        tokensUsed: 0,
+        promptVersion: 'v1',
+      }).tokensUsed,
+    ).toBe(0);
   });
 });
 

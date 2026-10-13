@@ -2,7 +2,9 @@
 
 > Implementation update, 2026-10-13: FW-10–13 now provides a local typed Fireworks text gateway,
 > reviewed release gating, source-bound observations and bounded transport (ADR-063). No model
-> is approved or wired into workers; durable inference accounting and real evaluation remain open.
+> is approved or wired into workers. FW-26 now adds synthetic durable inference ownership,
+> receipt accounting and crash recovery (ADR-064); live per-send integration (FW-41), versioned
+> observation summaries (FW-27), notification outbox (FW-40) and real evaluation remain open.
 > Fireworks/ElevenLabs credentials are now present locally. FW-37 adds scoped operations and audited delivery
 > recovery (ADR-062); current Fireworks gateway requirements are in FIREWORKS_GATEWAY_CONTRACT.md.
 > FW-36 has local persisted accepted-call observation,

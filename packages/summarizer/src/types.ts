@@ -114,12 +114,12 @@ export interface SummarizeInput {
 
 /**
  * Output of `SummarizerPort.summarize`. Wraps the validated
- * `SummaryOutput` plus the `tokensUsed` figure the worker writes to
- * `Organization.summaryTokensUsed` inside the cost-guard lock.
+ * `SummaryOutput` plus usage committed in the durable inference ledger.
+ * Null means usage is unknown and its reservation must remain outstanding.
  */
 export interface SummarizeResult {
   readonly summary: SummaryOutput;
-  readonly tokensUsed: number;
+  readonly tokensUsed: number | null;
   readonly promptVersion: string;
   readonly model: string;
 }

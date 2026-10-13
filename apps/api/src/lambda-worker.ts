@@ -14,10 +14,10 @@
  *     after shortening its visibility timeout to the job's BullMQ backoff
  *     (calls 30 s, 60 s; summaries 15 s, 30 s) so SQS redelivers on that
  *     schedule instead of after the queue-wide timeout;
- *   - failure on the final attempt         → the inline path's terminal
- *     hand-off runs (call → READY-only intent cancellation; summary → error
- *     log), then the message is deleted. Failed call terminal persistence
- *     remains a batch failure for SQS retry/redrive;
+ *   - final call failure                   → READY-only intent cancellation
+ *     is acknowledged only after its durable effects commit;
+ *   - unconfirmed summary or call failure  → remains a batch failure for
+ *     SQS retry/redrive, including BUSY summary work on the final receive;
  *   - unparseable body / unexpected crash  → reported as a failure without
  *     a visibility change, so it lands in the SQS DLQ via redrive.
  *
@@ -91,12 +91,17 @@ export function decide(
   kind: 'call.place' | 'summary.generate' = 'call.place',
 ): RecordDecision {
   if (report.status === 'retry') return 'retry';
-  if (kind === 'call.place' && report.status === 'failed' && !report.dlq) return 'retry';
+  if (report.status === 'failed' && !report.dlq) {
+    switch (kind) {
+      case 'call.place':
+      case 'summary.generate':
+        return 'retry';
+    }
+  }
   return 'delete';
 }
 
-const errInfo = (err: unknown): unknown =>
-  err instanceof Error ? { message: err.message, name: err.name } : err;
+const DELIVERY_ERROR = { code: 'JOB_DELIVERY_UNCONFIRMED' } as const;
 
 export async function processRecord(
   record: SqsRecord,
@@ -108,9 +113,9 @@ export async function processRecord(
   let message;
   try {
     message = parseSqsJobMessage(record.body);
-  } catch (err) {
+  } catch {
     deps.logger.error(
-      { ...log, err: errInfo(err) },
+      { ...log, err: DELIVERY_ERROR },
       'sqs worker: invalid job message — leaving it for the DLQ',
     );
     return 'retry';
@@ -127,12 +132,12 @@ export async function processRecord(
       message.type === 'call.place'
         ? await deps.runtime.runCallAttempt(message.data, jobAttempt)
         : await deps.runtime.runSummaryAttempt(message.data, jobAttempt);
-  } catch (err) {
+  } catch {
     // Infrastructure failure outside the processor (e.g. a runtime lookup).
     // The terminal hand-off could not run, so never delete: SQS retries and,
     // after maxReceiveCount, moves the message to the DLQ.
     deps.logger.error(
-      { ...log, type: message.type, jobId: message.data.idempotencyKey, err: errInfo(err) },
+      { ...log, type: message.type, jobId: message.data.idempotencyKey, err: DELIVERY_ERROR },
       'sqs worker: job crashed outside the processor',
     );
     return 'retry';
@@ -147,9 +152,9 @@ export async function processRecord(
   if (report.status === 'retry' && deps.scheduleRetry) {
     try {
       await deps.scheduleRetry(record.receiptHandle, Math.ceil(report.retryDelayMs / 1000));
-    } catch (err) {
+    } catch {
       deps.logger.warn(
-        { ...log, err: errInfo(err) },
+        { ...log, err: DELIVERY_ERROR },
         'sqs worker: could not set retry delay — queue visibility timeout applies',
       );
     }

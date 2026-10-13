@@ -136,8 +136,10 @@ export const SummaryJobResultSchema = z.object({
     'ALREADY_PROCESSED',
     'CALL_NOT_TERMINAL',
     'TRANSCRIPT_UNAVAILABLE',
+    'INFERENCE_REVIEW_REQUIRED',
+    'PROVIDER_DISABLED',
   ]),
-  tokensUsed: z.number().int().min(0),
+  tokensUsed: z.number().int().min(0).nullable(),
   promptVersion: z.string().min(1),
 });
 

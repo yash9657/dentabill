@@ -3,6 +3,7 @@ export { bootSummaryWorker, runSummaryWorker, type SummaryWorkerHandle } from '.
 export {
   applyTransitionPolicy,
   createSummaryJobHandler,
+  SummaryInferenceBusyError,
   type DbClient,
   type SummaryHandler,
   type SummaryHandlerDeps,

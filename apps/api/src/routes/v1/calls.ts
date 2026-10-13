@@ -207,6 +207,24 @@ const SummaryRetryResponseSchema = z.object({
   queuedAt: z.iso.datetime(),
 });
 
+const SummaryStatusResponseSchema = z.object({
+  callId: z.string(),
+  generation: z.literal(1),
+  state: z.enum([
+    'NOT_REQUESTED',
+    'RESERVED',
+    'SUBMITTING',
+    'UNKNOWN',
+    'RESPONDED',
+    'REJECTED',
+    'APPLIED',
+  ]),
+  summaryId: z.string().nullable(),
+  canRetry: z.boolean(),
+  lastErrorCode: z.string().nullable(),
+  updatedAt: z.iso.datetime().nullable(),
+});
+
 interface CallSummaryRowForResponse {
   id: string;
   callId: string;
@@ -956,7 +974,61 @@ export function callsRoutes(fastify: FastifyInstance): void {
     },
   );
 
-  // ─── POST /v1/calls/:id/summary/retry — re-enqueue (P4-T2H) ───────────
+  fastify.withTypeProvider().get(
+    '/calls/:id/summary/status',
+    {
+      preHandler: requireAuth,
+      schema: {
+        description:
+          'OWNER/ADMIN view of generation 1 summary work. No transcript, request, or provider response is returned.',
+        security,
+        params: CallIdParamSchema,
+        response: { 200: SummaryStatusResponseSchema },
+      },
+    },
+    async (request): Promise<z.infer<typeof SummaryStatusResponseSchema>> => {
+      const auth = request.dentabillAuth;
+      if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'Authentication required.');
+      const actor = await prisma.user.findFirst({
+        where: { id: auth.userId, organizationId: auth.orgId },
+        select: { role: true },
+      });
+      if (!actor || !['OWNER', 'ADMIN'].includes(actor.role))
+        throw new ApiError('FORBIDDEN', 'Only OWNER or ADMIN may inspect summary processing.');
+      const call = await prisma.call.findFirst({
+        where: {
+          id: (request.params as z.infer<typeof CallIdParamSchema>).id,
+          organizationId: auth.orgId,
+        },
+        select: { id: true, status: true },
+      });
+      if (!call) throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
+      const [run, summary] = await Promise.all([
+        prisma.inferenceRun.findFirst({
+          where: { organizationId: auth.orgId, callId: call.id, generation: 1 },
+          select: { state: true, lastErrorCode: true, updatedAt: true },
+        }),
+        prisma.callSummary.findFirst({
+          where: { organizationId: auth.orgId, callId: call.id },
+          select: { id: true, createdAt: true },
+        }),
+      ]);
+      return {
+        callId: call.id,
+        generation: 1,
+        state: summary ? 'APPLIED' : (run?.state ?? 'NOT_REQUESTED'),
+        summaryId: summary?.id ?? null,
+        canRetry:
+          !summary &&
+          TERMINAL_CALL_STATUSES.has(call.status) &&
+          (!run || run.state === 'RESERVED' || run.state === 'RESPONDED'),
+        lastErrorCode: run?.lastErrorCode ? 'INFERENCE_REVIEW_REQUIRED' : null,
+        updatedAt: (run?.updatedAt ?? summary?.createdAt)?.toISOString() ?? null,
+      };
+    },
+  );
+
+  // ─── POST /v1/calls/:id/summary/retry — generation 1 delivery only ───
   fastify.withTypeProvider().post(
     '/calls/:id/summary/retry',
     {
@@ -970,14 +1042,22 @@ export function callsRoutes(fastify: FastifyInstance): void {
       },
     },
     async (request, reply): Promise<z.infer<typeof SummaryRetryResponseSchema>> => {
+      if (
+        !z
+          .object({})
+          .strict()
+          .safeParse(request.body === undefined ? {} : request.body).success
+      ) {
+        throw new ApiError('VALIDATION_ERROR', 'Summary retry accepts only an empty request.');
+      }
       const auth = request.dentabillAuth;
       if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
       const { orgId } = auth;
       const { id } = request.params as z.infer<typeof CallIdParamSchema>;
 
       // OWNER/ADMIN gate — billing-staff must escalate.
-      const actor = await prisma.user.findUnique({
-        where: { id: auth.userId },
+      const actor = await prisma.user.findFirst({
+        where: { id: auth.userId, organizationId: orgId },
         select: { role: true },
       });
       if (!actor || (actor.role !== 'OWNER' && actor.role !== 'ADMIN')) {
@@ -998,6 +1078,8 @@ export function callsRoutes(fastify: FastifyInstance): void {
       }
 
       const queued = await prisma.$transaction(async (tx) => {
+        // Match the durable inference ledger's organization-first lock order.
+        await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${orgId} FOR NO KEY UPDATE`;
         const reserved = await tx.call.updateMany({
           where: { id, organizationId: orgId, status: call.status },
           data: { status: call.status },
@@ -1005,6 +1087,29 @@ export function callsRoutes(fastify: FastifyInstance): void {
         if (reserved.count !== 1) {
           throw new ApiError('INVALID_STATE_TRANSITION', 'Call changed before the summary retry.');
         }
+        await tx.$queryRaw`SELECT id FROM "InferenceRun" WHERE "organizationId" = ${orgId} AND "callId" = ${id} AND generation = 1 FOR UPDATE`;
+        const run = await tx.inferenceRun.findFirst({
+          where: { organizationId: orgId, callId: id, generation: 1 },
+        });
+        const existing = await tx.callSummary.findFirst({
+          where: { organizationId: orgId, callId: id },
+          select: { id: true },
+        });
+        if (existing || run?.state === 'APPLIED')
+          throw new ApiError(
+            'SUMMARY_ALREADY_EXISTS',
+            'A summary already exists. Retrying will not replace it.',
+          );
+        if (run?.state === 'SUBMITTING')
+          throw new ApiError(
+            'SUMMARY_INFERENCE_BUSY',
+            'Summary processing has already started. Another inference will not be submitted.',
+          );
+        if (run?.state === 'UNKNOWN' || run?.state === 'REJECTED')
+          throw new ApiError(
+            'SUMMARY_INFERENCE_REVIEW_REQUIRED',
+            'This summary requires review. Another inference will not be submitted.',
+          );
         const previousRetries = await tx.auditLog.count({
           where: {
             organizationId: orgId,

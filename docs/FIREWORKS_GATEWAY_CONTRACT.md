@@ -118,7 +118,10 @@ Mixed paid/denied lines, overpayments, unsupported evidence and contradictions n
 human review; full procedure-level adjudication remains in the domain backlog. VALIDATED means
 schema and implemented invariants passed, never that a model's assertions are true. Returned
 observations contain sensitive evidence; only closed failure/status/timing/usage fields are safe
-for diagnostics. Application telemetry and durable spend are still FW-14/FW-26.
+for diagnostics. Application telemetry remains FW-14. FW-26 now provides the synthetic
+workflow ledger; FW-41 must connect awaited per-HTTP-attempt admission/receipt hooks before
+this transport can use it. Current progress callbacks are best effort and do not durably
+authorize a send. Versioned observation/summary application remains FW-27 (ADR-064).
 
 Cancellation-safe progress preserves completed attempts and the current possible acceptance
 without inventing a send during backoff. Missing usage stays null. Opaque response-ID character

@@ -1,4 +1,8 @@
-# DentaBill Deploy Runbook — Railway + Vercel (Phase 5 Demo)
+# DentaBill Deploy Runbook — historical Railway + Vercel demo
+
+> Current backend: AWS Lambda/SQS/Aurora; use [DEPLOY_AWS.md](./DEPLOY_AWS.md).
+> The historical live-Claude instructions below are superseded by ADR-064: a configured
+> Anthropic key now fails closed. Fireworks keys do not activate production inference.
 
 **Source of truth:** This runbook and `docs/GOLIVE_PLAN.md` §7 (environment matrix). Deploy decisions recorded in ADR-051.
 

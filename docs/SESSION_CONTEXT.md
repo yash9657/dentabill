@@ -4,7 +4,61 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: FW-10–13 release-gated Fireworks text gateway
+### Latest continuation: FW-26 durable synthetic inference and receipt recovery
+
+The active parity goal continues on `codex/w0-containment`, with latest main `4497459`
+incorporated. Both added provider keys already passed read-only authentication; no new account
+requests, model inference, speech, call, purchase or production action ran in this continuation.
+The user has no clinic and uses fake data. Retell-managed Twilio remains the existing carrier;
+no Telnyx credential is needed. Preserve the two pre-existing stashes.
+
+- Additive migrations fourteen/fifteen create org-scoped budgets, immutable generation1 request
+  snapshots, one durable attempt per run and a review-application marker. They were applied
+  only to isolated localhost identity/runtime/process/summary databases. No historical provider
+  usage or acceptance is fabricated. Same-day legacy usage is imported once as baseline.
+- Organization locks serialize admission and accounting. RESERVED can be reclaimed after
+  expiry; submitted requests never become sendable again. Ambiguous acceptance retains its
+  reservation across UTC days. A late receipt from the original owner can settle evidence.
+  Bigint usage includes invalid output/overruns and commits independently of summary effects;
+  `summaryTokensUsed` is a bounded compatibility display. Operational token allocations are
+  not provider-certified token or dollar ceilings.
+- The summary handler accepts only the fixed synthetic descriptor, preserves original
+  claim/source/version evidence and stores the receipt before summary/state/audit application.
+  A saved response resumes without inference. Rejected/unknown review effects also resume
+  atomically, with a marker required before review acknowledgement. Independent review fixed
+  lost rejection effects, stale-config allocation checks, stored provider mismatch and lock
+  ordering. Legacy Redis cost guards no longer block recovery.
+- Nonempty `ANTHROPIC_API_KEY` makes production factory creation fail closed. Explicit
+  LiveClaude comparison fixtures remain with zero SDK retries and nullable usage. Neither
+  Fireworks nor ElevenLabs keys activate live inference. Fireworks observations cannot be
+  mapped into legacy confidence/representative fields by invention.
+- Owner/Admin GET summary/status exposes safe scoped state; strict-empty POST retry preserves
+  existing summaries, requires terminal calls and cannot start a replacement/ambiguous run.
+  Runtime busy/unconfirmed failures remain SQS retries/redrive or inline503 after exhaustion.
+  UNKNOWN/REJECTED acknowledgement requires the exact generation1 run and committed review
+  marker. General quarantined-summary recovery remains `SUMMARY_RETRY_UNSAFE` pending its
+  separate authorization/recovery proof. SDK schemas are regenerated.
+
+**Verification:** full API **415/30 files**, database **94/8**, summary worker **64/6**
+(including three process proofs), summarizer **84**, queue **79/6**, types **36/5** and SDK
+**19/2** pass: **791 tests** across these affected packages.
+Affected typecheck/lint **24/24** and Lambda packaging pass (API35.0MB/10.6MBzip;
+worker28.3MB/9.3MBzip). Final API typecheck/lint also passes after the lock-order regression.
+A fresh fetch confirms zero commits behind main4497459. Separate-process
+fixtures scrub credentials and use a localhost HTTP provider with fsynced synthetic receipts.
+SIGKILL before send permits one first request; after provider acceptance it never resubmits;
+a saved response survives application failure and applies without another request. No external
+provider compatibility, quality or production readiness follows from these tests.
+
+**Exact next tasks:** FW-41 awaited admission and receipt hooks for every Fireworks HTTP attempt,
+then FW-27 versioned observation/summary integration that preserves source/release evidence.
+The gateway's current void progress callback is best effort and cannot journal admission.
+FW-40 now explicitly owns the still-missing durable notification outbox; current post-commit
+notification can be lost. Model approval, account spend/retention/region evidence, ElevenLabs
+configuration, qualified dental evaluations, real connectors and full parity remain open.
+See ADR-064 and DEPLOY_AWS.md; no production rollout was authorized or performed.
+
+### Earlier continuation: FW-10–13 release-gated Fireworks text gateway
 
 The full parity goal remains active. Latest main `4497459` (the AWS PR merge) is now
 incorporated; AWS content was already present, so this merge changed no application files.

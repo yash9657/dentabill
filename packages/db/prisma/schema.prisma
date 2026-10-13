@@ -118,6 +118,26 @@ enum JobOutboxState {
   CLOSED
 }
 
+enum InferenceProvider {
+  SYNTHETIC
+  FIREWORKS
+}
+
+enum InferenceRunState {
+  RESERVED
+  SUBMITTING
+  UNKNOWN
+  RESPONDED
+  REJECTED
+  APPLIED
+}
+
+enum InferenceAttemptState {
+  SUBMITTING
+  RESPONDED
+  UNKNOWN
+}
+
 model Organization {
   id                   String    @id @default(cuid())
   clerkOrgId           String    @unique
@@ -148,6 +168,9 @@ model Organization {
   calls               Call[]
   callIntents         CallIntent[]
   jobOutbox           JobOutbox[]
+  inferenceBudgets    InferenceBudget[]
+  inferenceRuns       InferenceRun[]
+  inferenceAttempts   InferenceAttempt[]
   callSummaries       CallSummary[]
   payerConfigs        PayerConfig[]
   auditLogs           AuditLog[]
@@ -231,11 +254,12 @@ model Call {
   cancelRequestedBy String?
   createdAt         DateTime       @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  claim        Claim        @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  summary      CallSummary?
-  events       CallEvent[]
-  intent       CallIntent?
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  claim         Claim          @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  summary       CallSummary?
+  events        CallEvent[]
+  intent        CallIntent?
+  inferenceRuns InferenceRun[]
 
   @@unique([id, claimId, organizationId])
   @@index([organizationId])
@@ -333,6 +357,95 @@ model JobOutbox {
   @@unique([organizationId, kind, idempotencyKey])
   @@index([organizationId, state, availableAt])
   @@index([state, availableAt, leaseExpiresAt])
+}
+
+// Token allocations are admission controls, not an asserted provider dollar ceiling.
+// Unknown allocations remain outstanding across UTC days.
+model InferenceBudget {
+  id             String   @id @default(cuid())
+  organizationId String
+  billingDay     String   @db.VarChar(10)
+  tokenLimit     BigInt
+  baselineTokens BigInt   @default(0)
+  knownTokens    BigInt   @default(0)
+  reservedTokens BigInt   @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs         InferenceRun[]
+
+  @@unique([organizationId, billingDay])
+  @@index([organizationId, reservedTokens])
+}
+
+// Request and result snapshots contain protected evidence. Never log these rows.
+// Generation one is the only automatic generation until versioned review is implemented.
+model InferenceRun {
+  id              String            @id @default(cuid())
+  organizationId  String
+  callId          String
+  claimId         String
+  generation      Int               @default(1)
+  claimVersion    DateTime
+  sourceHash      String            @db.VarChar(64)
+  requestHash     String            @db.VarChar(64)
+  provider        InferenceProvider
+  releaseId       String
+  promptVersion   String
+  billingDay      String            @db.VarChar(10)
+  tokenAllowance  BigInt
+  reservedTokens  BigInt
+  totalTokens     BigInt?
+  state           InferenceRunState @default(RESERVED)
+  requestPayload  Json
+  resultPayload   Json?
+  receiptHash     String?           @db.VarChar(64)
+  leaseToken      String?
+  leaseExpiresAt  DateTime?
+  submittedAt     DateTime?
+  respondedAt     DateTime?
+  appliedAt       DateTime?
+  reviewAppliedAt DateTime?
+  summaryId       String?           @unique
+  lastErrorCode   String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  call         Call               @relation(fields: [callId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  budget       InferenceBudget    @relation(fields: [organizationId, billingDay], references: [organizationId, billingDay], onDelete: Restrict)
+  attempts     InferenceAttempt[]
+
+  @@unique([organizationId, callId, generation])
+  @@unique([id, organizationId])
+  @@index([organizationId, state, updatedAt])
+  @@index([state, leaseExpiresAt])
+}
+
+// This first integration admits exactly one send per run. Further HTTP sends require
+// independent durable admission before the Fireworks retrying transport can be connected.
+model InferenceAttempt {
+  id                String                @id @default(cuid())
+  organizationId    String
+  runId             String
+  attemptNumber     Int                   @default(1)
+  state             InferenceAttemptState @default(SUBMITTING)
+  tokenAllowance    BigInt
+  reservedTokens    BigInt
+  totalTokens       BigInt?
+  inputTokens       BigInt?
+  outputTokens      BigInt?
+  cachedInputTokens BigInt?
+  submittedAt       DateTime              @default(now())
+  respondedAt       DateTime?
+  lastErrorCode     String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  run          InferenceRun @relation(fields: [runId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([organizationId, runId, attemptNumber])
+  @@index([organizationId, state, submittedAt])
 }
 
 // PHI-relevant: rawTranscript + claudeSummary may contain patient

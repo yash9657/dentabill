@@ -8,7 +8,7 @@ import { hashPatientDOB, prisma } from '@dentabill/db';
 import { createLogger } from '@dentabill/logger';
 import { FakeRetell } from '@dentabill/payer-ivr';
 import type { CallJobData, JobDispatcher, SummaryJobData } from '@dentabill/queue';
-import { createSummarizerPort } from '@dentabill/summarizer';
+import { createSummarizerPort, type SummarizerPort } from '@dentabill/summarizer';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createSqsJobWorker } from '../lambda-worker.js';
@@ -147,6 +147,10 @@ afterEach(async () => {
   await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS reject_runtime_submission()');
   await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS reject_runtime_audit ON "AuditLog"');
   await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS reject_runtime_audit()');
+  await prisma.$executeRawUnsafe(
+    'DROP TRIGGER IF EXISTS reject_runtime_inference ON "InferenceRun"',
+  );
+  await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS reject_runtime_inference()');
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE "Organization", "User", "Claim", "Call", "CallSummary", "CallEvent", "PayerConfig", "AuditLog" RESTART IDENTITY CASCADE',
   );
@@ -677,7 +681,7 @@ describe('createInlineJobRuntime — summaries', () => {
     return { orgId, callId: call.id };
   }
 
-  it('runs the summary handler and persists a CallSummary (no Redis: in-memory cost guard)', async () => {
+  it('runs the summary handler and persists a CallSummary with the database ledger and no Redis', async () => {
     const { runtime } = runtimeWith();
     const { orgId, callId } = await seedEndedCall();
 
@@ -724,5 +728,88 @@ describe('createInlineJobRuntime — summaries', () => {
 
     expect(report).toEqual({ status: 'completed', attempt: 1 });
     await expect(prisma.callSummary.count({ where: { callId } })).resolves.toBe(1);
+  });
+
+  it('keeps a BUSY summary delivery for redrive even at the final receive without another submission', async () => {
+    const { orgId, callId } = await seedEndedCall();
+    const fake = createSummarizerPort({ deriveWhenUnregistered: true }).summarizer;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const summarize = vi.fn<SummarizerPort['summarize']>(async (input) => {
+      await gate;
+      return fake.summarize(input);
+    });
+    const { runtime } = runtimeWith({ summarizer: { inference: fake.inference, summarize } });
+    const data = {
+      organizationId: orgId,
+      callId,
+      promptVersion: 'v1',
+      idempotencyKey: `call.${callId}`,
+    };
+    const owner = runtime.runSummaryAttempt(data, { attempt: 1, maxAttempts: 3 });
+    try {
+      await vi.waitFor(async () => {
+        expect(
+          await prisma.inferenceRun.findFirst({ where: { organizationId: orgId, callId } }),
+        ).toMatchObject({ state: 'SUBMITTING' });
+      });
+      const duplicate = await runtime.runSummaryAttempt(data, { attempt: 3, maxAttempts: 3 });
+      expect(duplicate).toMatchObject({ status: 'retry', attempt: 3 });
+      expect(summarize).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+      await owner;
+    }
+  });
+
+  it('acknowledges durable UNKNOWN review state and never resubmits under a manual retry delivery key', async () => {
+    const { orgId, callId } = await seedEndedCall();
+    const fake = createSummarizerPort({ deriveWhenUnregistered: true }).summarizer;
+    const summarize = vi.fn<SummarizerPort['summarize']>(async () => {
+      throw new Error('PRIVATE_PROVIDER_ACCEPTANCE_LOST');
+    });
+    const { runtime } = runtimeWith({ summarizer: { inference: fake.inference, summarize } });
+    const data = {
+      organizationId: orgId,
+      callId,
+      promptVersion: 'v1',
+      idempotencyKey: `call.${callId}`,
+    };
+    expect(await runtime.runSummaryAttempt(data, { attempt: 1, maxAttempts: 3 })).toEqual({
+      status: 'inference_review_required',
+      attempt: 1,
+    });
+    expect(
+      await runtime.runSummary({ ...data, idempotencyKey: `${data.idempotencyKey}.retry.1` }),
+    ).toEqual({ status: 'inference_review_required', attemptsMade: 1 });
+    expect(summarize).toHaveBeenCalledTimes(1);
+    expect(
+      await prisma.inferenceRun.findFirst({ where: { organizationId: orgId, callId } }),
+    ).toMatchObject({ state: 'UNKNOWN', totalTokens: null });
+    expect(await prisma.callSummary.count({ where: { organizationId: orgId, callId } })).toBe(0);
+  });
+
+  it('does not acknowledge final summary persistence failures or expose raw errors', async () => {
+    const { orgId, callId } = await seedEndedCall();
+    const { runtime } = runtimeWith();
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION reject_runtime_inference() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'PRIVATE_DATABASE_SENTINEL'; END; $$`);
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER reject_runtime_inference BEFORE INSERT ON "InferenceRun"
+      FOR EACH ROW EXECUTE FUNCTION reject_runtime_inference()`);
+    const logs = vi.spyOn(silentLogger, 'error');
+    try {
+      const result = await runtime.runSummaryAttempt(
+        { organizationId: orgId, callId, promptVersion: 'v1', idempotencyKey: `call.${callId}` },
+        { attempt: 3, maxAttempts: 3 },
+      );
+      expect(result).toMatchObject({ status: 'retry', attempt: 3 });
+      expect(JSON.stringify(logs.mock.calls)).not.toContain('PRIVATE');
+      if (result.status === 'retry')
+        expect(result.error).toEqual(new Error('Summary delivery is unconfirmed.'));
+    } finally {
+      logs.mockRestore();
+    }
   });
 });

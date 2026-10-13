@@ -17,10 +17,10 @@ import { startHealthServer, type HealthServerHandle } from './health.js';
  * Boot the summary-worker. Mirrors `apps/call-worker/src/server.ts`:
  * env load → Redis connect → BullMQ Worker → /healthz → graceful drain.
  *
- * Failure modes routed to MANUAL_REVIEW are not retried (the handler
- * returns instead of throwing). Retryable failures (Anthropic 5xx,
- * Postgres lock contention) throw and BullMQ's exponential backoff
- * picks them up.
+ * Persisted review outcomes complete delivery after their effects commit.
+ * BUSY work and database failures throw for BullMQ backoff/redrive. A
+ * provider attempt whose result is unknown remains reserved for review;
+ * another delivery never submits that inference again.
  */
 
 export interface BootSummaryWorkerOptions {
@@ -83,7 +83,6 @@ export async function bootSummaryWorker(
     processor: createSummaryJobHandler({
       logger,
       prisma: prismaClient,
-      redis: connection,
       summarizer,
       env,
       notifier,
@@ -91,12 +90,12 @@ export async function bootSummaryWorker(
     }),
   });
 
-  worker.on('failed', (job, err) => {
+  worker.on('failed', (job) => {
     logger.error(
       {
         jobId: job?.id,
         attemptsMade: job?.attemptsMade,
-        err: { message: err.message, name: err.name },
+        code: 'SUMMARY_DELIVERY_UNCONFIRMED',
       },
       'summary-worker job failed',
     );

@@ -43,9 +43,21 @@ external workflows. No production deploy, schedule activation or real calls ran.
 fake, reviewed release policy, source-bound observation validation and bounded transport with
 safe failure/usage records. Independent review fixed cancellation losing prior attempts and
 foreign-currency ambiguity. Both model candidates remain unapproved; worker/voice integration,
-durable inference spend and real-provider/dental evaluations remain open. The user added the
+live inference accounting integration and real-provider/dental evaluations remain open. The user added the
 Fireworks/ElevenLabs keys; both pass bounded read-only authentication (HTTP200). Gateway274
 tests /5files and scoped checks7/7 pass. No inference, speech, call or production change ran. See ADR-063 and session context for final test evidence.
+
+**Durable summary slice:** FW-26 now gives the synthetic worker one durable generation/attempt,
+immutable source snapshots, independent usage receipts and resumable summary/review application.
+Unknown usage stays reserved across days; retries cannot resubmit an ambiguous request.
+Owner/Admin summary status and safe delivery retry are available; final SQS exceptions remain
+retryable. Configured legacy Claude is blocked by the production factory. Local migrations14/15,
+concurrency/rollback checks and three separate-process crash proofs support this boundary.
+Fireworks still needs awaited per-send accounting (FW-41) and versioned summaries (FW-27);
+review notifications still need an outbox (FW-40). Verification: **791 affected-package tests**
+(API415, DB94, summary-worker64, summarizer84, queue79, types36, SDK19), typecheck/lint24/24
+and both AWS Lambda packages pass. No paid inference or production change ran. See ADR-064
+and the latest session entry for evidence and limits.
 
 **User direction:** ElevenLabs speech/orchestration is permitted, business inference stays
 on Fireworks open weights. There is no pilot clinic yet: all development uses fake patient
@@ -96,6 +108,10 @@ older deployment target for the zero-extra-hosting demo.
 - [ ] Step 12 — Cloud Deployment (Phase 5; cloud target deferred per ADR-004)
 
 ## Recent activity
+
+- **2026-10-13 — FW-26:** durable synthetic inference reservations/receipts, resumable local
+  application/review, tenant-scoped status/retry and process-crash proof. Migrations14/15 only
+  on localhost; no production or paid-provider execution. FW-27/40/41 remain open.
 
 - 2026-10-13 — Local FW-37 admin operations/recovery, additive migration13, immutable delivery
   generations across BullMQ/SQS/inline, and stale-failure acknowledgement protection. Real

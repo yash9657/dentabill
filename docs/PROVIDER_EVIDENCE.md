@@ -56,7 +56,7 @@ command, and fresh consumers produce one synthetic provider action. The AWS rela
 and disabled scheduled-rule configuration have local contract tests and Terraform validation;
 no deployed scheduled recovery was measured. FW-32 adds atomic cancellation-request evidence
 and pending UI; it does not claim provider termination until provider evidence arrives.
-Local FW-37 quarantine operations are described below; deployed recovery remains open; FW-36 now implements local observer deadlines. Summary inference cost/duplicate execution is a separate FW-26 limitation.
+Local FW-37 quarantine operations are described below; deployed recovery remains open; FW-36 now implements local observer deadlines. Synthetic summary inference now has the durable FW-26 ledger described below; live Fireworks per-send integration remains open.
 
 FW-34 adds a local owner/admin recovery workflow: complete bounded metadata enumeration,
 exact saved-request hash/intent/agent/from/to matching, verified Get Call identity, and
@@ -101,7 +101,7 @@ FW-37 now provides a local stored-role Owner/Admin Operations screen, scoped due
 quarantine counts, oldest-first worklists and exact-snapshot recovery. Canonical commands,
 tenant bindings, claim versions and audit transactions gate an allowance of three additional
 delivery attempts. CLOSED denotes reviewed no-work-needed, never a transport receipt or call
-outcome. Summary replay stays blocked pending FW-26. Actual retained BullMQ jobs are covered
+outcome. General quarantined-summary recovery stays blocked; FW-26 now fences synthetic inference independently, while versioned/live recovery remains open. Actual retained BullMQ jobs are covered
 by a distinct approved transport generation. The same validated provenance survives SQS
 messages and authenticated inline headers; stale failure handling cannot cancel newer work,
 and unresolved READY/SUBMITTING state cannot be acknowledged as completed failure handling.
@@ -120,6 +120,27 @@ Refreshed Fireworks primary contracts and implementation acceptance criteria are
 [FIREWORKS_GATEWAY_CONTRACT.md](./FIREWORKS_GATEWAY_CONTRACT.md). Exact model/release approval,
 account probes and representative dental evaluation remain open. Public model-route presence,
 JSON Schema decoding and mutable publisher license links are not sufficient release evidence.
+
+### Durable synthetic inference (FW-26, ADR-064)
+
+The current summary worker now commits one generation1 reservation and one attempt before
+contact; records usage/response independently of summary application; retains unknown liability
+across days; and resumes saved response or review effects after failure. Tenant-scoped database
+constraints and immutable snapshots support concurrency/crash tests. Three separate-process
+proofs cover pre-send death, accepted-but-unreceived response death, and saved-response
+application failure using a localhost provider with fsynced synthetic receipts. These are
+application boundary proofs, not authenticated Fireworks or real billing evidence.
+
+No documented Chat Completions request-id recovery or idempotent resend guarantee was verified.
+The separate Responses retrieve API is not a substitute for recovering an ambiguous chat request.
+Billing exports may lag, so absent usage deltas do not release a reservation. The current gateway
+progress callback is best effort and cannot durably admit another send. FW-41 must provide
+awaited per-attempt admission/receipt hooks; the summary task contract is separately FW-27.
+Sources: [Chat Completions](https://docs.fireworks.ai/api-reference/post-chatcompletions),
+[Responses retrieval](https://docs.fireworks.ai/api-reference/get-response),
+[usage/cost exports](https://docs.fireworks.ai/accounts/exporting-usage-and-costs),
+[quota behavior](https://docs.fireworks.ai/guides/quotas_usage/account-quotas).
+No additional account requests or inference ran in this continuation.
 
 ## Public capability baseline
 

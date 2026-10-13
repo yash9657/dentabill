@@ -287,7 +287,10 @@ describe('decide', () => {
     ).toBe('delete');
     expect(decide({ status: 'failed', attempt: 3, dlq: true })).toBe('delete');
     expect(decide({ status: 'failed', attempt: 3, dlq: false })).toBe('retry');
-    expect(decide({ status: 'failed', attempt: 3, dlq: false }, 'summary.generate')).toBe('delete');
+    expect(decide({ status: 'failed', attempt: 3, dlq: false }, 'summary.generate')).toBe('retry');
+    expect(decide({ status: 'inference_review_required', attempt: 3 }, 'summary.generate')).toBe(
+      'delete',
+    );
     expect(decide({ status: 'reconciliation_required', attempt: 3 })).toBe('delete');
     expect(decide({ status: 'retry', attempt: 1, retryDelayMs: 30_000, error: null })).toBe(
       'retry',
@@ -367,14 +370,14 @@ describe('processRecord', () => {
     ).resolves.toBe('retry');
   });
 
-  it('preserves summary exhaustion behavior without a call DLQ', async () => {
+  it('retains exhausted summary delivery when no durable disposition was confirmed', async () => {
     const d = deps(
       { status: 'completed', attempt: 1 },
       { status: 'failed', attempt: 3, dlq: false },
     );
     await expect(
       processRecord(record({ type: 'summary.generate', data: summaryData }, '3'), d),
-    ).resolves.toBe('delete');
+    ).resolves.toBe('retry');
   });
 
   it('invalid bodies are left for the SQS DLQ without running anything', async () => {

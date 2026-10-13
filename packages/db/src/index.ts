@@ -1,4 +1,16 @@
 export { prisma } from './client.js';
+export {
+  reserveInferenceRun,
+  beginInferenceAttempt,
+  saveInferenceReceipt,
+  markInferenceApplied,
+  markInferenceReviewed,
+  type ReserveInferenceInput,
+  type InferenceReservation,
+  type InferenceOwnership,
+  type InferenceReceiptInput,
+  type InferenceErrorCode,
+} from './lib/inference.js';
 export { audit, type AuditInput } from './lib/audit.js';
 export { hashPatientDOB, patientDOBLast4, type HashPatientDOBInput } from './lib/dob.js';
 export { getOrgScopedDb, type OrgScopedDb } from './lib/with-org.js';
@@ -21,6 +33,12 @@ export type {
   JobOutbox,
   JobOutboxKind,
   JobOutboxState,
+  InferenceProvider,
+  InferenceRunState,
+  InferenceAttemptState,
+  InferenceBudget,
+  InferenceRun,
+  InferenceAttempt,
   CallSummary,
   CallEvent,
   PayerConfig,

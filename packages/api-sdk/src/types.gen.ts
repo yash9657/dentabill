@@ -1302,6 +1302,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/calls/{id}/summary/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description OWNER/ADMIN view of generation 1 summary work. No transcript, request, or provider response is returned. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            callId: string;
+                            /** @enum {number} */
+                            generation: 1;
+                            /** @enum {string} */
+                            state: "NOT_REQUESTED" | "RESERVED" | "SUBMITTING" | "UNKNOWN" | "RESPONDED" | "REJECTED" | "APPLIED";
+                            summaryId: string | null;
+                            canRetry: boolean;
+                            lastErrorCode: string | null;
+                            /** Format: date-time */
+                            updatedAt: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/calls/{id}/summary/retry": {
         parameters: {
             query?: never;

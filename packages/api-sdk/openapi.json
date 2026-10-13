@@ -3140,6 +3140,89 @@
         }
       }
     },
+    "/v1/calls/{id}/summary/status": {
+      "get": {
+        "description": "OWNER/ADMIN view of generation 1 summary work. No transcript, request, or provider response is returned.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "callId": {
+                      "type": "string"
+                    },
+                    "generation": {
+                      "type": "number",
+                      "enum": [
+                        1
+                      ]
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "NOT_REQUESTED",
+                        "RESERVED",
+                        "SUBMITTING",
+                        "UNKNOWN",
+                        "RESPONDED",
+                        "REJECTED",
+                        "APPLIED"
+                      ]
+                    },
+                    "summaryId": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "canRetry": {
+                      "type": "boolean"
+                    },
+                    "lastErrorCode": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    }
+                  },
+                  "required": [
+                    "callId",
+                    "generation",
+                    "state",
+                    "summaryId",
+                    "canRetry",
+                    "lastErrorCode",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/calls/{id}/summary/retry": {
       "post": {
         "description": "OWNER/ADMIN-gated retry of summary generation for a terminal Call. Atomically reserves a durable delivery command and audit record; retry reservations are serialized for each call.",
