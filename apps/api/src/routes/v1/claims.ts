@@ -5,6 +5,12 @@ import { z } from 'zod';
 
 import { isValidClaimTransition } from '../../lib/claim-state.js';
 
+import {
+  ClaimSourceDetailsResponseSchema,
+  sourceDetailsInclude,
+  toSourceDetailsResponse,
+} from './claim-source-details.js';
+
 /**
  * `/v1/claims` — basic CRUD on Claim rows (P2-T38).
  *
@@ -80,6 +86,11 @@ const ClaimResponseSchema = z.object({
 });
 
 type ClaimResponse = z.infer<typeof ClaimResponseSchema>;
+
+const ClaimDetailResponseSchema = ClaimResponseSchema.extend({
+  sourceDetails: ClaimSourceDetailsResponseSchema.nullable(),
+}).strict();
+type ClaimDetailResponse = z.infer<typeof ClaimDetailResponseSchema>;
 
 const ClaimCreateSchema = z.object({
   patientDOBHash: z.string().min(1),
@@ -378,19 +389,23 @@ export function claimsRoutes(fastify: FastifyInstance): void {
     {
       preHandler: requireAuth,
       schema: {
-        description: 'Fetch a single claim by id, scoped to the auth organization.',
+        description:
+          'Fetch a single claim and its read-only imported source details, scoped to the auth organization.',
         security,
         params: IdParamSchema,
-        response: { 200: ClaimResponseSchema },
+        response: { 200: ClaimDetailResponseSchema },
       },
     },
-    async (request): Promise<ClaimResponse> => {
+    async (request): Promise<ClaimDetailResponse> => {
       const auth = request.dentabillAuth;
       if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
       const { orgId } = auth;
       const { id } = request.params as z.infer<typeof IdParamSchema>;
       const db = getOrgScopedDb(orgId);
-      const row = await db.claim.findFirst({ where: { id } });
+      const row = await db.claim.findFirst({
+        where: { id, organizationId: orgId },
+        include: sourceDetailsInclude(orgId),
+      });
       if (!row) {
         throw new ApiError('NOT_FOUND', 'Claim not found in your organization.');
       }
@@ -402,7 +417,7 @@ export function claimsRoutes(fastify: FastifyInstance): void {
         // See claim.list note above on userId omission.
         metadata: { clerkUserId: auth.userId },
       });
-      return toResponse(row);
+      return { ...toResponse(row), sourceDetails: toSourceDetailsResponse(row) };
     },
   );
 

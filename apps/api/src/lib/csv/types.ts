@@ -17,6 +17,8 @@
  */
 import type { PayerCode } from '@dentabill/db';
 
+import type { ImportedSourceDetails } from './source-details.js';
+
 export const SUPPORTED_CSV_SOURCES = ['DENTRIX', 'EAGLESOFT', 'OPEN_DENTAL'] as const;
 export type CsvSource = (typeof SUPPORTED_CSV_SOURCES)[number];
 export const MAX_IMPORT_ROWS = 5000;
@@ -44,6 +46,8 @@ export interface CanonicalClaimRow {
    * only: never persist, log, or expose these potentially sensitive raw cells.
    */
   readonly sourceFields: readonly (readonly [string, string])[];
+  /** Optional explicit source facts; absent data is never synthesized from the header. */
+  readonly sourceDetails: ImportedSourceDetails | null;
   /** Decimal(10,2) amount with exactly two fractional digits (no `$`, no commas). */
   readonly claimAmount: string;
   /** ADA / CDT procedure codes. Preserved order, no duplicates. */

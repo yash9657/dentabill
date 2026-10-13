@@ -523,3 +523,26 @@ re-upload, conflict reporting and no mutation of reviewed claims. Current eviden
 Postgres plus synthetic browser/API data, not deployed AWS/Clerk/PMS operation. CSV database
 names are operator-declared: retain the same name for repeated exports. Secret rotation or
 namespace changes need reviewed reconciliation. No real PMS sync or payment posting is enabled.
+
+## Procedure and coverage snapshots (ADR-072; not deployed)
+
+Apply migration24 `20261014020000_claim_source_details` after migration23 and before this API
+version. It adds three tables/checks/triggers without backfilling existing claims. It was applied
+only to localhost `dentabill_test` and `dentabill_w0_identity`. Complete snapshots are written
+within the importer’s existing transaction; deferred triggers reject incomplete child counts,
+billed totals or coverage targets at commit. Keep these triggers when deploying/operating.
+
+Coordinate API before the new web version: GET claim detail gains required nullable
+`sourceDetails`; list/POST/PATCH responses remain shallow. Legacy claims legitimately have null
+details. Old import workers must be drained/disabled, since they would ignore the JSON columns.
+A legacy import that already fingerprinted unknown details will now conflict rather than silently
+backfill. Rollback should disable new imports and preserve the tables/history; do not re-enable
+older summary-only ingestion for these files or drop source evidence.
+
+Before rollout approval, validate lock/transaction duration at representative upload sizes,
+backup/restore with deferred and immutable triggers, the source namespace/secret stability,
+real authenticated upload-to-detail viewing, practice-switch isolation, and reviewed amount
+changes while imported facts stay fixed. Exact reimports retain child IDs. Current evidence uses
+local synthetic data only. No financial posting, source synchronization or production approval
+is implied. Future payment references must revisit the existing parent-claim cascade/retention
+policy before treating line IDs as a permanent financial ledger.

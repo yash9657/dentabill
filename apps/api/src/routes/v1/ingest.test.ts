@@ -1,6 +1,10 @@
+/* eslint-disable security/detect-non-literal-fs-filename -- Only checked-in synthetic fixtures resolved relative to this test. */
+import { readFileSync } from 'node:fs';
+
 import type { Organization } from '@dentabill/db';
 import { prisma } from '@dentabill/db';
 import type { FastifyInstance } from 'fastify';
+import Papa from 'papaparse';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { buildServer } from '../../app.js';
@@ -71,6 +75,129 @@ describe('/v1/ingest/claims (integration)', () => {
     await prisma.$executeRawUnsafe(
       'TRUNCATE TABLE "Organization", "User", "Claim", "Call", "CallSummary", "CallEvent", "PayerConfig", "AuditLog", "BillingUsageRecord" RESTART IDENTITY CASCADE',
     );
+  });
+
+  it('uploads explicit source details and serves the saved procedures and coverage through claim detail', async () => {
+    const org = await makeOrg('SyntheticDetail');
+    const fixture = readFileSync(
+      new URL(
+        '../../../test/fixtures/csv/opendental-source-details-synthetic.csv',
+        import.meta.url,
+      ),
+    );
+    const { body, contentType } = multipartBody({ content: fixture });
+    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+    const uploaded = await server.inject({
+      method: 'POST',
+      url: '/v1/ingest/claims',
+      headers: { ...headers, 'x-import-source': 'synthetic-main', 'content-type': contentType },
+      payload: body,
+    });
+    expect(uploaded.statusCode).toBe(200);
+    const report = uploaded.json<{ insertedRows: number; rows: { claimId: string }[] }>();
+    expect(report.insertedRows).toBe(1);
+    const claimId = report.rows[0]?.claimId;
+    if (!claimId) throw new Error('Missing synthetic claim');
+    const detail = await server.inject({ method: 'GET', url: `/v1/claims/${claimId}`, headers });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toMatchObject({
+      status: 'PENDING',
+      claimAmount: '100',
+      sourceDetails: {
+        importedClaimAmount: '100.00',
+        sourceNamespace: 'synthetic-main',
+        sourceVersion: 'version-1',
+        lines: [
+          { sourceLineId: 'proc-line-01', tooth: 'A', quantity: '3.000', billedAmount: '40.00' },
+          { sourceLineId: 'proc-line-02', tooth: 'AS', quantity: null, billedAmount: '60.00' },
+        ],
+        coverages: [
+          { sequence: 1, isClaimCoverage: false },
+          { sequence: 2, isClaimCoverage: true, subscriberId: null },
+        ],
+      },
+    });
+    const replay = await server.inject({
+      method: 'POST',
+      url: '/v1/ingest/claims',
+      headers: { ...headers, 'x-import-source': 'synthetic-main', 'content-type': contentType },
+      payload: body,
+    });
+    expect(replay.json()).toMatchObject({ insertedRows: 0, skippedDuplicates: 1 });
+    expect(await prisma.claimSourceLine.count({ where: { organizationId: org.id } })).toBe(2);
+  });
+
+  it('reports contradictory child facts without importing a summary-only claim', async () => {
+    const org = await makeOrg('SyntheticInvalidDetail');
+    const fixture = readFileSync(
+      new URL(
+        '../../../test/fixtures/csv/opendental-source-details-synthetic.csv',
+        import.meta.url,
+      ),
+      'utf8',
+    ).replace('40.00', '39.99');
+    const { body, contentType } = multipartBody({ content: fixture });
+    const response = await server.inject({
+      method: 'POST',
+      url: '/v1/ingest/claims',
+      headers: {
+        'x-test-user-id': 'user_a',
+        'x-test-org-id': org.id,
+        'x-import-source': 'synthetic-main',
+        'content-type': contentType,
+      },
+      payload: body,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      insertedRows: 0,
+      validRows: 0,
+      errors: [{ rowIndex: 2, message: 'ClaimLines: billed amounts must sum to the claim amount' }],
+    });
+    expect(await prisma.claim.count({ where: { organizationId: org.id } })).toBe(0);
+  });
+
+  it('rejects the upload-wide child limit before writing any claims', async () => {
+    const org = await makeOrg('SyntheticChildLimit');
+    const lines = JSON.stringify(
+      Array.from({ length: 500 }, (_, index) => ({
+        sourceLineId: String(index),
+        procedureCode: 'D1110',
+        serviceDate: '2026-01-08',
+        billedAmount: '0.00',
+      })),
+    );
+    const content = Papa.unparse(
+      Array.from({ length: 21 }, (_, index) => ({
+        PatNum: 'synthetic',
+        Birthdate: '1990-05-12',
+        InsCarrier: 'Synthetic',
+        ClaimIdent: String(index),
+        ClaimNum: String(index),
+        ProcCodes: 'D1110',
+        ClaimFee: '0.00',
+        ProcDate: '2026-01-08',
+        ClaimLines: lines,
+      })),
+    );
+    const { body, contentType } = multipartBody({ content });
+    const response = await server.inject({
+      method: 'POST',
+      url: '/v1/ingest/claims',
+      headers: {
+        'x-test-user-id': 'user_a',
+        'x-test-org-id': org.id,
+        'x-import-source': 'synthetic-main',
+        'content-type': contentType,
+      },
+      payload: body,
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: expect.stringContaining('10000'),
+    });
+    expect(await prisma.claim.count({ where: { organizationId: org.id } })).toBe(0);
   });
 
   it('rejects unauthenticated upload with 401', async () => {

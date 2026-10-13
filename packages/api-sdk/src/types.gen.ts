@@ -758,7 +758,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Fetch a single claim by id, scoped to the auth organization. */
+        /** @description Fetch a single claim and its read-only imported source details, scoped to the auth organization. */
         get: {
             parameters: {
                 query?: never;
@@ -795,6 +795,55 @@ export interface paths {
                             maxRetries: number;
                             createdAt: string;
                             updatedAt: string;
+                            sourceDetails: {
+                                /** @enum {number} */
+                                schemaVersion: 1;
+                                importedClaimAmount: string;
+                                /** @enum {string} */
+                                sourceSystem: "DENTRIX" | "EAGLESOFT" | "OPEN_DENTAL";
+                                sourceNamespace: string;
+                                sourceClaimId: string;
+                                sourceVersion: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                lines: {
+                                    id: string;
+                                    sourceLineId: string;
+                                    sourceProcedureId: string | null;
+                                    position: number;
+                                    procedureCode: string;
+                                    codeVersion: string | null;
+                                    /** Format: date */
+                                    serviceDate: string;
+                                    billedAmount: string;
+                                    quantity: string | null;
+                                    treatmentArea: string | null;
+                                    tooth: string | null;
+                                    surface: string | null;
+                                    quadrant: string | null;
+                                    toothRange: string | null;
+                                    toothNumberingSystem: string | null;
+                                }[];
+                                coverages: {
+                                    id: string;
+                                    sourceCoverageId: string;
+                                    sequence: number;
+                                    payerName: string;
+                                    payerIdentifier: string | null;
+                                    payerIdentifierSystem: string | null;
+                                    isClaimCoverage: boolean;
+                                    sourcePlanId: string | null;
+                                    sourceSubscriptionId: string | null;
+                                    subscriberId: string | null;
+                                    patientMemberId: string | null;
+                                    groupNumber: string | null;
+                                    relationship: string | null;
+                                    /** Format: date */
+                                    effectiveDate: string | null;
+                                    /** Format: date */
+                                    terminationDate: string | null;
+                                }[];
+                            } | null;
                         };
                     };
                 };

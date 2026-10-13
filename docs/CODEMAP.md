@@ -342,3 +342,14 @@ manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
   `packages/db/src/lib/claim-source-migration.test.ts`: expand-only constrained provenance;
   full prior-migration replay proves legacy duplicate/state preservation.
 - `apps/api/test/fixtures/csv/README.md`: exact CSV contract and synthetic examples.
+
+## Imported procedure and coverage snapshots (FW-21 first slice)
+
+- `apps/api/src/lib/csv/source-details.ts`: strict version1 child contract, exact totals and bounded input.
+- `apps/api/src/lib/csv/{parser,insert}.ts`: optional JSON columns, versioned fingerprints, parent/child/audit atomic import.
+- `packages/db/prisma/migrations/20261014020000_claim_source_details/migration.sql`: scoped snapshot/child keys, admission, immutable facts and deferred sealing.
+- `packages/db/src/lib/claim-source-details{,-migration}.test.ts`: real Postgres invariants and non-destructive migration replay.
+- `apps/api/src/routes/v1/claim-source-details.ts`: scoped GET-only projection/serialization.
+- `apps/web/src/components/dashboard/claims/claim-source-details.tsx`: imported totals, procedure pagination and explicit claim coverage.
+- `apps/web/src/lib/claims/use-claim.ts`: practice-scoped detail cache and status mutation preservation.
+- `apps/api/test/fixtures/csv/opendental-source-details-synthetic.csv`: one custom fabricated upload with repeated codes and secondary target coverage.

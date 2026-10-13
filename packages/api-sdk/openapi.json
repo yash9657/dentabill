@@ -1728,7 +1728,7 @@
     },
     "/v1/claims/{id}": {
       "get": {
-        "description": "Fetch a single claim by id, scoped to the auth organization.",
+        "description": "Fetch a single claim and its read-only imported source details, scoped to the auth organization.",
         "parameters": [
           {
             "schema": {
@@ -1835,6 +1835,259 @@
                     },
                     "updatedAt": {
                       "type": "string"
+                    },
+                    "sourceDetails": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "importedClaimAmount": {
+                          "type": "string",
+                          "pattern": "^(?:0|[1-9]\\d{0,7})\\.\\d{2}$"
+                        },
+                        "sourceSystem": {
+                          "type": "string",
+                          "enum": [
+                            "DENTRIX",
+                            "EAGLESOFT",
+                            "OPEN_DENTAL"
+                          ]
+                        },
+                        "sourceNamespace": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "sourceClaimId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceVersion": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "sourceLineId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sourceProcedureId": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "position": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "procedureCode": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 32
+                              },
+                              "codeVersion": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 32
+                              },
+                              "serviceDate": {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              },
+                              "billedAmount": {
+                                "type": "string",
+                                "pattern": "^(?:0|[1-9]\\d{0,7})\\.\\d{2}$"
+                              },
+                              "quantity": {
+                                "nullable": true,
+                                "type": "string",
+                                "pattern": "^\\d{1,9}\\.\\d{3}$"
+                              },
+                              "treatmentArea": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "tooth": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "surface": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "quadrant": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "toothRange": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "toothNumberingSystem": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "sourceLineId",
+                              "sourceProcedureId",
+                              "position",
+                              "procedureCode",
+                              "codeVersion",
+                              "serviceDate",
+                              "billedAmount",
+                              "quantity",
+                              "treatmentArea",
+                              "tooth",
+                              "surface",
+                              "quadrant",
+                              "toothRange",
+                              "toothNumberingSystem"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "coverages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "sourceCoverageId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sequence": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9
+                              },
+                              "payerName": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "payerIdentifier": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "payerIdentifierSystem": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "isClaimCoverage": {
+                                "type": "boolean"
+                              },
+                              "sourcePlanId": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "sourceSubscriptionId": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "subscriberId": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "patientMemberId": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "groupNumber": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "relationship": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "effectiveDate": {
+                                "nullable": true,
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              },
+                              "terminationDate": {
+                                "nullable": true,
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "sourceCoverageId",
+                              "sequence",
+                              "payerName",
+                              "payerIdentifier",
+                              "payerIdentifierSystem",
+                              "isClaimCoverage",
+                              "sourcePlanId",
+                              "sourceSubscriptionId",
+                              "subscriberId",
+                              "patientMemberId",
+                              "groupNumber",
+                              "relationship",
+                              "effectiveDate",
+                              "terminationDate"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "importedClaimAmount",
+                        "sourceSystem",
+                        "sourceNamespace",
+                        "sourceClaimId",
+                        "sourceVersion",
+                        "createdAt",
+                        "lines",
+                        "coverages"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -1853,7 +2106,8 @@
                     "retryCount",
                     "maxRetries",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "sourceDetails"
                   ],
                   "additionalProperties": false
                 }

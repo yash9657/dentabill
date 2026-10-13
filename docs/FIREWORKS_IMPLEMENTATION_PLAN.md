@@ -1,5 +1,11 @@
 # DentaBill: competitive gaps and the Fireworks implementation plan
 
+Current local progress (2026-10-13, ADR-072): FW-21 now preserves procedure-level billed lines
+and explicit coverage sequence/claim target from custom synthetic CSV through the claim detail
+screen. Exact totals, nullable identity, tenant-scoped immutable snapshots and atomic child
+writes are tested locally. Payment allocations/adjustments/reversals, supported source
+connectors and all external parity evidence remain open; full scope below is unchanged.
+
 Current local progress (2026-10-13, ADR-071): FW-19/20 now provides explicit CSV source
 identity, atomic duplicate protection, preserved legacy rows and biller-visible conflict reports.
 Reviewed source updates/sync (FW-43), procedure/coverage/payment modeling (FW-21), real

@@ -9,6 +9,9 @@
 export const MULTI_TENANT_MODELS = [
   'user',
   'claim',
+  'claimSourceDetails',
+  'claimSourceLine',
+  'claimSourceCoverage',
   'call',
   'callIntent',
   'jobOutbox',

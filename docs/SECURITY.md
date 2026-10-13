@@ -203,3 +203,16 @@ For a confirmed PHI exposure:
 
 The incident-response template lands when (if) we have a first incident,
 not preemptively.
+
+### Imported procedure and coverage facts (ADR-072; local implementation)
+
+`ClaimSourceLine` and `ClaimSourceCoverage` contain potentially identifying procedure dates,
+treatment locations, payer/plan/member/subscriber IDs and source references. They use composite
+tenant/claim foreign keys and tenant-filtered GET detail projections; no new public download,
+third-party transmission or verified-eligibility assertion is added. Parser errors are closed
+messages and import audit retains only aggregate counts. Imported snapshots reject update,
+append or individual deletion while the parent claim exists; authorized parent deletion follows
+the existing cascade. This does not establish a legal retention schedule or production PHI
+approval. Payment-ledger work must define retention/reversal semantics before introducing
+financial references to source lines. Practice-scoped browser query keys isolate source detail
+caches, including status-update refetch behavior. Local tests do not establish deployed controls.

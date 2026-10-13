@@ -3,13 +3,25 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-13
-**Current work:** source identity and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
+**Current work:** procedure/coverage and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
 `codex/w0-containment`. The full parity goal is active; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice:** FW-19/20 now imports with explicit source identity, database-enforced
+**Latest local slice:** FW-21 now imports procedure-level source lines and coverage through the
+real upload/claim-detail workflow (ADR-072). Repeated codes retain distinct line identities;
+explicit totals, coverage sequence/target and missing identities remain accurate. Tenant-scoped,
+immutable snapshots commit with parent/audit and survive exact reimports. The UI separates source
+totals from local corrections, paginates procedures and isolates detail caches by user/practice.
+Migration24 ran only locally. Full API607, SDK30, DB snapshot48 plus migration1/tenant32 pass;
+UI19, scoped types/lint30/30, both Lambda bundles and the full Next.js production build pass.
+Exact evidence and browser limitations are in session context.
+Financial allocations/partial payments/adjustments/reversals remain the next FW-21 slice. Real PMS
+and clearinghouse connectors, recovery actions, live AI/voice validation and AWS rollout/evidence
+remain substantial work. No paid inference, deployment, actual claims or payments changed.
+
+**Previous local slice:** FW-19/20 now imports with explicit source identity, database-enforced
 uniqueness and atomic chunk/audit writes. Repeated/concurrent files cannot duplicate the same
 source record. Changed records and legacy matches receive a row report without overwriting
 reviewed work. The upload screen requires a stable database name and exposes conflicts, links,

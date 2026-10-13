@@ -4,7 +4,71 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: source-aware CSV imports (ADR-071)
+### Latest continuation: procedure and coverage import-to-detail (ADR-072)
+
+The user asked how much remains. The status answer identified a substantial multi-week scope,
+with five remaining areas: financial modeling, real connectors, recovery actions, live AI/voice
+validation, and AWS/end-to-end operation. That is a rough scope estimate, not a committed date.
+The active goal then continued from clean `e6c4a77` with the first FW-21 vertical slice. No clinic
+exists; all data remains synthetic. No paid inference, speech, call, external submission, AWS
+migration/deployment or external message ran. The prepared $4 experiment is still unanswered.
+
+- Optional custom `ClaimLines`/`Coverages` CSV cells retain explicit source line identities,
+  submitted procedure codes, dates, entire-line billed amounts, nullable quantity/raw locations,
+  and explicit coverage sequence/target. The parser rejects malformed/unknown fields, duplicate
+  IDs/sequences, inconsistent totals/code lists and missing/ambiguous coverage targets. It never
+  invents missing quantity, tooth, plan/member/subscriber identity or outbound identity.
+- The imported snapshot, individual children, parent and audit share one transaction. Scoped
+  composite FKs and uniqueness fence tenants/identities. Immutable triggers plus deferred counts,
+  line totals/positions and one-target coverage checks seal the snapshot. Parent Claim deletion
+  retains the existing cascade behavior; this is not a permanent financial ledger/retention policy.
+  Current local claim edits are separate from original imported totals. Child IDs survive replay.
+- The details-specific fingerprint makes an earlier unmodeled JSON import report SOURCE_CHANGED,
+  never a false successful enrichment. Changed/legacy rows still require later FW-43 reconciliation.
+  Bounds are500 lines/9 coverages per claim,512 KiB per JSON cell,10,000 accepted children per
+  upload, plus existing10 MB/5,000 CSV-record limits. Unknown code/location text is preserved,
+  not certified as clinical CDT content. The new fake fixture is a custom contract, not a PMS export.
+- GET detail alone adds nullable sourceDetails with ordered, scoped children and exact decimal
+  strings. The real claim screen shows original versus current amount, repeated procedures,
+  optional raw source details, explicit target coverage and50-line pagination. Summary-only
+  records have an honest empty state. Status PATCH remains shallow and preserves/refetches details.
+- Browser-cache regressions found/fixed practice-switch data retention and late PATCH success
+  writing into a later selected scope. Detail keys bind user plus optional Clerk org, and mutation
+  context captures the original key. Independent review caught the initial org-only query gate
+  breaking onboarding’s personal/local organizations; signed-in personal sessions remain enabled,
+  and tests cover both org and user switches. Date-only summary labels now use UTC consistently.
+
+**Verification:** migration24 `20261014020000_claim_source_details` applied only to localhost
+`dentabill_test` and agent-isolated `dentabill_w0_identity`. Final snapshot DB48 pass, plus migration
+preservation1 and tenant-read/write32 pass. Migration replay applies all prior23 migrations,
+seeds reviewed legacy/source claims, then24 and proves original payloads unchanged/no backfill.
+Full API **607/607** pass, including real upload→detail, concurrent import, changed/repeated source
+facts, same child IDs across tenants/claims, and600-child late-chunk rollback of parents/children/
+audit followed by retry. Initial affected run had155 pass/1 assertion mismatch because the
+pre-existing header serializer returns `100`, not `100.00`; corrected expectation then full607 pass.
+SDK **30/30** pass. API TypeScript build and both Lambda bundles pass (35.6/28.8 MB unzip;
+10.7/9.4 MB zip). Affected Turbo typecheck/lint **30/30** pass. Final web component/cache tests **19/19** and the full Next.js production build pass.
+Logs `/tmp/dentabill-source-details-{api-tests,import-tests,parser-tests,checks,sdk-tests,lambda-build,web-build}.log`;
+DB logs `/tmp/dentabill-fw21-db-{tests,boundary-tests,types,lint}.log`.
+
+Actual ClaimDetailPage Chromium at1280/390px passed repeated-code/secondary-coverage/source/legacy
+views, optional detail expansion, shallow status PATCH→GET preserving source facts and no overflow
+or page errors. This is a synthetic local component harness, not live Clerk/API/AWS/PMS e2e.
+Two bounded visual rounds fixed a squeezed mobile payer/badge layout and confirmed it. Vite is
+stopped. Artifacts `/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-source-detail-visual-ce1e8uzu`
+(pointer `/tmp/dentabill-source-detail-visual-current`). The later personal-session auth correction
+is functionally tested; it changes query enabling/cache scope, not rendered layout.
+
+**Exact next task:** continue FW-21 with separate payment/remittance evidence, allocations to
+stable source line IDs, partial payment, adjustments and reversal fixtures/ledger invariants,
+then a real biller reconciliation view. Do not derive payment/settlement from source billed totals,
+call statements or workflow status. Define retention before financial FKs refer to deletable claims.
+FW-43 keeps source-revision review/updates/legacy binding and recurring PMS sync. All contracted
+connectors, appeals/corrections/attachments/receipts, live AI/voice evaluation, agreements and
+production evidence remain in scope. Preserve existing stashes. No overall complete/blocked goal
+status is justified by this local milestone; pending provider budget input does not block local work.
+
+### Previous continuation: source-aware CSV imports (ADR-071)
 
 The preceding turn answered the user's status question and made no code progress. This
 continuation resumed FW-19/20 on clean `402d3c2` rather than treating the unanswered $4

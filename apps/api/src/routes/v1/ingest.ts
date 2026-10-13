@@ -9,6 +9,7 @@ import {
   IMPORT_DISPOSITIONS,
 } from '../../lib/csv/insert.js';
 import { parseClaimsCSV } from '../../lib/csv/parser.js';
+import { CsvChildLimitError } from '../../lib/csv/source-details.js';
 import { CsvRowLimitError, UnknownCsvFormatError } from '../../lib/csv/types.js';
 import { getEnv } from '../../lib/env.js';
 
@@ -97,7 +98,7 @@ export async function ingestRoutes(fastify: FastifyInstance): Promise<void> {
       try {
         parsed = parseClaimsCSV(buffer);
       } catch (err) {
-        if (err instanceof CsvRowLimitError) {
+        if (err instanceof CsvRowLimitError || err instanceof CsvChildLimitError) {
           throw new ApiError('VALIDATION_ERROR', err.message);
         }
         if (err instanceof UnknownCsvFormatError) {

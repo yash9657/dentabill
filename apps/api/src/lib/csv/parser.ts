@@ -9,6 +9,7 @@ import {
   normaliseDateOptional,
   normaliseOpaqueId,
 } from './normalisers.js';
+import { CsvChildLimitError, MAX_IMPORT_CHILDREN, parseSourceDetails } from './source-details.js';
 import {
   CsvRowLimitError,
   MAX_IMPORT_ROWS,
@@ -36,6 +37,8 @@ const COLUMN_MAPS: Readonly<Record<CsvSource, Readonly<Record<string, ColumnRole
     'subscriber id': 'subscriberId',
     sourceclaimid: 'sourceClaimId',
     sourceversion: 'sourceVersion',
+    claimlines: 'claimLines',
+    coverages: 'coverages',
   },
   EAGLESOFT: {
     ptid: 'sourcePatientId',
@@ -49,6 +52,8 @@ const COLUMN_MAPS: Readonly<Record<CsvSource, Readonly<Record<string, ColumnRole
     subscriberid: 'subscriberId',
     sourceclaimid: 'sourceClaimId',
     sourceversion: 'sourceVersion',
+    claimlines: 'claimLines',
+    coverages: 'coverages',
   },
   OPEN_DENTAL: {
     patnum: 'sourcePatientId',
@@ -64,6 +69,8 @@ const COLUMN_MAPS: Readonly<Record<CsvSource, Readonly<Record<string, ColumnRole
     // Open Dental's record key is ClaimNum; ClaimIdent remains only display/reference text.
     claimnum: 'sourceClaimId',
     sourceversion: 'sourceVersion',
+    claimlines: 'claimLines',
+    coverages: 'coverages',
     secdatetedit: 'sourceVersion',
   },
 };
@@ -72,6 +79,8 @@ type ColumnRole =
   | 'sourcePatientId'
   | 'sourceClaimId'
   | 'sourceVersion'
+  | 'claimLines'
+  | 'coverages'
   | 'dob'
   | 'carrier'
   | 'claimNumber'
@@ -89,7 +98,13 @@ const CODE_SEPARATORS: Readonly<Record<CsvSource, readonly string[]>> = {
 
 const REQUIRED_FIELDS: readonly Exclude<
   ColumnRole,
-  'sourcePatientId' | 'sourceClaimId' | 'sourceVersion' | 'submittedDate' | 'subscriberId'
+  | 'sourcePatientId'
+  | 'sourceClaimId'
+  | 'sourceVersion'
+  | 'submittedDate'
+  | 'subscriberId'
+  | 'claimLines'
+  | 'coverages'
 >[] = ['dob', 'carrier', 'claimNumber', 'cdtCodes', 'amount', 'serviceDate'];
 
 /**
@@ -158,6 +173,7 @@ export function parseClaimsCSV(buffer: Buffer): ParseResult {
   }
 
   const rows: CanonicalClaimRow[] = [];
+  let childCount = 0;
   const errors: ParseRowError[] = [];
 
   const malformedRecords = new Set(parsed.errors.map((error) => error.row));
@@ -169,10 +185,19 @@ export function parseClaimsCSV(buffer: Buffer): ParseResult {
       return;
     }
     try {
-      rows.push(
-        normaliseRow({ cells, headers: normalisedHeaders, rowIndex, source, roleToColumn }),
-      );
+      const row = normaliseRow({
+        cells,
+        headers: normalisedHeaders,
+        rowIndex,
+        source,
+        roleToColumn,
+      });
+      childCount +=
+        (row.sourceDetails?.lines.length ?? 0) + (row.sourceDetails?.coverages.length ?? 0);
+      if (childCount > MAX_IMPORT_CHILDREN) throw new CsvChildLimitError();
+      rows.push(row);
     } catch (err) {
+      if (err instanceof CsvChildLimitError) throw err;
       errors.push({
         rowIndex,
         message: err instanceof Error ? err.message : 'Unknown parse error',
@@ -208,6 +233,12 @@ function normaliseRow(args: {
   if (cdtCodes.length === 0) throw new Error('cdtCodes: empty');
 
   const claimAmount = normaliseAmount(get('amount'), 'claimAmount');
+  const sourceDetails = parseSourceDetails(
+    get('claimLines'),
+    get('coverages'),
+    claimAmount,
+    cdtCodes,
+  );
   const serviceDate = normaliseDate(get('serviceDate'), 'serviceDate');
   const submittedDate = normaliseDateOptional(get('submittedDate'), 'submittedDate');
 
@@ -233,6 +264,7 @@ function normaliseRow(args: {
     sourceVersion,
     sourcePatientId,
     sourceFields,
+    sourceDetails,
     claimAmount,
     cdtCodes,
     serviceDate,

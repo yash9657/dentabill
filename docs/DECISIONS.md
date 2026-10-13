@@ -1397,3 +1397,50 @@ This slice implements import admission/reporting, not reviewed source updates or
 synchronization. FW-43 tracks versioned source reconciliation and legacy binding; FW-21 and
 contracted connectors retain their full scope. No production migration, deployment or
 third-party request is authorized by this decision.
+
+## ADR-072 — Immutable procedure and coverage import snapshots
+
+**Date:** 2026-10-13. **Status:** implemented locally; external connector/deployment evidence pending.
+
+Claim-level code arrays cannot identify procedures for partial payment or reversal allocation.
+Codes may repeat across teeth and source procedure IDs are not the same as submitted claim
+line IDs. Coverage order alone does not identify the payer billed by a secondary claim.
+Current Open Dental documentation distinguishes ClaimProc billed fees from procedure fees,
+quantities, estimates and adjustments; not every ClaimProc is a billed line. This decision
+models an explicit custom import contract, not an inferred native PMS adapter.
+
+1. Optional `ClaimLines`/`Coverages` JSON columns preserve explicit source facts. Per-line
+   billed totals reconcile exactly in integer cents; quantity is independent and nullable.
+   Repeated submitted codes survive with distinct source line IDs. Raw location/numbering
+   system text is bounded, never restricted to adult teeth1–32 or interpreted as clinical truth.
+   Unknown child keys, invalid dates/totals, duplicate identities and ambiguous target coverage
+   reject the entire CSV row. Upload bounds include10,000 children and512 KiB per details cell.
+2. Expand-only migration24 adds `ClaimSourceDetails`, `ClaimSourceLine`, `ClaimSourceCoverage`.
+   Composite tenant/claim foreign keys, scoped child/position/sequence uniqueness, admission
+   checks and deferred exact counts/totals/target checks seal the snapshot at commit. The
+   schema rejects updates, additions and individual deletion while the claim exists; existing
+   parent-claim cascade deletion still works. No legacy row or reviewed state is backfilled.
+3. Snapshot admission requires an identified source claim and its current amount. Subsequent
+   local claim corrections do not change imported facts. Parent, snapshot, child chunks and
+   aggregate audit share one transaction. A details-specific fingerprint prevents an older
+   unmodeled JSON export from being mistaken for a fully imported snapshot on replay.
+4. Coverage sequence and `isClaimCoverage` are separate explicit facts. Source subscription,
+   plan, subscriber and patient-member IDs remain distinct and nullable. This display/import
+   slice never populates outbound subscriber identity, verifies eligibility or changes financial
+   state. The current adapter continues to require its own explicit subscriber identity.
+5. GET detail exposes scoped ordered source facts; POST/PATCH/list retain their summary
+   response shapes. The claim page separates original totals from current local amounts and
+   paginates procedure lines. Detail cache keys include the selected practice and status edits
+   preserve the snapshot through refetch. Summary-only claims show absent detail rather than
+   fabricated one-line procedures.
+
+The contract and fabricated upload are documented in `apps/api/test/fixtures/csv/README.md`.
+Public sources: [ClaimProcs](https://www.opendental.com/site/apiclaimprocs.html),
+[Procedures](https://www.opendental.com/site/apiprocedurelogs.html),
+[PatPlans](https://www.opendental.com/site/apipatplans.html),
+[InsSubs](https://www.opendental.com/site/apiinssubs.html),
+[Claims](https://www.opendental.com/site/apiclaims.html).
+
+Stable line identities enable the next FW-21 slice; payment events, allocations, adjustments,
+reversals, reconciliation and source revision approval are not implemented by these snapshots.
+No live connector, migration of AWS, production rollout, real payment or parity claim follows.

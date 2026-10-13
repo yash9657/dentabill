@@ -13,6 +13,17 @@ Evidence labels:
 
 ## Local implementation evidence added after the baseline
 
+FW-21 now imports and displays explicit procedure/coverage snapshots (ADR-072). Repeated
+submitted codes retain separate line IDs; line amounts are independent of quantity and reconcile
+to the imported total. Coverage order and the payer for this claim remain distinct. Open Dental’s
+[ClaimProcs](https://www.opendental.com/site/apiclaimprocs.html),
+[ProcedureLogs](https://www.opendental.com/site/apiprocedurelogs.html),
+[PatPlans](https://www.opendental.com/site/apipatplans.html) and
+[InsSubs](https://www.opendental.com/site/apiinssubs.html) informed these distinctions. This is
+**repository/local synthetic evidence**, not an authenticated Open Dental integration. No direct
+ClaimProc mapping, verified eligibility, payment allocation or real outcome reconciliation is
+claimed. The expanded custom CSV contract and fixture are in `apps/api/test/fixtures/csv`.
+
 FW-19/20 now implements explicit CSV source identity, atomic duplicate prevention and a
 no-overwrite row report in the upload UI (ADR-071). Internal Open Dental `ClaimNum` is supported
 as an alias for explicit `SourceClaimId`; its `ClaimIdentifier` is documented as semi-unique

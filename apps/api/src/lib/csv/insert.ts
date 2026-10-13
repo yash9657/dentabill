@@ -12,6 +12,7 @@ import {
 import { ApiError } from '@dentabill/types';
 import { z } from 'zod';
 
+import { CsvChildLimitError, MAX_IMPORT_CHILDREN } from './source-details.js';
 import {
   MAX_IMPORT_ROWS,
   SUPPORTED_CSV_SOURCES,
@@ -65,7 +66,7 @@ function prepareRow(opts: BulkInsertOptions, row: CanonicalClaimRow, now: Date):
   const hash = createHmac('sha256', opts.dobHashSecret)
     .update(
       JSON.stringify([
-        'csv-source-v1',
+        row.sourceDetails ? 'csv-source-details-v1' : 'csv-source-v1',
         opts.organizationId,
         opts.source,
         opts.sourceNamespace,
@@ -82,6 +83,7 @@ function prepareRow(opts: BulkInsertOptions, row: CanonicalClaimRow, now: Date):
         row.payerLabel,
         row.serviceDate,
         row.submittedDate,
+        ...(row.sourceDetails ? [row.sourceDetails] : []),
       ]),
     )
     .digest('hex');
@@ -123,6 +125,14 @@ export async function bulkInsertClaims(opts: BulkInsertOptions): Promise<BulkIns
     throw new ApiError('VALIDATION_ERROR', 'Invalid import source or row limit exceeded.');
   }
   const now = opts.now ?? new Date();
+  if (
+    canonicalRows.reduce(
+      (count, row) =>
+        count + (row.sourceDetails?.lines.length ?? 0) + (row.sourceDetails?.coverages.length ?? 0),
+      0,
+    ) > MAX_IMPORT_CHILDREN
+  )
+    throw new CsvChildLimitError();
   const prepared = canonicalRows.map((row) => prepareRow(opts, row, now));
   const grouped = new Map<string, PreparedRow[]>();
   for (const item of prepared) {
@@ -218,6 +228,54 @@ export async function bulkInsertClaims(opts: BulkInsertOptions): Promise<BulkIns
           data: pending.slice(i, i + CHUNK_SIZE).map((item) => item.data),
           select: { id: true, sourceClaimId: true },
         });
+        const detailRows = inserted.flatMap((saved) => {
+          const item =
+            saved.sourceClaimId === null ? undefined : grouped.get(saved.sourceClaimId)?.[0];
+          const details = item?.row.sourceDetails;
+          return item && details ? [{ saved, item, details }] : [];
+        });
+        if (detailRows.length) {
+          await tx.claimSourceDetails.createMany({
+            data: detailRows.map(({ saved, item, details }) => ({
+              claimId: saved.id,
+              organizationId,
+              schemaVersion: details.schemaVersion,
+              importedClaimAmount: item.row.claimAmount,
+              lineCount: details.lines.length,
+              coverageCount: details.coverages.length,
+            })),
+          });
+          const lines = detailRows.flatMap(({ saved, details }) =>
+            details.lines.map((line, position) => ({
+              ...line,
+              claimId: saved.id,
+              organizationId,
+              position,
+              serviceDate: new Date(`${line.serviceDate}T00:00:00.000Z`),
+            })),
+          );
+          const coverages = detailRows.flatMap(({ saved, details }) =>
+            details.coverages.map((coverage) => ({
+              ...coverage,
+              claimId: saved.id,
+              organizationId,
+              effectiveDate: coverage.effectiveDate
+                ? new Date(`${coverage.effectiveDate}T00:00:00.000Z`)
+                : null,
+              terminationDate: coverage.terminationDate
+                ? new Date(`${coverage.terminationDate}T00:00:00.000Z`)
+                : null,
+            })),
+          );
+          for (let childIndex = 0; childIndex < lines.length; childIndex += CHUNK_SIZE)
+            await tx.claimSourceLine.createMany({
+              data: lines.slice(childIndex, childIndex + CHUNK_SIZE),
+            });
+          for (let childIndex = 0; childIndex < coverages.length; childIndex += CHUNK_SIZE)
+            await tx.claimSourceCoverage.createMany({
+              data: coverages.slice(childIndex, childIndex + CHUNK_SIZE),
+            });
+        }
         for (const saved of inserted) {
           const items = saved.sourceClaimId === null ? undefined : grouped.get(saved.sourceClaimId);
           if (!items) throw new Error('Import identity missing after insert.');

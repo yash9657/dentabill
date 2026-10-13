@@ -4,7 +4,7 @@ These are DentaBill synthetic test layouts for Dentrix, Eaglesoft and Open Denta
 All names, IDs and dates are fabricated. They are not captured customer exports or
 proof of a supported PMS connector.
 
-Each has ten rows, including multiple procedure codes, a missing submission date,
+The three original summary fixtures each have ten rows, including multiple procedure codes, a missing submission date,
 payer aliases and an unknown payer. The original payer text is preserved for change
 detection. Procedure lists are still claim-level summaries; they do not represent
 procedure quantities, teeth, surfaces, coverage or payments.
@@ -54,6 +54,61 @@ a conservative conflict. Raw cells are transient and are never stored in audit/l
 A change of the DOB hashing secret also changes fingerprints and requires planned
 reconciliation, not blind overwriting.
 
-Legacy binding, reviewed source updates, recurring PMS sync and procedure/payment
+Legacy binding, reviewed source updates, recurring PMS sync and payment
 modeling remain follow-on work. Current imports do not update reviewed claims or
 establish financial settlement.
+
+## Optional imported procedures and coverage (version 1)
+
+`opendental-source-details-synthetic.csv` is one fake claim with two separately
+identified procedure lines and a secondary coverage target. It is a custom DentaBill
+layout, not a native Open Dental export. Use the real upload form and any stable fake
+source database name to see its imported details on the linked claim page.
+
+All three layouts accept optional `ClaimLines` and `Coverages` columns containing
+CSV-escaped JSON arrays. Omitted/blank cells mean details were not supplied; an explicit
+empty array is rejected. Either array can be supplied independently. Each supplied array
+is complete for that part of this snapshot. Unknown keys or malformed details reject the
+whole row; the importer does not fall back to a summary-only record.
+
+`ClaimLines` has 1–500 objects:
+
+- Required: `sourceLineId` (opaque text, max200), `procedureCode` (max32),
+  `serviceDate` (real ISO date), `billedAmount` (exact nonnegative USD string with two
+  decimals, max `99999999.99`). Amounts are entire line totals and must sum exactly to
+  the claim header. The distinct submitted codes must agree with the header code list
+  (case-insensitive). Codes are not validated as licensed CDT clinical reference content.
+- Optional/null: `sourceProcedureId` (max200), `codeVersion` (max32), `quantity`
+  (positive decimal string, up to9 integer/3 fractional digits), `treatmentArea`, `tooth`,
+  `surface`, `quadrant`, `toothRange`, `toothNumberingSystem` (each max80).
+  Location values are source text, not interpreted tooth-number or surface enums.
+- IDs are unique within a claim. Repeated codes, teeth or dates remain distinct lines
+  when their source IDs differ. No quantity, location or amount multiplication is inferred.
+
+`Coverages` has 1–9 objects:
+
+- Required: `sourceCoverageId` (max200), `sequence` (integer1–9), `payerName` (max200),
+  `isClaimCoverage` (explicit boolean). Both source IDs and sequences are unique within
+  the claim; sequence gaps are allowed. Exactly one entry must be the coverage for this
+  claim. That entry need not be first in sequence.
+- Optional/null: `payerIdentifier`, `sourcePlanId`, `sourceSubscriptionId`, `subscriberId`,
+  `patientMemberId`, `groupNumber` (each max200), `payerIdentifierSystem`, `relationship`
+  (each max80), `effectiveDate`, `terminationDate` (ISO dates; end cannot precede start).
+- Subscriber/member/subscription/plan IDs are separate facts. These entries never fill
+  the parent claim’s outbound subscriber ID or establish eligibility/payment.
+
+Text cannot be empty, padded or contain control/format characters. Arrays are bounded at
+512 KiB per cell and10,000 accepted procedure+coverage records per upload, in addition to
+the existing10 MB/5,000 CSV-record limits. The upload-wide child bound rejects the whole
+upload before any write. Dates range from0001-01-01 through9999-12-31.
+
+The parent, sealed snapshot, individual children and audit commit atomically. Stable
+DentaBill line IDs are retained on exact reupload. Imported facts cannot be updated,
+appended to or individually deleted. Parent claim deletion retains the existing cascade
+behavior; this is not an indefinite-retention policy. Current claim edits do not rewrite
+the original snapshot or imported total. These rows do not post or reconcile payments.
+
+Details use a versioned fingerprint. If JSON columns were imported before this contract
+existed, reupload now reports `SOURCE_CHANGED`; it does not silently enrich or overwrite
+reviewed claims. FW-43 will provide reviewed source revisions. Formatting/source changes
+also retain the conservative conflict behavior described above.
