@@ -83,7 +83,18 @@ async function seedOrgAndClaim(opts?: {
   return { orgId: org.id, claimId: claim.id };
 }
 
-function jobFor(data: CallJobData): Parameters<ReturnType<typeof createCallJobHandler>>[0] {
+async function jobFor(
+  data: CallJobData,
+): Promise<Parameters<ReturnType<typeof createCallJobHandler>>[0]> {
+  const claim = await prisma.claim.findFirst({
+    where: { id: data.claimId, organizationId: data.organizationId },
+  });
+  if (claim) {
+    await prisma.callIntent.createMany({
+      data: [{ ...data, payerCode: claim.payerCode, claimVersion: claim.updatedAt }],
+      skipDuplicates: true,
+    });
+  }
   // BullMQ Job has many fields; the handler only reads `id` + `data`.
   return { id: 'job_test_1', data } as Parameters<ReturnType<typeof createCallJobHandler>>[0];
 }
@@ -135,11 +146,12 @@ describe('createCallJobHandler — happy path', () => {
     // Retell webhook delivery beats the worker's listener registration).
     // We can therefore kick the simulation eagerly once startCall has
     // been observed — no need to coordinate against the DB write.
-    const handlerPromise = handler(jobFor(data), 'token');
+    const handlerPromise = handler(await jobFor(data), 'token');
     await waitFor(() => fake.startedCalls.length === 1);
     await fake.simulateHappyPath(retellCallId);
 
     const result = await handlerPromise;
+    if (result.callId === null) throw new Error('Expected accepted call');
     expect(result.outcome).toBe('COMPLETED');
     expect(result.callId).toMatch(/^c[a-z0-9]+$/);
     expect(fake.startedCalls[0]?.agentMetadata.subscriberId).toBe('MEMBER-9001');
@@ -184,7 +196,7 @@ describe('createCallJobHandler — reviewed state protection', () => {
       outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
     });
     const pending = handler(
-      jobFor({
+      await jobFor({
         organizationId: orgId,
         claimId,
         payerCode: 'DELTA_DENTAL_PPO',
@@ -201,6 +213,7 @@ describe('createCallJobHandler — reviewed state protection', () => {
     });
     await fake.simulateHappyPath(retellCallId);
     const result = await pending;
+    if (result.callId === null) throw new Error('Expected accepted call');
     expect(
       (await prisma.claim.findFirstOrThrow({ where: { id: claimId, organizationId: orgId } }))
         .status,
@@ -242,11 +255,12 @@ describe('createCallJobHandler — denial path', () => {
       idempotencyKey: 'job-test-deny-1',
     };
 
-    const handlerPromise = handler(jobFor(data), 'token');
+    const handlerPromise = handler(await jobFor(data), 'token');
     await waitFor(() => fake.startedCalls.length === 1);
     await fake.simulateDenial(retellCallId);
 
     const result = await handlerPromise;
+    if (result.callId === null) throw new Error('Expected accepted call');
     expect(result.outcome).toBe('COMPLETED');
 
     const claimAfter = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
@@ -268,7 +282,7 @@ describe('createCallJobHandler — input validation & guards', () => {
     // the dequeue-time runtime guard rejects out-of-range payloads. This
     // is the trust-boundary contract — the worker cannot rely on the
     // enqueuer having validated.
-    const malformed = jobFor({
+    const malformed = await jobFor({
       organizationId: 'org_x',
       claimId: 'clm_x',
       payerCode: 'DELTA_DENTAL_PPO',
@@ -302,7 +316,9 @@ describe('createCallJobHandler — input validation & guards', () => {
       claimPriority: 50,
       idempotencyKey: 'cross-org-1',
     };
-    await expect(handler(jobFor(data), 'token')).rejects.toThrow(/not found in organization/);
+    await expect(handler(await jobFor(data), 'token')).resolves.toMatchObject({
+      outcome: 'BLOCKED',
+    });
     expect(fake.startedCalls).toHaveLength(0);
 
     // Org A's claim must remain untouched.
@@ -329,7 +345,7 @@ describe('createCallJobHandler — input validation & guards', () => {
       claimPriority: 50,
       idempotencyKey: 'no-npi-1',
     };
-    await expect(handler(jobFor(data), 'token')).rejects.toMatchObject({
+    await expect(handler(await jobFor(data), 'token')).rejects.toMatchObject({
       code: 'MISSING_CALL_IDENTITY',
       missingFields: ['providerNpi'],
     });
@@ -362,7 +378,7 @@ describe('createCallJobHandler — input validation & guards', () => {
       claimPriority: 80,
       idempotencyKey: 'missing-identity',
     };
-    const failed = handler(jobFor(data), 'token');
+    const failed = handler(await jobFor(data), 'token');
     await expect(failed).rejects.toBeInstanceOf(MissingCallIdentityError);
     await expect(failed).rejects.toMatchObject({
       code: 'MISSING_CALL_IDENTITY',
@@ -384,7 +400,9 @@ describe('createCallJobHandler — input validation & guards', () => {
       reason: 'MISSING_CALL_IDENTITY',
       missingFields: identity.missingFields,
     });
-    await expect(handler(jobFor(data), 'token')).rejects.toBeInstanceOf(MissingCallIdentityError);
+    await expect(handler(await jobFor(data), 'token')).resolves.toMatchObject({
+      outcome: 'ALREADY_PROCESSED',
+    });
     expect(
       await prisma.auditLog.count({
         where: { organizationId: orgId, resourceId: claimId, action: 'call.blocked' },
@@ -410,7 +428,7 @@ describe('createCallJobHandler — input validation & guards', () => {
     });
     await expect(
       handler(
-        jobFor({
+        await jobFor({
           organizationId: orgId,
           claimId,
           payerCode: 'DELTA_DENTAL_PPO',
@@ -455,7 +473,7 @@ describe('createCallJobHandler — true cancel channel (P4-T7-prep-4)', () => {
     // row at startCall time, so we use a setInterval-friendly hook
     // instead: poll until the handler has persisted its Call row, then
     // stamp the marker and let the cancel-poll loop drive endCall.
-    const handlerPromise = handler(jobFor(data), 'token');
+    const handlerPromise = handler(await jobFor(data), 'token');
     await waitFor(() => fake.startedCalls.length === 1);
     // Wait for the handler's Call row to land in Postgres before we
     // stamp the marker — startCall returns before the DB write completes.
@@ -474,6 +492,7 @@ describe('createCallJobHandler — true cancel channel (P4-T7-prep-4)', () => {
     // COMPLETED.
     await fake.simulateHappyPath(retellCallId);
     const result = await handlerPromise;
+    if (result.callId === null) throw new Error('Expected accepted call');
     expect(result.outcome).toBe('COMPLETED');
   });
 });
@@ -500,10 +519,11 @@ describe('createCallJobHandler — summary emission (P4-T2G)', () => {
       claimPriority: 80,
       idempotencyKey: 'job-emit-1',
     };
-    const handlerPromise = handler(jobFor(data), 'token');
+    const handlerPromise = handler(await jobFor(data), 'token');
     await waitFor(() => fake.startedCalls.length === 1);
     await fake.simulateHappyPath(retellCallId);
     const result = await handlerPromise;
+    if (result.callId === null) throw new Error('Expected accepted call');
 
     expect(summariesQueue.added).toHaveLength(1);
     const enqueued = summariesQueue.added[0];
@@ -540,10 +560,11 @@ describe('createCallJobHandler — summary emission (P4-T2G)', () => {
       claimPriority: 80,
       idempotencyKey: 'job-emit-fail-1',
     };
-    const handlerPromise = handler(jobFor(data), 'token');
+    const handlerPromise = handler(await jobFor(data), 'token');
     await waitFor(() => fake.startedCalls.length === 1);
     await fake.simulateHappyPath(retellCallId);
     const result = await handlerPromise;
+    if (result.callId === null) throw new Error('Expected accepted call');
     expect(result.outcome).toBe('COMPLETED');
   });
 });

@@ -5,7 +5,8 @@
  * The processors themselves are reused unchanged from the worker packages
  * (`createCallJobHandler`, `createSummaryJobHandler`, `createDlqJobHandler`);
  * this module only supplies what BullMQ used to: a Job-shaped object, the
- * retry policy, duplicate suppression, and the terminal DLQ hand-off.
+ * retry policy, summary duplicate suppression, and the terminal DLQ hand-off.
+ * The call processor owns durable intent checks and submission ownership.
  */
 import {
   createCallJobHandler,
@@ -25,6 +26,7 @@ import {
   CALL_JOB_NAME,
   computeBackoffMs,
   type CallJobData,
+  type CallJobResult,
   CALLS_DEFAULT_JOB_OPTIONS,
   DLQ_JOB_NAME,
   DLQ_REASONS,
@@ -63,14 +65,13 @@ export const INLINE_JOB_BUDGET_MS = 760_000;
  */
 const UNUSED_REDIS_URL = 'redis://redis-not-configured.invalid:6379';
 
-/** Rescheduled attempts (hold-detector) carry `-r<n>`; see resolveHoldBreach. */
-const RESCHEDULE_KEY = /-r\d+$/;
 /** Operator-initiated summary retries carry `.retry.<n>`; see POST /calls/:id/summary/retry. */
 const SUMMARY_RETRY_KEY = /\.retry\.\d+$/;
 
 export type InlineRunReport =
   | { readonly status: 'completed'; readonly attemptsMade: number }
   | { readonly status: 'skipped'; readonly reason: string }
+  | { readonly status: 'reconciliation_required'; readonly attemptsMade: number }
   | {
       readonly status: 'blocked';
       readonly reason: 'MISSING_CALL_IDENTITY';
@@ -97,6 +98,7 @@ export interface JobAttempt {
 export type AttemptReport =
   | { readonly status: 'completed'; readonly attempt: number }
   | { readonly status: 'skipped'; readonly reason: string }
+  | { readonly status: 'reconciliation_required'; readonly attempt: number }
   | {
       readonly status: 'blocked';
       readonly reason: 'MISSING_CALL_IDENTITY';
@@ -104,7 +106,7 @@ export type AttemptReport =
       readonly attempt: number;
     }
   | {
-      /** Failed, attempts remain — the caller must make the queue redeliver. */
+      /** Retryable failure or incomplete terminal persistence; keep the delivery. */
       readonly status: 'retry';
       readonly attempt: number;
       /** Backoff the job's BullMQ options would have applied before the next attempt. */
@@ -124,9 +126,9 @@ export interface InlineJobRuntime {
   runSummary(data: SummaryJobData): Promise<InlineRunReport>;
   /**
    * SQS mode: exactly one attempt. Retries are the queue's job — on
-   * `retry` the caller leaves the message undeleted; on the final attempt
-   * the terminal hand-off (call DLQ escalation / summary failure log) runs
-   * here and the report is `failed`, so the caller can delete the message.
+   * `retry` the caller leaves the message undeleted. Exhausted calls must
+   * finish the safe DLQ hand-off before deletion; a failed hand-off still
+   * returns `retry`. Summaries log their final failure here.
    */
   runCallAttempt(data: CallJobData, attempt: JobAttempt): Promise<AttemptReport>;
   runSummaryAttempt(data: SummaryJobData, attempt: JobAttempt): Promise<AttemptReport>;
@@ -203,49 +205,11 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
   const summaryJobOptions = deps.summaryJobOptions ?? SUMMARIES_DEFAULT_JOB_OPTIONS;
 
   /**
-   * Duplicate suppression. BullMQ collapsed duplicate jobIds in Redis;
-   * here the claim row is the lease: the enqueue route flips the claim to
-   * IN_QUEUE, and exactly one trigger can move it IN_QUEUE → CALLING. A
-   * replayed or doubled trigger finds it already CALLING and stops.
-   * Hold-detector reschedules run while the claim is CALLING and carry a
-   * deterministic `-r<n>` key, so they bypass the lease.
-   *
-   * `isRetry` (SQS redelivery after a failed attempt): the failed attempt
-   * already moved the claim to CALLING, so CALLING is accepted too — but a
-   * claim that reached any other state (resolved, manual review, …) is
-   * never redialled.
+   * Exhausted call delivery uses the same READY-only cancellation as the
+   * DLQ consumer, invoked directly. Submitted and ambiguous intents remain
+   * protected. Returns whether that transaction completed.
    */
-  const acquireCallLease = async (data: CallJobData, isRetry: boolean): Promise<boolean> => {
-    const jobId = data.idempotencyKey;
-    if (RESCHEDULE_KEY.test(jobId)) return true;
-    const lease = await prisma.claim.updateMany({
-      where: {
-        id: data.claimId,
-        organizationId: data.organizationId,
-        status: isRetry ? { in: ['IN_QUEUE', 'CALLING'] } : 'IN_QUEUE',
-      },
-      data: { status: 'CALLING' },
-    });
-    if (lease.count === 0) {
-      logger.warn(
-        { jobId, claimId: data.claimId, isRetry },
-        'call job skipped — claim is not in a dialable state (duplicate or stale trigger)',
-      );
-      return false;
-    }
-    return true;
-  };
-
-  /**
-   * Terminal call failure → the same escalation the DLQ consumer performs
-   * for `calls-dlq`, invoked directly (there is no DLQ queue here). Returns
-   * whether the escalation succeeded.
-   */
-  const escalateCallToDlq = async (
-    data: CallJobData,
-    attemptsMade: number,
-    error: unknown,
-  ): Promise<boolean> => {
+  const escalateCallToDlq = async (data: CallJobData, attemptsMade: number): Promise<boolean> => {
     const jobId = data.idempotencyKey;
     const dlqData: DlqJobData = {
       originalJobId: jobId,
@@ -255,7 +219,6 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
       reason: DLQ_REASONS.EXCEEDED_MAX_ATTEMPTS,
       attemptsMade,
       enqueuedAt: new Date().toISOString(),
-      ...(error instanceof Error && { failedReason: error.message }),
     };
     try {
       await dlqHandler(
@@ -292,10 +255,6 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
   return {
     async runCall(data): Promise<InlineRunReport> {
       const jobId = data.idempotencyKey;
-      if (!(await acquireCallLease(data, false))) {
-        return { status: 'skipped', reason: 'claim_not_in_queue' };
-      }
-
       const outcome = await runInlineJob({
         id: jobId,
         name: CALL_JOB_NAME,
@@ -305,8 +264,7 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
         ...(deps.sleep && { sleep: deps.sleep }),
         process: async (job) => {
           try {
-            await callHandler(asBullMqJob(job));
-            return null;
+            return await callHandler(asBullMqJob(job));
           } catch (err) {
             // Missing data needs a biller; retrying or DLQ escalation would
             // replace the handler's NEEDS_INFO state without improving it.
@@ -330,11 +288,16 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
             attemptsMade: outcome.attemptsMade,
           };
         }
+        const disposition = callDisposition(outcome.result);
+        if (disposition?.status === 'skipped') return disposition;
+        if (disposition?.status === 'reconciliation_required') {
+          return { ...disposition, attemptsMade: outcome.attemptsMade };
+        }
         logger.info({ jobId, attemptsMade: outcome.attemptsMade }, 'inline call job completed');
         return { status: 'completed', attemptsMade: outcome.attemptsMade };
       }
 
-      const dlq = await escalateCallToDlq(data, outcome.attemptsMade, outcome.error);
+      const dlq = await escalateCallToDlq(data, outcome.attemptsMade);
       return {
         status: 'failed',
         attemptsMade: outcome.attemptsMade,
@@ -388,13 +351,15 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
 
     async runCallAttempt(data, { attempt, maxAttempts }): Promise<AttemptReport> {
       const jobId = data.idempotencyKey;
-      if (!(await acquireCallLease(data, attempt > 1))) {
-        return { status: 'skipped', reason: 'claim_not_in_queue' };
-      }
       try {
-        await callHandler(
+        const result = await callHandler(
           asBullMqJob({ id: jobId, name: CALL_JOB_NAME, data, attemptsMade: attempt - 1 }),
         );
+        const disposition = callDisposition(result);
+        if (disposition?.status === 'skipped') return disposition;
+        if (disposition?.status === 'reconciliation_required') {
+          return { ...disposition, attempt };
+        }
         logger.info({ jobId, attempt }, 'call job completed');
         return { status: 'completed', attempt };
       } catch (err) {
@@ -415,7 +380,15 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
             error: err,
           };
         }
-        const dlq = await escalateCallToDlq(data, attempt, err);
+        const dlq = await escalateCallToDlq(data, attempt);
+        if (!dlq) {
+          return {
+            status: 'retry',
+            attempt,
+            retryDelayMs: computeBackoffMs(callJobOptions.backoff, attempt),
+            error: err,
+          };
+        }
         return { status: 'failed', attempt, dlq };
       }
     },
@@ -448,4 +421,16 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
       }
     },
   };
+}
+
+/** Queue delivery does not own physical submission; the durable intent does. */
+function callDisposition(
+  result: CallJobResult,
+): { status: 'skipped'; reason: string } | { status: 'reconciliation_required' } | null {
+  if (result.outcome === 'BLOCKED') return { status: 'skipped', reason: 'call_intent_blocked' };
+  if (result.outcome === 'ALREADY_PROCESSED') {
+    return { status: 'skipped', reason: 'call_intent_already_processed' };
+  }
+  if (result.outcome === 'RECONCILIATION_REQUIRED') return { status: 'reconciliation_required' };
+  return null;
 }

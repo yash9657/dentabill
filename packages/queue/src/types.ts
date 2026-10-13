@@ -63,9 +63,17 @@ export type CallJobData = z.infer<typeof CallJobDataSchema>;
  * is the source of truth for that path.
  */
 export const CallJobResultSchema = z.object({
-  callId: z.string().min(1),
+  callId: z.string().min(1).nullable(),
   retellCallId: z.string().min(1).nullable(),
-  outcome: z.enum(['COMPLETED', 'ESCALATED', 'RESCHEDULED', 'CANCELLED']),
+  outcome: z.enum([
+    'COMPLETED',
+    'ESCALATED',
+    'RESCHEDULED',
+    'CANCELLED',
+    'BLOCKED',
+    'RECONCILIATION_REQUIRED',
+    'ALREADY_PROCESSED',
+  ]),
   durationSeconds: z.number().int().min(0).nullable(),
 });
 

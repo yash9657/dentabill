@@ -171,6 +171,7 @@ describe('call-worker e2e — happy path lifecycle', () => {
         claimPriority: 80,
         idempotencyKey: 'e2e-happy-1',
       };
+      await seedIntent(data);
       await queue.add(CALL_JOB_NAME, data, {
         jobId: 'e2e-happy-1',
         ...CALLS_DEFAULT_JOB_OPTIONS,
@@ -250,7 +251,7 @@ describe('call-worker e2e — cross-org isolation', () => {
         const job = await queue.getJob('e2e-crossorg-1');
         if (job === undefined) return false;
         const state = await job.getState();
-        return state === 'failed';
+        return state === 'completed';
       });
     } finally {
       await queue.close();
@@ -305,6 +306,14 @@ describe('call-worker e2e — missing identity', () => {
     const queue = createCallsQueue({ connection: queueConnection });
     try {
       const jobId = 'e2e-missing-identity';
+      await seedIntent({
+        organizationId: orgId,
+        claimId,
+        payerCode: 'DELTA_DENTAL_PPO',
+        attemptNumber: 1,
+        claimPriority: 80,
+        idempotencyKey: jobId,
+      });
       await queue.add(
         CALL_JOB_NAME,
         {
@@ -336,3 +345,12 @@ describe('call-worker e2e — missing identity', () => {
     }
   });
 });
+
+async function seedIntent(data: CallJobData): Promise<void> {
+  const claim = await prisma.claim.findFirstOrThrow({
+    where: { id: data.claimId, organizationId: data.organizationId },
+  });
+  await prisma.callIntent.create({
+    data: { ...data, payerCode: claim.payerCode, claimVersion: claim.updatedAt },
+  });
+}

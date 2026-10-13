@@ -126,6 +126,17 @@ describe('Retell webhook inbox across operating-system processes (synthetic prov
         priority: 80,
       },
     });
+    await prisma.callIntent.create({
+      data: {
+        organizationId: org.id,
+        claimId: claim.id,
+        payerCode: claim.payerCode,
+        claimPriority: 80,
+        attemptNumber: 1,
+        idempotencyKey: `process-${retellCallId}`,
+        claimVersion: claim.updatedAt,
+      },
+    });
     const worker = startFixture();
     worker.send({ type: 'worker.start', organizationId: org.id, claimId: claim.id, retellCallId });
     const barrier = await worker.reply('worker.barrier');

@@ -283,7 +283,7 @@ describe('POST /v1/claims/:id/calls (P3-T16)', () => {
       }>();
       expect(body.claimId).toBe(claim.id);
       expect(body.attemptNumber).toBe(1);
-      expect(body.jobId.startsWith(`${claim.id}-a1-`)).toBe(true);
+      expect(body.jobId.startsWith('call_')).toBe(true);
 
       // BullMQ add() called with the right shape.
       expect(queueAddSpy).toHaveBeenCalledTimes(1);
@@ -358,7 +358,104 @@ describe('POST /v1/claims/:id/calls (P3-T16)', () => {
     }
   });
 
-  it('rolls Claim back to its original status if BullMQ add() throws', async () => {
+  it('concurrent requests reserve one intent and one atomic enqueue audit', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T18:00:00.000Z'));
+    try {
+      const org = await makeOrg('Synthetic concurrency');
+      const claim = await makeClaim(org.id);
+      const request = {
+        method: 'POST' as const,
+        url: `/v1/claims/${claim.id}/calls`,
+        headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id },
+        payload: {},
+      };
+      const responses = await Promise.all([server.inject(request), server.inject(request)]);
+      expect(responses.map((r) => r.statusCode)).toEqual([202, 202]);
+      expect(responses[0].json<{ jobId: string }>().jobId).toBe(
+        responses[1].json<{ jobId: string }>().jobId,
+      );
+      expect(await prisma.callIntent.count({ where: { organizationId: org.id } })).toBe(1);
+      expect(
+        await prisma.auditLog.count({ where: { organizationId: org.id, action: 'call.enqueue' } }),
+      ).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('blocks another call while a previous submission is uncertain even after manual review', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T18:00:00.000Z'));
+    try {
+      const org = await makeOrg('Synthetic uncertain');
+      const claim = await makeClaim(org.id);
+      const request = {
+        method: 'POST' as const,
+        url: `/v1/claims/${claim.id}/calls`,
+        headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id },
+        payload: {},
+      };
+      expect((await server.inject(request)).statusCode).toBe(202);
+      await prisma.callIntent.updateMany({
+        where: { organizationId: org.id, claimId: claim.id },
+        data: { state: 'UNKNOWN' },
+      });
+      await prisma.claim.updateMany({
+        where: { organizationId: org.id, id: claim.id },
+        data: { status: 'MANUAL_REVIEW' },
+      });
+      const blocked = await server.inject(request);
+      expect(blocked.statusCode).toBe(409);
+      expect(bodyAsError(blocked).message).toContain('reconciliation');
+      expect(queueAddSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('counts yesterday reservations submitted today toward the daily attempt cap', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T18:00:00.000Z'));
+    try {
+      const org = await makeOrg('Synthetic attempt date');
+      const claim = await makeClaim(org.id);
+      const row = await prisma.claim.findFirstOrThrow({
+        where: { id: claim.id, organizationId: org.id },
+      });
+      for (const attemptNumber of [1, 2]) {
+        await prisma.callIntent.create({
+          data: {
+            organizationId: org.id,
+            claimId: claim.id,
+            payerCode: row.payerCode,
+            claimPriority: row.priority,
+            claimVersion: row.updatedAt,
+            idempotencyKey: `prior-reservation-${String(attemptNumber)}`,
+            attemptNumber,
+            state: 'TERMINAL',
+            createdAt: new Date('2026-10-12T18:00:00Z'),
+            submittedAt: new Date(),
+          },
+        });
+      }
+      const response = await server.inject({
+        method: 'POST',
+        url: `/v1/claims/${claim.id}/calls`,
+        headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id },
+        payload: {},
+      });
+      expect(response.statusCode).toBe(429);
+      expect(queueAddSpy).not.toHaveBeenCalled();
+      expect(
+        await prisma.claim.findFirst({ where: { id: claim.id, organizationId: org.id } }),
+      ).toMatchObject({ status: 'PENDING' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retains the same durable intent when BullMQ delivery is ambiguous', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-01-13T18:00:00.000Z'));
     queueAddSpy.mockImplementationOnce(async () => {
@@ -376,7 +473,21 @@ describe('POST /v1/claims/:id/calls (P3-T16)', () => {
       });
       expect(response.statusCode).toBe(500); // unhandled — sanitised by global handler
       const after = await prisma.claim.findUniqueOrThrow({ where: { id: claim.id } });
-      expect(after.status).toBe('PENDING');
+      expect(after.status).toBe('IN_QUEUE');
+      const intent = await prisma.callIntent.findFirstOrThrow({
+        where: { organizationId: org.id, claimId: claim.id },
+      });
+      expect(intent.state).toBe('READY');
+      const retry = await server.inject({
+        method: 'POST',
+        url: `/v1/claims/${claim.id}/calls`,
+        headers,
+        payload: {},
+      });
+      expect(retry.statusCode).toBe(202);
+      expect(retry.json<{ jobId: string }>().jobId).toBe(intent.idempotencyKey);
+      expect(queueAddSpy.mock.calls[0]?.[1]).toEqual(queueAddSpy.mock.calls[1]?.[1]);
+      expect(await prisma.callIntent.count({ where: { organizationId: org.id } })).toBe(1);
     } finally {
       vi.useRealTimers();
     }

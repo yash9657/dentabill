@@ -12,7 +12,7 @@
 //   - PHI fields are bounded; raw transcripts and Claude outputs use Text.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // "native" for local dev + Docker images; "rhel-openssl-3.0.x" for Vercel
   // Functions (Amazon Linux 2023) — ADR-053 / docs/DEPLOY_VERCEL.md.
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
@@ -97,14 +97,23 @@ enum CallDLQReason {
 
 // ─── Models ───────────────────────────────────────────────────────────────
 
+enum CallIntentState {
+  READY
+  SUBMITTING
+  UNKNOWN
+  ACCEPTED
+  TERMINAL
+  CANCELLED
+}
+
 model Organization {
-  id         String   @id @default(cuid())
-  clerkOrgId String   @unique
-  name       String
-  npi        String?
-  plan       Plan     @default(TRIAL)
-  callsUsed  Int      @default(0)
-  settings   Json     @default("{}")
+  id                   String    @id @default(cuid())
+  clerkOrgId           String    @unique
+  name                 String
+  npi                  String?
+  plan                 Plan      @default(TRIAL)
+  callsUsed            Int       @default(0)
+  settings             Json      @default("{}")
   // Phase 4: per-org feature flag overrides on top of process-level env
   // flags (ADR-042..049). Flag service is intentionally absent in Phase 4 —
   // env wins by default; this column is the targeted-rollout escape hatch.
@@ -125,6 +134,7 @@ model Organization {
   users               User[]
   claims              Claim[]
   calls               Call[]
+  callIntents         CallIntent[]
   callSummaries       CallSummary[]
   payerConfigs        PayerConfig[]
   auditLogs           AuditLog[]
@@ -172,7 +182,9 @@ model Claim {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   calls        Call[]
+  callIntents  CallIntent[]
 
+  @@unique([id, organizationId])
   @@index([organizationId, status])
   @@index([organizationId, priority])
 }
@@ -210,7 +222,9 @@ model Call {
   claim        Claim        @relation(fields: [claimId], references: [id], onDelete: Cascade)
   summary      CallSummary?
   events       CallEvent[]
+  intent       CallIntent?
 
+  @@unique([id, claimId, organizationId])
   @@index([organizationId])
   // Single-column claimId index kept for backward compatibility — Postgres
   // can use the composite below for `claimId`-only filters, but Prisma's
@@ -226,13 +240,46 @@ model Call {
   @@index([organizationId, claimId, status])
 }
 
+// A submission can be attempted only after READY -> SUBMITTING commits.
+// SUBMITTING/UNKNOWN are never made READY again, including after a timeout.
+model CallIntent {
+  id             String          @id @default(cuid())
+  organizationId String
+  claimId        String
+  idempotencyKey String
+  payerCode      PayerCode
+  attemptNumber  Int
+  claimPriority  Int
+  claimVersion   DateTime
+  state          CallIntentState @default(READY)
+  // Exact outbound request contains PHI. Never copy into audit/log metadata.
+  requestPayload Json?
+  requestHash    String?
+  callId         String?         @unique
+  submittedAt    DateTime?
+  completedAt    DateTime?
+  lastErrorCode  String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  claim        Claim        @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  call         Call?        @relation(fields: [callId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  // Migration also enforces one active intent per organization/claim.
+
+  @@unique([callId, claimId, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, claimId, createdAt])
+  @@index([organizationId, state, updatedAt])
+}
+
 // PHI-relevant: rawTranscript + claudeSummary may contain patient
 // names, dates of service, and denial narrative. Multi-tenancy
 // enforcement is mandatory (P4-T1A, ADR-042).
 model CallSummary {
-  id              String       @id @default(cuid())
+  id              String     @id @default(cuid())
   organizationId  String
-  callId          String       @unique
+  callId          String     @unique
   claimStatus     String
   denialReason    String?
   denialCode      String?
@@ -241,11 +288,11 @@ model CallSummary {
   repName         String?
   referenceNumber String?
   callbackDate    DateTime?
-  amountApproved  Decimal?     @db.Decimal(10, 2)
+  amountApproved  Decimal?   @db.Decimal(10, 2)
   notes           String?
-  rawTranscript   String       @db.Text
-  claudeSummary   String       @db.Text
-  createdAt       DateTime     @default(now())
+  rawTranscript   String     @db.Text
+  claudeSummary   String     @db.Text
+  createdAt       DateTime   @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   call         Call         @relation(fields: [callId], references: [id], onDelete: Cascade)

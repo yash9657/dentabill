@@ -1,5 +1,8 @@
+import { createHash } from 'node:crypto';
+
 import {
   audit,
+  type Prisma,
   type Call,
   type ClaimStatus,
   getOrgScopedDb,
@@ -22,7 +25,12 @@ import {
   type StartCallInput,
   validateCallIdentity,
 } from '@dentabill/payer-ivr';
-import { CallJobDataSchema, type CallsProcessor, type JobDispatcher } from '@dentabill/queue';
+import {
+  CallJobDataSchema,
+  type CallJobResult,
+  type CallsProcessor,
+  type JobDispatcher,
+} from '@dentabill/queue';
 import { UnrecoverableError } from 'bullmq';
 
 import type { WorkerEnv } from './env.js';
@@ -46,34 +54,7 @@ export class MissingCallIdentityError extends UnrecoverableError {
   }
 }
 
-/**
- * Real call-job handler (P3-T10).
- *
- * Drives the full lifecycle for a single `call.place` job:
- *
- *   1. Re-validate the job payload at the dequeue trust boundary
- *      (ADR-035 — the queue is a trust boundary).
- *   2. Load the Claim + Organization through `getOrgScopedDb`. The
- *      org-scoped accessor + write-side middleware (ADR-009) are
- *      load-bearing here: a poisoned job pointing at another org's
- *      claim cannot read or transition that claim's row.
- *   3. Resolve the payer's IVR map and Retell agent prompt
- *      (ADR-032 / ADR-033). Throws if Phase 3 doesn't support the
- *      payer; the API enqueue route should have rejected the job
- *      earlier, so this is a defence-in-depth check.
- *   4. Transition `Claim.status → CALLING` and persist a `Call`
- *      row stamped with the `retellCallId` we get back from
- *      `RetellPort.startCall`.
- *   5. Subscribe to events. Each event is persisted as a
- *      `CallEvent` row. `call.transcript` events update the live
- *      `Call.status` (NAVIGATING_IVR → ON_HOLD → COLLECTING). A
- *      terminal `call.ended` event resolves the handler; `call.error`
- *      throws so BullMQ retries per ADR-035.
- *   6. Update Call + Claim with the final state.
- *
- * Per-call duration cap (ADR-038) and hold cap (ADR-039) are enforced
- * by P3-T11 / T12 / T13 layered on top of this base handler.
- */
+/** Drives only a persisted call intent; queue delivery is not submission ownership. */
 export interface CallJobHandlerDeps {
   readonly logger: Logger;
   readonly prisma: DbClient;
@@ -101,6 +82,36 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
     if (!validation.success) throw validation.error;
     const data = validation.data;
 
+    const foundIntent = await deps.prisma.callIntent.findFirst({
+      where: { organizationId: data.organizationId, idempotencyKey: data.idempotencyKey },
+    });
+    if (
+      foundIntent?.claimId !== data.claimId ||
+      foundIntent.payerCode !== data.payerCode ||
+      foundIntent.attemptNumber !== data.attemptNumber ||
+      foundIntent.claimPriority !== data.claimPriority
+    )
+      return noCallResult('BLOCKED');
+    let intent = foundIntent;
+    if (intent.state === 'SUBMITTING' || intent.state === 'UNKNOWN') {
+      return noCallResult('RECONCILIATION_REQUIRED');
+    }
+    if (intent.state === 'CANCELLED' || intent.state === 'TERMINAL') {
+      return noCallResult('ALREADY_PROCESSED');
+    }
+    let call: Call | null =
+      intent.callId === null
+        ? null
+        : await deps.prisma.call.findFirst({
+            where: {
+              id: intent.callId,
+              organizationId: data.organizationId,
+              claimId: data.claimId,
+            },
+          });
+    if (intent.state === 'ACCEPTED' && call === null) {
+      throw new Error('Accepted call intent has no matching call.');
+    }
     const orgScoped = getOrgScopedDb(data.organizationId);
 
     // ── 2. Load claim + org ────────────────────────────────────────────
@@ -114,137 +125,222 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
         `call-worker: claim ${data.claimId} not found in organization ${data.organizationId}`,
       );
     }
-    const org = await deps.prisma.organization.findUnique({
-      where: { id: data.organizationId },
-    });
-    if (org === null) {
-      throw new Error(`call-worker: organization ${data.organizationId} not found`);
-    }
+    if (intent.state === 'READY') {
+      const org = await deps.prisma.organization.findUnique({
+        where: { id: data.organizationId },
+      });
+      if (org === null) {
+        throw new Error(`call-worker: organization ${data.organizationId} not found`);
+      }
 
-    // ── 3. Resolve IVR + agent ─────────────────────────────────────────
-    const ivrMap = getIvrMap(claim.payerCode);
-    const agentPrompt = getAgentPrompt(claim.payerCode);
-    if (ivrMap === undefined || agentPrompt === undefined) {
-      throw new Error(
-        `call-worker: Phase 3 has no IVR map / agent for payer ${claim.payerCode} — API enqueue should have rejected this job`,
-      );
-    }
+      // ── 3. Resolve IVR + agent ─────────────────────────────────────────
+      const ivrMap = getIvrMap(claim.payerCode);
+      const agentPrompt = getAgentPrompt(claim.payerCode);
+      if (ivrMap === undefined || agentPrompt === undefined) {
+        throw new Error(
+          `call-worker: Phase 3 has no IVR map / agent for payer ${claim.payerCode} — API enqueue should have rejected this job`,
+        );
+      }
 
-    const payerConfig = await deps.prisma.payerConfig.findUnique({
-      where: {
-        organizationId_payerCode: {
-          organizationId: data.organizationId,
-          payerCode: claim.payerCode,
+      const payerConfig = await deps.prisma.payerConfig.findUnique({
+        where: {
+          organizationId_payerCode: {
+            organizationId: data.organizationId,
+            payerCode: claim.payerCode,
+          },
         },
-      },
-    });
-    const providerNpi = payerConfig?.providerNpi ?? org.npi;
-    const identity = validateCallIdentity({ subscriberId: claim.subscriberId, providerNpi });
-    if (!identity.ok) {
-      await deps.prisma.$transaction(async (tx) => {
-        const blocked = await tx.claim.updateMany({
+      });
+      const providerNpi = payerConfig?.providerNpi ?? org.npi;
+      const identity = validateCallIdentity({ subscriberId: claim.subscriberId, providerNpi });
+      if (!identity.ok) {
+        await deps.prisma.$transaction(async (tx) => {
+          const owned = await tx.callIntent.updateMany({
+            where: { id: intent.id, organizationId: data.organizationId, state: 'READY' },
+            data: { state: 'CANCELLED', completedAt: clock(), lastErrorCode: identity.code },
+          });
+          if (owned.count === 0) return;
+          const blocked = await tx.claim.updateMany({
+            where: {
+              id: claim.id,
+              organizationId: data.organizationId,
+              status: 'IN_QUEUE',
+              updatedAt: intent.claimVersion,
+            },
+            data: { status: 'NEEDS_INFO' },
+          });
+          if (blocked.count > 0) {
+            await audit(
+              {
+                action: 'call.blocked',
+                resourceType: 'Claim',
+                resourceId: claim.id,
+                organizationId: data.organizationId,
+                metadata: {
+                  jobId: job.id ?? null,
+                  reason: identity.code,
+                  missingFields: identity.missingFields,
+                },
+              },
+              tx,
+            );
+          }
+        });
+        throw new MissingCallIdentityError(identity.missingFields);
+      }
+
+      const startInput = buildStartCallInput({
+        data: { idempotencyKey: intent.id },
+        claim,
+        org,
+        ivrMap,
+        agentPrompt,
+        identity: identity.identity,
+        outboundNumberE164: deps.outboundNumberE164,
+        env: deps.env,
+      });
+      const requestJson = JSON.stringify(startInput);
+      const reserved = await deps.prisma.$transaction(async (tx) => {
+        const owned = await tx.callIntent.updateMany({
+          where: { id: intent.id, organizationId: data.organizationId, state: 'READY' },
+          data: {
+            state: 'SUBMITTING',
+            submittedAt: clock(),
+            requestPayload: JSON.parse(requestJson) as Prisma.InputJsonValue,
+            requestHash: createHash('sha256').update(requestJson).digest('hex'),
+          },
+        });
+        if (owned.count === 0) return null;
+        const transitioned = await tx.claim.updateMany({
           where: {
             id: claim.id,
             organizationId: data.organizationId,
-            status: { in: ['IN_QUEUE', 'CALLING'] },
-            updatedAt: claim.updatedAt,
+            status: 'IN_QUEUE',
+            updatedAt: intent.claimVersion,
           },
-          data: { status: 'NEEDS_INFO' },
+          data: { status: 'CALLING', lastCallAt: clock() },
         });
-        if (blocked.count > 0) {
+        if (transitioned.count === 0) {
+          await tx.callIntent.updateMany({
+            where: { id: intent.id, organizationId: data.organizationId, state: 'SUBMITTING' },
+            data: { state: 'CANCELLED', completedAt: clock(), lastErrorCode: 'STALE_CLAIM' },
+          });
           await audit(
             {
-              action: 'call.blocked',
-              resourceType: 'Claim',
-              resourceId: claim.id,
+              action: 'call.intent.cancelled',
+              resourceType: 'CallIntent',
+              resourceId: intent.id,
+              organizationId: data.organizationId,
+              metadata: { reason: 'STALE_CLAIM' },
+            },
+            tx,
+          );
+          return null;
+        }
+        const current = await tx.claim.findFirstOrThrow({
+          where: { id: claim.id, organizationId: data.organizationId },
+        });
+        await tx.callIntent.updateMany({
+          where: { id: intent.id, organizationId: data.organizationId },
+          data: { claimVersion: current.updatedAt },
+        });
+        await audit(
+          {
+            action: 'call.intent.submitting',
+            resourceType: 'CallIntent',
+            resourceId: intent.id,
+            organizationId: data.organizationId,
+            metadata: { claimId: claim.id },
+          },
+          tx,
+        );
+        return { ...intent, claimVersion: current.updatedAt };
+      });
+      if (reserved === null) return noCallResult('BLOCKED');
+      intent = reserved;
+
+      let startResult;
+      try {
+        startResult = await deps.retellPort.startCall(startInput);
+      } catch {
+        // Any rejection can follow acceptance. Never infer permission to redial.
+        await deps.prisma.$transaction(async (tx) => {
+          const changed = await tx.callIntent.updateMany({
+            where: { id: intent.id, organizationId: data.organizationId, state: 'SUBMITTING' },
+            data: { state: 'UNKNOWN', lastErrorCode: 'PROVIDER_ACCEPTANCE_UNKNOWN' },
+          });
+          if (changed.count === 0) return;
+          const review = await tx.claim.updateMany({
+            where: {
+              id: claim.id,
+              organizationId: data.organizationId,
+              status: 'CALLING',
+              updatedAt: intent.claimVersion,
+            },
+            data: { status: 'MANUAL_REVIEW' },
+          });
+          await audit(
+            {
+              action: 'call.intent.unknown',
+              resourceType: 'CallIntent',
+              resourceId: intent.id,
               organizationId: data.organizationId,
               metadata: {
-                jobId: job.id ?? null,
-                reason: identity.code,
-                missingFields: identity.missingFields,
+                reason: 'PROVIDER_ACCEPTANCE_UNKNOWN',
+                claimTransitionApplied: review.count === 1,
               },
             },
             tx,
           );
-        }
+        });
+        return noCallResult('RECONCILIATION_REQUIRED');
+      }
+
+      call = await deps.prisma.$transaction(async (tx) => {
+        const owned = await tx.callIntent.updateMany({
+          where: { id: intent.id, organizationId: data.organizationId, state: 'SUBMITTING' },
+          data: { state: 'ACCEPTED' },
+        });
+        if (owned.count !== 1) throw new Error('Call submission ownership changed.');
+        const created = await tx.call.create({
+          data: {
+            organizationId: data.organizationId,
+            claimId: claim.id,
+            retellCallId: startResult.retellCallId,
+            retellAgentId: startInput.agentId,
+            status: 'INITIATED',
+            attemptNumber: data.attemptNumber,
+            startedAt: new Date(startResult.queuedAt),
+          },
+        });
+        await tx.callIntent.updateMany({
+          where: { id: intent.id, organizationId: data.organizationId },
+          data: { callId: created.id },
+        });
+        await audit(
+          {
+            action: 'call.start',
+            resourceType: 'Call',
+            resourceId: created.id,
+            organizationId: data.organizationId,
+            metadata: {
+              intentId: intent.id,
+              claimId: claim.id,
+              jobId: job.id ?? null,
+              attemptNumber: data.attemptNumber,
+              payerCode: claim.payerCode,
+            },
+          },
+          tx,
+        );
+        return created;
       });
-      throw new MissingCallIdentityError(identity.missingFields);
     }
-
-    // ── 4. Transition Claim → CALLING and start the Retell call ──────
-    // The org-scope write middleware requires `organizationId` in every
-    // `where` payload, so we use `updateMany` with the composite filter
-    // (matches the established API pattern in apps/api/src/routes/v1/claims.ts).
-    //
-    // Failure mode (acceptable for Phase 3): if `retellPort.startCall`
-    // throws AFTER this update lands, BullMQ's retry policy (ADR-035) will
-    // re-enter this handler with the same claimId. The claim is now
-    // `CALLING`, the second attempt's update is a no-op, and the job
-    // proceeds. If retries exhaust, the claim is stuck `CALLING` until the
-    // DLQ consumer (P3-T14) writes the terminal CallEvent and the runbook
-    // (P3-T28) walks oncall through the recovery psql.
-    await deps.prisma.claim.updateMany({
-      where: { id: claim.id, organizationId: data.organizationId },
-      data: { status: 'CALLING', lastCallAt: clock() },
-    });
-
-    const startInput = buildStartCallInput({
-      data,
-      claim,
-      org,
-      ivrMap,
-      agentPrompt,
-      identity: identity.identity,
-      outboundNumberE164: deps.outboundNumberE164,
-      env: deps.env,
-    });
-    const startResult = await deps.retellPort.startCall(startInput);
-
-    const call = await deps.prisma.call.create({
-      data: {
-        organizationId: data.organizationId,
-        claimId: claim.id,
-        retellCallId: startResult.retellCallId,
-        retellAgentId: agentPrompt.agentId,
-        status: 'INITIATED',
-        attemptNumber: data.attemptNumber,
-        startedAt: new Date(startResult.queuedAt),
-      },
-    });
-
-    // P3-T27 — audit Call create. The system actor (no userId) drove
-    // this write, so we tag `userId=null` and capture the originating
-    // job id + claim for the HIPAA review trail.
-    await audit({
-      action: 'call.start',
-      resourceType: 'Call',
-      resourceId: call.id,
-      organizationId: data.organizationId,
-      metadata: {
-        claimId: claim.id,
-        jobId: job.id ?? null,
-        attemptNumber: data.attemptNumber,
-        payerCode: claim.payerCode,
-      },
-    });
-
-    deps.logger.info(
-      {
-        jobId: job.id,
-        callId: call.id,
-        retellCallId: startResult.retellCallId,
-        organizationId: data.organizationId,
-        claimId: claim.id,
-        attemptNumber: data.attemptNumber,
-        payerCode: claim.payerCode,
-      },
-      'call-worker started outbound call',
-    );
+    if (call === null) throw new Error('Call intent has no accepted call.');
 
     // ── 5. Subscribe + persist events; resolve when call.ended ───────
     const ended = await waitForCallEnd({
       retellPort: deps.retellPort,
-      retellCallId: startResult.retellCallId,
+      retellCallId: call.retellCallId,
       callId: call.id,
       organizationId: data.organizationId,
       prisma: deps.prisma,
@@ -254,46 +350,66 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
     // ── 6. Update Call + Claim with final state ───────────────────────
     const finalCallStatus = endReasonToCallStatus(ended.endReason);
     const finalClaimStatus = endReasonToClaimStatus(ended);
-    await deps.prisma.call.updateMany({
-      where: {
-        id: call.id,
-        organizationId: data.organizationId,
-        status: { notIn: ['COMPLETED', 'FAILED', 'VOICEMAIL'] },
-      },
-      data: {
-        status: finalCallStatus,
-        endedAt: ended.endedAt === null ? null : new Date(ended.endedAt),
+    const finalized = await deps.prisma.$transaction(async (tx) => {
+      const owned = await tx.callIntent.updateMany({
+        where: {
+          id: intent.id,
+          organizationId: data.organizationId,
+          state: 'ACCEPTED',
+          callId: call.id,
+        },
+        data: { state: 'TERMINAL', completedAt: clock() },
+      });
+      if (owned.count === 0) return false;
+      await tx.call.updateMany({
+        where: {
+          id: call.id,
+          organizationId: data.organizationId,
+          status: { notIn: ['COMPLETED', 'FAILED', 'VOICEMAIL'] },
+        },
+        data: {
+          status: finalCallStatus,
+          endedAt: ended.endedAt === null ? null : new Date(ended.endedAt),
+          durationSeconds: ended.durationSeconds,
+        },
+      });
+      const claimTransition = await tx.claim.updateMany({
+        where: {
+          id: claim.id,
+          organizationId: data.organizationId,
+          status: 'CALLING',
+          updatedAt: intent.claimVersion,
+          calls: { none: { createdAt: { gt: call.createdAt } } },
+        },
+        data: { status: finalClaimStatus },
+      });
+      await audit(
+        {
+          action: 'call.end',
+          resourceType: 'Call',
+          resourceId: call.id,
+          organizationId: data.organizationId,
+          metadata: {
+            claimId: claim.id,
+            intentId: intent.id,
+            providerCallStatus: finalCallStatus,
+            proposedClaimStatus: finalClaimStatus,
+            claimTransitionApplied: claimTransition.count === 1,
+            durationSeconds: ended.durationSeconds,
+            endReason: ended.endReason,
+          },
+        },
+        tx,
+      );
+      return true;
+    });
+    if (!finalized)
+      return {
+        callId: call.id,
+        retellCallId: call.retellCallId,
+        outcome: 'ALREADY_PROCESSED',
         durationSeconds: ended.durationSeconds,
-      },
-    });
-    const claimTransition = await deps.prisma.claim.updateMany({
-      where: {
-        id: claim.id,
-        organizationId: data.organizationId,
-        status: 'CALLING',
-        calls: { none: { createdAt: { gt: call.createdAt } } },
-      },
-      data: { status: finalClaimStatus },
-    });
-
-    // P3-T27 — audit Call lifecycle close. Captures the final status,
-    // duration, and end reason so the review trail can answer
-    // "what was the outcome of the call DentaBill placed at <ts>?"
-    // without re-deriving it from CallEvent[].
-    await audit({
-      action: 'call.end',
-      resourceType: 'Call',
-      resourceId: call.id,
-      organizationId: data.organizationId,
-      metadata: {
-        claimId: claim.id,
-        providerCallStatus: finalCallStatus,
-        proposedClaimStatus: finalClaimStatus,
-        claimTransitionApplied: claimTransition.count === 1,
-        durationSeconds: ended.durationSeconds,
-        endReason: ended.endReason,
-      },
-    });
+      };
 
     // P4-T2G — enqueue post-call summarisation. Only fired when a
     // dispatcher is wired (production deploys + the explicit tests for
@@ -317,7 +433,7 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
           {
             callId: call.id,
             organizationId: data.organizationId,
-            err: err instanceof Error ? { message: err.message, name: err.name } : err,
+            errorType: err instanceof Error ? err.name : 'UnknownError',
           },
           'call-worker: failed to enqueue summary.generate — call lifecycle still healthy',
         );
@@ -326,11 +442,17 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
 
     return {
       callId: call.id,
-      retellCallId: startResult.retellCallId,
+      retellCallId: call.retellCallId,
       outcome: finalClaimStatus === 'MANUAL_REVIEW' ? 'ESCALATED' : 'COMPLETED',
       durationSeconds: ended.durationSeconds,
     };
   };
+}
+
+function noCallResult(
+  outcome: 'BLOCKED' | 'RECONCILIATION_REQUIRED' | 'ALREADY_PROCESSED',
+): CallJobResult {
+  return { callId: null, retellCallId: null, outcome, durationSeconds: null };
 }
 
 interface BuildStartCallInputArgs {
@@ -452,7 +574,7 @@ function waitForCallEnd(args: WaitForCallEndArgs): Promise<RetellCallEndedEvent>
           where: {
             callId: args.callId,
             call: { organizationId: args.organizationId },
-            eventType: 'webhook.call.ended',
+            eventType: { in: ['webhook.call.ended', 'call.ended'] },
           },
           orderBy: [{ timestamp: 'asc' }, { id: 'asc' }],
         });

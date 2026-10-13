@@ -63,6 +63,7 @@ async function seed(
     npi?: string | null;
     subscriberId?: string | null;
     status?: 'IN_QUEUE' | 'PENDING';
+    withIntent?: boolean;
   } = {},
 ): Promise<{
   orgId: string;
@@ -91,22 +92,31 @@ async function seed(
       claimAmount: '245.00',
       payerCode: 'DELTA_DENTAL_PPO',
       serviceDate: new Date('2026-01-15T00:00:00.000Z'),
-      status: opts.status ?? 'IN_QUEUE',
+      status: 'PENDING',
       priority: 80,
     },
   });
-  return {
-    orgId: org.id,
+  const queued =
+    (opts.status ?? 'IN_QUEUE') === 'IN_QUEUE'
+      ? await prisma.claim.update({
+          where: { id: claim.id, organizationId: org.id },
+          data: { status: 'IN_QUEUE' },
+        })
+      : claim;
+  const data: CallJobData = {
+    organizationId: org.id,
     claimId: claim.id,
-    data: {
-      organizationId: org.id,
-      claimId: claim.id,
-      payerCode: 'DELTA_DENTAL_PPO',
-      attemptNumber: 1,
-      claimPriority: 80,
-      idempotencyKey: `${claim.id}-a1-test`,
-    },
+    payerCode: 'DELTA_DENTAL_PPO',
+    attemptNumber: 1,
+    claimPriority: 80,
+    idempotencyKey: `${claim.id}-a1-test`,
   };
+  if (opts.withIntent ?? queued.status === 'IN_QUEUE') {
+    await prisma.callIntent.create({
+      data: { ...data, payerCode: 'DELTA_DENTAL_PPO', claimVersion: queued.updatedAt },
+    });
+  }
+  return { orgId: org.id, claimId: claim.id, data };
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 3_000): Promise<void> {
@@ -126,6 +136,8 @@ afterAll(async () => {
 });
 
 afterEach(async () => {
+  await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS reject_runtime_audit ON "AuditLog"');
+  await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS reject_runtime_audit()');
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE "Organization", "User", "Claim", "Call", "CallSummary", "CallEvent", "PayerConfig", "AuditLog" RESTART IDENTITY CASCADE',
   );
@@ -147,35 +159,71 @@ describe('createInlineJobRuntime — calls', () => {
     expect(dispatcher.dispatchSummary).toHaveBeenCalledWith(
       expect.objectContaining({ callId: call.id, idempotencyKey: `call.${call.id}` }),
     );
-  });
-
-  it('skips a duplicate trigger once the claim has left IN_QUEUE', async () => {
-    const { runtime, retell } = runtimeWith();
-    const { data } = await seed({ status: 'PENDING' });
-    await expect(runtime.runCall(data)).resolves.toEqual({
+    expect(await runtimeWith({ retellPort: retell }).runtime.runCall(data)).toEqual({
       status: 'skipped',
-      reason: 'claim_not_in_queue',
+      reason: 'call_intent_already_processed',
     });
-    expect(retell.startedCalls).toHaveLength(0);
+    expect(retell.startedCalls).toHaveLength(1);
   });
 
-  it('retries per job options, then runs the DLQ escalation (claim → MANUAL_REVIEW)', async () => {
-    const { runtime, retell } = runtimeWith({
-      callJobOptions: { attempts: 2, backoff: { type: 'fixed', delay: 1 } },
-    });
-    vi.spyOn(retell, 'startCall').mockRejectedValue(new Error('synthetic connection refused'));
-    const { data, claimId } = await seed();
+  it.each(['', '-r2'])(
+    'fails closed without an exact intent, including reschedule suffix %j',
+    async (suffix) => {
+      const { runtime, retell } = runtimeWith();
+      const { data, claimId } = await seed({ withIntent: false });
+      await expect(
+        runtime.runCall({ ...data, idempotencyKey: `${data.idempotencyKey}${suffix}` }),
+      ).resolves.toEqual({
+        status: 'skipped',
+        reason: 'call_intent_blocked',
+      });
+      expect(retell.startedCalls).toHaveLength(0);
+      expect((await prisma.claim.findUniqueOrThrow({ where: { id: claimId } })).status).toBe(
+        'IN_QUEUE',
+      );
+    },
+  );
 
-    const report = await runtime.runCall(data);
-
-    expect(report).toEqual({
-      status: 'failed',
-      attemptsMade: 2,
-      budgetExhausted: false,
-      dlq: true,
+  it('retains uncertain provider acceptance without retrying the physical submission', async () => {
+    const { runtime, retell, dispatcher } = runtimeWith({
+      callJobOptions: { attempts: 3, backoff: { type: 'fixed', delay: 1 } },
     });
-    const claim = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
-    expect(claim.status).toBe('MANUAL_REVIEW');
+    const submit = retell.startCall.bind(retell);
+    const startCall = vi.spyOn(retell, 'startCall').mockImplementation(async (input) => {
+      await submit(input);
+      throw new Error('synthetic response lost after acceptance');
+    });
+    const { data, claimId, orgId } = await seed();
+    expect(await runtime.runCall(data)).toEqual({
+      status: 'reconciliation_required',
+      attemptsMade: 1,
+    });
+    expect(startCall).toHaveBeenCalledTimes(1);
+    expect(retell.startedCalls).toHaveLength(1);
+    expect(
+      (
+        await prisma.callIntent.findFirstOrThrow({
+          where: { organizationId: orgId, idempotencyKey: data.idempotencyKey },
+        })
+      ).state,
+    ).toBe('UNKNOWN');
+    expect((await prisma.claim.findUniqueOrThrow({ where: { id: claimId } })).status).toBe(
+      'MANUAL_REVIEW',
+    );
+    expect(await prisma.call.count({ where: { organizationId: orgId } })).toBe(0);
+    expect(dispatcher.dispatchSummary).not.toHaveBeenCalled();
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: orgId, action: 'call.intent.cancelled' },
+      }),
+    ).toBe(0);
+
+    const restarted = runtimeWith({ retellPort: retell }).runtime;
+    expect(await restarted.runCall(data)).toEqual({
+      status: 'reconciliation_required',
+      attemptsMade: 1,
+    });
+    expect(startCall).toHaveBeenCalledTimes(1);
   });
 
   it.each([null, '', ' \t\n '])(
@@ -204,43 +252,169 @@ describe('createInlineJobRuntime — calls', () => {
 });
 
 describe('createInlineJobRuntime — single attempts (SQS mode)', () => {
-  it('first attempt fails with attempts left → retry with the backoff, claim stays CALLING', async () => {
-    const { runtime, retell } = runtimeWith();
-    vi.spyOn(retell, 'startCall').mockRejectedValue(new Error('synthetic connection refused'));
-    const { data, claimId } = await seed();
-
-    const report = await runtime.runCallAttempt(data, { attempt: 1, maxAttempts: 3 });
-
-    expect(report).toMatchObject({ status: 'retry', attempt: 1, retryDelayMs: 30_000 });
-    const claim = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
-    expect(claim.status).toBe('CALLING');
-  });
-
-  it('a redelivery may re-take the CALLING lease, and the final attempt escalates to DLQ', async () => {
-    const { runtime, retell } = runtimeWith();
-    vi.spyOn(retell, 'startCall').mockRejectedValue(new Error('synthetic connection refused'));
-    const { data, claimId } = await seed();
-    await runtime.runCallAttempt(data, { attempt: 1, maxAttempts: 3 });
-
-    await expect(
-      runtime.runCallAttempt(data, { attempt: 2, maxAttempts: 3 }),
-    ).resolves.toMatchObject({ status: 'retry', attempt: 2, retryDelayMs: 60_000 });
-    await expect(runtime.runCallAttempt(data, { attempt: 3, maxAttempts: 3 })).resolves.toEqual({
-      status: 'failed',
-      attempt: 3,
-      dlq: true,
+  it('retries a database failure before submission, retaining the READY reservation', async () => {
+    const { runtime, retell, retellCallId } = runtimeWith();
+    const { data, orgId, claimId } = await seed();
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION reject_runtime_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'call.intent.submitting' THEN RAISE EXCEPTION 'synthetic audit outage'; END IF; RETURN NEW; END $$`,
+    );
+    await prisma.$executeRawUnsafe(
+      'CREATE TRIGGER reject_runtime_audit BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION reject_runtime_audit()',
+    );
+    expect(await runtime.runCallAttempt(data, { attempt: 1, maxAttempts: 3 })).toMatchObject({
+      status: 'retry',
+      attempt: 1,
+      retryDelayMs: 30_000,
     });
-    const claim = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
-    expect(claim.status).toBe('MANUAL_REVIEW');
+    expect(retell.startedCalls).toHaveLength(0);
+    expect(
+      (await prisma.callIntent.findFirstOrThrow({ where: { organizationId: orgId } })).state,
+    ).toBe('READY');
+    expect((await prisma.claim.findUniqueOrThrow({ where: { id: claimId } })).status).toBe(
+      'IN_QUEUE',
+    );
+    await prisma.$executeRawUnsafe('DROP TRIGGER reject_runtime_audit ON "AuditLog"');
+    const running = runtime.runCallAttempt(data, { attempt: 2, maxAttempts: 3 });
+    await waitFor(() => retell.startedCalls.length === 1);
+    await retell.simulateHappyPath(retellCallId);
+    expect(await running).toEqual({ status: 'completed', attempt: 2 });
+    expect(retell.startedCalls).toHaveLength(1);
   });
 
-  it('never redials a claim that left IN_QUEUE / CALLING, even on a redelivery', async () => {
+  it('keeps the final SQS delivery when neither reservation nor terminal failure can commit', async () => {
     const { runtime, retell } = runtimeWith();
-    const { data } = await seed({ status: 'PENDING' });
-    for (const attempt of [1, 2]) {
+    const { data, orgId, claimId } = await seed();
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION reject_runtime_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action IN ('call.intent.submitting', 'call.intent.cancelled') THEN RAISE EXCEPTION 'synthetic audit outage'; END IF; RETURN NEW; END $$`,
+    );
+    await prisma.$executeRawUnsafe(
+      'CREATE TRIGGER reject_runtime_audit BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION reject_runtime_audit()',
+    );
+    const worker = createSqsJobWorker({ runtime, logger: silentLogger, maxReceiveCount: 3 });
+    expect(
+      await worker({
+        Records: [
+          {
+            messageId: 'uncommitted',
+            receiptHandle: 'synthetic-receipt',
+            body: JSON.stringify({ type: 'call.place', data }),
+            attributes: { ApproximateReceiveCount: '3' },
+          },
+        ],
+      }),
+    ).toEqual({ batchItemFailures: [{ itemIdentifier: 'uncommitted' }] });
+    expect(retell.startedCalls).toHaveLength(0);
+    expect(
+      (await prisma.callIntent.findFirstOrThrow({ where: { organizationId: orgId } })).state,
+    ).toBe('READY');
+    expect((await prisma.claim.findUniqueOrThrow({ where: { id: claimId } })).status).toBe(
+      'IN_QUEUE',
+    );
+    expect(await prisma.auditLog.count()).toBe(0);
+  });
+
+  it('does not repeat provider submission when accepted-call persistence fails', async () => {
+    const { runtime, retell } = runtimeWith();
+    const { data, orgId } = await seed();
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION reject_runtime_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'call.start' THEN RAISE EXCEPTION 'synthetic audit outage'; END IF; RETURN NEW; END $$`,
+    );
+    await prisma.$executeRawUnsafe(
+      'CREATE TRIGGER reject_runtime_audit BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION reject_runtime_audit()',
+    );
+    expect(await runtime.runCallAttempt(data, { attempt: 1, maxAttempts: 3 })).toMatchObject({
+      status: 'retry',
+    });
+    expect(retell.startedCalls).toHaveLength(1);
+    expect(
+      (await prisma.callIntent.findFirstOrThrow({ where: { organizationId: orgId } })).state,
+    ).toBe('SUBMITTING');
+    expect(await prisma.call.count()).toBe(0);
+    await prisma.$executeRawUnsafe('DROP TRIGGER reject_runtime_audit ON "AuditLog"');
+    const restarted = runtimeWith({ retellPort: retell }).runtime;
+    expect(await restarted.runCallAttempt(data, { attempt: 3, maxAttempts: 3 })).toEqual({
+      status: 'reconciliation_required',
+      attempt: 3,
+    });
+    expect(retell.startedCalls).toHaveLength(1);
+    expect(await prisma.auditLog.count({ where: { action: 'call.intent.cancelled' } })).toBe(0);
+  });
+
+  it('acknowledges uncertainty across SQS redeliveries and runtime recreation without DLQ overwrite', async () => {
+    const { retell } = runtimeWith();
+    const startCall = vi
+      .spyOn(retell, 'startCall')
+      .mockRejectedValue(new Error('synthetic unknown submission result'));
+    const { data, claimId, orgId } = await seed();
+    const scheduleRetry = vi.fn(async () => undefined);
+    for (const attempt of [1, 2, 3]) {
+      const { runtime } = runtimeWith({ retellPort: retell });
+      const worker = createSqsJobWorker({
+        runtime,
+        logger: silentLogger,
+        maxReceiveCount: 3,
+        scheduleRetry,
+      });
+      expect(
+        await worker({
+          Records: [
+            {
+              messageId: `delivery-${String(attempt)}`,
+              receiptHandle: 'synthetic-receipt',
+              body: JSON.stringify({ type: 'call.place', data }),
+              attributes: { ApproximateReceiveCount: String(attempt) },
+            },
+          ],
+        }),
+      ).toEqual({ batchItemFailures: [] });
+    }
+    expect(startCall).toHaveBeenCalledTimes(1);
+    expect(scheduleRetry).not.toHaveBeenCalled();
+    expect(
+      (
+        await prisma.callIntent.findFirstOrThrow({
+          where: { organizationId: orgId, idempotencyKey: data.idempotencyKey },
+        })
+      ).state,
+    ).toBe('UNKNOWN');
+    expect((await prisma.claim.findUniqueOrThrow({ where: { id: claimId } })).status).toBe(
+      'MANUAL_REVIEW',
+    );
+    expect(await prisma.auditLog.count({ where: { action: 'call.intent.cancelled' } })).toBe(0);
+  });
+
+  it('prevents concurrent runtimes from submitting the same READY intent twice', async () => {
+    const { retell, runtime } = runtimeWith();
+    let release: () => void = () => undefined;
+    const submitted = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const startCall = vi.spyOn(retell, 'startCall').mockImplementation(async () => {
+      await submitted;
+      throw new Error('synthetic unknown submission result');
+    });
+    const { data } = await seed();
+    const first = runtime.runCallAttempt(data, { attempt: 1, maxAttempts: 3 });
+    await waitFor(() => startCall.mock.calls.length === 1);
+    const duplicate = runtimeWith({ retellPort: retell }).runtime;
+    try {
+      await expect(duplicate.runCallAttempt(data, { attempt: 2, maxAttempts: 3 })).resolves.toEqual(
+        { status: 'reconciliation_required', attempt: 2 },
+      );
+      expect(startCall).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+    }
+    await expect(first).resolves.toEqual({ status: 'reconciliation_required', attempt: 1 });
+  });
+
+  it('fails closed for legacy redelivery without an intent', async () => {
+    const { runtime, retell } = runtimeWith();
+    const { data } = await seed({ withIntent: false });
+    for (const attempt of [1, 3]) {
       await expect(runtime.runCallAttempt(data, { attempt, maxAttempts: 3 })).resolves.toEqual({
         status: 'skipped',
-        reason: 'claim_not_in_queue',
+        reason: 'call_intent_blocked',
       });
     }
     expect(retell.startedCalls).toHaveLength(0);

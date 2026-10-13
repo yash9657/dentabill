@@ -155,10 +155,11 @@ export const StartCallInputSchema = z.object({
     dateOfService: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD'),
   }),
   /**
-   * Idempotency key — typically the BullMQ jobId from `@dentabill/queue`.
-   * Adapter implementations MUST refuse to start a duplicate if they
-   * see the same key twice in a short window (LiveRetell uses Retell's
-   * own `client_call_id`; FakeRetell uses an in-memory Set).
+   * Opaque durable call-intent ID supplied by the dial runtime. LiveRetell
+   * sends it as the provider's `idempotency_key` body field and correlation
+   * metadata. Retell documents a one-hour deduplication window; the runtime
+   * must retain unresolved intents and must not infer that a timeout is safe
+   * to retry. FakeRetell's in-memory deduplication is only a test convenience.
    */
   idempotencyKey: z.string().min(1),
 });

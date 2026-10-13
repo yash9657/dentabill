@@ -76,7 +76,7 @@ describe('receiveAttempt', () => {
 });
 
 describe('decide', () => {
-  it('only a retry report keeps the message', () => {
+  it('keeps retry reports and calls whose terminal persistence failed', () => {
     expect(decide({ status: 'completed', attempt: 1 })).toBe('delete');
     expect(decide({ status: 'skipped', reason: 'summary_exists' })).toBe('delete');
     expect(
@@ -88,6 +88,9 @@ describe('decide', () => {
       }),
     ).toBe('delete');
     expect(decide({ status: 'failed', attempt: 3, dlq: true })).toBe('delete');
+    expect(decide({ status: 'failed', attempt: 3, dlq: false })).toBe('retry');
+    expect(decide({ status: 'failed', attempt: 3, dlq: false }, 'summary.generate')).toBe('delete');
+    expect(decide({ status: 'reconciliation_required', attempt: 3 })).toBe('delete');
     expect(decide({ status: 'retry', attempt: 1, retryDelayMs: 30_000, error: null })).toBe(
       'retry',
     );
@@ -145,10 +148,35 @@ describe('processRecord', () => {
   });
 
   it('duplicates skipped by the DB checks are deleted', async () => {
-    const d = deps({ status: 'skipped', reason: 'claim_not_in_queue' });
+    const d = deps({ status: 'skipped', reason: 'call_intent_already_processed' });
     await expect(processRecord(record({ type: 'call.place', data: callData }), d)).resolves.toBe(
       'delete',
     );
+  });
+
+  it('acknowledges persisted uncertainty without scheduling a fresh submission', async () => {
+    const d = deps({ status: 'reconciliation_required', attempt: 3 });
+    await expect(
+      processRecord(record({ type: 'call.place', data: callData }, '3'), d),
+    ).resolves.toBe('delete');
+    expect(d.scheduleRetry).not.toHaveBeenCalled();
+  });
+
+  it('does not acknowledge a call when its final failure could not be persisted', async () => {
+    const d = deps({ status: 'failed', attempt: 3, dlq: false });
+    await expect(
+      processRecord(record({ type: 'call.place', data: callData }, '3'), d),
+    ).resolves.toBe('retry');
+  });
+
+  it('preserves summary exhaustion behavior without a call DLQ', async () => {
+    const d = deps(
+      { status: 'completed', attempt: 1 },
+      { status: 'failed', attempt: 3, dlq: false },
+    );
+    await expect(
+      processRecord(record({ type: 'summary.generate', data: summaryData }, '3'), d),
+    ).resolves.toBe('delete');
   });
 
   it('invalid bodies are left for the SQS DLQ without running anything', async () => {

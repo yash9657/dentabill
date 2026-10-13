@@ -31,7 +31,10 @@ const sampleInput = (overrides: Partial<StartCallInput> = {}): StartCallInput =>
  * are `call.createPhoneCall` and `call.stop`. Cast to the SDK's
  * default-export type just enough to satisfy LiveRetell's loader.
  */
-type StubCreatePhoneCall = (body: Record<string, unknown>) => Promise<{ call_id: string }>;
+type StubCreatePhoneCall = (
+  body: Record<string, unknown>,
+  options: { readonly maxRetries: number; readonly timeout: number },
+) => Promise<{ call_id: string }>;
 type StubStopCall = (
   callId: string,
   options: { readonly maxRetries: number; readonly timeout: number },
@@ -107,7 +110,13 @@ describe('LiveRetell — startCall', () => {
       subscriber_id: 'SUB-001',
       date_of_service: '2026-03-15',
     });
-    expect(callArg.metadata).toMatchObject({ idempotencyKey: 'claim_test_001-1' });
+    expect(callArg.idempotency_key).toBe('claim_test_001-1');
+    expect(callArg.metadata).toEqual({
+      dentabill_intent_id: 'claim_test_001-1',
+      idempotencyKey: 'claim_test_001-1',
+      payerCode: 'DELTA_DENTAL_PPO',
+    });
+    expect(createPhoneCall.mock.calls[0]![1]).toEqual({ maxRetries: 0, timeout: 30_000 });
 
     expect(result).toEqual({
       retellCallId: 'retell_call_xyz',
@@ -141,6 +150,125 @@ describe('LiveRetell — startCall', () => {
     const live = new LiveRetell({ apiKey: 'rk_test', retellLoader: loader });
     await expect(live.startCall(sampleInput({ toNumberE164: 'bad' }))).rejects.toThrow();
     expect(loader).not.toHaveBeenCalled();
+  });
+
+  it.each(['abcd', 'invalid.key', 'a'.repeat(256)])(
+    'rejects an intent ID outside the provider idempotency-key contract before SDK loading',
+    async (idempotencyKey) => {
+      const loader = vi.fn(async () => buildStubRetell({}));
+      const live = new LiveRetell({ apiKey: 'rk_test', retellLoader: loader });
+      await expect(live.startCall(sampleInput({ idempotencyKey }))).rejects.toThrow(
+        /idempotency key/,
+      );
+      expect(loader).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('LiveRetell — installed SDK create-call contract (synthetic transport)', () => {
+  // Current API docs include body idempotency_key; SDK 5.16.0's types predate it.
+  // https://docs.retellai.com/api-references/create-phone-call (2026-10-13).
+  it('sends one POST with a real idempotency body field and minimal correlation metadata', async () => {
+    const fetch = vi.fn<RetellFetch>(
+      async () =>
+        Response.json({ call_id: 'call_synthetic_fw25' }, { status: 201 }) as RetellResponse,
+    );
+    const live = buildSdkRetell(fetch);
+
+    expect(
+      await live.startCall(sampleInput({ idempotencyKey: 'intent_synthetic_fw25' })),
+    ).toMatchObject({
+      retellCallId: 'call_synthetic_fw25',
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = fetch.mock.calls[0]!;
+    const request = new Request(url, init);
+    expect(request.url).toBe('https://api.retellai.com/v2/create-phone-call');
+    expect(request.method).toBe('POST');
+    expect(await request.json()).toEqual({
+      from_number: '+15551234567',
+      to_number: '+18007656003',
+      override_agent_id: 'agent_delta_dental_ppo',
+      idempotency_key: 'intent_synthetic_fw25',
+      metadata: {
+        dentabill_intent_id: 'intent_synthetic_fw25',
+        idempotencyKey: 'intent_synthetic_fw25',
+        payerCode: 'DELTA_DENTAL_PPO',
+      },
+      retell_llm_dynamic_variables: {
+        practice_name: 'Sunrise Family Dental',
+        provider_npi: '1234567890',
+        subscriber_id: 'SUB-001',
+        date_of_service: '2026-03-15',
+      },
+    });
+  });
+
+  it.each([400, 401, 402, 408, 409, 422, 429, 500])(
+    'propagates create HTTP %s without an implicit SDK retry',
+    async (status) => {
+      const fetch = vi.fn<RetellFetch>(
+        async () =>
+          Response.json({ message: 'Synthetic create rejection' }, { status }) as RetellResponse,
+      );
+      const live = buildSdkRetell(fetch);
+
+      await expect(live.startCall(sampleInput())).rejects.toMatchObject({ status });
+
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not redial when transport loses the response after accepting the request', async () => {
+    const acceptedRequests: unknown[] = [];
+    const cause = new TypeError('Synthetic connection lost after request acceptance');
+    const fetch = vi.fn<RetellFetch>(async (url, init) => {
+      acceptedRequests.push(await new Request(url, init).json());
+      throw cause;
+    });
+    const live = buildSdkRetell(fetch);
+
+    await expect(
+      live.startCall(sampleInput({ idempotencyKey: 'intent_synthetic_lost_response' })),
+    ).rejects.toMatchObject({ cause });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(acceptedRequests).toHaveLength(1);
+    expect(acceptedRequests[0]).toMatchObject({
+      idempotency_key: 'intent_synthetic_lost_response',
+      metadata: { dentabill_intent_id: 'intent_synthetic_lost_response' },
+    });
+  });
+
+  it('aborts a stalled create request after thirty seconds without retry', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn<RetellFetch>(
+        async (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              'abort',
+              () => {
+                reject(new DOMException('Synthetic create timeout', 'AbortError'));
+              },
+              { once: true },
+            );
+          }),
+      );
+      const live = buildSdkRetell(fetch);
+      const outcome = live.startCall(sampleInput()).catch((error: unknown) => error);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(await Promise.race([outcome, Promise.resolve('still pending')])).toBeInstanceOf(
+        Retell.APIConnectionTimeoutError,
+      );
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(fetch.mock.calls[0]![1]?.signal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

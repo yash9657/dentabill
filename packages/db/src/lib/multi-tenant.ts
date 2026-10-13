@@ -10,6 +10,7 @@ export const MULTI_TENANT_MODELS = [
   'user',
   'claim',
   'call',
+  'callIntent',
   'callSummary',
   'payerConfig',
   'auditLog',

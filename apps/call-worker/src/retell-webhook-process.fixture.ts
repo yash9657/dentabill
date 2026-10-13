@@ -139,6 +139,7 @@ async function run(): Promise<void> {
     },
   } as Parameters<typeof handler>[0];
   const result = await handler(job, 'synthetic-worker-token');
+  if (result.callId === null) throw new Error('Synthetic worker did not accept call.');
   await send({
     type: 'worker.complete',
     pid: process.pid,

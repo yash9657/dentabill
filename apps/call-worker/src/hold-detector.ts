@@ -1,30 +1,21 @@
 import type { RetellPort } from '@dentabill/payer-ivr';
-import {
-  type CallJobData,
-  CALL_JOB_NAME,
-  DLQ_REASONS,
-  type DlqQueue,
-  enqueueDlqJob,
-  type JobDispatcher,
-} from '@dentabill/queue';
+import { type CallJobData, type DlqQueue, type JobDispatcher } from '@dentabill/queue';
 
 /**
- * Hold detector + reschedule resolver (P3-T12).
+ * Hold detector + termination request (P3-T12).
  *
  * Two pieces, kept separately so the pure-logic detector has zero I/O
- * and the async resolver lives at the worker → queue boundary.
+ * and the async termination request lives at the provider boundary.
  *
  *   1. `createHoldDetector({ maxHoldMs })` — tracks the wall-clock gap
  *      between the call start (or the rep's last utterance) and "now".
  *      Once the gap exceeds `maxHoldMs` (ADR-039 default = 600 s) the
  *      detector flips to `'breached'`.
  *
- *   2. `resolveHoldBreach({ … })` — invoked by the worker when the
- *      detector trips. Ends the Retell call with `hold_cap_exceeded`,
- *      then reschedules the job with `attemptNumber + 1` (cap 2 per
- *      ADR-039). When the cap is hit the job is DLQ'd with
- *      `EXCEEDED_MAX_HOLD`. P3-T14's DLQ consumer is what surfaces the
- *      `MANUAL_REVIEW` claim status downstream.
+ *   2. `resolveHoldBreach({ … })` requests termination with
+ *      `hold_cap_exceeded`. A successful stop request is not terminal
+ *      evidence; another attempt requires a newly reserved durable intent
+ *      after reconciliation. This helper never dispatches a replacement.
  */
 export interface HoldDetectorOptions {
   /** ADR-039 default 600 s. Lower for tests. */
@@ -90,9 +81,8 @@ export function createHoldDetector(options: HoldDetectorOptions): HoldDetector {
 
 export interface ResolveHoldBreachInput {
   /**
-   * Re-dispatch target for the rescheduled attempt (ADR-053). BullMQ
-   * dispatch applies the `calls` queue's default job options; inline
-   * dispatch runs the next attempt immediately in a fresh invocation.
+   * Legacy integration parameters retained for callers. These transports
+   * are deliberately not used before provider termination is established.
    */
   readonly jobDispatcher: Pick<JobDispatcher, 'dispatchCall'>;
   readonly dlqQueue: DlqQueue;
@@ -100,18 +90,14 @@ export interface ResolveHoldBreachInput {
   readonly retellCallId: string;
   /** The job that just breached the hold cap. */
   readonly originalData: CallJobData;
-  /** BullMQ jobId of the breached job (used as DLQ idempotency key). */
+  /** Legacy BullMQ jobId of the breached job. */
   readonly originalJobId: string;
-  /** ms of dead air observed at the breach (logged on the DLQ payload). */
+  /** ms of dead air observed at the breach. */
   readonly silentMs: number;
 }
 
 export interface ResolveHoldBreachResult {
-  readonly outcome: 'rescheduled' | 'dlq_exhausted';
-  /** Set on `rescheduled`; the `attemptNumber` of the new job. */
-  readonly nextAttemptNumber?: 1 | 2;
-  /** Set on `rescheduled`; the BullMQ jobId of the new job. */
-  readonly nextJobId?: string;
+  readonly outcome: 'termination_pending';
 }
 
 /**
@@ -132,35 +118,5 @@ export async function resolveHoldBreach(
     reason: 'hold_cap_exceeded',
   });
 
-  const current = input.originalData.attemptNumber;
-  // 2. Reschedule if we still have attempts left. The new job carries
-  //    attemptNumber + 1; the idempotencyKey is suffixed `-r<n>` so a
-  //    racing duplicate breach (two pollers both observing the same
-  //    silence threshold) collapses to a single requeue thanks to BullMQ's
-  //    jobId uniqueness.
-  if (current < MAX_ATTEMPTS_PER_CLAIM_PER_DAY) {
-    const nextAttemptNumber = (current + 1) as 1 | 2;
-    const nextJobId = `${input.originalData.idempotencyKey}-r${String(nextAttemptNumber)}`;
-    const nextData: CallJobData = {
-      ...input.originalData,
-      attemptNumber: nextAttemptNumber,
-      idempotencyKey: nextJobId,
-    };
-    await input.jobDispatcher.dispatchCall(nextData);
-    return { outcome: 'rescheduled', nextAttemptNumber, nextJobId };
-  }
-
-  // 3. Cap reached: terminal DLQ. The DLQ consumer (P3-T14) is what
-  //    eventually flips `Claim.status` to `MANUAL_REVIEW` and writes the
-  //    `Call.dlqReason = EXCEEDED_MAX_HOLD` row.
-  await enqueueDlqJob({
-    dlq: input.dlqQueue,
-    originalJobId: input.originalJobId,
-    originalJobName: CALL_JOB_NAME,
-    originalData: input.originalData,
-    attemptsMade: current,
-    reason: DLQ_REASONS.EXCEEDED_MAX_HOLD,
-    failedReason: `hold cap exceeded after ${String(input.silentMs)} ms of silence`,
-  });
-  return { outcome: 'dlq_exhausted' };
+  return { outcome: 'termination_pending' };
 }

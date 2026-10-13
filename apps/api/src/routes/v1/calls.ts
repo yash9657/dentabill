@@ -1,4 +1,6 @@
-import { audit, getOrgScopedDb, prisma } from '@dentabill/db';
+import { randomUUID } from 'node:crypto';
+
+import { audit, type CallIntent, getOrgScopedDb, prisma } from '@dentabill/db';
 import { checkPayerHours, validateCallIdentity } from '@dentabill/payer-ivr';
 import type { CallJobData, SummaryJobData } from '@dentabill/queue';
 import { ApiError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@dentabill/types';
@@ -10,39 +12,6 @@ import {
   unavailableVerifiedPayments,
   VerifiedPaymentsSchema,
 } from '../../lib/financial-reporting.js';
-
-/**
- * `/v1/claims/:id/calls` — enqueue an outbound call (P3-T16).
- *
- * Phase 3 entry point for the dashboard "Call now" button. The route
- * does the bare-minimum gating then hands off to BullMQ; the actual
- * call lifecycle (Retell → IVR → rep → DB persist) lives in the
- * call-worker.
- *
- * Flow:
- *
- *   1. `requireAuth` populates `request.dentabillAuth` with `orgId` and
- *      `userId`.
- *   2. Look up the Claim through `getOrgScopedDb` so the multi-tenancy
- *      filter is automatic — a foreign claim id returns 404, not the
- *      foreign row.
- *   3. Reject if the claim is in a state where dialling makes no sense
- *      (`COMPLETED`, `WRITTEN_OFF`, etc.).
- *   4. Reject if the payer's provider line is closed at submission time
- *      (ADR-037 — business-hours guard runs at enqueue, not at worker
- *      pickup, so the user gets immediate feedback).
- *   5. Transition Claim → IN_QUEUE via the `prisma.claim.updateMany`
- *      with a composite where (matches the established API pattern in
- *      claims.ts).
- *   6. Enqueue a `call.place` job. The BullMQ jobId is the deterministic
- *      idempotency key (`<claimId>-<attemptNumber>-<timestamp slug>`)
- *      so a UI double-click collapses to a single job.
- *   7. Audit + return 202 with `{ jobId, claimId, queuedAt }`.
- *
- * Per-org rate limit: 10/min (ADR-035 — busy practices have ~50 claims
- * per biller per day; 10 enqueues per minute is well above the
- * legitimate ceiling and well below the per-payer line capacity).
- */
 
 const PHASE_3_PAYERS = ['DELTA_DENTAL_PPO', 'CIGNA_DENTAL', 'METLIFE_DENTAL'] as const;
 const PHASE_3_PAYERS_SET = new Set<string>(PHASE_3_PAYERS);
@@ -357,7 +326,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       preHandler: requireAuth,
       schema: {
         description:
-          'Enqueue an outbound payer call for the given claim. Returns 202 with the BullMQ job id; the call lifecycle plays out in the call-worker.',
+          'Reserve an outbound payer call intent and dispatch it. Repeated requests reuse the active intent; ambiguous provider submission requires reconciliation.',
         security,
         params: IdParamSchema,
         body: EnqueueCallBodySchema,
@@ -387,6 +356,38 @@ export function callsRoutes(fastify: FastifyInstance): void {
       if (!claim) {
         throw new ApiError('NOT_FOUND', 'Claim not found in your organization.');
       }
+
+      const dispatchIntent = async (intent: CallIntent): Promise<EnqueueCallResponse> => {
+        if (intent.state === 'SUBMITTING' || intent.state === 'UNKNOWN') {
+          throw new ApiError(
+            'INVALID_STATE_TRANSITION',
+            'The earlier call submission needs reconciliation before another call can be placed.',
+          );
+        }
+        if (intent.state === 'READY') {
+          const data: CallJobData = {
+            organizationId: orgId,
+            claimId: id,
+            payerCode: intent.payerCode,
+            attemptNumber: intent.attemptNumber,
+            claimPriority: intent.claimPriority,
+            idempotencyKey: intent.idempotencyKey,
+          };
+          // Delivery can be ambiguous too. Preserve the same READY intent on failure.
+          await fastify.jobDispatcher.dispatchCall(data, { priority: 101 - data.claimPriority });
+        }
+        reply.code(202);
+        return {
+          jobId: intent.idempotencyKey,
+          claimId: id,
+          queuedAt: intent.createdAt.toISOString(),
+          attemptNumber: intent.attemptNumber,
+        };
+      };
+      const activeIntent = await db.callIntent.findFirst({
+        where: { claimId: id, state: { in: ['READY', 'SUBMITTING', 'UNKNOWN', 'ACCEPTED'] } },
+      });
+      if (activeIntent) return dispatchIntent(activeIntent);
 
       if (!ENQUEUEABLE_CLAIM_STATUSES.has(claim.status)) {
         throw new ApiError(
@@ -470,85 +471,90 @@ export function callsRoutes(fastify: FastifyInstance): void {
         );
       }
 
-      // Count today's attempts for this claim so we stamp the right
-      // `attemptNumber` (ADR-039 cap of 2/claim/day). UTC day boundary
-      // is fine for Phase 3 — payer-local wall-clock day matters most
-      // for the hold-time policy, which the worker enforces.
-      const todayUtcStart = new Date();
-      todayUtcStart.setUTCHours(0, 0, 0, 0);
-      const attemptsToday = await prisma.call.count({
-        where: {
-          organizationId: orgId,
-          claimId: id,
-          createdAt: { gte: todayUtcStart },
-        },
-      });
-      if (attemptsToday >= 2) {
-        throw new ApiError(
-          'RATE_LIMITED',
-          'This claim has already used its 2 dialling attempts for today (ADR-039).',
+      const reserved = await prisma.$transaction(async (tx) => {
+        const queued = await tx.claim.updateMany({
+          where: { id, organizationId: orgId, status: claim.status, updatedAt: claim.updatedAt },
+          data: { status: 'IN_QUEUE' },
+        });
+        if (queued.count === 0) {
+          const concurrent = await tx.callIntent.findFirst({
+            where: {
+              organizationId: orgId,
+              claimId: id,
+              state: { in: ['READY', 'SUBMITTING', 'UNKNOWN', 'ACCEPTED'] },
+            },
+          });
+          if (concurrent) return concurrent;
+          throw new ApiError(
+            'INVALID_STATE_TRANSITION',
+            'Claim changed before the call was queued.',
+          );
+        }
+        const legacyActive = await tx.call.count({
+          where: {
+            organizationId: orgId,
+            claimId: id,
+            status: { notIn: ['COMPLETED', 'FAILED', 'VOICEMAIL'] },
+          },
+        });
+        if (legacyActive > 0) {
+          throw new ApiError('INVALID_STATE_TRANSITION', 'An earlier call is still active.');
+        }
+        const todayUtcStart = new Date();
+        todayUtcStart.setUTCHours(0, 0, 0, 0);
+        const attemptsToday =
+          (await tx.callIntent.count({
+            where: {
+              organizationId: orgId,
+              claimId: id,
+              OR: [{ createdAt: { gte: todayUtcStart } }, { submittedAt: { gte: todayUtcStart } }],
+            },
+          })) +
+          (await tx.call.count({
+            where: {
+              organizationId: orgId,
+              claimId: id,
+              createdAt: { gte: todayUtcStart },
+              intent: null,
+            },
+          }));
+        if (attemptsToday >= 2) {
+          throw new ApiError(
+            'RATE_LIMITED',
+            'This claim has already reserved its 2 dialling attempts for today.',
+          );
+        }
+        const current = await tx.claim.findFirstOrThrow({ where: { id, organizationId: orgId } });
+        const intent = await tx.callIntent.create({
+          data: {
+            organizationId: orgId,
+            claimId: id,
+            payerCode: claim.payerCode,
+            attemptNumber: attemptsToday + 1,
+            claimPriority: body?.priorityOverride ?? claim.priority,
+            idempotencyKey: `call_${randomUUID()}`,
+            claimVersion: current.updatedAt,
+          },
+        });
+        await audit(
+          {
+            action: 'call.enqueue',
+            resourceType: 'Claim',
+            resourceId: id,
+            organizationId: orgId,
+            metadata: {
+              clerkUserId: auth.userId,
+              attemptNumber: intent.attemptNumber,
+              jobId: intent.idempotencyKey,
+              intentId: intent.id,
+              payerCode: claim.payerCode,
+            },
+          },
+          tx,
         );
-      }
-      const attemptNumber = (attemptsToday + 1) as 1 | 2;
-
-      const queuedAt = new Date();
-      const idempotencyKey = `${id}-a${String(attemptNumber)}-${queuedAt.getTime().toString(36)}`;
-      const data: CallJobData = {
-        organizationId: orgId,
-        claimId: id,
-        payerCode: claim.payerCode,
-        attemptNumber,
-        claimPriority: body?.priorityOverride ?? claim.priority,
-        idempotencyKey,
-      };
-
-      // Transition the claim into the queue BEFORE enqueuing the job —
-      // a worker pickup is allowed to see status=IN_QUEUE; if Redis
-      // throws on `add()` we leave the claim flipped, which is the
-      // less-bad failure mode (the user sees the queued state and can
-      // retry; the background reaper P3-T28 documents could pull stuck
-      // rows back to PENDING).
-      await prisma.claim.updateMany({
-        where: { id, organizationId: orgId },
-        data: { status: 'IN_QUEUE' },
+        return intent;
       });
-
-      try {
-        await fastify.jobDispatcher.dispatchCall(data, {
-          // Higher claimPriority → lower BullMQ priority value (BullMQ
-          // is min-first). Map [0..100] → [101..1] so 100 priority
-          // dials before 0. Inline dispatch ignores priority.
-          priority: 101 - data.claimPriority,
-        });
-      } catch (err) {
-        // Roll the claim back so the UI doesn't show a stuck IN_QUEUE.
-        await prisma.claim.updateMany({
-          where: { id, organizationId: orgId, status: 'IN_QUEUE' },
-          data: { status: claim.status },
-        });
-        throw err;
-      }
-
-      await audit({
-        action: 'call.enqueue',
-        resourceType: 'Claim',
-        resourceId: id,
-        organizationId: orgId,
-        metadata: {
-          clerkUserId: auth.userId,
-          attemptNumber,
-          jobId: idempotencyKey,
-          payerCode: claim.payerCode,
-        },
-      });
-
-      reply.code(202);
-      return {
-        jobId: idempotencyKey,
-        claimId: id,
-        queuedAt: queuedAt.toISOString(),
-        attemptNumber,
-      };
+      return dispatchIntent(reserved);
     },
   );
 

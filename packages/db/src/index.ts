@@ -16,6 +16,8 @@ export type {
   User,
   Claim,
   Call,
+  CallIntent,
+  CallIntentState,
   CallSummary,
   CallEvent,
   PayerConfig,

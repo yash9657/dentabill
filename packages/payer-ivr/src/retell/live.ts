@@ -16,13 +16,17 @@ import type { RetellEventListener, RetellPort } from './port.js';
  */
 interface RetellLikeClient {
   readonly call: {
-    createPhoneCall(body: {
-      readonly from_number: string;
-      readonly to_number: string;
-      readonly override_agent_id?: string;
-      readonly metadata?: unknown;
-      readonly retell_llm_dynamic_variables?: Record<string, unknown>;
-    }): Promise<{ readonly call_id: string }>;
+    createPhoneCall(
+      body: {
+        readonly from_number: string;
+        readonly to_number: string;
+        readonly idempotency_key: string;
+        readonly override_agent_id?: string;
+        readonly metadata?: unknown;
+        readonly retell_llm_dynamic_variables?: Record<string, unknown>;
+      },
+      options: { readonly maxRetries: number; readonly timeout: number },
+    ): Promise<{ readonly call_id: string }>;
     stop(
       callId: string,
       options: { readonly maxRetries: number; readonly timeout: number },
@@ -85,28 +89,42 @@ export class LiveRetell implements RetellPort {
   async startCall(input: StartCallInput): Promise<StartCallResult> {
     const validation = StartCallInputSchema.safeParse(input);
     if (!validation.success) throw validation.error;
+    if (!/^[A-Za-z0-9_-]{5,255}$/.test(input.idempotencyKey)) {
+      throw new Error(
+        'Retell idempotency key must be 5–255 ASCII letters, digits, underscores, or hyphens.',
+      );
+    }
     const client = await this.#getClient();
     const queuedAt = this.#clock();
-    const response = await client.call.createPhoneCall({
-      from_number: input.fromNumberE164,
-      to_number: input.toNumberE164,
-      override_agent_id: input.agentId,
-      metadata: {
-        idempotencyKey: input.idempotencyKey,
-        payerCode: input.payerCode,
-        practiceName: input.agentMetadata.practiceName,
-        providerNpi: input.agentMetadata.providerNpi,
+    // Current Create Phone Call docs define a one-hour idempotency window.
+    // SDK 5.16.0 serializes this body field although its types predate it.
+    // Metadata alone is correlation, not provider-enforced idempotency.
+    // https://docs.retellai.com/api-references/create-phone-call
+    const response = await client.call.createPhoneCall(
+      {
+        from_number: input.fromNumberE164,
+        to_number: input.toNumberE164,
+        idempotency_key: input.idempotencyKey,
+        override_agent_id: input.agentId,
+        metadata: {
+          dentabill_intent_id: input.idempotencyKey,
+          idempotencyKey: input.idempotencyKey,
+          payerCode: input.payerCode,
+        },
+        // Retell substitutes `{{var}}` placeholders in the agent prompt
+        // from this dictionary. Phase 3 prompts (packages/payer-ivr/agents/*)
+        // reference exactly these four keys.
+        retell_llm_dynamic_variables: {
+          practice_name: input.agentMetadata.practiceName,
+          provider_npi: input.agentMetadata.providerNpi,
+          subscriber_id: input.agentMetadata.subscriberId,
+          date_of_service: input.agentMetadata.dateOfService,
+        },
       },
-      // Retell substitutes `{{var}}` placeholders in the agent prompt
-      // from this dictionary. Phase 3 prompts (packages/payer-ivr/agents/*)
-      // reference exactly these four keys.
-      retell_llm_dynamic_variables: {
-        practice_name: input.agentMetadata.practiceName,
-        provider_npi: input.agentMetadata.providerNpi,
-        subscriber_id: input.agentMetadata.subscriberId,
-        date_of_service: input.agentMetadata.dateOfService,
-      },
-    });
+      // A timeout can follow successful creation. The durable intent owner
+      // must reconcile ambiguous outcomes instead of issuing another create.
+      { maxRetries: 0, timeout: 30_000 },
+    );
     return {
       retellCallId: response.call_id,
       queuedAt: queuedAt.toISOString(),

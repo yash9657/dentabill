@@ -9,14 +9,15 @@
  * single attempt per receive; SQS owns the retry loop:
  *
  *   - attempt number = `ApproximateReceiveCount`;
- *   - success / duplicate (skipped)       → message deleted;
+ *   - success / duplicate / durable uncertainty → message deleted;
  *   - failure with attempts remaining      → reported in `batchItemFailures`,
  *     after shortening its visibility timeout to the job's BullMQ backoff
  *     (calls 30 s, 60 s; summaries 15 s, 30 s) so SQS redelivers on that
  *     schedule instead of after the queue-wide timeout;
  *   - failure on the final attempt         → the inline path's terminal
- *     hand-off runs (call → DLQ escalation, claim → MANUAL_REVIEW; summary →
- *     error log), then the message is deleted;
+ *     hand-off runs (call → READY-only intent cancellation; summary → error
+ *     log), then the message is deleted. Failed call terminal persistence
+ *     remains a batch failure for SQS retry/redrive;
  *   - unparseable body / unexpected crash  → reported as a failure without
  *     a visibility change, so it lands in the SQS DLQ via redrive.
  *
@@ -77,8 +78,13 @@ export function receiveAttempt(record: SqsRecord): number {
 }
 
 /** What a runtime report means for the SQS message. */
-export function decide(report: AttemptReport): RecordDecision {
-  return report.status === 'retry' ? 'retry' : 'delete';
+export function decide(
+  report: AttemptReport,
+  kind: 'call.place' | 'summary.generate' = 'call.place',
+): RecordDecision {
+  if (report.status === 'retry') return 'retry';
+  if (kind === 'call.place' && report.status === 'failed' && !report.dlq) return 'retry';
+  return 'delete';
 }
 
 const errInfo = (err: unknown): unknown =>
@@ -110,7 +116,7 @@ export async function processRecord(
         ? await deps.runtime.runCallAttempt(message.data, jobAttempt)
         : await deps.runtime.runSummaryAttempt(message.data, jobAttempt);
   } catch (err) {
-    // Infrastructure failure outside the processor (e.g. the lease query).
+    // Infrastructure failure outside the processor (e.g. a runtime lookup).
     // The terminal hand-off could not run, so never delete: SQS retries and,
     // after maxReceiveCount, moves the message to the DLQ.
     deps.logger.error(
@@ -125,7 +131,7 @@ export async function processRecord(
     'sqs worker: job attempt finished',
   );
 
-  const decision = decide(report);
+  const decision = decide(report, message.type);
   if (report.status === 'retry' && deps.scheduleRetry) {
     try {
       await deps.scheduleRetry(record.receiptHandle, Math.ceil(report.retryDelayMs / 1000));

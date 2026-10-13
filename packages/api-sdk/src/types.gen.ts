@@ -566,7 +566,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Enqueue an outbound payer call for the given claim. Returns 202 with the BullMQ job id; the call lifecycle plays out in the call-worker. */
+        /** @description Reserve an outbound payer call intent and dispatch it. Repeated requests reuse the active intent; ambiguous provider submission requires reconciliation. */
         post: {
             parameters: {
                 query?: never;
@@ -968,7 +968,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Live call event stream (Server-Sent Events). Replays persisted CallEvent rows on connect, then streams new events via Redis pub/sub. Heartbeat every 15s; closes on server shutdown or auth expiry. See ADR-046. */
+        /** @description Live call event stream (Server-Sent Events). Replays all persisted CallEvent rows in bounded pages, then catches up from Postgres with optional Redis wake-up hints. Heartbeat every 15s; closes after terminal call events are drained. See ADR-046. */
         get: {
             parameters: {
                 query?: never;
