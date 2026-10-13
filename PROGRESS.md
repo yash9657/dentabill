@@ -3,7 +3,7 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-13
-**Current work:** implementing W0 containment on AWS baseline through `23cdc7b`, branch
+**Current work:** implementing W0 containment on latest main `4497459` (AWS baseline `23cdc7b`), branch
 `codex/w0-containment`. The full parity goal is active; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
@@ -39,6 +39,14 @@ with19 affected UI tests repeated after the final markup/fixture corrections. Ty
 and Lambda packaging pass. See session context for proof and limits; counts do not certify
 external workflows. No production deploy, schedule activation or real calls ran.
 
+**New gateway slice:** FW-10–13 now implements a typed Fireworks text adapter, explicit synthetic
+fake, reviewed release policy, source-bound observation validation and bounded transport with
+safe failure/usage records. Independent review fixed cancellation losing prior attempts and
+foreign-currency ambiguity. Both model candidates remain unapproved; worker/voice integration,
+durable inference spend and real-provider/dental evaluations remain open. The user added the
+Fireworks/ElevenLabs keys; both pass bounded read-only authentication (HTTP200). Gateway274
+tests /5files and scoped checks7/7 pass. No inference, speech, call or production change ran. See ADR-063 and session context for final test evidence.
+
 **User direction:** ElevenLabs speech/orchestration is permitted, business inference stays
 on Fireworks open weights. There is no pilot clinic yet: all development uses fake patient
 data. AWS Lambda/SQS/Aurora is the current backend; the Vercel-only notes below are historical.
@@ -46,7 +54,7 @@ The frontend remains on Vercel. The live worker is configured for demo mode. AWS
 passed on a second direct Function URL probe; custom API-domain readiness remains unverified.
 
 **Still required:** real financial reconciliation, source sync/electronic connectors,
-version-bound reviewed actions, durable external-intent recovery, Fireworks gateway/evals,
+version-bound reviewed actions, durable external-intent recovery, Fireworks worker integration/evals,
 voice contract/behavior proof, PHI agreements, production validation and authorized clinic evidence.
 
 ### Historical go-live report — 2026-08-22

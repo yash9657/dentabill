@@ -1006,3 +1006,45 @@ Only synthetic localhost databases are migrated. No production deployment, recov
 activation, live call, notification to others or account change is authorized by this ADR.
 Notification escalation, transport execution monitoring, unmatched inbox operations and staged
 AWS evidence remain separate gates. The original outbox/evidence must survive rollback.
+
+## ADR-063 — Release-gated Fireworks observation boundary
+
+**Date:** 2026-10-13. **Status:** implemented locally; no model approval or production integration.
+
+Business reasoning must use approved Fireworks-hosted open weights. An API key, catalog route
+or valid JSON is insufficient approval or evidence. A separate leaf package implements the
+first task, versioned claim observation from final transcripts, without changing live worker
+selection or the Retell comparison baseline.
+
+1. Trusted server configuration selects an explicit immutable release ID. Candidate and
+   disabled releases cannot send requests. Enabled entries bind exact endpoint/route, measured
+   response identity, organizations, task/prompt/schema/rule hashes, implementation artifact,
+   safety limits and reviewed evidence references. A policy SHA-256 and dated approval prevent
+   accidental scope/limit changes from reusing review. Protected input also requires separate
+   contractual/source approval. References are operator-reviewed records, not cryptographic
+   vendor attestation; artifact identity must be supplied by the future trusted build integration.
+2. Input objects are strict and cloned, with matching organization/claim/version and unique
+   sources. Output requires exact source/version/UTF-16 spans, identity, bounded integer USD
+   amounts, explicit code nomenclature or UNKNOWN, compatible actions and strict abstention.
+   Source anchors and lexical rules prove consistency only. They do not prove attribution,
+   applicability, clinical correctness or settlement. Every result requires human review.
+3. Native fetch fixes US host/path and denies redirects. Only allowlisted nonstreaming fields
+   are sent; tenant/release cache keys contain no source text. No tool execution, storage option,
+   prompt repair, implicit fake or cross-model/provider fallback exists. Fake fixtures are
+   explicitly synthetic and tied to the entire input; an unknown fixture abstains.
+4. One monotonic deadline covers headers, body, parsing, validation and backoff. Request128KiB,
+   response1MiB, depth32, output4096 and thirty seconds are maxima that releases may tighten.
+   At most one retry follows explicit429/500/502/503/504 and applicable Retry-After within the
+   same budget. Ambiguous network failure, cancellation and invalid output do not retry.
+   Abort cannot establish that generation stopped or was free.
+5. Safe progress preserves each completed/active transport attempt even when the gateway's
+   cancellation watchdog wins. Unknown token usage remains null, never zero or inferred.
+   Errors expose closed codes/status/timing/usage only. Observations and evidence themselves
+   contain sensitive content and must not be logged. FW-14 still owns application telemetry;
+   FW-26 must persist ownership/spend before worker replay is allowed.
+
+Both checked-in routes remain CANDIDATE. No inference, speech, call, deployment or cutover
+occurred. New credentials passed one bounded read-only authenticated account/user GET each;
+remaining account policy/entitlement inventory proceeds alongside FW-26. Qualified dental evaluations, source authorization, actual model revision/license/region/
+retention and capped inference authorization remain release gates. Streaming/tools and the
+ElevenLabs voice chain require separate implementation and comparative evidence.

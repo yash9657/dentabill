@@ -27,10 +27,10 @@ Each FW item is a 1–3 hour slice; larger workstreams require further decomposi
 - [ ] **FW-07** Transitional webhook normalization or explicit live-path disablement (FW-06). _Implemented locally: strict signature/wire normalization, transactional pending inbox, canonical final transcript, DB worker completion; synthetic HTTP/fault tests._
 - [ ] **FW-08** Separate-process call/fault-injection integration harness. _Local producer-SIGKILL/early-delivery/DB-completion/replay regression passes; worker restart/no-redial proof still FW-25._
 - [ ] **FW-09** Fireworks ASR/TTS, license, region, and contractual feasibility record.
-- [ ] **FW-10** Typed model gateway and fake with evidence/model-release contracts. _Current primary contract and no-key acceptance matrix documented in FIREWORKS_GATEWAY_CONTRACT.md; adapter not yet implemented, no model approved._
-- [ ] **FW-11** Synthetic Fireworks adapter with host/model allowlist (FW-10).
-- [ ] **FW-12** Structured output, truncation, and semantic validation (FW-11).
-- [ ] **FW-13** Bounded retries/deadlines/cancellation and vendor failure fixtures (FW-11).
+- [ ] **FW-10** Typed model gateway and fake with evidence/model-release contracts. _Implemented locally in @dentabill/model-gateway; explicit synthetic provenance, reviewed release manifests and no default live release. No model approved; see ADR-063._
+- [ ] **FW-11** Synthetic Fireworks adapter with host/model allowlist (FW-10). _Native-fetch adapter implemented and tested with synthetic fixtures/local HTTP; exact US route/response identity gates. Real authenticated contract probes remain unverified._
+- [ ] **FW-12** Structured output, truncation, and semantic validation (FW-11). _Local strict schemas, source/version/UTF-16 anchors, conservative amount/code invariants and review-only abstention implemented. Lexical checks do not establish truth or dental accuracy._
+- [ ] **FW-13** Bounded retries/deadlines/cancellation and vendor failure fixtures (FW-11). _Implemented locally: end-to-end monotonic deadline, bounded body/depth, explicit status-only retry, no fallback and cancellation-safe attempt journal. Live latency/billing behavior unverified._
 - [ ] **FW-14** Redacted inference telemetry and PHI/secret log-capture regression.
 - [ ] **FW-15** Annotation schema and first 25 adjudicated synthetic edge cases.
 - [ ] **FW-16** Deterministic evaluation runner and report (FW-15).

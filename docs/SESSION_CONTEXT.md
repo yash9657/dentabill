@@ -4,7 +4,64 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: FW-37 scoped operations and audited recovery
+### Latest continuation: FW-10–13 release-gated Fireworks text gateway
+
+The full parity goal remains active. Latest main `4497459` (the AWS PR merge) is now
+incorporated; AWS content was already present, so this merge changed no application files.
+The user added `FIREWORKS_API_KEY` and `ELEVENLABS_API_KEY` to root `.env`. Presence-only
+checks confirm those and the existing Retell key in root/API/web configuration, without
+printing values or finding duplicate definitions. Read-only authentication now succeeds for both providers (HTTP200); account limits, inference/agent
+permissions and contractual suitability remain unverified. Telnyx is unnecessary for Retell-managed Twilio.
+`.env.example` now includes the new names and corrects the historical carrier comments.
+Only two bounded read-only provider requests ran: Fireworks accounts and ElevenLabs user.
+No inference, speech, purchase, call, deployment, production migration or account change ran.
+The user has no clinic; development remains synthetic. Preserve the existing stashes.
+
+- New leaf package `@dentabill/model-gateway` implements one versioned claim-observation
+  port, explicit synthetic adapter and native-fetch Fireworks transport. It is not yet wired
+  into summary workers or the voice path. There is no API-key activation, default live model,
+  implicit fake, repair prompt or fallback to another model/provider.
+- Reviewed server manifests bind exact fixed US endpoint/regional route, observed response
+  model IDs, organization/workload scope, prompt/schema/validator-rule hashes, application
+  artifact hash, limits, publisher/license/serving/region/retention/price evidence references,
+  review expiry and evaluation/run authorization. The policy digest invalidates changed scope
+  or limits. Both checked-in candidates remain unapproved. Evidence references and the
+  deployment artifact hash are trusted operator records, not automatic vendor attestation.
+- Strict schemas require echoed claim/version and exact versioned source spans. Local rules
+  enforce tenant/source consistency, UTF-16 offsets, integer USD amounts within billed value,
+  lexical currency/amount/code consistency, explicit code nomenclature or UNKNOWN, and strict
+  abstention/review-only actions. Anchors and lexical checks cannot prove payer attribution,
+  applicability, clinical correctness, payment or truth. Mixed adjudication, overpayments,
+  unsupported amount notation and missing/conflicting evidence require human review.
+- Transport fixes the host/path, refuses redirects, builds only allowlisted JSON fields and
+  isolates prompt caches by an opaque tenant/release hash. Limits are 128KiB request, 1MiB
+  response, depth32, 4096 output tokens, 30s including body/parse/validation/backoff, and two
+  attempts maximum. Only explicit 429/500/502/503/504 may retry once; network ambiguity,
+  cancellation, invalid output, auth/payment failures do not. Retry-After cannot extend the
+  deadline. Provider model identity, one completed assistant choice, UTF-8 and output shape
+  are checked; reasoning/tool payloads never become observations.
+- Usage missing from any attempt stays unknown. Safe progress snapshots preserve completed
+  and active attempts if gateway cancellation wins the race against transport cleanup.
+  Review reproduced and fixed a two-send cancellation that previously lost attempt history;
+  currency review also found and tightened foreign-currency ambiguity. No raw provider body,
+  exception, key, prompt or output is emitted by gateway diagnostics. Returned observations
+  are sensitive evidence and must not be logged by future callers.
+
+**Verification:** model-gateway **274 tests / 5 files** pass, including four real localhost
+HTTP/socket tests. Scoped typecheck/lint/build and the complete focused Turbo run pass **7/7**
+tasks. No authenticated inference or accuracy claim is made. These tests establish our
+boundary behavior only. The operations UI fixture now correctly models 10→13 attempts after
+three additional deliveries; its 13 tests pass. Existing API/worker behavior is unchanged.
+
+**Limits and exact next task:** implement FW-26 durable inference ownership/reservations and
+attempt/usage accounting before wiring this adapter into retrying workers or enabling summary
+recovery. FW-27 must preserve historical summaries/source versions during replacement. Basic read-only authentication is now confirmed (details
+in PROVIDER_EVIDENCE.md). Continue permitted-model/agent, spend-limit, residency/retention and
+ElevenLabs configuration inventory before proposing a capped synthetic run. No model is approved and no streaming/tool/voice compatibility,
+dental quality, real connector, payment reconciliation or full Lunabill parity is established.
+See ADR-063 and FIREWORKS_GATEWAY_CONTRACT.md for the precise boundary.
+
+### Earlier continuation: FW-37 scoped operations and audited recovery
 
 The full parity goal remains active. Retell key presence was rechecked without displaying
 values: root `.env`, API `.env` and web `.env.local` share the configured `RETELL_API_KEY`.

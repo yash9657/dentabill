@@ -480,6 +480,22 @@ importers:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@20.19.39)(jsdom@29.0.2)(lightningcss@1.32.0)
 
+  packages/model-gateway:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@dentabill/config':
+        specifier: workspace:*
+        version: link:../config
+      '@types/node':
+        specifier: ^20.17.6
+        version: 20.19.39
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@20.19.39)(jsdom@29.0.2)(lightningcss@1.32.0)
+
   packages/notifier:
     dependencies:
       zod:

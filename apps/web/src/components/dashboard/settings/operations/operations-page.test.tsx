@@ -160,7 +160,7 @@ describe('Operations workspace', () => {
       currentPreview = {
         ...preview,
         state: 'PENDING',
-        deliveryAttemptLimit: 11,
+        deliveryAttemptLimit: 13,
         recoveryCount: 1,
         action: 'BLOCKED',
         blockedReason: 'NOT_QUARANTINED',
@@ -193,8 +193,8 @@ describe('Operations workspace', () => {
       currentPreview = {
         ...preview,
         reviewVersion: 'review-changed',
-        deliveryAttempts: 11,
-        deliveryAttemptLimit: 11,
+        deliveryAttempts: 13,
+        deliveryAttemptLimit: 13,
       };
       return {
         error: { code: 'OPERATIONS_STALE_REVIEW', message: 'PRIVATE_PAYLOAD' },
@@ -208,7 +208,7 @@ describe('Operations workspace', () => {
     await within(dialog).findByText(
       'This delivery changed. Review the refreshed details before approving again.',
     );
-    await waitFor(() => expect(within(dialog).getByText('11 of 11')).toBeInTheDocument());
+    await waitFor(() => expect(within(dialog).getByText('13 of 13')).toBeInTheDocument());
     await waitFor(() => expect(within(dialog).getByRole('checkbox')).not.toBeChecked());
     expect(
       within(dialog).getByRole('button', { name: 'Allow three more attempts' }),

@@ -1,6 +1,6 @@
 # Fireworks stateless gateway contract evidence — FW-10 through FW-13
 
-**Checked:** 2026-10-13, America/Los_Angeles. **Status:** primary-source research and a proposed implementation contract. No Fireworks account request, inference, credential inspection, provider configuration change, purchase, deployment, or production model approval occurred. Tests listed below are acceptance criteria, not completed gateway tests.
+**Checked:** 2026-10-13, America/Los_Angeles. **Status:** primary-source research plus local FW-10–13 implementation in `packages/model-gateway` (ADR-063). The acceptance cases below now have synthetic/local HTTP tests; exact final evidence is in SESSION_CONTEXT.md. No inference, speech, provider configuration change, purchase, deployment or production model approval occurred. Credential presence and any separate read-only authentication results are recorded in PROVIDER_EVIDENCE.md.
 
 This supplements [provider evidence](./PROVIDER_EVIDENCE.md) and the [implementation plan](./FIREWORKS_IMPLEMENTATION_PLAN.md). The first slice is a text-only, nonstreaming, stateless adapter and fake behind one typed interface. Streaming voice/tool execution, embeddings, reranking, document media, inference-job persistence and provider cutover remain separate work. The user's ElevenLabs exception covers speech/orchestration; business inference remains restricted to approved Fireworks-hosted open weights.
 
@@ -27,7 +27,7 @@ The documented request format is `response_format: {type: 'json_schema', json_sc
 
 The current API schema has a `strict` property on tool functions, while `response_format.json_schema` is an open object. The sources reviewed do **not** establish an OpenAI-equivalent guarantee for `json_schema.strict: true`, nor universal rejection of unsupported keywords. Do not invent that guarantee or silently downgrade to unconstrained text when a schema is rejected. Keep runtime validation authoritative. [Chat Completion reference](https://docs.fireworks.ai/api-reference/post-chatcompletions)
 
-Proposed local schema subset: closed objects, explicit required fields, bounded arrays/strings, scalar types/enums and explicit nullable values; no remote refs, recursive schemas, ambiguous composition or complex regex initially. More capable provider grammar support does not require exposing it through our first contract. Schema versions must pin both emitted JSON Schema and the local validator. Financial amounts use integer minor units with a currency; identifiers remain strings. A syntactically valid object is never proof of identity, policy coverage, payment or permission to act.
+Implemented local schema subset: closed objects, explicit required fields, bounded arrays/strings, scalar types/enums and explicit nullable values; no remote refs or recursive schemas. The explicit UTC/calendar pattern is a decoding hint; local Zod date validation remains authoritative. Provider string-length rules may count code points while local text/quote limits use UTF-16 units. More capable provider grammar support does not require exposing it through our first contract. Schema versions must pin both emitted JSON Schema and the local validator. Financial amounts use integer minor units with a currency; identifiers remain strings. A syntactically valid object is never proof of identity, policy coverage, payment or permission to act.
 
 ### Statelessness, retention and cache isolation
 
@@ -49,7 +49,7 @@ Rate limits are account/model scoped and adapt over time. Published ceilings are
 
 The reliability guide recommends backoff for 429/500/502/503/504 and gives workload-dependent client timeouts. The error-code page additionally lists 402/403/408/412/413/520 and describes 500 less optimistically. These are not an idempotency or exactly-once billing contract. A lost response/cancelled connection does not prove generation stopped or was free. [Reliability](https://docs.fireworks.ai/guides/reliability), [error codes](https://docs.fireworks.ai/guides/inference-error-codes)
 
-Proposed FW-13 policy: thirty seconds end-to-end including headers, body read, parsing, backoff and both attempts; at most two attempts total, with retries allowed only for explicit 429/500/502/503/504 responses. Disable SDK/framework retries, use bounded jitter and honor a valid Retry-After only if it fits the remaining budget. No retry on cancellation, ambiguous network failure/timeout, malformed output, schema/semantic failure, refusal, configuration/auth/payment failure or other status. Discard/cancel error bodies without logging them. Record each attempt's known usage; retain an unknown-cost marker where acceptance is ambiguous. Any later retry policy change requires a measured budget rationale.
+Implemented FW-13 policy: thirty seconds end-to-end including headers, body read, parsing, backoff and both attempts; at most two attempts total, with retries allowed only for explicit 429/500/502/503/504 responses. Disable SDK/framework retries, use bounded jitter and honor a valid Retry-After only if it fits the remaining budget. No retry on cancellation, ambiguous network failure/timeout, malformed output, schema/semantic failure, refusal, configuration/auth/payment failure or other status. Discard/cancel error bodies without logging them. Record each attempt's known usage; retain an unknown-cost marker where acceptance is ambiguous. Any later retry policy change requires a measured budget rationale.
 
 Price references must be versioned by region and service tier. Current Standard US rates per million input/cached-input/output tokens are GLM Flash $0.225/$0.045/$0.75 and DeepSeek Flash $0.45/$0.009/$1.80. These match the prior evidence table; they are not measured case costs or purchase authorization. Keep Priority disabled unless separately approved. [Current pricing](https://docs.fireworks.ai/serverless/pricing)
 
@@ -59,18 +59,18 @@ Tool arguments arrive incrementally and are correlated by tool index; parallel-t
 
 There is a documentation discrepancy to preserve in fixtures: the current API reference describes a final usage SSE chunk with empty `choices` before `[DONE]`, separate from `finish_reason`; the text guide describes usage on the finish chunk. A future reader must tolerate both shapes and never index `choices[0]` unconditionally or stop before collecting final usage. Missing terminal markers/usage after interruption remain explicit unknowns. This must be measured on the chosen route and ElevenLabs gateway before voice approval. [API stream options](https://docs.fireworks.ai/api-reference/post-chatcompletions), [text guide](https://docs.fireworks.ai/guides/querying-text-models#usage--performance-tracking)
 
-## Proposed gateway boundary
+## Implemented local gateway boundary
 
-These are DentaBill implementation choices, not claims about an implemented gateway.
+These are DentaBill boundary controls, not proof of model behavior or a deployed workflow.
 
 1. **FW-10:** one typed text-generation port plus deterministic fake. Input names an internal immutable `releaseId`, task/schema/prompt version, bounded source references, task input and abort signal. It does not accept a raw provider URL, model ID, arbitrary HTTP headers, tools or request extras. Trusted callers derive tenant/source authorization; the provider cannot authorize it. Keep PHI-bearing input/output distinct from safe diagnostic metadata.
 2. **FW-11:** a native-fetch adapter owns the exact HTTPS endpoint and authorization header. Server configuration resolves the internal release to an exact documented route. Reject credentials in URLs, custom ports, query strings, redirects and unknown hosts/paths; never follow a redirect with the key. Inject transport for fixtures, not an unrestricted production base URL. No default production release; key presence alone does not activate inference.
 3. **FW-12:** bound request/response bytes and JSON depth; reject extra choices, missing/null content, tool output and non-`stop`/unknown finish reasons. Parse exact JSON without code-fence stripping, repair prompts or second-model fallback. A task validator checks echoed identity, source IDs/versions, amount/currency invariants and permitted abstention. A provider refusal field or nonconforming refusal text is a typed non-success; do not invent a Fireworks refusal-field guarantee. Business policy receives only validated structured output, never raw reasoning.
 4. **FW-13:** use one monotonic deadline plus propagated cancellation, bound body reads, recheck cancellation/deadline immediately before sends and before accepting results, and reject late completion even from a transport that ignores abort. Retry only under the policy above. Error surfaces contain stable codes/status, attempt count and safe timing/usage; never provider body/message, input, output, key, stack/cause or arbitrary headers. Do not log a raw fetch/SDK exception.
 
-Suggested initial safety bounds are 128 KiB serialized request, 1 MiB response, 4,096 maximum output tokens, thirty-second total deadline and two attempts. These are conservative testable product limits, not vendor capabilities. A release can tighten them; widening them requires a reviewed workload/budget change. The wire body is constructed from an allowlist: exact model, system/user text messages, `stream:false`, `n:1`, bounded `max_tokens`, `context_length_exceeded_behavior:'error'`, versioned JSON response format and the server-derived cache isolation key. Sampling settings, if used, belong to the release manifest and evaluations rather than caller overrides.
+Implemented safety bounds are 128 KiB serialized request, 1 MiB response, 4,096 maximum output tokens, thirty-second total deadline and two attempts. These are conservative testable product limits, not vendor capabilities. A release can tighten them; widening them requires a reviewed workload/budget change. The wire body is constructed from an allowlist: exact model, system/user text messages, `stream:false`, `n:1`, bounded `max_tokens`, `context_length_exceeded_behavior:'error'`, versioned JSON response format and the server-derived cache isolation key. Sampling settings, if used, belong to the release manifest and evaluations rather than caller overrides.
 
-The result should distinguish validated output from abstention and typed failure, and carry internal release/prompt/schema versions, bounded provider response ID/model, finish reason, attempt counts, elapsed time and usage completeness. A provider response's `model` may differ from the requested regional route: release approval must record measured allowed response identities, not guess an equality rule or accept any string. Unknown/mismatched identity fails closed. Provider IDs/model strings are untrusted and must not be forwarded into logs before validation.
+The result distinguishes validated output from abstention and typed failure, and carry internal release/prompt/schema versions, bounded provider response ID/model, accepted stop-only completion, attempt counts, elapsed time and usage completeness. A provider response's `model` may differ from the requested regional route: release approval must record measured allowed response identities, not guess an equality rule or accept any string. Unknown/mismatched identity fails closed. Provider IDs/model strings are untrusted and must not be forwarded into logs before validation.
 
 ## What can be proved without a key
 
@@ -87,14 +87,41 @@ The result should distinguish validated output from abstention and typed failure
 
 These tests establish our boundary behavior only. They do not prove a model follows the schema, bills as expected, runs in the claimed region, honors retention, meets latency targets or performs accurate dental extraction.
 
-## Proposed release policy and remaining gates
+## Release policy and remaining gates
 
 Maintain a checked-in reviewed release manifest with explicit **candidate**, **synthetic-evaluation enabled**, **approved for a named workload**, and **disabled** states. None of the candidates in this document is approved. A fake or HTTP fixture never changes that state. Runtime selection cannot promote a candidate, and environment keys cannot bypass it.
 
-Each approved entry needs exact route/endpoint, publisher artifact and license revision, observed serving identity/revision/quantization where available, prompt/schema/validator hashes, output/deadline/retry limits, region/retention policy evidence, price snapshot, evaluation artifact and reviewer/date/scope. A router name or publisher model card alone cannot pin the served weights. If Fireworks cannot attest the required serving identity, retain that blocker rather than inventing a revision.
+Each enabled entry binds exact route/endpoint, publisher artifact and license revision, observed serving identity/revision, prompt/schema/validator-rule hashes, implementation artifact SHA-256, output/deadline/retry limits, region/retention policy evidence, price snapshot, evaluation artifact and reviewer/date/scope. The approved policy digest detects changed scope or limits; expiry is checked on every invocation. The references and supplied application artifact identity remain trusted server records and need a future build/release verifier; rule-descriptor hashes alone do not attest compiled validator code. A router name or publisher model card alone cannot pin the served weights. If Fireworks cannot attest the required serving identity, retain that blocker rather than inventing a revision.
 
 Before any authenticated synthetic probe, establish permitted account/key access, existing spend limits, explicit evaluation release scope and a bounded run manifest. Before real data, additionally establish applicable BAA/DPA/retention/support/subprocessor terms and authorized source access. Verify account residency/ZDR/model restrictions read-only first; changes, paid capacity and deployments are separate authorized operations. No access or contract is established here.
 
 Before workload approval, capture regional JSON/schema/finish/usage/error behavior using authorized synthetic runs, then qualified dental adjudication across noisy/partial/contradictory evidence, wrong-plan cases, identifiers, amounts and abstention. There is currently no clinic or adjudicated case set. Evaluate cost/latency including failed attempts and unknown usage. Preserve default-disabled live inference and the existing synthetic demo while these gates are open.
 
 Rollback disables new inference or returns work for human review; it does not switch to GPT/Claude, mutable automatic routing, an unapproved Fireworks model, or an unrelated voice provider. This gateway cannot settle claims, confirm payment, execute tools or repair call intent ambiguity. Inference-job deduplication/cost reservation and production integration must be addressed before connecting the adapter to retrying workers.
+
+## Local task limits
+
+The first task consumes only final call transcripts and emits one reviewable claim-level
+observation. Input authorization belongs to the trusted caller; matching organization/source
+IDs cannot establish authorization. Sources are cloned, uniquely identified, tied to the claim
+version and capped at 65,536 combined UTF-16 units before the serialized request bound.
+
+Evidence binds exact UTF-16 source spans. Payment values use USD integer minor units with a
+bounded, explicit dollar-amount mention; foreign-currency qualifiers, ambiguous notation and
+amounts above billed value fail review checks. The amount's bounded source context is inspected
+so cropping an evidence quote cannot hide a currency qualifier, sign or multiplier. These are
+conservative lexical rules with known recall limits, not exhaustive language interpretation.
+Codes retain raw spelling and UNKNOWN system unless cited text explicitly names the nomenclature.
+No code dictionary, benefit interpretation, clinical fact, payment match or settlement is inferred.
+
+Mixed paid/denied lines, overpayments, unsupported evidence and contradictions need abstention/
+human review; full procedure-level adjudication remains in the domain backlog. VALIDATED means
+schema and implemented invariants passed, never that a model's assertions are true. Returned
+observations contain sensitive evidence; only closed failure/status/timing/usage fields are safe
+for diagnostics. Application telemetry and durable spend are still FW-14/FW-26.
+
+Cancellation-safe progress preserves completed attempts and the current possible acceptance
+without inventing a send during backoff. Missing usage stays null. Opaque response-ID character
+limits and defensive refusal/content-filter rejection are local acceptance policies; Fireworks
+has not been measured to guarantee those exact fields/identities. Test fixtures always use
+synthetic releases and cannot approve either checked-in candidate.

@@ -109,7 +109,14 @@ Synthetic real-Postgres tests cover concurrent/stale approvals, rollback and fai
 pre-submission persistence across runtime boundaries. No deployed heartbeat, external alerts,
 real-provider comparison or overall workflow parity follows from these local tests.
 
-Refreshed Fireworks primary contracts and no-key implementation acceptance criteria are in
+FW-10–13 now implements the local `@dentabill/model-gateway` text port, explicit synthetic
+adapter, reviewed scoped releases, strict source-bound observations, fixed-host native transport
+and bounded retry/deadline/cancellation. Attempt progress preserves unknown spend through
+cancellation; human review remains required. Structural/lexical checks and synthetic/local HTTP
+fixtures do not establish truthful payer attribution, model accuracy, actual serving identity,
+region/retention, account entitlement or billing. No release is approved or wired into workers.
+
+Refreshed Fireworks primary contracts and implementation acceptance criteria are in
 [FIREWORKS_GATEWAY_CONTRACT.md](./FIREWORKS_GATEWAY_CONTRACT.md). Exact model/release approval,
 account probes and representative dental evaluation remain open. Public model-route presence,
 JSON Schema decoding and mutable publisher license links are not sufficient release evidence.
@@ -232,14 +239,26 @@ Each measured run must retain: test ID and synthetic/authorized label; code/conf
 
 ## Access, next step and rollback constraints
 
-Parent account inventory on 2026-10-13 found no configured Fireworks/ElevenLabs credentials, empty Telnyx key/number fields, and Retell/Clerk credential names present. App `.env.local`/`.env` symlinks resolve to the same root configuration. Retell configured-agent GET succeeded; Clerk instance GET returned HTTP 403, so Clerk authentication is unverified. GitHub/Vercel/Railway sessions were found; Vercel project records and inactive Railway services do not override the user's current AWS deployment direction. PMS/clearinghouse credentials were absent. This is an access/configuration inventory, not evidence that the owner lacks accounts or contracts; see the session access record for the separate AWS probe results.
+Initial account inventory on 2026-10-13 found no configured Fireworks/ElevenLabs credentials, empty Telnyx key/number fields, and Retell/Clerk credential names present. Later in the session the user added Fireworks/ElevenLabs keys: presence-only checks now confirm both, plus Retell, without duplicates or displayed values. Both subsequently passed documented read-only authentication endpoints; inference/agent entitlements and budgets remain unverified. App `.env.local`/`.env` symlinks resolve to the same root configuration. Retell configured-agent GET succeeded; Clerk instance GET returned HTTP 403, so Clerk authentication is unverified. GitHub/Vercel/Railway sessions were found; Vercel project records and inactive Railway services do not override the user's current AWS deployment direction. PMS/clearinghouse credentials were absent. This is an access/configuration inventory, not evidence that the owner lacks accounts or contracts; see the session access record for the separate AWS probe results.
+
+**New credential verification:** one bounded authenticated GET per provider succeeded on
+2026-10-13: Fireworks `https://api.fireworks.ai/v1/accounts?pageSize=1&readMask=state` returned
+HTTP200 and an account READY state; ElevenLabs `https://api.elevenlabs.io/v1/user` returned
+HTTP200 and completed onboarding. Keys were loaded directly from root `.env`; only status and
+allowlisted booleans were returned. Redirects/proxies were disabled, deadlines10s and bodies1MiB.
+No key, account ID, email, response body, error payload or header was printed or saved. No
+inference, speech, call, settings mutation or purchase ran. These private authenticated reads
+establish basic access only, not generation/agent permission, credits, regional/retention policy,
+BAA, model quality or integration capability.
+[Fireworks List Accounts](https://docs.fireworks.ai/api-reference/list-accounts),
+[ElevenLabs Get User](https://elevenlabs.io/docs/api-reference/user/get).
 
 Exact prerequisites for the next controlled provider test:
 
 1. Existing Fireworks account access/key with permitted inference and model-list access, account spend cap, US route availability and retention policy. Run synthetic contract/evaluation cases only after the model release under test is explicitly registered.
 2. Existing ElevenLabs workspace access with agent/config/secret permissions and known included budget. Inspect configuration, model/fallback/analysis settings, region and concurrent-call limits. Custom-LLM-with-ZRM enablement and the applicable BAA block PHI use; no public pricing quote substitutes for enterprise terms.
 3. Carrier compatibility remains a separate gate: preserve the existing Retell-managed Twilio number and configuration. Defer Telnyx setup per user direction; a later Telnyx test would require account access, an authorized number, outbound voice profile/SIP credentials, and a capped budget if it adds spend. Use an owned controlled destination and explicit call authorization; do not rebind a production number or call payers as a feasibility shortcut.
-4. Implement authenticated streaming gateway, versioned provider adapter/config, durable intent/inbox/reconciliation and carrier termination contract; run the same probe manifest against both adapters. This record alone implements none of these boundaries.
+4. Implement authenticated streaming gateway, versioned provider adapter/config, durable intent/inbox/reconciliation and carrier termination contract; run the same probe manifest against both adapters. The local text gateway does not implement the streaming voice chain.
 5. PMS/clearinghouse sandbox credentials, practice authorization and enrolled payer/product/region list for real status/acknowledgement and posting workflows; keep unavailable integrations visible.
 
 For non-PHI authentication checks, current primary docs support Retell `GET https://api.retellai.com/get-agent/{agent_id}` and Clerk `GET https://api.clerk.com/v1/instance`, both with bearer credentials. Return status and an allowlisted configuration summary only. Retell's current agent-list contract is paginated `POST /v2/list-agents`, which differs from older SDK assumptions. [Retell get](https://docs.retellai.com/api-references/get-agent), [Retell list](https://docs.retellai.com/api-references/list-agents), [Clerk instance](https://clerk.com/docs/reference/backend/instance/get), [Clerk base URL/auth](https://clerk.com/docs/reference/backend-api)

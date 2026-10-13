@@ -1,6 +1,9 @@
 # DentaBill: competitive gaps and the Fireworks implementation plan
 
-> Implementation update, 2026-10-13: FW-37 now adds scoped operations and audited delivery
+> Implementation update, 2026-10-13: FW-10–13 now provides a local typed Fireworks text gateway,
+> reviewed release gating, source-bound observations and bounded transport (ADR-063). No model
+> is approved or wired into workers; durable inference accounting and real evaluation remain open.
+> Fireworks/ElevenLabs credentials are now present locally. FW-37 adds scoped operations and audited delivery
 > recovery (ADR-062); current Fireworks gateway requirements are in FIREWORKS_GATEWAY_CONTRACT.md.
 > FW-36 has local persisted accepted-call observation,
 > duration/Stop confirmation state and synthetic separate-process recovery evidence; FW-38

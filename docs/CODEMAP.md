@@ -25,6 +25,7 @@ packages/
   types/            Shared TS types + Zod ApiError + branded ids + enums
   logger/           pino with PHI-field redaction
   queue/            BullMQ job definitions — Phase 3
+  model-gateway/    Release-gated Fireworks text inference + explicit synthetic adapter
   payer-ivr/        Insurance IVR navigation maps — Phase 3
   ui/               Shared shadcn components — Phase 2
 ```
@@ -55,6 +56,18 @@ enum mirrors.
   NextAction (mirrors PRD §5; replaced by Prisma re-exports after P1-T4)
 
 **Depends on:** `zod` only.
+
+### `@dentabill/model-gateway` — packages/model-gateway
+
+**Purpose:** Versioned claim observations from source-bound final transcripts. No worker or
+voice integration yet; default live releases remain unapproved (ADR-063).
+**Entry:** `packages/model-gateway/src/index.ts`.
+**Key files:** `contracts.ts` typed request/result; `release.ts` scoped reviewed policy and
+contract/artifact hashes; `task.ts` prompt/schema/evidence/lexical rules; `transport.ts` fixed
+US native fetch with byte/depth/deadline/retry/progress controls; `gateway.ts` orchestration;
+`fake.ts` exact synthetic fixtures and explicit abstention. Tests cover policy/input isolation,
+protocol/transport faults, cancellation accounting and semantic constraints.
+**Depends on:** `zod`, Node crypto/fetch. No SDK retries, database access or logging dependency.
 
 ### `@dentabill/logger` — packages/logger
 
