@@ -4,7 +4,68 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: independent observation evaluation (ADR-069)
+### Latest continuation: bounded contract discovery (ADR-070)
+
+The previous goal turn made concrete progress by committing independent evaluation tooling in
+`4ca7508`. This continuation started clean on `codex/w0-containment`; full parity remains active.
+No inference, speech, phone call, purchase, production migration, account-policy change or AWS
+deployment ran. User still has no clinic; only fake data is used. Existing stashes are preserved.
+
+- Read-only Fireworks account/model checks at23:05Z succeeded: one READY/UNSUSPENDED account;
+  monthly quota value/max9999999 and usage5.04 (not a task budget or available credits);
+  policy ZDRnull, no residency field returned. Both candidate model records report context1048576
+  and serverless support. Both exact regional router metadata requests returned403. Current
+  Standard rates/default tier and immutable publisher license evidence are in PROVIDER_EVIDENCE.
+  A browser check reached login; credit balance/Auto Reload remain unverified. No secrets or
+  account names were printed. Sanitized evidence: `/tmp/dentabill-fw42-account-evidence.json`.
+- Added a distinct capture-only transport to discover unknown response identities without
+  fabricating a synthetic-evaluation release. Shared fixed-host transport, raw-before-parse
+  persistence, deadlines and required journal remain; ordinary gateway identity/release checks
+  are unchanged. Discovery returns no model/content/observation and cannot approve a release.
+- Added `capture prepare/inspect/run`. Plans bind full synthetic inventory (max25), one candidate,
+  original exact wire builder, current account/price/context/license evidence, code/dependency
+  fingerprint, host/path and24-hour expiry. One attempt per case; integer micro-USD reservations
+  use full context for input and completion with no refunds. This is a conservative price-based
+  allowance, not a proven provider invoice cap or serving-revision mapping.
+- Private immutable fsynced records atomically join each admission with its allowance. An
+  admission without raw response never resends after a confirmed-dead owner; saved raw response
+  replays locally. A NO_SEND tombstone wins the same slot, fixing a reviewed race where concurrent
+  cancellation could otherwise conceal another runner's send. Reverse publication-order reads
+  validate saved-result/receipt bindings. Raw replay usage stops later cases even if an earlier
+  cancelled attempt retained null usage. This store is local/single-host, not a distributed ledger.
+
+**Verification:** evaluator **196 tests /10 files**, gateway **325/8** and affected Turbo
+typecheck/lint/build **9/9** pass. Real-filesystem checks cover modes, symlinks, competing exclusive
+publishes and ambiguous fsync failure. Three separate-process SIGKILL proofs use an independent
+localhost HTTP provider ledger: accepted/no receipt → UNKNOWN without resend; saved raw → local
+replay; saved over-limit raw plus immutable cancelled/unknown-usage receipt → next case NOT_SENT,
+with one total HTTP in every proof. CLI child tests cover prepare/inspect, exact confirmation,
+no credential/no-send, closed errors and old offline seed/score/verify. An initial process-output
+assertion was corrected to separate Node/tsx warnings; lint/type issues were fixed before these
+final results. Logs: `/tmp/dentabill-capture-{evals-tests,gateway-tests,checks-final}.log` plus
+`-process-{tests,types,lint}.log`, `-store-{tests,lint}.log` and `-plan-tests.log`.
+
+**Concrete first experiment, prepared and inspected without authorization:**
+`/private/tmp/dentabill-fw42-ready-gyCCKz/` contains one DRAFT fake-case corpus and two exact plans.
+GLM run allowance$1.10, reserved$1.022362, digest
+`d2ed78e507b748e461c3008db9d8731ea3abcb9bd000a7a6ff1438920874fda6`;
+DeepSeek allowance$2.90, reserved$2.359296, digest
+`f1a379344b1ea6967a647980688f8444fb55bba3daa5a17e4a9262e4bce61fa8`.
+They expire around2026-10-14T23:18Z. Combined proposed allowance$4; two text requests, no retries,
+calls or production changes. No `authorization.json` was created. A user question is pending
+for this exact spending scope because no established test budget is recorded. A large quota
+does not authorize it. Local artifacts and IDs do not themselves establish user permission.
+
+**Exact next task:** if the user approves this experiment, verify current source/plan integrity
+and expiry, then run the two prepared manifests with the root `.env` only through the explicit
+capture CLI; inspect private receipts and reconcile returned serving identities/usage before
+preparing any scored evaluation release. Expired/changed plans need refreshed evidence and a
+new concrete plan within the user's authorized scope. Do not invent served revisions. If budget
+input remains pending, continue independent FW-19/20 source-import identity and concurrent
+duplicate protection using fake data. No clinic-dependent capability, voice evaluation or full
+parity is complete. No overall blocked/complete goal status is justified by this milestone.
+
+### Earlier continuation: independent observation evaluation (ADR-069)
 
 The previous goal turn made concrete progress with automatic native jobs in `f8bdf99`.
 The full parity goal remains active on `codex/w0-containment`; the worktree was clean at

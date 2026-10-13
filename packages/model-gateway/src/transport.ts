@@ -4,8 +4,10 @@ import {
   FIREWORKS_ENDPOINT,
   TransportAttemptSchema,
   unknownUsage,
+  type FireworksDiscoveryTransport,
+  type FireworksDiscoveryTransportRequest,
+  type FireworksDiscoveryTransportResult,
   type FireworksTransport,
-  type FireworksTransportRequest,
   type GatewayErrorCode,
   type TransportAttempt,
   type TransportResult,
@@ -15,6 +17,10 @@ import {
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
 const OPAQUE_ID = /^[A-Za-z0-9_.-]{1,128}$/;
 const MAX_DEPTH = 32;
+
+type ExecutionMode =
+  | { readonly kind: 'EXPECTED_MODEL'; readonly expectedResponseModels: readonly string[] }
+  | { readonly kind: 'DISCOVERY' };
 
 class TransportFailure extends Error {
   constructor(readonly code: GatewayErrorCode) {
@@ -31,7 +37,7 @@ class Deadline {
     this.abort('CANCELLED');
   };
 
-  constructor(private readonly request: FireworksTransportRequest) {
+  constructor(private readonly request: FireworksDiscoveryTransportRequest) {
     request.signal?.addEventListener('abort', this.onCancel, { once: true });
     if (request.signal?.aborted) this.abort('CANCELLED');
     else this.arm();
@@ -343,7 +349,10 @@ function attemptOutcome(code: GatewayErrorCode): TransportAttempt['outcome'] {
   return 'INVALID_RESPONSE';
 }
 
-function validConfiguration(request: FireworksTransportRequest): boolean {
+function validConfiguration(
+  request: FireworksDiscoveryTransportRequest,
+  mode: ExecutionMode,
+): boolean {
   return (
     ((request.replay !== undefined &&
       request.sendDeadlineAt !== undefined &&
@@ -356,8 +365,11 @@ function validConfiguration(request: FireworksTransportRequest): boolean {
     Number.isSafeInteger(request.maxResponseBytes) &&
     request.maxResponseBytes > 0 &&
     [1, 2].includes(request.maxAttempts) &&
-    request.expectedResponseModels.length > 0 &&
-    request.expectedResponseModels.every((model) => typeof model === 'string' && model.length > 0)
+    (mode.kind === 'DISCOVERY' ||
+      (mode.expectedResponseModels.length > 0 &&
+        mode.expectedResponseModels.every(
+          (model) => typeof model === 'string' && model.length > 0,
+        )))
   );
 }
 
@@ -404,286 +416,315 @@ export function createFireworksTransport(
   options: { readonly fetch?: typeof globalThis.fetch } = {},
 ): FireworksTransport {
   const fetcher = options.fetch ?? globalThis.fetch;
-  return async (request): Promise<TransportResult> => {
-    const attempts: TransportAttempt[] = [];
-    let activeAttempt: Omit<TransportAttempt, 'outcome'> | null = null;
-    const publish = (): void => {
-      try {
-        request.onProgress?.({
-          completedAttempts: attempts.map((attempt) => ({
-            ...attempt,
-            usage: { ...attempt.usage },
-          })),
-          activeAttempt: activeAttempt
-            ? { ...activeAttempt, usage: { ...activeAttempt.usage } }
-            : null,
-        });
-      } catch {
-        /* Diagnostics cannot substitute for or bypass the awaited journal. */
-      }
-    };
-    publish();
-    if (!validConfiguration(request) || typeof fetcher !== 'function')
-      return { ok: false, code: 'CONFIGURATION_ERROR', attempts };
-    const journal = request.journal;
-    if (
-      !journal ||
-      typeof journal.beforeAttempt !== 'function' ||
-      typeof journal.recordResponse !== 'function' ||
-      typeof journal.completeAttempt !== 'function'
-    )
-      return { ok: false, code: 'ACCOUNTING_REQUIRED', attempts };
-    const replay = request.replay;
-    if (replay) {
-      if (
-        !Number.isSafeInteger(replay.response.index) ||
-        replay.response.index < 1 ||
-        replay.response.index > request.maxAttempts ||
-        replay.attempts.length !== replay.response.index - 1 ||
-        replay.attempts.some(
-          (attempt, i) =>
-            !TransportAttemptSchema.safeParse(attempt).success || attempt.index !== i + 1,
-        ) ||
-        !Number.isSafeInteger(replay.response.status) ||
-        replay.response.status < 100 ||
-        replay.response.status > 599 ||
-        !Number.isFinite(replay.response.retryDelayMs) ||
-        replay.response.retryDelayMs < 0 ||
-        replay.response.retryDelayMs > 60_000 ||
-        (replay.response.status >= 200 && replay.response.status < 300
-          ? typeof replay.response.body !== 'string' ||
-            Buffer.byteLength(replay.response.body, 'utf8') > request.maxResponseBytes
-          : replay.response.body !== null)
-      )
-        return { ok: false, code: 'CONFIGURATION_ERROR', attempts };
-      attempts.push(...structuredClone(replay.attempts));
-      publish();
-    }
-    const wireRequestHash = createHash('sha256').update(request.body).digest('hex');
-    const sendDeadlineAt = Math.min(
-      request.sendDeadlineAt ?? request.deadlineAt,
-      request.deadlineAt,
+  return (request) =>
+    executeTransport(
+      request,
+      {
+        kind: 'EXPECTED_MODEL',
+        expectedResponseModels: request.expectedResponseModels,
+      },
+      fetcher,
     );
-    if (!Number.isFinite(sendDeadlineAt))
-      return { ok: false, code: 'CONFIGURATION_ERROR', attempts };
-    const deadline = new Deadline(request);
+}
+
+/** Discovery never returns model identity, completion content, or a validated observation. */
+export function createFireworksDiscoveryTransport(
+  options: { readonly fetch?: typeof globalThis.fetch } = {},
+): FireworksDiscoveryTransport {
+  const fetcher = options.fetch ?? globalThis.fetch;
+  return (request) => executeTransport(request, { kind: 'DISCOVERY' }, fetcher);
+}
+
+function executeTransport(
+  request: FireworksDiscoveryTransportRequest,
+  mode: Extract<ExecutionMode, { kind: 'EXPECTED_MODEL' }>,
+  fetcher: typeof globalThis.fetch,
+): Promise<TransportResult>;
+function executeTransport(
+  request: FireworksDiscoveryTransportRequest,
+  mode: Extract<ExecutionMode, { kind: 'DISCOVERY' }>,
+  fetcher: typeof globalThis.fetch,
+): Promise<FireworksDiscoveryTransportResult>;
+async function executeTransport(
+  request: FireworksDiscoveryTransportRequest,
+  mode: ExecutionMode,
+  fetcher: typeof globalThis.fetch,
+): Promise<TransportResult | FireworksDiscoveryTransportResult> {
+  const attempts: TransportAttempt[] = [];
+  let activeAttempt: Omit<TransportAttempt, 'outcome'> | null = null;
+  const publish = (): void => {
     try {
-      for (let index = replay?.response.index ?? 1; index <= request.maxAttempts; index += 1) {
-        deadline.check();
-        const started = performance.now();
-        let status: number | null = null;
-        let acceptance: TransportAttempt['acceptance'] = 'NOT_SENT';
-        let usage = unknownUsage();
-        let admitted = false;
-        let completed = false;
-        let journalFailed = false;
-        let interpretation: {
-          outcome: TransportAttempt['outcome'];
-          errorCode: GatewayErrorCode | null;
-        } | null = null;
-        const completionState = (): { completed: boolean; journalFailed: boolean } => ({
-          completed,
-          journalFailed,
-        });
-        const updateProgress = (): void => {
-          activeAttempt = {
-            index,
-            httpStatus: status,
-            acceptance,
-            elapsedMs: Math.max(0, performance.now() - started),
-            usage,
-          };
-          publish();
+      request.onProgress?.({
+        completedAttempts: attempts.map((attempt) => ({
+          ...attempt,
+          usage: { ...attempt.usage },
+        })),
+        activeAttempt: activeAttempt
+          ? { ...activeAttempt, usage: { ...activeAttempt.usage } }
+          : null,
+      });
+    } catch {
+      /* Diagnostics cannot substitute for or bypass the awaited journal. */
+    }
+  };
+  publish();
+  if (!validConfiguration(request, mode) || typeof fetcher !== 'function')
+    return { ok: false, code: 'CONFIGURATION_ERROR', attempts };
+  const journal = request.journal;
+  if (
+    !journal ||
+    typeof journal.beforeAttempt !== 'function' ||
+    typeof journal.recordResponse !== 'function' ||
+    typeof journal.completeAttempt !== 'function'
+  )
+    return { ok: false, code: 'ACCOUNTING_REQUIRED', attempts };
+  const replay = request.replay;
+  if (replay) {
+    if (
+      !Number.isSafeInteger(replay.response.index) ||
+      replay.response.index < 1 ||
+      replay.response.index > request.maxAttempts ||
+      replay.attempts.length !== replay.response.index - 1 ||
+      replay.attempts.some(
+        (attempt, i) =>
+          !TransportAttemptSchema.safeParse(attempt).success || attempt.index !== i + 1,
+      ) ||
+      !Number.isSafeInteger(replay.response.status) ||
+      replay.response.status < 100 ||
+      replay.response.status > 599 ||
+      !Number.isFinite(replay.response.retryDelayMs) ||
+      replay.response.retryDelayMs < 0 ||
+      replay.response.retryDelayMs > 60_000 ||
+      (replay.response.status >= 200 && replay.response.status < 300
+        ? typeof replay.response.body !== 'string' ||
+          Buffer.byteLength(replay.response.body, 'utf8') > request.maxResponseBytes
+        : replay.response.body !== null)
+    )
+      return { ok: false, code: 'CONFIGURATION_ERROR', attempts };
+    attempts.push(...structuredClone(replay.attempts));
+    publish();
+  }
+  const wireRequestHash = createHash('sha256').update(request.body).digest('hex');
+  const sendDeadlineAt = Math.min(request.sendDeadlineAt ?? request.deadlineAt, request.deadlineAt);
+  if (!Number.isFinite(sendDeadlineAt)) return { ok: false, code: 'CONFIGURATION_ERROR', attempts };
+  const deadline = new Deadline(request);
+  try {
+    for (let index = replay?.response.index ?? 1; index <= request.maxAttempts; index += 1) {
+      deadline.check();
+      const started = performance.now();
+      let status: number | null = null;
+      let acceptance: TransportAttempt['acceptance'] = 'NOT_SENT';
+      let usage = unknownUsage();
+      let admitted = false;
+      let completed = false;
+      let journalFailed = false;
+      let interpretation: {
+        outcome: TransportAttempt['outcome'];
+        errorCode: GatewayErrorCode | null;
+      } | null = null;
+      const completionState = (): { completed: boolean; journalFailed: boolean } => ({
+        completed,
+        journalFailed,
+      });
+      const updateProgress = (): void => {
+        activeAttempt = {
+          index,
+          httpStatus: status,
+          acceptance,
+          elapsedMs: Math.max(0, performance.now() - started),
+          usage,
         };
-        const save = async (
-          outcome: TransportAttempt['outcome'],
-          code: GatewayErrorCode | null,
-        ): Promise<void> => {
-          if (!admitted) {
-            activeAttempt = null;
-            completed = true;
-            publish();
-            return;
+        publish();
+      };
+      const save = async (
+        outcome: TransportAttempt['outcome'],
+        code: GatewayErrorCode | null,
+      ): Promise<void> => {
+        if (!admitted) {
+          activeAttempt = null;
+          completed = true;
+          publish();
+          return;
+        }
+        const attempt: TransportAttempt = {
+          index,
+          httpStatus: status,
+          outcome,
+          acceptance,
+          elapsedMs: Math.max(0, performance.now() - started),
+          usage,
+        };
+        try {
+          await persist(() => journal.completeAttempt({ attempt, errorCode: code }));
+        } catch {
+          journalFailed = true;
+          throw new TransportFailure('JOURNAL_ERROR');
+        }
+        attempts.push(attempt);
+        activeAttempt = null;
+        completed = true;
+        publish();
+      };
+      updateProgress();
+      let response: Response | undefined;
+      try {
+        let text: string | null;
+        let delay = 0;
+        const saved = replay?.response.index === index ? replay.response : null;
+        if (saved) {
+          admitted = true;
+          status = saved.status;
+          acceptance = 'RESPONDED';
+          text = saved.body;
+          delay = saved.retryDelayMs;
+          updateProgress();
+        } else {
+          if (performance.now() >= sendDeadlineAt) throw new TransportFailure('DEADLINE_EXCEEDED');
+          const admission = await persist(() => journal.beforeAttempt({ index, wireRequestHash }));
+          if (admission !== 'ADMITTED') {
+            const code =
+              admission === 'BUDGET_EXCEEDED'
+                ? 'BUDGET_EXCEEDED'
+                : admission === 'DEADLINE_EXCEEDED'
+                  ? 'DEADLINE_EXCEEDED'
+                  : 'ADMISSION_DENIED';
+            throw new TransportFailure(code);
           }
-          const attempt: TransportAttempt = {
-            index,
-            httpStatus: status,
-            outcome,
-            acceptance,
-            elapsedMs: Math.max(0, performance.now() - started),
-            usage,
-          };
+          admitted = true;
+          // Awaited admission may finish after cancellation/deadline. Recheck at the actual send boundary.
+          deadline.check();
+          if (performance.now() >= sendDeadlineAt) throw new TransportFailure('DEADLINE_EXCEEDED');
+          response = await deadline.run(async () => {
+            deadline.check();
+            if (performance.now() >= sendDeadlineAt)
+              throw new TransportFailure('DEADLINE_EXCEEDED');
+            acceptance = 'POSSIBLE';
+            updateProgress();
+            const received = await fetcher(FIREWORKS_ENDPOINT, {
+              method: 'POST',
+              redirect: 'error',
+              headers: {
+                Authorization: `Bearer ${request.apiKey}`,
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+              },
+              body: request.body,
+              signal: deadline.controller.signal,
+            });
+            if (deadline.inactive) discard(received);
+            else {
+              status = received.status;
+              acceptance = 'RESPONDED';
+              updateProgress();
+            }
+            return received;
+          });
+          status = response.status;
+          acceptance = 'RESPONDED';
+          if (response.ok) text = await readBody(response, request.maxResponseBytes, deadline);
+          else {
+            delay = Math.min(60_000, retryDelay(response));
+            text = null;
+            discard(response);
+          }
+          // Preserve bounded wire evidence before JSON, model, finish, usage or observation validation.
           try {
-            await persist(() => journal.completeAttempt({ attempt, errorCode: code }));
+            await persist(() =>
+              journal.recordResponse({
+                index,
+                status: status ?? 0,
+                body: text,
+                retryDelayMs: delay,
+              }),
+            );
           } catch {
             journalFailed = true;
             throw new TransportFailure('JOURNAL_ERROR');
           }
-          attempts.push(attempt);
-          activeAttempt = null;
-          completed = true;
-          publish();
-        };
-        updateProgress();
-        let response: Response | undefined;
-        try {
-          let text: string | null;
-          let delay = 0;
-          const saved = replay?.response.index === index ? replay.response : null;
-          if (saved) {
-            admitted = true;
-            status = saved.status;
-            acceptance = 'RESPONDED';
-            text = saved.body;
-            delay = saved.retryDelayMs;
-            updateProgress();
-          } else {
-            if (performance.now() >= sendDeadlineAt)
-              throw new TransportFailure('DEADLINE_EXCEEDED');
-            const admission = await persist(() =>
-              journal.beforeAttempt({ index, wireRequestHash }),
-            );
-            if (admission !== 'ADMITTED') {
-              const code =
-                admission === 'BUDGET_EXCEEDED'
-                  ? 'BUDGET_EXCEEDED'
-                  : admission === 'DEADLINE_EXCEEDED'
-                    ? 'DEADLINE_EXCEEDED'
-                    : 'ADMISSION_DENIED';
-              throw new TransportFailure(code);
-            }
-            admitted = true;
-            // Awaited admission may finish after cancellation/deadline. Recheck at the actual send boundary.
-            deadline.check();
-            if (performance.now() >= sendDeadlineAt)
-              throw new TransportFailure('DEADLINE_EXCEEDED');
-            response = await deadline.run(async () => {
-              deadline.check();
-              if (performance.now() >= sendDeadlineAt)
-                throw new TransportFailure('DEADLINE_EXCEEDED');
-              acceptance = 'POSSIBLE';
-              updateProgress();
-              const received = await fetcher(FIREWORKS_ENDPOINT, {
-                method: 'POST',
-                redirect: 'error',
-                headers: {
-                  Authorization: `Bearer ${request.apiKey}`,
-                  'Content-Type': 'application/json',
-                  Accept: 'application/json',
-                },
-                body: request.body,
-                signal: deadline.controller.signal,
-              });
-              if (deadline.inactive) discard(received);
-              else {
-                status = received.status;
-                acceptance = 'RESPONDED';
-                updateProgress();
-              }
-              return received;
-            });
-            status = response.status;
-            acceptance = 'RESPONDED';
-            if (response.ok) text = await readBody(response, request.maxResponseBytes, deadline);
-            else {
-              delay = Math.min(60_000, retryDelay(response));
-              text = null;
-              discard(response);
-            }
-            // Preserve bounded wire evidence before JSON, model, finish, usage or observation validation.
-            try {
-              await persist(() =>
-                journal.recordResponse({
-                  index,
-                  status: status ?? 0,
-                  body: text,
-                  retryDelayMs: delay,
-                }),
-              );
-            } catch {
-              journalFailed = true;
-              throw new TransportFailure('JOURNAL_ERROR');
-            }
-          }
-          deadline.check();
-          if (status < 200 || status >= 300) {
-            await save('HTTP_ERROR', 'HTTP_ERROR');
-            if (
-              index < request.maxAttempts &&
-              RETRY_STATUSES.has(status) &&
-              delay < Math.min(deadline.remaining(), sendDeadlineAt - performance.now())
-            ) {
-              await deadline.sleep(delay);
-              continue;
-            }
-            return { ok: false, code: 'HTTP_ERROR', attempts };
-          }
-          if (text === null) throw new TransportFailure('INVALID_RESPONSE');
-          const parsed = parseJson(text, deadline);
-          const accounting = usageFrom(object(parsed)?.usage);
-          usage = accounting.usage;
-          updateProgress();
-          if (!accounting.valid) throw new TransportFailure('INVALID_RESPONSE');
-          const result = completion(parsed, request.expectedResponseModels);
-          interpretation = { outcome: 'COMPLETED', errorCode: null };
-          deadline.check();
-          await save('COMPLETED', null);
-          deadline.check();
-          return { ok: true, ...result, usage: invocationUsage(attempts), attempts };
-        } catch (error) {
-          if (response) discard(response);
-          let code: GatewayErrorCode =
-            error instanceof TransportFailure ? error.code : 'NETWORK_ERROR';
-          const interpretedError = code;
-          if (code === 'JOURNAL_ERROR') journalFailed = true;
-          if (!journalFailed) {
-            try {
-              deadline.check();
-            } catch (deadlineError) {
-              if (deadlineError instanceof TransportFailure) code = deadlineError.code;
-            }
-          }
-          if (!completionState().completed && !completionState().journalFailed) {
-            try {
-              // A caller interrupt cannot replace an interpretation already obtained from saved evidence.
-              const definite =
-                interpretation ??
-                (!['CANCELLED', 'DEADLINE_EXCEEDED'].includes(interpretedError)
-                  ? { outcome: attemptOutcome(interpretedError), errorCode: interpretedError }
-                  : null);
-              await save(
-                definite?.outcome ?? attemptOutcome(code),
-                definite ? definite.errorCode : code,
-              );
-            } catch {
-              code = 'JOURNAL_ERROR';
-            }
-          }
-          // If storage failed, preserve the active attempt in the safe result without fabricating a receipt.
-          if (!completionState().completed) {
-            attempts.push({
-              index,
-              httpStatus: status,
-              outcome: attemptOutcome(code),
-              acceptance,
-              elapsedMs: Math.max(0, performance.now() - started),
-              usage,
-            });
-            activeAttempt = null;
-            publish();
-          }
-          return { ok: false, code, attempts };
         }
+        deadline.check();
+        if (status < 200 || status >= 300) {
+          await save('HTTP_ERROR', 'HTTP_ERROR');
+          if (
+            index < request.maxAttempts &&
+            RETRY_STATUSES.has(status) &&
+            delay < Math.min(deadline.remaining(), sendDeadlineAt - performance.now())
+          ) {
+            await deadline.sleep(delay);
+            continue;
+          }
+          return { ok: false, code: 'HTTP_ERROR', attempts };
+        }
+        if (text === null) throw new TransportFailure('INVALID_RESPONSE');
+        const parsed = parseJson(text, deadline);
+        if (mode.kind === 'DISCOVERY' && !object(parsed))
+          throw new TransportFailure('INVALID_RESPONSE');
+        const accounting = usageFrom(object(parsed)?.usage);
+        usage = accounting.usage;
+        updateProgress();
+        if (!accounting.valid) throw new TransportFailure('INVALID_RESPONSE');
+        const result =
+          mode.kind === 'EXPECTED_MODEL' ? completion(parsed, mode.expectedResponseModels) : null;
+        interpretation = { outcome: 'COMPLETED', errorCode: null };
+        deadline.check();
+        await save('COMPLETED', null);
+        deadline.check();
+        return result
+          ? { ok: true, ...result, usage: invocationUsage(attempts), attempts }
+          : { ok: true, captured: true, usage: invocationUsage(attempts), attempts };
+      } catch (error) {
+        if (response) discard(response);
+        let code: GatewayErrorCode =
+          error instanceof TransportFailure ? error.code : 'NETWORK_ERROR';
+        const interpretedError = code;
+        if (code === 'JOURNAL_ERROR') journalFailed = true;
+        if (!journalFailed) {
+          try {
+            deadline.check();
+          } catch (deadlineError) {
+            if (deadlineError instanceof TransportFailure) code = deadlineError.code;
+          }
+        }
+        if (!completionState().completed && !completionState().journalFailed) {
+          try {
+            // A caller interrupt cannot replace an interpretation already obtained from saved evidence.
+            const definite =
+              interpretation ??
+              (!['CANCELLED', 'DEADLINE_EXCEEDED'].includes(interpretedError)
+                ? { outcome: attemptOutcome(interpretedError), errorCode: interpretedError }
+                : null);
+            await save(
+              definite?.outcome ?? attemptOutcome(code),
+              definite ? definite.errorCode : code,
+            );
+          } catch {
+            code = 'JOURNAL_ERROR';
+          }
+        }
+        // If storage failed, preserve the active attempt in the safe result without fabricating a receipt.
+        if (!completionState().completed) {
+          attempts.push({
+            index,
+            httpStatus: status,
+            outcome: attemptOutcome(code),
+            acceptance,
+            elapsedMs: Math.max(0, performance.now() - started),
+            usage,
+          });
+          activeAttempt = null;
+          publish();
+        }
+        return { ok: false, code, attempts };
       }
-      return { ok: false, code: 'HTTP_ERROR', attempts };
-    } catch (error) {
-      return {
-        ok: false,
-        code: error instanceof TransportFailure ? error.code : 'NETWORK_ERROR',
-        attempts,
-      };
-    } finally {
-      deadline.close();
     }
-  };
+    return { ok: false, code: 'HTTP_ERROR', attempts };
+  } catch (error) {
+    return {
+      ok: false,
+      code: error instanceof TransportFailure ? error.code : 'NETWORK_ERROR',
+      attempts,
+    };
+  } finally {
+    deadline.close();
+  }
 }

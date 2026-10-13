@@ -10,6 +10,9 @@
 > FW-15/16 now adds 25 DRAFT synthetic development hypotheses and deterministic offline
 > field/evidence/abstention scoring with bound review packets (ADR-069). Domain adjudication,
 > untouched held-out cases and authenticated provider evaluation are still missing.
+> FW-42 adds isolated bounded contract-discovery tooling with private durable receipts
+> (ADR-070). Account/model metadata checks ran; serving identity, paid captures and actual quality
+> remain unverified. Discovery cannot approve models or produce production observations.
 > Notification outbox (FW-40), live model
 > evaluation and provider approval remain open.
 > Fireworks/ElevenLabs credentials are now present locally. FW-37 adds scoped operations and audited delivery

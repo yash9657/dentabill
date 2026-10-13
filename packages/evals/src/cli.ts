@@ -1,9 +1,9 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- Offline operator-selected inputs, fixed implementation files, and exclusively created output artifacts; no server-controlled paths. */
-import { createHash } from 'node:crypto';
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { implementationHash } from './artifact.js';
 import { runSyntheticBaseline } from './baseline.js';
 import { EvaluationError, canonicalJson, evidenceHash } from './contracts.js';
 import { prepareEvaluationReview } from './review.js';
@@ -27,34 +27,6 @@ async function readJson(path: string): Promise<unknown> {
   } catch {
     throw new EvaluationError('INVALID_INPUT');
   }
-}
-
-async function implementationHash(): Promise<string> {
-  const files: { path: string; sha256: string }[] = [];
-  for (const [prefix, directory] of [
-    ['evals', new URL('.', import.meta.url)],
-    ['model-gateway', new URL('.', import.meta.resolve('@dentabill/model-gateway'))],
-  ] as const) {
-    for (const name of (await readdir(directory)).sort()) {
-      if (!name.endsWith('.ts') || name.endsWith('.test.ts') || name === 'test-fixtures.ts')
-        continue;
-      const bytes = await readFile(new URL(name, directory));
-      files.push({
-        path: `${prefix}/${name}`,
-        sha256: createHash('sha256').update(bytes).digest('hex'),
-      });
-    }
-    for (const name of ['package.json', 'tsconfig.json']) {
-      const bytes = await readFile(new URL(`../${name}`, directory));
-      files.push({
-        path: `${prefix}/${name}`,
-        sha256: createHash('sha256').update(bytes).digest('hex'),
-      });
-    }
-  }
-  const lock = await readFile(new URL('../../../pnpm-lock.yaml', import.meta.url));
-  files.push({ path: 'pnpm-lock.yaml', sha256: createHash('sha256').update(lock).digest('hex') });
-  return evidenceHash(files);
 }
 
 async function writeArtifacts(

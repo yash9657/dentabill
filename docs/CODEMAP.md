@@ -26,7 +26,7 @@ packages/
   logger/           pino with PHI-field redaction
   queue/            BullMQ job definitions — Phase 3
   model-gateway/    Release-gated Fireworks text inference + explicit synthetic adapter
-  evals/            Offline synthetic observation scoring and evidence-bound review packets
+  evals/            Offline scoring, evidence-bound review packets and isolated contract capture
   payer-ivr/        Insurance IVR navigation maps — Phase 3
   ui/               Shared shadcn components — Phase 2
 ```
@@ -84,7 +84,13 @@ recomputed review evidence. No production runtime import, network transport or r
 and artifact bindings with mandatory blockers; `cli.ts` exclusive local artifacts and verification.
 **Depends on:** `@dentabill/model-gateway`, `zod`, Node crypto/filesystem. Review attestations and
 imported provenance are not authenticated; every packet keeps production approval false.
-**Workflow and limits:** `packages/evals/README.md` (ADR-069).
+**Contract discovery:** `capture-plan.ts` freezes candidate/corpus/account/artifact and monetary
+allowances; `capture-store.ts` publishes private immutable fsynced records; `capture-run.ts`
+owns one attempt per case, account checks, raw receipts and replay/unknown outcomes.
+`capture-cli.ts` exposes prepare/inspect/run separately from offline scoring. Process fixtures
+prove acceptance/raw-receipt crashes and over-allowance recovery against localhost HTTP only.
+
+**Workflow and limits:** `packages/evals/README.md` (ADR-069/070).
 
 ### `@dentabill/logger` — packages/logger
 

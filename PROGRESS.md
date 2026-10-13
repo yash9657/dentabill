@@ -9,7 +9,15 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice:** FW-15/16 now has 25 independent DRAFT synthetic cases, deterministic
+**Latest local slice:** FW-42 has a functioning contract-discovery CLI with exact corpus/account/
+artifact bindings, one attempt per case, private durable raw receipts, conservative spending
+allowances and crash-safe replay (ADR-070). It preserves unapproved candidates and cannot return
+production observations. Read-only Fireworks account/model checks pass; regional router metadata
+returned403. Serving identity, credits/Auto Reload, actual captures, billing and model quality
+remain unverified. No inference, phone call, migration or deployment ran. Verification and the
+concrete proposed first run are in session context.
+
+**Previous local slice:** FW-15/16 now has 25 independent DRAFT synthetic cases, deterministic
 offline scoring and an executable seed/replay/verification CLI (ADR-069). Exact corpus/input
 bindings expose omissions and swaps; separate coverage/abstention/subgroup measures prevent
 blanket refusal from looking accurate. The baseline uses the fake gateway without gold-label

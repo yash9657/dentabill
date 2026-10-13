@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "build": "tsc --noEmit -p tsconfig.json",
-    "evaluate": "tsx src/cli.ts"
+    "evaluate": "tsx src/cli.ts",
+    "capture": "tsx src/capture-cli.ts"
   },
   "dependencies": {
     "@dentabill/model-gateway": "workspace:*",

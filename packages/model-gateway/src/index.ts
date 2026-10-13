@@ -14,6 +14,9 @@ export {
   type ModelGateway,
   type FireworksTransport,
   type FireworksTransportRequest,
+  type FireworksDiscoveryTransport,
+  type FireworksDiscoveryTransportRequest,
+  type FireworksDiscoveryTransportResult,
   type GatewayJournalBinding,
   type GatewayJournalFactory,
   type GatewayJournalOpen,
@@ -27,7 +30,7 @@ export {
 } from './contracts.js';
 export { createFakeModelGateway, SYNTHETIC_RELEASE_ID } from './fake.js';
 export { createFireworksGateway, buildObservationRequestBody } from './gateway.js';
-export { createFireworksTransport } from './transport.js';
+export { createFireworksTransport, createFireworksDiscoveryTransport } from './transport.js';
 export { validateGatewayInput, validateObservation } from './task.js';
 export {
   CANDIDATE_RELEASES,

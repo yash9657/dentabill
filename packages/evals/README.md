@@ -1,8 +1,9 @@
 # Observation evaluation
 
 `@dentabill/evals` compares frozen synthetic observations against separately authored reference
-annotations. It has no network transport, credential loader, production database access or release
-promotion command. The runtime model gateway and its approval requirements remain unchanged.
+annotations. The `evaluate` commands run offline. A separate, explicitly authorized `capture`
+command can collect synthetic Fireworks contract evidence as described below. Neither path has
+production database access or a release promotion command. Runtime approval requirements remain unchanged.
 
 ## Run the workflow
 
@@ -95,3 +96,71 @@ authorized provider captures with actual latency, usage, billing and correction-
 Provider license/revision, region/retention, spend authorization and protected-data approvals
 remain separate release gates. Do not manufacture reviewer records or use perfect fixture
 scores to approve a production model.
+
+## Separate contract discovery (ADR-070)
+
+`capture prepare` freezes a real, reviewable experiment without making network requests:
+
+```bash
+pnpm --filter @dentabill/evals capture prepare \
+  --corpus /absolute/path/corpus.json \
+  --candidate glm-flash-claim-observation.v1 \
+  --evidence /absolute/path/capture-evidence.json \
+  --allowance-usd 2 \
+  --out /absolute/path/new-private-run
+pnpm --filter @dentabill/evals capture inspect --run /absolute/path/new-private-run
+```
+
+The evidence file follows `CaptureEvidenceSchema` in `src/capture-plan.ts`. It records the
+read-only account digest and evidence digest, current price/context sources, exact candidate
+route, Standard rates in micro-USD per million tokens, publisher revision/license digest and
+explicitly unverified serving revision/regional route. Use actual observations; no generated
+evidence file, source URL or identifier proves contractual approval. Account/price/context evidence
+must be at most 24 hours old at preparation. At most 25 complete synthetic cases are allowed.
+
+The plan binds its exact corpus, candidate, source/dependency artifact, local host and canonical
+run directory. It expires after 24 hours. It uses the production request builder and fixed US
+transport with one attempt per case, output limit4096, response1MiB and deadline30s. The original
+candidate stays CANDIDATE with no approval or guessed response identities. A separate discovery
+transport can persist an unknown model response without returning an observation or bypassing
+the production transport's identity check. `captured` means bounded raw JSON/usage was retained;
+it does not validate the declared model, finish reason, content, dental accuracy or serving region.
+
+After the human has authorized the concrete experiment and its spending allowance, use the
+exact plan digest printed by `prepare`/`inspect`. A caller-provided digest is a trusted local
+operator confirmation, not a cryptographically authenticated human signature:
+
+```bash
+pnpm --filter @dentabill/evals exec node --env-file=../../.env --import tsx \
+  src/capture-cli.ts run --run /absolute/path/new-private-run --authorize-plan <exact-sha256>
+```
+
+Only `run` uses the process's `FIREWORKS_API_KEY`. It first performs a bounded read-only account
+lookup and rejects a different/ambiguous account. It does not buy credits, change limits, create
+agents, place phone calls or alter production settings. Do not run without the required budget
+authorization; existing account quota is not a task budget. `prepare` and `inspect` need no key.
+
+The monetary allowance reserves uncached input **and completion** at the entire documented model
+context for every case, intentionally over-reserving hidden reasoning. Arithmetic rounds upward
+in integer micro-USD. No refund or reuse of an uncertain request's allowance is allowed. This
+is a conservative bound under the recorded price/context assumptions, not an enforced provider
+invoice cap or measured cost. Regional router-to-model mapping and actual billing still require
+evidence. Explicit wire usage above those token allowances stops remaining cases without sending;
+unknown usage retains liability. Checking raw receipts on replay prevents an older cancellation
+receipt with null usage from hiding a later-known overrun.
+
+Run directories are 0700 and immutable records0600. Each admission and its reserved allowance
+are published together through fsync and an atomic exclusive link before HTTP. Response bytes
+are persisted before interpretation. A NO_SEND record claims the same slot, so concurrent
+cancellation cannot hide a request. Completed runs reopen without another request; crashes
+after a saved response replay locally. A dead owner's admission without a raw receipt becomes
+UNKNOWN and never sends again. Live or foreign-host owners block takeover. Unattempted cases
+remain in the report. Failed/unknown cases never establish zero cost or a valid model response.
+
+This store is for one trusted operator on one local filesystem. Do not delete, clone, relocate,
+or edit an authorized run to reset its budget. Local integrity bindings are not an adversary-proof
+global account ledger or distributed service. Raw receipts can contain sensitive text; the CLI
+prints only closed codes/counts/digests. Non-2xx error bodies are intentionally discarded while
+status and uncertain usage remain. Do not commit private artifacts or treat discovery output as
+an evaluator bundle. Reviewed response identity and a real synthetic-evaluation release are
+still required for scored captures through the normal gateway.

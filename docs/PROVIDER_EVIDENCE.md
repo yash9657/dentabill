@@ -13,6 +13,44 @@ Evidence labels:
 
 ## Local implementation evidence added after the baseline
 
+FW-42 adds a separate local contract-discovery runner (ADR-070): frozen synthetic inventory,
+candidate/account/artifact binding, a 24-hour plan, one attempt per case, private fsynced raw
+receipts and conservative monetary allowances. A discovery result cannot approve a release or
+become a production observation. Same-host SIGKILL/restart tests prove no resend after uncertain
+acceptance, local replay after a raw receipt, and stopping on raw over-allowance usage even when
+an earlier cancelled attempt recorded unknown usage. All HTTP in these tests is localhost.
+
+Actual **read-only account checks at 2026-10-13T23:05Z**: one account; READY/UNSUSPENDED;
+`productivityOnly:false`; monthly-spend quota value/max9999999 and usage5.04. This high account
+quota is not a DentaBill experiment budget or credit-balance evidence. Policy GET succeeded;
+`zeroDataRetention:null` supplies no enforced-ZDR evidence. No residency field was returned.
+Both public model GETs returned HTTP200, `supportsServerless:true` and context1048576. Both exact
+regional router metadata GETs returned403, so their underlying mapping/entitlement is unverified.
+No inference ran. A separate browser check reached login, leaving credit balance/Auto Reload
+unverified. Raw account identifiers/credentials were not printed or changed; the local sanitized
+record is `/tmp/dentabill-fw42-account-evidence.json`.
+[Account](https://docs.fireworks.ai/api-reference/get-account),
+[quota](https://docs.fireworks.ai/api-reference/get-quota),
+[model metadata](https://docs.fireworks.ai/api-reference/get-model),
+[router metadata](https://docs.fireworks.ai/api-reference/get-router).
+
+Public routing/prices were refreshed on the same date. Standard is the documented default when
+`service_tier` is omitted, matching the current wire builder. The planner reserves uncached input
+and completion at the entire model context on both sides; it does not claim bytes×2 is a billing
+bound or that hidden reasoning is free. Exact regional serving identity and invoice behavior
+remain unmeasured. [Modes](https://docs.fireworks.ai/serverless/serverless-modes),
+[US routing](https://docs.fireworks.ai/serverless/us-only-serverless),
+[pricing](https://docs.fireworks.ai/serverless/pricing).
+
+Publisher license evidence is now pinned: GLM revision
+`91b69215804f2d2036a8867f6ce44848e278dcda`, LICENSE SHA256
+`30b85b6b9659f2e78aa259f8faf5d920a68dee7c9ced3fa6dba1f19f2bc4fca1`;
+DeepSeek revision `5254448103b6254fc646dacbca1cbbf20e9216c1`, LICENSE SHA256
+`f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040`.
+Both license texts are MIT. These pin publisher evidence, not Fireworks' served weights or precision.
+[GLM immutable license](https://huggingface.co/zai-org/GLM-5.3-Flash/raw/91b69215804f2d2036a8867f6ce44848e278dcda/LICENSE),
+[DeepSeek immutable license](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/raw/5254448103b6254fc646dacbca1cbbf20e9216c1/LICENSE).
+
 FW-15/16 now provides a functioning offline evaluation workflow in `@dentabill/evals`:
 25 independent DRAFT synthetic development hypotheses, strict split/inventory binding,
 separate field/citation/abstention/subgroup metrics, and replay/review recomputation. Its

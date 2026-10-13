@@ -1,7 +1,7 @@
 # DentaBill model gateway
 
 Server-only structured Fireworks inference for `claim-observation.v1`. This package is a
-local implementation of FW-10–13 (ADR-063); workers and voice do not consume it yet.
+local implementation of FW-10–13 (ADR-063), now integrated with durable native summary jobs.
 Both checked-in models remain unapproved. Credentials alone do not enable inference.
 
 `createFireworksGateway` implements `ModelGateway.generate(request, { signal })` and returns
@@ -36,6 +36,14 @@ speaker identity, applicability, accuracy or payment truth. Amount/code parsing 
 conservative; mixed adjudication, overpayments and unsupported evidence require review.
 Representative adjudicated evaluations remain a release gate.
 
+`createFireworksDiscoveryTransport` is a separate low-level experiment transport (ADR-070).
+It preserves the same fixed host, byte/deadline bounds and awaited journal, but returns only
+`captured:true`, attempts and usage after a raw JSON response is saved. It never returns model
+identity, generated content, a validated observation or release approval. Use the bounded
+synthetic `@dentabill/evals capture` workflow; this function alone does not authorize data or
+spending. The ordinary transport and gateway retain their required response-model allowlist
+and approved-release policy. Discovery is not used by API/worker production paths.
+
 ## Synthetic adapter
 
 Use `createFakeModelGateway` explicitly with `SYNTHETIC_RELEASE_ID` and `dataClass:'SYNTHETIC'`.
@@ -55,6 +63,7 @@ accounting, late response rejection and native socket closure. They do not conta
 
 See [the contract register](../../docs/FIREWORKS_GATEWAY_CONTRACT.md),
 [current evidence](../../docs/SESSION_CONTEXT.md) and [AWS integration gates](../../docs/DEPLOY_AWS.md).
-FW-26 durable inference accounting and FW-27 versioned summary replacement must precede
-automatic worker integration. Streaming/tools, voice, retrieval and document media are separate
+FW-26/41 durable accounting and FW-27 versioned observation publication now support automatic
+native jobs locally; defaults stay synthetic and live releases remain unapproved.
+Streaming/tools, voice, retrieval and document media are separate
 tasks; rollback disables inference and returns work to review, without a provider fallback.

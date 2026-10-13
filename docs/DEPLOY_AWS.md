@@ -159,6 +159,12 @@ production. The current 25-case seed is unadjudicated development data and the C
 does not call Fireworks. Model/voice selectors, AWS secrets and deployed artifacts are unchanged.
 Authenticated captures, qualified review and the existing release/deployment gates still apply.
 
+ADR-070 adds a separate local `capture prepare/inspect/run` workflow. It uses a private,
+single-host filesystem journal and exact run budget/account/code bindings; it is not a Lambda
+worker, distributed spending service or production release gate replacement. Keep private raw
+capture files out of deployment bundles/version control. Discovery never supplies a usable
+observation or approves a model. Existing API/worker selectors and AWS secrets are unchanged.
+
 ## Infrastructure expectations
 
 | Item             | API function                                                                                           | Worker function                                                                                                     |

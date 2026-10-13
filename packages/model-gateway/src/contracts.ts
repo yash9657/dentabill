@@ -201,6 +201,31 @@ export interface FireworksTransportRequest {
   readonly onProgress?: (progress: TransportProgress) => void;
 }
 export type FireworksTransport = (request: FireworksTransportRequest) => Promise<TransportResult>;
+/** Capture-only request. It cannot be used as an observation transport with an empty allowlist. */
+export type FireworksDiscoveryTransportRequest = Omit<
+  FireworksTransportRequest,
+  'expectedResponseModels'
+>;
+/**
+ * A capture confirms only a journaled bounded JSON object and basic usage validation.
+ * Model identity, completion content/finish, and observation correctness remain unverified.
+ * Sensitive raw response text is available only through the required transport journal.
+ */
+export type FireworksDiscoveryTransportResult =
+  | {
+      readonly ok: true;
+      readonly captured: true;
+      readonly usage: Usage;
+      readonly attempts: readonly TransportAttempt[];
+    }
+  | {
+      readonly ok: false;
+      readonly code: GatewayErrorCode;
+      readonly attempts: readonly TransportAttempt[];
+    };
+export type FireworksDiscoveryTransport = (
+  request: FireworksDiscoveryTransportRequest,
+) => Promise<FireworksDiscoveryTransportResult>;
 export type GatewayResult =
   | {
       readonly status: 'VALIDATED' | 'ABSTAINED';

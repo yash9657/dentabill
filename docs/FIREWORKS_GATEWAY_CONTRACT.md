@@ -4,6 +4,23 @@
 
 This supplements [provider evidence](./PROVIDER_EVIDENCE.md) and the [implementation plan](./FIREWORKS_IMPLEMENTATION_PLAN.md). The first slice is a text-only, nonstreaming, stateless adapter and fake behind one typed interface. Streaming voice/tool execution, embeddings, reranking, document media, inference-job persistence and provider cutover remain separate work. The user's ElevenLabs exception covers speech/orchestration; business inference remains restricted to approved Fireworks-hosted open weights.
 
+## FW-42 isolated contract discovery — 2026-10-13
+
+ADR-070 adds an explicit discovery-only experiment path to resolve the initial unknown response
+identity without inventing release evidence. `createFireworksDiscoveryTransport` shares the
+fixed endpoint, bounded request lifecycle and awaited journal with normal transport, but returns
+no completion content or observation. The local `@dentabill/evals capture` CLI binds synthetic
+cases, candidate, current account/price/context/license evidence, exact artifact, host/path,
+allowance and expiry. Every case has at most one send; unknown acceptance stays reserved, saved
+raw responses replay without a network request, and concurrent cancellation cannot mask a send.
+
+Candidates remain unapproved, their serving revisions unknown, and normal gateway identity/
+release gates unchanged. This explicitly authorized discovery is the prerequisite for measured
+identity evidence; a subsequent scored synthetic-evaluation release still needs reviewed scope
+and applicable provider evidence. Local capture files are not deployment artifacts, authenticated
+domain adjudication, production approval or an account-wide dollar enforcement service. See
+`packages/evals/README.md` and the dated actual read-only checks in PROVIDER_EVIDENCE.md.
+
 ## FW-27 local observation publication/review — 2026-10-13
 
 The explicit worker can now publish validated saved native results into immutable observation
@@ -18,8 +35,9 @@ calls/superseded findings, and is idempotent for the same actor/decision/note. O
 creation time orders recovered calls; later database insertion cannot promote old evidence.
 The UI preserves review history alongside later stale warnings and labels synthetic data even
 when a local native HTTP fixture uses FIREWORKS provenance. This establishes local workflow
-invariants only. Same-call regeneration, automatic production routing, live evaluation and notification delivery
-remain open. Corrected, changed or missing final transcripts make existing reviews stale. ADR-066.
+invariants only. Same-call regeneration and automatic native routing are now implemented locally
+(ADR-067/068); live evaluation/deployment and notification delivery remain open. Corrected, changed
+or missing final transcripts make existing reviews stale. ADR-066.
 
 ## FW-41 local durable integration — 2026-10-13
 

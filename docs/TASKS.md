@@ -77,7 +77,7 @@ No pilot clinic yet (user confirmed); fake data is authorized. Real connector/cl
 is visibly blocked pending a test partner and authorized system access. Open Dental is a rollout
 sequence; the broader capability matrix remains in scope.
 
-- [ ] **FW-42** Auditable synthetic model-evaluation capture. Refresh account/model/license/region/retention and pricing evidence; bind a capped authorized run to the frozen corpus, exact release and implementation artifact; retain actual per-attempt provider request/response/usage receipts through the durable gateway. Preserve failures and uncertain spend. Compare candidates on the same inventory. The offline FW-16 runner and imported provenance alone do not establish this evidence; no paid request without confirmed budget/authorization.
+- [ ] **FW-42** Auditable synthetic model-evaluation capture. _Read-only account/model evidence refreshed. A separate bounded contract-discovery CLI, private immutable journal, one-send-per-case fence, retained liability, exact plan/artifact/account bindings and crash/replay proofs are implemented locally (ADR-070). Discovery leaves candidates unapproved and produces no quality scores. Real discovery, reviewed serving identity, authorized normal-gateway scored captures, billing reconciliation and candidate comparison remain open; no paid request without confirmed budget/authorization._
 
 ---
 

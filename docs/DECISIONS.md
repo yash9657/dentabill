@@ -1315,3 +1315,45 @@ workspace with a complete offline seed, score and verification workflow.
    ratified thresholds, applicable vendor evidence and authorized deployment remain required.
 
 No new inference provider, paid request, production migration or deployment is introduced.
+
+## ADR-070 — Bounded synthetic contract discovery before release approval
+
+**Date:** 2026-10-13. **Status:** accepted for local capture tooling; no production approval.
+
+FW-42 encountered a bootstrap dependency: production release approval requires a measured
+response-model identity and serving evidence that cannot be honestly populated before a first
+response exists. Credentials and publisher model cards cannot supply that evidence. Introducing
+fictional release IDs/evidence or weakening normal gateway approval would conceal the gap.
+
+1. A separate discovery transport shares the fixed US host, bounds, cancellation and awaited
+   journal implementation. It returns only capture status, attempts and usage after saving raw
+   JSON; it never returns a validated observation, model identity or generated content. The
+   ordinary gateway and expected-model transport retain their existing approval/identity rules.
+2. A local capture plan freezes at most25 synthetic cases, one exact candidate, request bytes,
+   code/dependency fingerprint, host/path, account digest, current price/context/license evidence
+   and a 24-hour execution window. The target remains CANDIDATE. An exact plan-digest confirmation
+   is a trusted local operator action, not authenticated proof of a human's authority.
+3. The whole inventory reserves a conservative micro-USD allowance before execution, using
+   uncached input and completion rates at the full documented model context on both sides.
+   This intentionally over-reserves reasoning until measured, rounds upward and never refunds
+   uncertainty. It is not a verified provider-side invoice cap; regional model mapping and actual
+   usage/billing still need evidence. Reported counts above the bound stop further cases.
+4. One immutable admission publishes identity and its allowance together before HTTP. Private
+   0700/0600 records use temp-file fsync, exclusive atomic link, then directory fsync. Response
+   bytes precede interpretation; an interrupted receipt replays without sending. An admission
+   without a response retains liability and becomes UNKNOWN only after the same-host owner is
+   confirmed dead. A live/reused PID blocks takeover. NO_SEND claims the same slot to prevent a
+   cancelled concurrent runner from masking another runner's provider request.
+5. Reverse publication-order reads validate every receipt and final-result binding. Raw usage
+   is checked again on restart so an earlier cancellation receipt cannot hide a known overrun.
+   Every frozen case retains a disposition; missing usage/failures never become free or accurate.
+6. The CLI has separate prepare, inspect and run commands. Only run uses a key and verifies its
+   exact account read-only before sending. It cannot buy credits, change account policy, approve
+   a model, touch application data, migrate/deploy AWS or place calls. Local filesystem durability
+   is not a distributed/account-wide spending service. Authorized runs must not be cloned,
+   relocated, edited or deleted to obtain another allowance.
+
+Actual read-only account/model evidence is in the provider register. Fake HTTP/process tests
+validate mechanics only. First real discovery requests require the concrete spending scope to be
+confirmed; quality measurement then requires a reviewed synthetic-evaluation release and normal
+gateway captures. Qualified reference review and the full connector/voice/product scope remain open.
