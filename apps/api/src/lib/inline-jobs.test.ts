@@ -3,6 +3,7 @@
  * test Postgres. Retell and Claude are the in-process fakes, injected so a
  * developer `.env` with live keys can never leak into the run.
  */
+import { enqueueJobOutbox } from '@dentabill/call-worker';
 import { hashPatientDOB, prisma } from '@dentabill/db';
 import { createLogger } from '@dentabill/logger';
 import { FakeRetell } from '@dentabill/payer-ivr';
@@ -140,6 +141,10 @@ afterAll(async () => {
 });
 
 afterEach(async () => {
+  await prisma.$executeRawUnsafe(
+    'DROP TRIGGER IF EXISTS reject_runtime_submission ON "CallIntent"',
+  );
+  await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS reject_runtime_submission()');
   await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS reject_runtime_audit ON "AuditLog"');
   await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS reject_runtime_audit()');
   await prisma.$executeRawUnsafe(
@@ -147,7 +152,107 @@ afterEach(async () => {
   );
 });
 
+async function rejectSubmission(): Promise<void> {
+  await prisma.$executeRawUnsafe(`CREATE FUNCTION reject_runtime_submission() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN IF NEW.state = 'SUBMITTING' THEN RAISE EXCEPTION 'Synthetic submission persistence failure'; END IF;
+    RETURN NEW; END; $$`);
+  await prisma.$executeRawUnsafe(`CREATE TRIGGER reject_runtime_submission BEFORE UPDATE ON "CallIntent"
+    FOR EACH ROW EXECUTE FUNCTION reject_runtime_submission()`);
+}
+
 describe('createInlineJobRuntime — calls', () => {
+  it('keeps old recovered SQS failure unacknowledged and accepts exact current generation exhaustion', async () => {
+    const { data, orgId } = await seed();
+    const outbox = await enqueueJobOutbox(prisma, {
+      organizationId: orgId,
+      kind: 'CALL_PLACE',
+      data,
+    });
+    await prisma.jobOutbox.updateMany({
+      where: { id: outbox.id, organizationId: orgId },
+      data: {
+        state: 'DELIVERED',
+        recoveryCount: 1,
+        deliveryAttempts: 11,
+        deliveryAttemptLimit: 13,
+      },
+    });
+    const { runtime, retell } = runtimeWith();
+    const start = vi.spyOn(retell, 'startCall');
+    const worker = createSqsJobWorker({ runtime, logger: silentLogger, maxReceiveCount: 1 });
+    await rejectSubmission();
+    try {
+      const stale = await worker({
+        Records: [
+          {
+            messageId: 'stale',
+            receiptHandle: 'stale-handle',
+            body: JSON.stringify({ type: 'call.place', data }),
+            attributes: { ApproximateReceiveCount: '1' },
+          },
+        ],
+      });
+      expect(stale).toEqual({ batchItemFailures: [{ itemIdentifier: 'stale' }] });
+      expect(
+        await prisma.callIntent.findFirst({
+          where: { organizationId: orgId, idempotencyKey: data.idempotencyKey },
+        }),
+      ).toMatchObject({ state: 'READY' });
+      const current = await worker({
+        Records: [
+          {
+            messageId: 'current',
+            receiptHandle: 'current-handle',
+            body: JSON.stringify({
+              type: 'call.place',
+              data,
+              transportJobId: `outbox.${outbox.id}.recovery.1`,
+            }),
+            attributes: { ApproximateReceiveCount: '1' },
+          },
+        ],
+      });
+      expect(current).toEqual({ batchItemFailures: [] });
+      expect(
+        await prisma.callIntent.findFirst({
+          where: { organizationId: orgId, idempotencyKey: data.idempotencyKey },
+        }),
+      ).toMatchObject({ state: 'CANCELLED' });
+      expect(
+        await prisma.auditLog.count({
+          where: { organizationId: orgId, action: 'call.intent.cancelled' },
+        }),
+      ).toBe(1);
+      expect(start).not.toHaveBeenCalled();
+    } finally {
+      start.mockRestore();
+    }
+  });
+
+  it('threads recovered inline provenance without claiming stale failure persistence', async () => {
+    const { data, orgId } = await seed();
+    const outbox = await enqueueJobOutbox(prisma, {
+      organizationId: orgId,
+      kind: 'CALL_PLACE',
+      data,
+    });
+    await prisma.jobOutbox.updateMany({
+      where: { id: outbox.id, organizationId: orgId },
+      data: { state: 'PENDING', recoveryCount: 1, deliveryAttempts: 11, deliveryAttemptLimit: 13 },
+    });
+    const { runtime, retell } = runtimeWith({ callJobOptions: { attempts: 1 } });
+    const start = vi.spyOn(retell, 'startCall');
+    await rejectSubmission();
+    try {
+      expect(await runtime.runCall(data)).toMatchObject({ status: 'failed', dlq: false });
+      expect(
+        await runtime.runCall(data, { transportJobId: `outbox.${outbox.id}.recovery.1` }),
+      ).toMatchObject({ status: 'failed', dlq: true });
+      expect(start).not.toHaveBeenCalled();
+    } finally {
+      start.mockRestore();
+    }
+  });
   it('runs the call handler to completion and dispatches the summary job', async () => {
     const { runtime, retell, retellCallId, dispatcher } = runtimeWith();
     const { data, orgId } = await seed();

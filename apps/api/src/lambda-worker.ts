@@ -116,7 +116,11 @@ export async function processRecord(
     return 'retry';
   }
 
-  const jobAttempt = { attempt, maxAttempts: deps.maxReceiveCount };
+  const jobAttempt = {
+    attempt,
+    maxAttempts: deps.maxReceiveCount,
+    ...(message.transportJobId !== undefined && { transportJobId: message.transportJobId }),
+  };
   let report: AttemptReport;
   try {
     report =

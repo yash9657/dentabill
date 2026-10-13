@@ -15,7 +15,6 @@ type OutboxDb = Omit<
   DbClient,
   '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
 >;
-const MAX_DELIVERY_ATTEMPTS = 10;
 
 export interface EnqueueJobOutboxInput {
   readonly organizationId: string;
@@ -148,7 +147,7 @@ export async function relayJobOutbox(
       hash(JSON.stringify(parsed.data)) !== row.payloadHash
     ) {
       quarantineCode = 'PAYLOAD_INVALID';
-    } else if (row.deliveryAttempts >= MAX_DELIVERY_ATTEMPTS) {
+    } else if (row.deliveryAttempts >= row.deliveryAttemptLimit) {
       quarantineCode = 'DELIVERY_EXHAUSTED';
     }
     if (quarantineCode !== null) {
@@ -191,15 +190,24 @@ export async function relayJobOutbox(
     }
     try {
       await withTimeout(async () => {
+        const recoveryOptions =
+          row.recoveryCount > 0
+            ? { transportJobId: `outbox.${row.id}.recovery.${String(row.recoveryCount)}` }
+            : undefined;
         if (row.kind === 'CALL_PLACE') {
           const data = CallJobDataSchema.parse(row.payload);
-          await options.jobDispatcher.dispatchCall(data, { priority: 101 - data.claimPriority });
+          await options.jobDispatcher.dispatchCall(data, {
+            priority: 101 - data.claimPriority,
+            ...recoveryOptions,
+          });
         } else {
-          await options.jobDispatcher.dispatchSummary(SummaryJobDataSchema.parse(row.payload));
+          const data = SummaryJobDataSchema.parse(row.payload);
+          if (recoveryOptions) await options.jobDispatcher.dispatchSummary(data, recoveryOptions);
+          else await options.jobDispatcher.dispatchSummary(data);
         }
       }, sendBudgetMs);
     } catch (error) {
-      const exhausted = row.deliveryAttempts + 1 >= MAX_DELIVERY_ATTEMPTS;
+      const exhausted = row.deliveryAttempts + 1 >= row.deliveryAttemptLimit;
       const changed = await options.prisma.jobOutbox.updateMany({
         where: owned,
         data: {

@@ -292,6 +292,340 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: date-time */
+                            sampledAt: string;
+                            thresholds: {
+                                deliveryAgeSeconds: number;
+                                observationAgeSeconds: number;
+                            };
+                            counts: {
+                                pending: number;
+                                agedPending: number;
+                                quarantined: number;
+                                acceptedOverdue: number;
+                                observationReview: number;
+                                uncertainCalls: number;
+                                legacyReadyWithoutDelivery: number;
+                            };
+                            /** Format: date-time */
+                            oldestPendingAt: string | null;
+                            /** Format: date-time */
+                            oldestQuarantinedAt: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operations/outbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: string;
+                    limit?: number;
+                    state?: "PENDING" | "QUARANTINED" | "DELIVERED" | "CLOSED";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                id: string;
+                                /** @enum {string} */
+                                kind: "CALL_PLACE" | "SUMMARY_GENERATE";
+                                /** @enum {string} */
+                                state: "PENDING" | "QUARANTINED" | "DELIVERED" | "CLOSED";
+                                deliveryAttempts: number;
+                                deliveryAttemptLimit: number;
+                                recoveryCount: number;
+                                /** @enum {string|null} */
+                                lastErrorCode: "PAYLOAD_INVALID" | "DELIVERY_EXHAUSTED" | "DISPATCH_FAILED" | "DISPATCH_TIMEOUT" | "UNKNOWN" | null;
+                                /** Format: date-time */
+                                availableAt: string;
+                                /** Format: date-time */
+                                leaseExpiresAt: string | null;
+                                /** Format: date-time */
+                                closedAt: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                                /** Format: date-time */
+                                deliveredAt: string | null;
+                            }[];
+                            nextCursor: string | null;
+                            hasMore: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operations/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: string;
+                    limit?: number;
+                    kind?: "UNCERTAIN" | "OBSERVATION" | "LEGACY_READY";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                id: string;
+                                claimId: string;
+                                callId: string | null;
+                                /** @enum {string} */
+                                state: "READY" | "SUBMITTING" | "UNKNOWN" | "ACCEPTED" | "TERMINAL" | "CANCELLED";
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                submittedAt: string | null;
+                                /** Format: date-time */
+                                callDeadlineAt: string | null;
+                                /** Format: date-time */
+                                nextObservationAt: string | null;
+                                /** Format: date-time */
+                                observationReviewAt: string | null;
+                                /** Format: date-time */
+                                lastObservedAt: string | null;
+                            }[];
+                            nextCursor: string | null;
+                            hasMore: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operations/outbox/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            /** @enum {string} */
+                            kind: "CALL_PLACE" | "SUMMARY_GENERATE";
+                            /** @enum {string} */
+                            state: "PENDING" | "QUARANTINED" | "DELIVERED" | "CLOSED";
+                            deliveryAttempts: number;
+                            deliveryAttemptLimit: number;
+                            recoveryCount: number;
+                            /** @enum {string|null} */
+                            lastErrorCode: "PAYLOAD_INVALID" | "DELIVERY_EXHAUSTED" | "DISPATCH_FAILED" | "DISPATCH_TIMEOUT" | "UNKNOWN" | null;
+                            /** Format: date-time */
+                            availableAt: string;
+                            /** Format: date-time */
+                            leaseExpiresAt: string | null;
+                            /** Format: date-time */
+                            closedAt: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** Format: date-time */
+                            deliveredAt: string | null;
+                            reviewVersion: string;
+                            /** @enum {string} */
+                            action: "RETRY" | "CLOSE" | "BLOCKED";
+                            /** @enum {string|null} */
+                            blockedReason: "NOT_QUARANTINED" | "ACTIVE_LEASE" | "PAYLOAD_INVALID" | "DOMAIN_BINDING_MISMATCH" | "CLAIM_CHANGED" | "CLAIM_NOT_QUEUED" | "CALL_RECONCILIATION_REQUIRED" | "CALL_OBSERVATION_REQUIRED" | "SUMMARY_RETRY_UNSAFE" | "DELIVERY_NOT_EXHAUSTED" | null;
+                            followUp: {
+                                /** @enum {string} */
+                                kind: "CALL_RECONCILIATION" | "CALL_OBSERVATION";
+                                intentId: string;
+                                claimId: string;
+                                callId: string | null;
+                            } | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operations/outbox/{id}/recover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        action: "RETRY" | "CLOSE";
+                        reviewVersion: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            /** @enum {string} */
+                            kind: "CALL_PLACE" | "SUMMARY_GENERATE";
+                            /** @enum {string} */
+                            state: "PENDING" | "QUARANTINED" | "DELIVERED" | "CLOSED";
+                            deliveryAttempts: number;
+                            deliveryAttemptLimit: number;
+                            recoveryCount: number;
+                            /** @enum {string|null} */
+                            lastErrorCode: "PAYLOAD_INVALID" | "DELIVERY_EXHAUSTED" | "DISPATCH_FAILED" | "DISPATCH_TIMEOUT" | "UNKNOWN" | null;
+                            /** Format: date-time */
+                            availableAt: string;
+                            /** Format: date-time */
+                            leaseExpiresAt: string | null;
+                            /** Format: date-time */
+                            closedAt: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** Format: date-time */
+                            deliveredAt: string | null;
+                            reviewVersion: string;
+                            /** @enum {string} */
+                            action: "RETRY" | "CLOSE" | "BLOCKED";
+                            /** @enum {string|null} */
+                            blockedReason: "NOT_QUARANTINED" | "ACTIVE_LEASE" | "PAYLOAD_INVALID" | "DOMAIN_BINDING_MISMATCH" | "CLAIM_CHANGED" | "CLAIM_NOT_QUEUED" | "CALL_RECONCILIATION_REQUIRED" | "CALL_OBSERVATION_REQUIRED" | "SUMMARY_RETRY_UNSAFE" | "DELIVERY_NOT_EXHAUSTED" | null;
+                            followUp: {
+                                /** @enum {string} */
+                                kind: "CALL_RECONCILIATION" | "CALL_OBSERVATION";
+                                intentId: string;
+                                claimId: string;
+                                callId: string | null;
+                            } | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/claims": {
         parameters: {
             query?: never;

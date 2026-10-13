@@ -1,5 +1,13 @@
+import { createHash } from 'node:crypto';
+
 import type { Logger } from '@dentabill/logger';
-import { type DlqJobData, DlqJobDataSchema, type DlqJobName, QUEUE_NAMES } from '@dentabill/queue';
+import {
+  CallJobDataSchema,
+  type DlqJobData,
+  DlqJobDataSchema,
+  type DlqJobName,
+  QUEUE_NAMES,
+} from '@dentabill/queue';
 import { Worker, type Processor } from 'bullmq';
 import type { Redis } from 'ioredis';
 
@@ -26,6 +34,31 @@ export function createDlqJobHandler(deps: DlqHandlerDeps): DlqProcessor {
     const data = validation.data;
     const original = data.originalData;
     const cancelled = await deps.prisma.$transaction(async (tx) => {
+      // Serialize cancellation with approval so an older transport cannot cancel
+      // the newly approved generation of the same immutable domain command.
+      await tx.$queryRaw`SELECT id FROM "JobOutbox" WHERE "organizationId" = ${original.organizationId} AND kind = 'CALL_PLACE' AND "idempotencyKey" = ${original.idempotencyKey} FOR SHARE`;
+      const outbox = await tx.jobOutbox.findFirst({
+        where: {
+          organizationId: original.organizationId,
+          kind: 'CALL_PLACE',
+          idempotencyKey: original.idempotencyKey,
+        },
+      });
+      const expectedJobId =
+        outbox && outbox.recoveryCount > 0
+          ? `outbox.${outbox.id}.recovery.${String(outbox.recoveryCount)}`
+          : original.idempotencyKey;
+      if (data.originalJobId !== expectedJobId || outbox?.state === 'CLOSED') return false;
+      if (outbox) {
+        const payload = CallJobDataSchema.strict().safeParse(outbox.payload);
+        if (
+          !payload.success ||
+          JSON.stringify(payload.data) !== JSON.stringify(original) ||
+          createHash('sha256').update(JSON.stringify(payload.data)).digest('hex') !==
+            outbox.payloadHash
+        )
+          return false;
+      }
       const intent = await tx.callIntent.findFirst({
         where: {
           organizationId: original.organizationId,
@@ -36,6 +69,7 @@ export function createDlqJobHandler(deps: DlqHandlerDeps): DlqProcessor {
         intent?.claimId !== original.claimId ||
         intent.payerCode !== original.payerCode ||
         intent.attemptNumber !== original.attemptNumber ||
+        intent.claimPriority !== original.claimPriority ||
         intent.state !== 'READY'
       )
         return false;

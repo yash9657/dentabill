@@ -94,6 +94,8 @@ export type InlineRunReport =
  * policy. `attempt` is 1-based (SQS `ApproximateReceiveCount`).
  */
 export interface JobAttempt {
+  /** Authenticated delivery provenance, separate from immutable domain identity. */
+  readonly transportJobId?: string;
   readonly attempt: number;
   /** Deliveries after which the job is treated as exhausted (SQS `maxReceiveCount`). */
   readonly maxAttempts: number;
@@ -127,7 +129,10 @@ export type AttemptReport =
 
 export interface InlineJobRuntime {
   /** Inline mode: every attempt + backoff in-process (BullMQ policy replay). */
-  runCall(data: CallJobData): Promise<InlineRunReport>;
+  runCall(
+    data: CallJobData,
+    options?: { readonly transportJobId?: string },
+  ): Promise<InlineRunReport>;
   runSummary(data: SummaryJobData): Promise<InlineRunReport>;
   /**
    * SQS mode: exactly one attempt. Retries are the queue's job — on
@@ -214,8 +219,12 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
    * DLQ consumer, invoked directly. Submitted and ambiguous intents remain
    * protected. Returns whether that transaction completed.
    */
-  const escalateCallToDlq = async (data: CallJobData, attemptsMade: number): Promise<boolean> => {
-    const jobId = data.idempotencyKey;
+  const escalateCallToDlq = async (
+    data: CallJobData,
+    attemptsMade: number,
+    transportJobId?: string,
+  ): Promise<boolean> => {
+    const jobId = transportJobId ?? data.idempotencyKey;
     const dlqData: DlqJobData = {
       originalJobId: jobId,
       originalQueueName: 'calls',
@@ -229,7 +238,28 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
       await dlqHandler(
         asBullMqJob({ id: jobId, name: DLQ_JOB_NAME, data: dlqData, attemptsMade: 0 }),
       );
-      return true;
+      const intent = await prisma.callIntent.findFirst({
+        where: {
+          organizationId: data.organizationId,
+          ...(data.resume
+            ? { id: data.resume.intentId, callId: data.resume.callId }
+            : { idempotencyKey: data.idempotencyKey }),
+          claimId: data.claimId,
+          claimPriority: data.claimPriority,
+          attemptNumber: data.attemptNumber,
+          OR: [
+            { state: { in: data.resume ? ['TERMINAL'] : ['CANCELLED', 'TERMINAL', 'UNKNOWN'] } },
+            {
+              state: 'ACCEPTED',
+              callId: { not: null },
+              callDeadlineAt: { not: null },
+              nextObservationAt: { not: null },
+            },
+          ],
+        },
+        select: { payerCode: true },
+      });
+      return intent?.payerCode === data.payerCode;
     } catch (err) {
       logger.error({ jobId, err: errInfo(err) }, 'DLQ handling failed — manual recovery required');
       return false;
@@ -258,8 +288,8 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
   };
 
   return {
-    async runCall(data): Promise<InlineRunReport> {
-      const jobId = data.idempotencyKey;
+    async runCall(data, options): Promise<InlineRunReport> {
+      const jobId = options?.transportJobId ?? data.idempotencyKey;
       const outcome = await runInlineJob({
         id: jobId,
         name: CALL_JOB_NAME,
@@ -305,7 +335,7 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
         return { status: 'completed', attemptsMade: outcome.attemptsMade };
       }
 
-      const dlq = await escalateCallToDlq(data, outcome.attemptsMade);
+      const dlq = await escalateCallToDlq(data, outcome.attemptsMade, options?.transportJobId);
       return {
         status: 'failed',
         attemptsMade: outcome.attemptsMade,
@@ -357,8 +387,8 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
       };
     },
 
-    async runCallAttempt(data, { attempt, maxAttempts }): Promise<AttemptReport> {
-      const jobId = data.idempotencyKey;
+    async runCallAttempt(data, { attempt, maxAttempts, transportJobId }): Promise<AttemptReport> {
+      const jobId = transportJobId ?? data.idempotencyKey;
       try {
         const result = await callHandler(
           asBullMqJob({ id: jobId, name: CALL_JOB_NAME, data, attemptsMade: attempt - 1 }),
@@ -391,7 +421,7 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
             error: err,
           };
         }
-        const dlq = await escalateCallToDlq(data, attempt);
+        const dlq = await escalateCallToDlq(data, attempt, transportJobId);
         if (!dlq) {
           return {
             status: 'retry',

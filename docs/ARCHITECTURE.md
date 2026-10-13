@@ -6,6 +6,11 @@ work is bound to land. Keep this file conceptual — for "what file lives where"
 use `docs/CODEMAP.md`; for "what the engineering rules are" use
 `docs/ENGINEERING_RULES.md`.
 
+> Current baseline (2026-10-13): AWS Lambda/SQS/Aurora serves the backend; Vercel serves
+> the web frontend. Retell uses Retell-managed Twilio for current telephony. Several deployment
+> and inference details below are historical; DEPLOY_AWS.md and SESSION_CONTEXT.md describe
+> current durable execution and the gated Fireworks/ElevenLabs direction.
+
 ## Style: modular monolith, not microservices
 
 DentaBill is a **modular monolith deployed as separate processes** — one
@@ -45,7 +50,7 @@ flowchart LR
 
   subgraph "External services"
     retell[Retell AI<br/>voice + IVR]
-    telnyx[Telnyx<br/>outbound PSTN]
+    twilio[Retell-managed Twilio<br/>outbound PSTN]
     clerk[Clerk<br/>auth + orgs]
     claude[Anthropic Claude<br/>post-call analysis]
     resend[Resend<br/>transactional email]
@@ -60,7 +65,7 @@ flowchart LR
   api --> redis
   api -->|Enqueue| callw
   callw --> retell
-  retell --> telnyx
+  retell --> twilio
   retell -->|Webhooks HMAC| api
   callw -->|Job + transcript| summw
   summw --> claude

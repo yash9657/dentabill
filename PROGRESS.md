@@ -29,11 +29,15 @@ command; separate-process crashes and create-response races preserve one synthet
 Accepted calls now have persisted observer leases/deadlines, bounded provider status/Stop
 checks, review after unconfirmed termination and manual read-only status recovery. Crash tests
 keep one call while Stop ACKs remain distinct from terminal evidence. Prisma diagnostics now
-exclude raw query/error payloads. All remain local and synthetic; account sweeps, quarantine
-operations, deployed recovery and authorized real-provider tests are still pending. Exact tests/limits are in the session record. No production
-deploy, recovery schedule activation or real calls ran. Latest local checks: API379, worker157,
-database77, provider268, queue66, SDK19, and targeted web calls101; affected types/lint and
-Lambda packaging pass. Counts are regression evidence, not external workflow certification.
+exclude raw query/error payloads. Owner/Admin Operations now exposes aged/quarantined work,
+exact-snapshot recovery with three additional attempts and a distinct reviewed close. Retained
+BullMQ and SQS/inline provenance preserve the original domain identity; delayed failure notices
+cannot cancel newer approved work or silently acknowledge an unresolved intent. All remain local
+and synthetic; account sweeps, deployed recovery/alerts and authorized real-provider tests remain
+pending. Current API393, worker186, database77, queue78 and SDK19 tests pass. Full web383 passed
+with19 affected UI tests repeated after the final markup/fixture corrections. Types/lint28/28
+and Lambda packaging pass. See session context for proof and limits; counts do not certify
+external workflows. No production deploy, schedule activation or real calls ran.
 
 **User direction:** ElevenLabs speech/orchestration is permitted, business inference stays
 on Fireworks open weights. There is no pilot clinic yet: all development uses fake patient
@@ -84,6 +88,12 @@ older deployment target for the zero-extra-hosting demo.
 - [ ] Step 12 — Cloud Deployment (Phase 5; cloud target deferred per ADR-004)
 
 ## Recent activity
+
+- 2026-10-13 — Local FW-37 admin operations/recovery, additive migration13, immutable delivery
+  generations across BullMQ/SQS/inline, and stale-failure acknowledgement protection. Real
+  PostgreSQL fault tests and retained Redis jobs pass; UI/accessibility reviewed at desktop/mobile.
+  Fireworks gateway primary contracts refreshed, with no model approval. See ADR-062 and session
+  evidence. Next: typed Fireworks gateway/validation/failure fixtures, then inference ownership.
 
 - 2026-10-13 — Local transactional call/summary outbox and bounded leased recovery; AWS
   schedule prepared but disabled, inline premature receipt fixed, cancellation made atomic

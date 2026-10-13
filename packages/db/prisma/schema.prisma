@@ -115,6 +115,7 @@ enum JobOutboxState {
   PENDING
   DELIVERED
   QUARANTINED
+  CLOSED
 }
 
 model Organization {
@@ -308,21 +309,24 @@ model CallIntent {
 
 // Only validated queue commands (opaque IDs and routing fields), never transcripts.
 model JobOutbox {
-  id               String         @id @default(cuid())
-  organizationId   String
-  kind             JobOutboxKind
-  idempotencyKey   String
-  payload          Json
-  payloadHash      String
-  state            JobOutboxState @default(PENDING)
-  availableAt      DateTime       @default(now())
-  leaseToken       String?
-  leaseExpiresAt   DateTime?
-  deliveryAttempts Int            @default(0)
-  deliveredAt      DateTime?
-  lastErrorCode    String?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id                   String         @id @default(cuid())
+  organizationId       String
+  kind                 JobOutboxKind
+  idempotencyKey       String
+  payload              Json
+  payloadHash          String
+  state                JobOutboxState @default(PENDING)
+  availableAt          DateTime       @default(now())
+  leaseToken           String?
+  leaseExpiresAt       DateTime?
+  deliveryAttempts     Int            @default(0)
+  deliveryAttemptLimit Int            @default(10)
+  recoveryCount        Int            @default(0)
+  closedAt             DateTime?
+  deliveredAt          DateTime?
+  lastErrorCode        String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 

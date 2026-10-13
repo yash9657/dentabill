@@ -54,6 +54,16 @@ export {
   type RelayJobOutboxOptions,
   type RelayJobOutboxResult,
 } from './job-outbox.js';
+export {
+  previewJobRecovery,
+  recoverJobOutbox,
+  JobRecoveryBlockedReasonSchema,
+  type JobRecoveryBlockedReason,
+  type JobRecoveryPreview,
+  type JobRecoveryResult,
+  type PreviewJobRecoveryOptions,
+  type RecoverJobOutboxOptions,
+} from './job-recovery.js';
 
 export {
   observeAcceptedCall,

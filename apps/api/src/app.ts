@@ -31,6 +31,7 @@ import { ingestRoutes } from './routes/v1/ingest.js';
 import { internalJobsRoutes } from './routes/v1/internal-jobs.js';
 import { meRoutes } from './routes/v1/me.js';
 import { onboardingRoutes } from './routes/v1/onboarding.js';
+import { operationsRoutes } from './routes/v1/operations.js';
 import { reportsRoutes } from './routes/v1/reports.js';
 import { retellWebhookRoutes } from './routes/v1/retell-webhook.js';
 
@@ -222,6 +223,7 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(healthRoutes, { prefix: '/v1' });
   await fastify.register(meRoutes, { prefix: '/v1' });
   await fastify.register(onboardingRoutes, { prefix: '/v1' });
+  await fastify.register(operationsRoutes, { prefix: '/v1' });
   await fastify.register(claimsRoutes, { prefix: '/v1' });
   await fastify.register(callsRoutes, { prefix: '/v1' });
   await fastify.register(callRecoveryRoutes, {

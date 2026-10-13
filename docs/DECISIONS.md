@@ -963,3 +963,46 @@ cap is additional protection, not verified real-line termination. Hold detection
 actual provider behavior remain unverified. Synthetic process tests prove the documented crash
 boundaries only. FW-38 separately replaces raw Prisma event logging with allowlisted target/
 timestamp records; thrown errors elsewhere still need their own safe handling.
+
+## ADR-062 — Scoped operations review and bounded delivery recovery
+
+**Date:** 2026-10-13. **Status:** implemented locally; deployment and operational evidence pending.
+
+Delivery acknowledgement cannot establish that a call or summary finished. Operators need to
+see due work, quarantine and missing legacy commands without raw payloads or a blind redial.
+An exhausted transport job may also remain in BullMQ, where re-adding its original ID does
+not run it again.
+
+1. Additive migration thirteen adds per-row `deliveryAttemptLimit`, monotonic `recoveryCount`
+   and a separate `CLOSED`/`closedAt` disposition. Attempts are never reset. Owner/Admin
+   approval grants exactly three additional delivery attempts for an exhausted, valid,
+   quarantined READY command with the unchanged queued claim version. Early quarantine,
+   active leases, invalid bindings, ambiguous submissions and accepted calls cannot be reset.
+2. Recovery revalidates the canonical command/hash, scoped actor, domain state and review
+   version in a serializable transaction. Audit and allowance/disposition commit together.
+   No endpoint accepts replacement payloads, provider IDs or freeform patient-bearing reasons.
+   Existing UNKNOWN/SUBMITTING calls use read-only reconciliation; ACCEPTED calls use their
+   existing status control. Summary redelivery remains blocked until inference ownership and
+   incurred-cost accounting are durable (FW-26).
+3. A confirmed terminal/cancelled intent or existing summary may close its exact quarantined
+   delivery as no work needed. `CLOSED` is not `DELIVERED`; closing never fabricates a receipt,
+   call outcome, transcript, summary, payment or new external action.
+4. Approved BullMQ recovery uses `outbox.<rowId>.recovery.<count>` as transport job ID while
+   preserving the immutable domain idempotency key and command. Retries within the allowance
+   share that transport generation. SQS carries validated optional envelope `transportJobId`; inline carries the same value
+   in an authenticated private header. Their domain bodies/receipt keys stay unchanged. The
+   runtime retains provenance through failure handling, and rechecks durable intent state
+   before acknowledging it. An older-generation failure cannot cancel newer recovery; an
+   unresolved READY/SUBMITTING no-op returns SQS retry or inline503. Domain consumers still
+   own external-action deduplication.
+5. `/v1/operations` and its cursor-paginated delivery/call lists require the stored Owner/Admin
+   role and organization scope. The Settings screen exposes safe counters, dates and closed
+   error codes, snapshot review and explicit approval. Five-minute delivery age is measured
+   from due time, not creation time; call observation uses a two-minute overdue threshold.
+   Missing legacy READY commands are visible but reads never invent them. No zero-backlog
+   result is a service-health or scheduler-heartbeat claim.
+
+Only synthetic localhost databases are migrated. No production deployment, recovery-schedule
+activation, live call, notification to others or account change is authorized by this ADR.
+Notification escalation, transport execution monitoring, unmatched inbox operations and staged
+AWS evidence remain separate gates. The original outbox/evidence must survive rollback.

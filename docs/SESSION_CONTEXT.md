@@ -4,7 +4,79 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: FW-36 bounded accepted-call monitoring and FW-38 safe diagnostics
+### Latest continuation: FW-37 scoped operations and audited recovery
+
+The full parity goal remains active. Retell key presence was rechecked without displaying
+values: root `.env`, API `.env` and web `.env.local` share the configured `RETELL_API_KEY`.
+Fireworks/ElevenLabs remain empty or absent; Telnyx is not required for the existing
+Retell-managed Twilio setup. The user has no clinic and authorizes fake data. Fresh fetch
+confirms latest main `55a1896` is already incorporated, alongside AWS baseline `23cdc7b`.
+No external provider call, account change, purchase, deployment, production migration or
+recovery-schedule activation occurred. Preserve the existing stash.
+
+- Additive migration thirteen (`20261013150000_job_recovery`) adds delivery attempt allowance,
+  recovery generation and separate CLOSED/closedAt disposition. Applied only to isolated
+  localhost identity/runtime/process/summary/receipts databases; Prisma generated. Existing
+  attempts remain monotonic. An exhausted valid READY delivery may receive exactly three
+  additional attempts after an Owner/Admin reviews its current snapshot. Early quarantine,
+  active leases, changed claim/version, invalid canonical binding, submitted or accepted calls
+  cannot be reset. Summary replay remains blocked until FW-26 proves inference ownership/spend.
+- `job-recovery.ts` checks the stored role, canonical payload/hash/key, scoped domain binding
+  and queued claim version. Serializable approval uses row locks and compare-and-swap, with
+  audit and allowance/close in one transaction. Duplicate or stale approval cannot grant twice.
+  Source payloads, lease tokens and provider errors are never projected. Confirmed terminal/
+  cancelled intent or an existing summary can close exact quarantine as no work needed;
+  CLOSED never fabricates DELIVERED, completion or a payment.
+- Retained BullMQ jobs use `outbox.<rowId>.recovery.<count>` as transport identity while the
+  domain payload/key remain immutable. Current-generation DLQ checks reject delayed old
+  failures. Independent review found that SQS/inline also need this provenance: it now survives
+  a validated optional SQS envelope field/private authenticated inline header, Lambda attempt,
+  runtime and DLQ. The runtime rechecks exact durable intent disposition before acknowledging
+  failure handling. Unresolved READY/SUBMITTING no-ops remain SQS retry/inline503, preventing
+  the older implementation's silent acknowledgement. Old consumers must drain before rollout.
+- New scoped `/v1/operations` overview, cursor lists and preview/recover endpoints require the
+  actual stored Owner/Admin role. Five-minute delivery age starts at due time, observation
+  checks use a two-minute threshold; legacy missing commands are visible without fabricated
+  history. Settings → Operations has organization-keyed queries, safe state copy, links to
+  existing reconciliation/status controls and snapshot-bound explicit approval. Stale approval
+  refreshes and requires a new decision. Counts do not establish scheduler/worker health.
+- Refreshed primary Fireworks evidence in `FIREWORKS_GATEWAY_CONTRACT.md` identifies current
+  regional routes, schema/retention/cache/retry limitations and proposed no-key gateway tests.
+  No model is approved and no adapter/inference evidence is claimed. The short project brief
+  now names AWS and Retell-managed Twilio; historical carrier assumptions are corrected.
+
+**Verification:** full API **393 tests / 30 files**, worker **186/23**, database **77/7**,
+queue **78/6**, SDK **19/2** pass. Full web **383/69** passed before the final semantic markup
+correction; the **19** affected UI/tab tests passed after that correction and fixture cleanup.
+Affected typecheck/lint **28/28** pass. Lambda packaging passes: API **38.7 MB / 11.3 MB zip**,
+worker **32.0 MB / 10.0 MB zip**. Actual component renders at desktop1280/mobile390 and native
+review dialogs have no page overflow; dialog axe checks found zero violations after one fix.
+This is synthetic component browser evidence, not authenticated deployed E2E.
+
+New PostgreSQL tests cover canonical binding, tenant/role isolation, stale/concurrent approval,
+audit rollback, preserved commands, three-attempt exhaustion, early quarantine and separate
+close semantics. Actual retained failed/completed Redis jobs prove transport generations.
+Real DB triggers reject pre-submission writes in the actual SQS/inline runtimes: a stale
+failure cannot cancel newer work or be ACKed, while current-generation failure commits one
+cancellation without any provider create. Independent review raised and then verified the
+cross-transport fix. No authenticated provider calls or AWS service requests were used.
+
+**Limits:** no deployed operations/recovery/alert evidence, no service heartbeat, no external
+notifications and no inference-spend-safe summary replay. Delivered-but-unconsumed READY
+monitoring and transport redrive operations remain FW-39; pending inbox operations are FW-33.
+SQL/application error paths beyond existing allowlists and full PHI lifecycle remain gates.
+No clinic/domain-adjudicated quality evidence or complete Lunabill parity is established.
+See ADR-062 and the matching rollout/rollback instructions in DEPLOY_AWS.md.
+
+**Exact next task:** implement FW-10–13 as a bounded typed Fireworks text gateway and synthetic
+adapter tests using the refreshed contract: server-owned exact release/host policy, structural
+and semantic output validation, no hidden fallback, bounded retries/deadlines/cancellation,
+and redacted failure/usage envelopes. Keep all models unapproved until account/license/revision/
+region/retention and dental evaluation gates are evidenced. Then durable inference-attempt
+ownership/usage (FW-26) can unlock safe summary recovery. Continue independent work without
+reasking for the already-known missing credentials or clinic.
+
+### Earlier continuation: FW-36 bounded accepted-call monitoring and FW-38 safe diagnostics
 
 The full parity goal remains active. Retell already has a local API key; current carrier is
 Retell-managed Twilio, so Telnyx is not required. Fireworks/ElevenLabs credentials remain

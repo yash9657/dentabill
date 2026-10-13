@@ -27,7 +27,7 @@ Each FW item is a 1–3 hour slice; larger workstreams require further decomposi
 - [ ] **FW-07** Transitional webhook normalization or explicit live-path disablement (FW-06). _Implemented locally: strict signature/wire normalization, transactional pending inbox, canonical final transcript, DB worker completion; synthetic HTTP/fault tests._
 - [ ] **FW-08** Separate-process call/fault-injection integration harness. _Local producer-SIGKILL/early-delivery/DB-completion/replay regression passes; worker restart/no-redial proof still FW-25._
 - [ ] **FW-09** Fireworks ASR/TTS, license, region, and contractual feasibility record.
-- [ ] **FW-10** Typed model gateway and fake with evidence/model-release contracts.
+- [ ] **FW-10** Typed model gateway and fake with evidence/model-release contracts. _Current primary contract and no-key acceptance matrix documented in FIREWORKS_GATEWAY_CONTRACT.md; adapter not yet implemented, no model approved._
 - [ ] **FW-11** Synthetic Fireworks adapter with host/model allowlist (FW-10).
 - [ ] **FW-12** Structured output, truncation, and semantic validation (FW-11).
 - [ ] **FW-13** Bounded retries/deadlines/cancellation and vendor failure fixtures (FW-11).
@@ -64,9 +64,11 @@ require durable execution and applicable PHI agreements even for an unpaid pilot
 - [ ] **FW-35** Transactional call/summary outbox and bounded leased relay with crash-after-send replay, including inline acknowledgement and AWS recovery scheduling (FW-18 concrete next slice). _Implemented locally with bounded relay, two crash boundaries, inline completed receipts, BullMQ recurrence and disabled AWS schedule; deployment/schedule activation unverified._
 - [ ] **FW-36** Persist observer leases and hard termination/reconciliation deadlines; stale workers must not lose accepted calls or infer terminal evidence. _Implemented locally: persisted deadline/observer lease, bounded status/stop attempts, source-only finalization, scheduled due scans and manual status workflow. Separate-process crash/stale-owner evidence; AWS rollout and authorized live confirmation remain open. See ADR-061._
 
-- [ ] **FW-37** Scoped outbox operating visibility, age/quarantine alerts and audited recovery controls; distinguish transport receipt from completion and review legacy missing commands.
+- [ ] **FW-37** Scoped outbox operating visibility, age/quarantine alerts and audited recovery controls; distinguish transport receipt from completion and review legacy missing commands. _Implemented locally: Owner/Admin Operations screen, tenant-scoped age/list queries, exact-snapshot recovery with three extra delivery attempts, separate CLOSED disposition, retained BullMQ transport generations and stale-failure protection. No external notifications, deployed recovery or scheduler-health evidence; summary replay remains FW-26. See ADR-062._
 
 - [ ] **FW-38** Allowlist database diagnostic logging and add PHI-bearing error capture regression; _Implemented locally: registered error/warn/info callbacks retain only closed target/timestamp fields; actual SQL-error and synthetic private-payload regressions pass. Caller-thrown error sanitization and full PHI lifecycle remain broader gates._
+
+- [ ] **FW-39** Transport execution and recovery heartbeat monitoring, including delivered-but-unconsumed READY work, current-generation failure evidence across SQS/inline, and authorized alert escalation. FW-37 saved-work counters do not establish worker or scheduler health.
 
 No pilot clinic yet (user confirmed); fake data is authorized. Real connector/clinic evidence
 is visibly blocked pending a test partner and authorized system access. Open Dental is a rollout

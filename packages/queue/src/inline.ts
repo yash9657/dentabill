@@ -1,7 +1,7 @@
 import type { DefaultJobOptions, Job } from 'bullmq';
 import { z } from 'zod';
 
-import type { JobDispatcher } from './dispatcher.js';
+import { TransportJobIdSchema, type JobDispatcher } from './dispatcher.js';
 import type { CallJobData, SummaryJobData } from './types.js';
 
 /**
@@ -23,6 +23,7 @@ import type { CallJobData, SummaryJobData } from './types.js';
  */
 
 export const INTERNAL_JOB_SECRET_HEADER = 'x-internal-job-secret';
+export const INTERNAL_JOB_TRANSPORT_HEADER = 'x-dentabill-transport-job-id';
 
 export const INTERNAL_JOB_ROUTES = {
   calls: '/v1/internal/jobs/calls',
@@ -73,6 +74,7 @@ export function createInlineJobDispatcher(
   const requestReceipt = async (
     kind: InlineJobKind,
     body: CallJobData | SummaryJobData,
+    transportJobId: string | undefined,
   ): Promise<{ status: number; confirmed: boolean }> => {
     const controller = new AbortController();
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -82,9 +84,16 @@ export function createInlineJobDispatcher(
           const res = await doFetch(`${baseUrl}${INTERNAL_JOB_ROUTES[kind]}`, {
             method: 'POST',
             headers: {
-              ...options.headers,
+              ...Object.fromEntries(
+                Object.entries(options.headers ?? {}).filter(
+                  ([name]) => name.toLowerCase() !== INTERNAL_JOB_TRANSPORT_HEADER,
+                ),
+              ),
               'content-type': 'application/json',
               [INTERNAL_JOB_SECRET_HEADER]: options.secret,
+              ...(transportJobId !== undefined && {
+                [INTERNAL_JOB_TRANSPORT_HEADER]: transportJobId,
+              }),
             },
             body: JSON.stringify(body),
             signal: controller.signal,
@@ -114,11 +123,12 @@ export function createInlineJobDispatcher(
   const trigger = async (
     kind: InlineJobKind,
     body: CallJobData | SummaryJobData,
+    transportJobId: string | undefined,
   ): Promise<void> => {
     let lastError = new Error('Inline job completion is unconfirmed.');
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        const res = await requestReceipt(kind, body);
+        const res = await requestReceipt(kind, body, transportJobId);
         if (res.confirmed) return;
         lastError = new Error(`Inline job receipt unconfirmed (HTTP ${String(res.status)}).`);
         // Early 202 acknowledgements and malformed receipts are not completion evidence.
@@ -132,9 +142,14 @@ export function createInlineJobDispatcher(
     throw lastError;
   };
 
-  const dispatch = (kind: InlineJobKind, body: CallJobData | SummaryJobData): Promise<string> => {
+  const dispatch = async (
+    kind: InlineJobKind,
+    body: CallJobData | SummaryJobData,
+    requestedTransportJobId?: string,
+  ): Promise<string> => {
+    const transportJobId = TransportJobIdSchema.optional().parse(requestedTransportJobId);
     const jobId = body.idempotencyKey;
-    const promise = trigger(kind, body).then(
+    const promise = trigger(kind, body, transportJobId).then(
       () => jobId,
       (err: unknown) => {
         options.onTriggerError?.(err, { kind, jobId });
@@ -147,16 +162,16 @@ export function createInlineJobDispatcher(
         () => undefined,
       ),
     );
-    return promise;
+    return await promise;
   };
 
   return {
     mode: 'inline',
-    dispatchCall(data): Promise<string> {
-      return dispatch('calls', data);
+    dispatchCall(data, opts): Promise<string> {
+      return dispatch('calls', data, opts?.transportJobId);
     },
-    dispatchSummary(data): Promise<string> {
-      return dispatch('summaries', data);
+    dispatchSummary(data, opts): Promise<string> {
+      return dispatch('summaries', data, opts?.transportJobId);
     },
   };
 }

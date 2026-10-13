@@ -239,3 +239,17 @@ end-to-end. Fastify-based health probe at `:3010/healthz`.
 - `apps/api/src/routes/v1/call-recovery.ts`, `check-call-status-control.tsx`, `use-check-call-status.ts` — audited Owner/Admin-only accepted-call reads, cooldown/auth ordering and cache-safe feedback.
 - `apps/call-worker/src/handler-demo-autopilot.test.ts` — real handler/adapter completion and confirmed cancellation with compressed synthetic scenario timers.
 - `packages/db/src/lib/prisma-diagnostics.ts` and tests — closed diagnostic target/timestamp logging, excluding raw messages/query inputs.
+
+## Operations and reviewed recovery (FW-37)
+
+- `apps/api/src/routes/v1/operations.ts` — scoped stored-role overview, cursor-paginated delivery/
+  call worklists and exact-snapshot recovery endpoints; synthetic real-PG route tests adjacent.
+- `apps/call-worker/src/job-recovery.ts` — canonical command/domain validation, serializable
+  approval, bounded additional allowance and separate audited close; real-PG recovery tests.
+- `packages/queue/src/dispatcher-recovery.test.ts` — retained failed/completed BullMQ generation proof.
+- `apps/web/src/app/dashboard/settings/operations/` and
+  `apps/web/src/components/dashboard/settings/operations/` — admin worklists and review dialog;
+  `apps/web/src/lib/operations/` — organization-keyed SDK hooks and safe status copy.
+- `packages/db/prisma/migrations/20261013150000_job_recovery/` — additive recovery allowance/history.
+- `docs/FIREWORKS_GATEWAY_CONTRACT.md` — refreshed primary vendor contract and unapproved gateway
+  release/test requirements; not completed adapter or provider suitability evidence.

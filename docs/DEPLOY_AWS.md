@@ -219,8 +219,8 @@ GROUP BY "state";
 Pending eligible work should recover on a later sweep. DELIVERED proves transport receipt,
 not business completion. QUARANTINED is not success: inspect its error code, intent state,
 provider evidence and transport health before any reviewed replay. Do not reset UNKNOWN or
-SUBMITTING call intents or manufacture a new job key to force a dial. Supported outbox/quarantine recovery
-UI, alerts and reviewed replay remain follow-on work; there is no automatic reset.
+SUBMITTING call intents or manufacture a new job key to force a dial. Local scoped operations/review controls are implemented in FW-37 below; deployed alerts and
+recovery evidence remain unverified. There is no automatic reset.
 Existing READY intents from older code have no inferred outbox history; the API backfills an
 identical command on a repeated request. Historical lost summary jobs are not reconstructed.
 
@@ -323,3 +323,43 @@ Stop behavior on that line; current tests use actual SDK transports against a lo
 provider, not a real telephone network. Hold limits remain unwired. Broader quarantine/age alerts
 and tenant operating controls are FW-37. The Prisma event sink now logs only allowlisted target/
 timestamp data, but this does not certify all application error paths or PHI lifecycle controls.
+
+## Operations and delivery recovery release gate (FW-37)
+
+Apply additive `20261013150000_job_recovery` before matching worker/API versions. It adds
+`deliveryAttemptLimit` (default10), `recoveryCount` and `closedAt`, plus the `CLOSED` enum.
+Drain old workers before exposing approvals: old code does not honor increased attempt
+allowances or recovery transport generations. Do not downgrade consumers while approved
+recovery remains outstanding. The migration was applied only to isolated localhost test DBs.
+
+Settings → Operations is restricted to stored Owner/Admin roles. The overview shows pending,
+five-minutes-past-due and quarantined delivery counts, overdue/review calls, uncertain submissions
+and legacy READY intents without their original delivery command. Lists are tenant-scoped,
+cursor-paginated and oldest-first. Dates/counts are saved-work evidence, not a deployed scheduler
+heartbeat. `oldestPendingAt` is the oldest already-due available time; `oldestQuarantinedAt`
+is the oldest request creation time, not the time quarantine began. No email/Slack alert is sent.
+
+Review a quarantined delivery before approving its current snapshot. Retry grants exactly three
+additional attempts only to an exhausted, valid READY command whose queued claim version is
+unchanged. The command and domain identity remain fixed. Unknown/submitting calls link to the
+existing read-only recovery flow; accepted calls link to Check call status. A conflicting update
+returns409 and requires a fresh review. Closing verified no-work-needed delivery sets CLOSED
+without marking it DELIVERED. Summary replay is blocked until FW-26 establishes durable spend
+and execution ownership; do not work around that by manufacturing a new summary key.
+
+Retained BullMQ jobs require a distinct transport generation for an approved recovery;
+`outbox.<rowId>.recovery.<count>` leaves the domain payload/key unchanged. Stale delivery failure
+notices cannot cancel newer approved work. SQS preserves the validated optional envelope
+`transportJobId`; inline preserves it in `x-dentabill-transport-job-id` after shared-secret
+authorization. The domain command and inline receipt key are unchanged. All consumers must
+be upgraded and drained before approvals: old consumers strip this provenance. A failure
+no-op with unresolved READY/SUBMITTING ownership is not durable completion and returns SQS
+retry or inline503. Verify current-generation cancellation as well as rejection of stale
+notices through each enabled transport. Further execution/heartbeat/DLQ observability and
+deployed recovery proof remain required.
+
+Before activation, verify this review/approval workflow with synthetic data through the actual
+staged API, transport and worker, including a retained original failed job, stale approval,
+delayed old failure notice and process loss. The existing AWS recovery rule remains disabled.
+Keep source evidence, original command, attempt history and audit rows on rollback. This local
+slice does not authorize production migration, scheduler activation or real payer calls.

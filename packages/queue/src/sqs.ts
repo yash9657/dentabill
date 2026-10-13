@@ -6,7 +6,7 @@ import {
 } from '@aws-sdk/client-sqs';
 import { z } from 'zod';
 
-import type { JobDispatcher } from './dispatcher.js';
+import { TransportJobIdSchema, type JobDispatcher } from './dispatcher.js';
 import {
   CALL_JOB_NAME,
   CallJobDataSchema,
@@ -21,6 +21,7 @@ import {
  *
  * One **standard** queue carries both job kinds. Each message body is a
  * JSON envelope `{ "type": "call.place" | "summary.generate", "data": … }`
+ * with optional `transportJobId` for an approved recovery generation,
  * and is consumed by the worker Lambda (`apps/api/src/lambda-worker.ts`),
  * which runs the same processors the inline runtime uses — one attempt
  * per receive, with retries delegated to SQS (visibility timeout + redrive
@@ -42,8 +43,20 @@ import {
 export const SQS_MAX_DELAY_SECONDS = 900;
 
 export const SqsJobMessageSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal(CALL_JOB_NAME), data: CallJobDataSchema }),
-  z.object({ type: z.literal(SUMMARY_JOB_NAME), data: SummaryJobDataSchema }),
+  z
+    .object({
+      type: z.literal(CALL_JOB_NAME),
+      data: CallJobDataSchema,
+      transportJobId: TransportJobIdSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal(SUMMARY_JOB_NAME),
+      data: SummaryJobDataSchema,
+      transportJobId: TransportJobIdSchema.optional(),
+    })
+    .strict(),
 ]);
 
 export type SqsJobMessage = z.infer<typeof SqsJobMessageSchema>;
@@ -130,6 +143,7 @@ export function createSqsJobDispatcher(options: CreateSqsJobDispatcherOptions): 
   const getClient = (): SqsSendClient => (client ??= new SQSClient({}));
 
   const send = async (message: SqsJobMessage, delayMs: number | undefined): Promise<string> => {
+    const transportJobId = TransportJobIdSchema.optional().parse(message.transportJobId);
     const jobId = message.data.idempotencyKey;
     const delaySeconds = toSqsDelaySeconds(delayMs);
     if (delayMs !== undefined && delayMs > SQS_MAX_DELAY_SECONDS * 1000) {
@@ -142,7 +156,7 @@ export function createSqsJobDispatcher(options: CreateSqsJobDispatcherOptions): 
     await getClient().send(
       new SendMessageCommand({
         QueueUrl: options.queueUrl,
-        MessageBody: JSON.stringify(message),
+        MessageBody: JSON.stringify({ ...message, transportJobId }),
         MessageAttributes: attributes,
         ...(delaySeconds > 0 && { DelaySeconds: delaySeconds }),
       }),
@@ -155,10 +169,24 @@ export function createSqsJobDispatcher(options: CreateSqsJobDispatcherOptions): 
   return {
     mode: 'sqs',
     dispatchCall(data: CallJobData, opts): Promise<string> {
-      return send({ type: CALL_JOB_NAME, data }, opts?.delayMs);
+      return send(
+        {
+          type: CALL_JOB_NAME,
+          data,
+          ...(opts?.transportJobId !== undefined && { transportJobId: opts.transportJobId }),
+        },
+        opts?.delayMs,
+      );
     },
     dispatchSummary(data: SummaryJobData, opts): Promise<string> {
-      return send({ type: SUMMARY_JOB_NAME, data }, opts?.delayMs);
+      return send(
+        {
+          type: SUMMARY_JOB_NAME,
+          data,
+          ...(opts?.transportJobId !== undefined && { transportJobId: opts.transportJobId }),
+        },
+        opts?.delayMs,
+      );
     },
   };
 }

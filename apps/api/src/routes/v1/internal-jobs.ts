@@ -19,6 +19,8 @@ import {
   CallJobDataSchema,
   type CallJobData,
   INTERNAL_JOB_SECRET_HEADER,
+  INTERNAL_JOB_TRANSPORT_HEADER,
+  TransportJobIdSchema,
   SummaryJobDataSchema,
   type SummaryJobData,
 } from '@dentabill/queue';
@@ -156,6 +158,15 @@ export function internalJobsRoutes(fastify: FastifyInstance): void {
 
   fastify.post('/internal/jobs/calls', { schema }, async (request, reply) => {
     if (!authorize(request, reply)) return reply;
+    const transport = TransportJobIdSchema.optional().safeParse(
+      request.headers[INTERNAL_JOB_TRANSPORT_HEADER],
+    );
+    if (!transport.success)
+      return reply.code(400).send({
+        error: true,
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid delivery identity.',
+      });
     const parsed = CallJobDataSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply
@@ -163,7 +174,14 @@ export function internalJobsRoutes(fastify: FastifyInstance): void {
         .send({ error: true, code: 'VALIDATION_ERROR', message: 'Invalid call job payload.' });
     }
     const data = parsed.data;
-    return execute(data, () => runtime().runCall(data), reply);
+    return execute(
+      data,
+      () =>
+        transport.data === undefined
+          ? runtime().runCall(data)
+          : runtime().runCall(data, { transportJobId: transport.data }),
+      reply,
+    );
   });
 
   fastify.post('/internal/jobs/summaries', { schema }, async (request, reply) => {

@@ -1,6 +1,8 @@
 # DentaBill: competitive gaps and the Fireworks implementation plan
 
-> Implementation update, 2026-10-13: FW-36 now has local persisted accepted-call observation,
+> Implementation update, 2026-10-13: FW-37 now adds scoped operations and audited delivery
+> recovery (ADR-062); current Fireworks gateway requirements are in FIREWORKS_GATEWAY_CONTRACT.md.
+> FW-36 has local persisted accepted-call observation,
 > duration/Stop confirmation state and synthetic separate-process recovery evidence; FW-38
 > allowlists Prisma diagnostic output. Latest implementation/test/release limits are recorded
 > in SESSION_CONTEXT.md, PROVIDER_EVIDENCE.md and ADR-061. These local changes are not deployed

@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as React from 'react';
 
+import { useMe } from '../../lib/me/use-me.js';
+
 /**
  * `<SettingsTabs>` — horizontal sub-navigation rendered above every
  * /dashboard/settings/* page. Six destinations matching the Phase 2
@@ -65,7 +67,31 @@ export function SettingsTabs(): React.ReactElement {
             </li>
           );
         })}
+        {process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ? (
+          <OperationsTab pathname={pathname} />
+        ) : null}
       </ul>
     </nav>
+  );
+}
+
+function OperationsTab({ pathname }: { readonly pathname: string }): React.ReactElement | null {
+  const profile = useMe();
+  if (profile.data?.user.role !== 'OWNER' && profile.data?.user.role !== 'ADMIN') return null;
+  const href = '/dashboard/settings/operations';
+  const active = isActive(pathname, href);
+  return (
+    <li className="shrink-0">
+      <Link
+        href={href}
+        aria-current={active ? 'page' : undefined}
+        className={cn(
+          'text-caption inline-flex items-center border-b-2 px-3 py-3 font-medium transition-colors',
+          active ? 'border-brand text-brand' : 'text-gray-warm border-transparent hover:text-black',
+        )}
+      >
+        Operations
+      </Link>
+    </li>
   );
 }

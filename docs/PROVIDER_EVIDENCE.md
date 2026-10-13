@@ -56,7 +56,7 @@ command, and fresh consumers produce one synthetic provider action. The AWS rela
 and disabled scheduled-rule configuration have local contract tests and Terraform validation;
 no deployed scheduled recovery was measured. FW-32 adds atomic cancellation-request evidence
 and pending UI; it does not claim provider termination until provider evidence arrives.
-Outbox quarantine operations and deployed recovery remain open; FW-36 now implements local observer deadlines. Summary inference cost/duplicate execution is a separate FW-26 limitation.
+Local FW-37 quarantine operations are described below; deployed recovery remains open; FW-36 now implements local observer deadlines. Summary inference cost/duplicate execution is a separate FW-26 limitation.
 
 FW-34 adds a local owner/admin recovery workflow: complete bounded metadata enumeration,
 exact saved-request hash/intent/agent/from/to matching, verified Get Call identity, and
@@ -96,6 +96,23 @@ request; actual terminal source remains necessary. Live termination timing, IVR 
 DTMF and licensed/contractual suitability are still unverified. FW-38 closes the raw Prisma
 event-emitter diagnostic gap with actual SQL-error and private-payload capture tests; broader
 application logs and PHI lifecycle remain separate gates.
+
+FW-37 now provides a local stored-role Owner/Admin Operations screen, scoped due-age and
+quarantine counts, oldest-first worklists and exact-snapshot recovery. Canonical commands,
+tenant bindings, claim versions and audit transactions gate an allowance of three additional
+delivery attempts. CLOSED denotes reviewed no-work-needed, never a transport receipt or call
+outcome. Summary replay stays blocked pending FW-26. Actual retained BullMQ jobs are covered
+by a distinct approved transport generation. The same validated provenance survives SQS
+messages and authenticated inline headers; stale failure handling cannot cancel newer work,
+and unresolved READY/SUBMITTING state cannot be acknowledged as completed failure handling.
+Synthetic real-Postgres tests cover concurrent/stale approvals, rollback and failed
+pre-submission persistence across runtime boundaries. No deployed heartbeat, external alerts,
+real-provider comparison or overall workflow parity follows from these local tests.
+
+Refreshed Fireworks primary contracts and no-key implementation acceptance criteria are in
+[FIREWORKS_GATEWAY_CONTRACT.md](./FIREWORKS_GATEWAY_CONTRACT.md). Exact model/release approval,
+account probes and representative dental evaluation remain open. Public model-route presence,
+JSON Schema decoding and mutable publisher license links are not sufficient release evidence.
 
 ## Public capability baseline
 

@@ -90,6 +90,28 @@ describe('POST /v1/internal/jobs/*', () => {
     };
   });
 
+  it('passes authenticated recovery provenance and rejects malformed transport identity', async () => {
+    const transportJobId = 'outbox.synthetic_recovery.recovery.1';
+    const response = await server.inject({
+      method: 'POST',
+      url: '/v1/internal/jobs/calls',
+      headers: { [HEADER]: SECRET, 'x-dentabill-transport-job-id': transportJobId },
+      payload: callJob,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(runCall).toHaveBeenCalledWith(callJob, { transportJobId });
+    expect(response.json()).toEqual({ accepted: true, jobId: callJob.idempotencyKey });
+    runCall.mockClear();
+    const invalid = await server.inject({
+      method: 'POST',
+      url: '/v1/internal/jobs/calls',
+      headers: { [HEADER]: SECRET, 'x-dentabill-transport-job-id': 'untrusted-arbitrary-identity' },
+      payload: callJob,
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(runCall).not.toHaveBeenCalled();
+  });
+
   afterAll(async () => {
     await server.close();
     await prisma.$disconnect();

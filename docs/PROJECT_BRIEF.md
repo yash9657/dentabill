@@ -13,7 +13,7 @@
 
 ## Stack (locked for Phase 1)
 
-Turborepo + pnpm · Next.js 15 (App Router, TS strict) · Tailwind v3 · shadcn/ui · Framer Motion · Fastify v5 (Zod type provider) · PostgreSQL 16 + Prisma v6 · BullMQ + ioredis (Upstash dev) · Retell AI (voice/IVR) · Telnyx (numbers) · Anthropic Claude (summaries) · Clerk (auth + Orgs = tenants) · Resend (email) · Stripe (metered per call-minute) · Railway (PG/Redis/workers) · Vercel (web).
+Turborepo + pnpm · Next.js 15 (App Router, TS strict) · Tailwind v3 · shadcn/ui · Framer Motion · Fastify v5 (Zod type provider) · PostgreSQL 16 + Prisma v6 · BullMQ + ioredis (Upstash dev) · Retell AI (voice/IVR) · Retell-managed Twilio (current numbers) · Anthropic Claude (summaries) · Clerk (auth + Orgs = tenants) · Resend (email) · Stripe (metered per call-minute) · AWS Lambda/SQS/Aurora (current backend) · Vercel (web).
 
 ## Repo layout
 
@@ -33,7 +33,12 @@ Turborepo + pnpm · Next.js 15 (App Router, TS strict) · Tailwind v3 · shadcn/
 `Claim → Calls → CallSummary + CallEvents`
 Priority: `round(min(amount/100,100)*0.6 + min(daysOutstanding*2,100)*0.4)`.
 
-## Phase 1 success
+> Current direction (2026-10-13): Fireworks open-weight business inference and an ElevenLabs
+> speech/orchestration evaluation supersede historical Claude/Retell defaults. Existing Retell
+> is the comparison/rollback baseline, not approval of its reasoning defaults. Local fixes and
+> missing release evidence are tracked in SESSION_CONTEXT.md and PROVIDER_EVIDENCE.md.
+
+## Historical Phase 1 success
 
 End-to-end: CSV upload → queued claim → Retell call w/ IVR navigation → human reached → transcript → Claude summary → status update + email → visible in dashboard, deployed on Railway/Vercel.
 

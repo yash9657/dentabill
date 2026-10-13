@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { CallsQueue, SummariesQueue } from './queues.js';
 import { CALL_JOB_NAME, SUMMARY_JOB_NAME, type CallJobData, type SummaryJobData } from './types.js';
 
@@ -17,12 +19,21 @@ import { CALL_JOB_NAME, SUMMARY_JOB_NAME, type CallJobData, type SummaryJobData 
  *   - `sqs`: one Amazon SQS standard queue consumed by the worker Lambda,
  *     one attempt per receive with SQS-driven retries (see `sqs.ts`).
  *
- * Every implementation uses `data.idempotencyKey` as the job id.
+ * Domain idempotency stays in `data.idempotencyKey`; an approved recovery
+ * has separate transport provenance across all dispatch modes.
  */
 export const JOB_DISPATCH_MODES = ['bullmq', 'inline', 'sqs'] as const;
 export type JobDispatchMode = (typeof JOB_DISPATCH_MODES)[number];
 
+export const TransportJobIdSchema = z
+  .string()
+  .max(160)
+  .regex(/^outbox\.[A-Za-z0-9_-]{1,128}\.recovery\.[1-9][0-9]{0,9}$/)
+  .refine((value) => Number(value.slice(value.lastIndexOf('.') + 1)) <= 2_147_483_647);
+
 export interface DispatchOptions {
+  /** Approved outbox generation; transport provenance, never part of the domain command. */
+  readonly transportJobId?: string;
   /**
    * Hold the job back for this long before it may run. BullMQ: `delay`.
    * SQS: `DelaySeconds`, rounded up and clamped to 900 s (the SQS max).
@@ -38,7 +49,7 @@ export interface DispatchCallOptions extends DispatchOptions {
 
 export interface JobDispatcher {
   readonly mode: JobDispatchMode;
-  /** Returns the job id (always `data.idempotencyKey` unless BullMQ says otherwise). */
+  /** BullMQ returns its job id; SQS/inline return the unchanged domain key. */
   dispatchCall(data: CallJobData, opts?: DispatchCallOptions): Promise<string>;
   dispatchSummary(data: SummaryJobData, opts?: DispatchOptions): Promise<string>;
 }
@@ -63,23 +74,25 @@ export function createBullMqJobDispatcher(
   return {
     mode: 'bullmq',
     async dispatchCall(data, opts): Promise<string> {
+      const transportJobId = TransportJobIdSchema.optional().parse(opts?.transportJobId);
       if (!options.callsQueue) throw new Error('bullmq dispatcher: calls queue not configured');
       const job = await options.callsQueue.add(CALL_JOB_NAME, data, {
-        jobId: data.idempotencyKey,
+        jobId: transportJobId ?? data.idempotencyKey,
         ...(opts?.priority !== undefined && { priority: opts.priority }),
         ...(opts?.delayMs !== undefined && opts.delayMs > 0 && { delay: opts.delayMs }),
       });
-      return job.id ?? data.idempotencyKey;
+      return job.id ?? transportJobId ?? data.idempotencyKey;
     },
     async dispatchSummary(data, opts): Promise<string> {
+      const transportJobId = TransportJobIdSchema.optional().parse(opts?.transportJobId);
       if (!options.summariesQueue) {
         throw new Error('bullmq dispatcher: summaries queue not configured');
       }
       const job = await options.summariesQueue.add(SUMMARY_JOB_NAME, data, {
-        jobId: data.idempotencyKey,
+        jobId: transportJobId ?? data.idempotencyKey,
         ...(opts?.delayMs !== undefined && opts.delayMs > 0 && { delay: opts.delayMs }),
       });
-      return job.id ?? data.idempotencyKey;
+      return job.id ?? transportJobId ?? data.idempotencyKey;
     },
   };
 }
