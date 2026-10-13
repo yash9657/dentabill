@@ -68,7 +68,7 @@ await build({
   legalComments: 'none',
   logLevel: 'warning',
   // Optional / dev-only modules that are never loaded in production.
-  external: ['pino-pretty', '@anthropic-ai/sdk'],
+  external: ['pino-pretty'],
   plugins: [prismaExternal],
   // CommonJS dependencies inside an ESM bundle expect these globals.
   banner: {
