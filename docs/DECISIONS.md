@@ -1357,3 +1357,43 @@ Actual read-only account/model evidence is in the provider register. Fake HTTP/p
 validate mechanics only. First real discovery requests require the concrete spending scope to be
 confirmed; quality measurement then requires a reviewed synthetic-evaluation release and normal
 gateway captures. Qualified reference review and the full connector/voice/product scope remain open.
+
+## ADR-071 — Explicit CSV source identity and non-destructive import reports
+
+**Date:** 2026-10-13. **Status:** implemented locally; deployment and real PMS evidence pending.
+
+The prior importer discarded the detected source and source patient reference, treated
+`(organizationId, claimNumber)` as identity without a unique constraint, checked outside
+transactions, and committed 500-row chunks independently. Same-file/concurrent duplicates
+could be inserted; changed and cross-source claims could be silently skipped. No existing
+legacy identity can be inferred safely from that data.
+
+New CSV claims use `(organizationId, sourceSystem, sourceNamespace, sourceClaimId)`.
+The source database namespace is explicitly declared by the operator, and `SourceClaimId`
+is explicitly exported; only Open Dental’s documented internal `ClaimNum` has a native
+alias. Display identifiers, DOB and subscriber IDs are never fallbacks. Optional source
+versions are opaque. The nullable expand-only migration preserves every legacy row,
+adds a scoped unique index and complete-provenance CHECK, and makes imported provenance
+immutable. Legacy duplicates remain reportable rather than deleted or merged.
+
+The importer holds an organization NO KEY UPDATE lock across lookup, insert chunks and
+aggregate audit. A keyed fingerprint binds normalized fields plus all exact source cells
+(sorted normalized headers), including currently unmodeled data; raw cells remain transient.
+Equal rows deduplicate. Conflicting same-file identities are all withheld. Changed source
+records and legacy display matches are reported with no mutation of the existing claim.
+The unique index additionally fences writers outside this importer. Namespace and hash-secret
+changes require intentional reconciliation; an operator declaration is not authenticated
+PMS identity. A source-format change can still require reviewed cross-system reconciliation.
+
+The UI requires the source database, separates unchanged rows from conflicts, exposes row
+outcomes/links and downloads a report without raw source data. Missing source IDs are visible
+row outcomes, never invented values. CSV parsing rejects ambiguous headers/aliases, malformed
+records, invalid calendar dates, out-of-range amounts and invalid UTF-8. A record-aware preview
+bounds parsing before normalization at 5,000 data records; no newline counting is used.
+A local real-Postgres migration replay preserves duplicate reviewed records byte-for-byte;
+concurrent uploads and a late-chunk failure are covered by real database tests.
+
+This slice implements import admission/reporting, not reviewed source updates or real source
+synchronization. FW-43 tracks versioned source reconciliation and legacy binding; FW-21 and
+contracted connectors retain their full scope. No production migration, deployment or
+third-party request is authorized by this decision.

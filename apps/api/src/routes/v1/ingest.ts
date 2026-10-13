@@ -3,36 +3,15 @@ import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { bulkInsertClaims } from '../../lib/csv/insert.js';
+import {
+  bulkInsertClaims,
+  ImportSourceNamespaceSchema,
+  IMPORT_DISPOSITIONS,
+} from '../../lib/csv/insert.js';
 import { parseClaimsCSV } from '../../lib/csv/parser.js';
-import { UnknownCsvFormatError } from '../../lib/csv/types.js';
+import { CsvRowLimitError, UnknownCsvFormatError } from '../../lib/csv/types.js';
 import { getEnv } from '../../lib/env.js';
 
-/**
- * `POST /v1/ingest/claims` — synchronous CSV ingestion (P2-T43).
- *
- * Accepts a single `file` field via `multipart/form-data`, max 10MB,
- * detects the source system from the header, validates each row
- * against the per-source schema (T44), and returns a parse summary:
- * `source`, `totalRows`, `validRows`, `errors`.
- *
- * Phase 2 ships the upload + parse path. The bulk-insert into the
- * `Claim` table — and the persisted `IngestJob` row — land in T48.
- * Until then this endpoint is read-only; the response shape is
- * forward-compatible.
- *
- * Failure modes:
- *   - 400 `VALIDATION_ERROR` — no file, multiple files, wrong field
- *     name.
- *   - 400 `VALIDATION_ERROR` — file is not text/csv (sniffed via
- *     mimetype + the first non-empty line of the buffer).
- *   - 413 `VALIDATION_ERROR` — file exceeds 10 MB.
- *   - 422 `VALIDATION_ERROR` — header doesn't match any supported
- *     source system.
- *
- * Per-row validation errors do NOT fail the request — they appear
- * in the response body so the caller can fix and re-upload.
- */
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 const ParseRowErrorSchema = z.object({
@@ -42,10 +21,19 @@ const ParseRowErrorSchema = z.object({
 
 const IngestResponseSchema = z.object({
   source: z.enum(['DENTRIX', 'EAGLESOFT', 'OPEN_DENTAL']),
+  sourceNamespace: ImportSourceNamespaceSchema,
   totalRows: z.number().int().nonnegative(),
   validRows: z.number().int().nonnegative(),
   insertedRows: z.number().int().nonnegative(),
   skippedDuplicates: z.number().int().nonnegative(),
+  conflictRows: z.number().int().nonnegative(),
+  rows: z.array(
+    z.object({
+      rowIndex: z.number().int().positive(),
+      disposition: z.enum(IMPORT_DISPOSITIONS),
+      claimId: z.string().nullable(),
+    }),
+  ),
   errors: z.array(ParseRowErrorSchema),
 });
 
@@ -75,9 +63,10 @@ export async function ingestRoutes(fastify: FastifyInstance): Promise<void> {
       preHandler: requireAuth,
       schema: {
         description:
-          'Upload a CSV export from Dentrix, Eaglesoft, or Open Dental for the authenticated organization. Returns a parse summary; bulk DB insert lands in T48.',
+          'Import claims using an explicit source database and stable source record IDs. Unchanged rows are skipped; conflicts are reported without overwriting existing work.',
         security,
         consumes: ['multipart/form-data'],
+        headers: z.looseObject({ 'x-import-source': ImportSourceNamespaceSchema }),
         response: { 200: IngestResponseSchema },
       },
     },
@@ -85,38 +74,32 @@ export async function ingestRoutes(fastify: FastifyInstance): Promise<void> {
       const auth = request.dentabillAuth;
       if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
 
-      const file = await request.file();
-      if (!file) {
+      const sourceNamespace = ImportSourceNamespaceSchema.parse(request.headers['x-import-source']);
+      let buffer: Buffer | undefined;
+      for await (const part of request.parts()) {
+        if (part.type !== 'file' || part.fieldname !== 'file' || buffer) {
+          throw new ApiError('VALIDATION_ERROR', 'Upload one CSV using the "file" field.');
+        }
+        buffer = await part.toBuffer();
+        if (part.file.truncated) {
+          throw new ApiError('VALIDATION_ERROR', 'CSV exceeds the 10 MB upload limit.');
+        }
+        assertCsvLike(buffer, part.mimetype);
+      }
+      if (!buffer) {
         throw new ApiError(
           'VALIDATION_ERROR',
           'Upload must include a "file" field with the CSV body.',
         );
       }
-      if (file.fieldname !== 'file') {
-        throw new ApiError(
-          'VALIDATION_ERROR',
-          `Expected field name "file", got "${file.fieldname}".`,
-        );
-      }
-
-      const buffer = await file.toBuffer().catch((err: unknown) => {
-        if (err instanceof Error && /file too large/i.test(err.message)) {
-          throw new ApiError('VALIDATION_ERROR', 'CSV exceeds the 10 MB upload limit.');
-        }
-        throw err;
-      });
-
-      // file.file.truncated is set by busboy when the limit was hit.
-      if (file.file.truncated) {
-        throw new ApiError('VALIDATION_ERROR', 'CSV exceeds the 10 MB upload limit.');
-      }
-
-      assertCsvLike(buffer, file.mimetype);
 
       let parsed;
       try {
         parsed = parseClaimsCSV(buffer);
       } catch (err) {
+        if (err instanceof CsvRowLimitError) {
+          throw new ApiError('VALIDATION_ERROR', err.message);
+        }
         if (err instanceof UnknownCsvFormatError) {
           throw new ApiError(
             'VALIDATION_ERROR',
@@ -127,18 +110,22 @@ export async function ingestRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       const env = getEnv();
-      const { insertedRows, skippedDuplicates } = await bulkInsertClaims({
+      const result = await bulkInsertClaims({
         organizationId: auth.orgId,
+        actorId: auth.userId,
+        source: parsed.source,
+        sourceNamespace,
         canonicalRows: parsed.rows,
         dobHashSecret: env.DOB_HASH_SECRET,
       });
 
       return {
         source: parsed.source,
+        sourceNamespace,
         totalRows: parsed.rows.length + parsed.errors.length,
         validRows: parsed.rows.length,
-        insertedRows,
-        skippedDuplicates,
+        ...result,
+        rows: [...result.rows],
         errors: parsed.errors.map((e) => ({ rowIndex: e.rowIndex, message: e.message })),
       };
     },

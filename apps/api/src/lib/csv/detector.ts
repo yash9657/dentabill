@@ -4,10 +4,10 @@ import type { CsvSource } from './types.js';
  * Format detection from the header row alone.
  *
  * Each source uses a distinctive triple of column names; if the row
- * contains all three (case-insensitive, trimmed), we know the source.
+ * contains exactly one complete signature, we identify the layout.
  * Order isn't significant — different practice setups reorder
- * columns. The triples were chosen so no two sources share all
- * three (matched in dev against real customer exports).
+ * columns. Layout recognition does not verify the originating system
+ * or establish a source database namespace.
  */
 const SIGNATURES: Readonly<Record<CsvSource, readonly string[]>> = {
   DENTRIX: ['patient id', 'insurance carrier', 'service date'],
@@ -21,13 +21,15 @@ function normaliseHeaderCell(raw: string): string {
 
 export function detectCsvSource(headers: readonly string[]): CsvSource | null {
   const normalised = new Set(headers.map(normaliseHeaderCell));
+  let matched: CsvSource | null = null;
   for (const [source, signature] of Object.entries(SIGNATURES) as [
     CsvSource,
     readonly string[],
   ][]) {
     if (signature.every((col) => normalised.has(col))) {
-      return source;
+      if (matched) return null;
+      matched = source;
     }
   }
-  return null;
+  return matched;
 }

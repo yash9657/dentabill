@@ -326,3 +326,19 @@ manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
 - `packages/db/prisma/migrations/20261013150000_job_recovery/` — additive recovery allowance/history.
 - `docs/FIREWORKS_GATEWAY_CONTRACT.md` — refreshed primary vendor contract and unapproved gateway
   release/test requirements; not completed adapter or provider suitability evidence.
+
+## Source-aware CSV imports (FW-19/20)
+
+- `apps/api/src/lib/csv/{parser,detector,normalisers,types}.ts`: bounded logical-record parsing,
+  explicit source IDs/versions, validated dates/amounts, transient complete source cells.
+- `apps/api/src/lib/csv/insert.ts`: scoped identity/fingerprint lookup, no-overwrite row outcomes,
+  tenant-serialized atomic chunk writes and aggregate audit; `insert.test.ts` uses real Postgres.
+- `apps/api/src/routes/v1/ingest.ts`: required source-database header and row report API;
+  `apps/api/src/app.ts` permits its browser CORS header. SDK contract is generated.
+- `apps/web/src/components/dashboard/claims/claims-import-page.tsx` and
+  `apps/web/src/lib/claims/use-claims-import.ts`: required source database, scoped form state,
+  conflict guidance, links, pagination and safe report download.
+- `packages/db/prisma/migrations/20261014010000_claim_source_identity/migration.sql` and
+  `packages/db/src/lib/claim-source-migration.test.ts`: expand-only constrained provenance;
+  full prior-migration replay proves legacy duplicate/state preservation.
+- `apps/api/test/fixtures/csv/README.md`: exact CSV contract and synthetic examples.

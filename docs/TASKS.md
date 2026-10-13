@@ -36,8 +36,8 @@ Each FW item is a 1–3 hour slice; larger workstreams require further decomposi
 - [ ] **FW-16** Deterministic evaluation runner and report (FW-15). _Local offline scoring, all-abstaining baseline, exact-input replay, integrity verification and evidence-bound review packets implemented (ADR-069). Failed/invalid outputs remain in denominators; separate field/evidence/abstention/subgroup and unknown-usage metrics. No authenticated provider capture, measured model quality, ratified release thresholds or production approval._
 - [ ] **FW-17** Intent/inbox/outbox persistence and scoped uniqueness contracts. _Retell pending inbox and scoped call intents implemented locally; transactional call/summary outbox now implemented locally with lease/backoff/quarantine and crash evidence; deployment pending._
 - [ ] **FW-18** Atomic state/audit/outbox commit and crash/replay test (FW-17). _Local call/summary producer transactions and independent broker/consumer crash tests pass; scheduled production proof pending._
-- [ ] **FW-19** Canonical source identity and non-destructive duplicate report.
-- [ ] **FW-20** Validated uniqueness migration and concurrent import regression (FW-19).
+- [ ] **FW-19** Canonical source identity and non-destructive duplicate report. _Implemented locally (ADR-071): explicit source database/record identity, opaque versions, keyed whole-record change detection, no display-number fallback, row outcomes/links/report in the real import screen. Legacy candidates and changed rows are preserved without automatic binding/overwrite. CSV fixtures are synthetic, not PMS integration proof._
+- [ ] **FW-20** Validated uniqueness migration and concurrent import regression (FW-19). _Implemented locally (ADR-071): nullable provenance, complete/immutable identity constraints, scoped unique index, atomic tenant-serialized chunks/audit, concurrent duplicate/conflicting uploads and late-failure rollback tests. Full migration replay retains duplicate reviewed legacy rows. Migration23 only on localhost; no deployment._
 - [ ] **FW-21** Claim-line, coverage, partial-payment, and reversal fixtures.
 - [ ] **FW-22** PHI vendor/control evidence register and security-copy reconciliation.
 - [ ] **FW-23** Durable runner decision within documented hosting constraints.
@@ -78,6 +78,8 @@ is visibly blocked pending a test partner and authorized system access. Open Den
 sequence; the broader capability matrix remains in scope.
 
 - [ ] **FW-42** Auditable synthetic model-evaluation capture. _Read-only account/model evidence refreshed. A separate bounded contract-discovery CLI, private immutable journal, one-send-per-case fence, retained liability, exact plan/artifact/account bindings and crash/replay proofs are implemented locally (ADR-070). Discovery leaves candidates unapproved and produces no quality scores. Real discovery, reviewed serving identity, authorized normal-gateway scored captures, billing reconciliation and candidate comparison remain open; no paid request without confirmed budget/authorization._
+
+- [ ] **FW-43** Reviewed source reconciliation: immutable source revision history, evidence/payload/version-bound approval of updates or legacy binding, concurrent-review invalidation, cross-system identity mapping and recurring authorized PMS sync. FW-19/20 report changed/legacy rows but never apply them.
 
 ---
 

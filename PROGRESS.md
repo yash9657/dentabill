@@ -3,13 +3,23 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-13
-**Current work:** implementing W0 containment on latest main `4497459` (AWS baseline `23cdc7b`), branch
+**Current work:** source identity and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
 `codex/w0-containment`. The full parity goal is active; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice:** FW-42 has a functioning contract-discovery CLI with exact corpus/account/
+**Latest local slice:** FW-19/20 now imports with explicit source identity, database-enforced
+uniqueness and atomic chunk/audit writes. Repeated/concurrent files cannot duplicate the same
+source record. Changed records and legacy matches receive a row report without overwriting
+reviewed work. The upload screen requires a stable database name and exposes conflicts, links,
+report download and all validation errors. Migration23 preserves legacy duplicates; it ran only
+on localhost. Import113, UI24, SDK30 and migration replay pass; scoped type/lint30/30, both
+Lambda bundles and the web production build pass. Exact full-suite results and browser limits are in session context.
+Real PMS sync, reviewed source updates/legacy binding (FW-43), financial modeling and all
+external parity gates remain open. No paid inference, deployment or real claim changes ran.
+
+**Previous local slice:** FW-42 has a functioning contract-discovery CLI with exact corpus/account/
 artifact bindings, one attempt per case, private durable raw receipts, conservative spending
 allowances and crash-safe replay (ADR-070). It preserves unapproved candidates and cannot return
 production observations. Read-only Fireworks account/model checks pass; regional router metadata

@@ -506,3 +506,20 @@ on rollback. A cancelled interpretation may be refined once from its already-sav
 this cannot authorize a new send. On a later scoped reservation lookup, zero-attempt expired reservations refund only under the
 organization lock after proving no attempt exists and invalidating old ownership. Requests
 that may have reached the provider remain reserved. This runbook does not authorize deployment.
+
+## Source-aware CSV import rollout (ADR-071; not deployed)
+
+Migration23 `20261014010000_claim_source_identity` ran only on localhost. It retains legacy
+claims and duplicates; it does not infer IDs, backfill or merge. Apply after the preceding
+migrations before running the new API. Coordinate API and web deployment: the new endpoint
+requires `x-import-source`, and the upload UI sends it. CORS must permit this header. Drain
+or disable old import requests during rollout; older code writes unscoped legacy rows.
+Rollback should disable imports rather than re-enable the prior race-prone importer. Keep
+provenance/history intact; do not drop the new fields or rewrite imported identities.
+
+Before production approval, validate migration time/index creation on a representative copy,
+existing duplicate reports, authenticated browser upload/preflight, same-file and concurrent
+re-upload, conflict reporting and no mutation of reviewed claims. Current evidence is local
+Postgres plus synthetic browser/API data, not deployed AWS/Clerk/PMS operation. CSV database
+names are operator-declared: retain the same name for repeated exports. Secret rotation or
+namespace changes need reviewed reconciliation. No real PMS sync or payment posting is enabled.

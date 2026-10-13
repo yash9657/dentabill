@@ -1,82 +1,102 @@
+import { createHmac, randomUUID } from 'node:crypto';
+
 import {
+  audit,
   daysOutstandingSince,
   hashPatientDOB,
   patientDOBLast4,
   prisma,
   scoreClaim,
+  type Prisma,
 } from '@dentabill/db';
+import { ApiError } from '@dentabill/types';
+import { z } from 'zod';
 
-import type { CanonicalClaimRow } from './types.js';
+import {
+  MAX_IMPORT_ROWS,
+  SUPPORTED_CSV_SOURCES,
+  type CanonicalClaimRow,
+  type CsvSource,
+} from './types.js';
 
-/**
- * `bulkInsertClaims` — turn parsed canonical rows (T44) into Claim
- * rows for the authenticated organization (T48).
- *
- * Idempotency: re-uploading a CSV that contains rows with claim
- * numbers already on disk for this org is the common case (a biller
- * re-exports nightly). We skip those rows rather than failing the
- * whole upload — the `skippedDuplicates` counter is surfaced in the
- * response so the user knows nothing was lost. Dedup is by the
- * natural `(organizationId, claimNumber)` pair: it survives across
- * uploads, doesn't depend on the upload's idempotency-key header,
- * and matches what billers expect ("the claim is already in the
- * queue").
- *
- * Per-row write hooks compute:
- *   - `patientDOBHash` via T45's org-scoped + secret-keyed SHA-256
- *   - `patientDOBLast4` for verbal patient confirmation
- *   - `priority` via T47's PRD §5 formula based on amount + age
- *
- * createMany() with `skipDuplicates: false` is wrapped in a single
- * transaction so a write failure mid-batch leaves no partial rows.
- * Chunked at 500 rows to stay well under Postgres parameter limits.
- */
+export const ImportSourceNamespaceSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/);
+export const IMPORT_DISPOSITIONS = [
+  'INSERTED',
+  'DUPLICATE',
+  'SOURCE_CHANGED',
+  'BATCH_CONFLICT',
+  'LEGACY_MATCH',
+  'MISSING_SOURCE_ID',
+] as const;
+export interface ImportRowResult {
+  readonly rowIndex: number;
+  readonly disposition: (typeof IMPORT_DISPOSITIONS)[number];
+  readonly claimId: string | null;
+}
 export interface BulkInsertOptions {
   readonly organizationId: string;
+  readonly source: CsvSource;
+  readonly sourceNamespace: string;
   readonly canonicalRows: readonly CanonicalClaimRow[];
   readonly dobHashSecret: string;
-  /** Defaults to `new Date()`. Injectable for deterministic testing. */
+  readonly actorId?: string;
   readonly now?: Date;
 }
-
 export interface BulkInsertResult {
   readonly insertedRows: number;
   readonly skippedDuplicates: number;
+  readonly conflictRows: number;
+  readonly rows: readonly ImportRowResult[];
 }
 
 const CHUNK_SIZE = 500;
+interface PreparedRow {
+  readonly row: CanonicalClaimRow;
+  readonly data: Prisma.ClaimCreateManyInput;
+  readonly hash: string;
+}
 
-export async function bulkInsertClaims(opts: BulkInsertOptions): Promise<BulkInsertResult> {
-  const { organizationId, canonicalRows, dobHashSecret } = opts;
-  const now = opts.now ?? new Date();
-  if (canonicalRows.length === 0) return { insertedRows: 0, skippedDuplicates: 0 };
-
-  const incomingClaimNumbers = canonicalRows.map((r) => r.claimNumber);
-  const existing = await prisma.claim.findMany({
-    where: {
-      organizationId,
-      claimNumber: { in: incomingClaimNumbers },
-    },
-    select: { claimNumber: true },
+function prepareRow(opts: BulkInsertOptions, row: CanonicalClaimRow, now: Date): PreparedRow {
+  const patientDOBHash = hashPatientDOB({
+    dob: row.patientDOB,
+    organizationId: opts.organizationId,
+    secret: opts.dobHashSecret,
   });
-  const existingSet = new Set(existing.map((c) => c.claimNumber));
-
-  const newRows = canonicalRows.filter((r) => !existingSet.has(r.claimNumber));
-  const skippedDuplicates = canonicalRows.length - newRows.length;
-  if (newRows.length === 0) return { insertedRows: 0, skippedDuplicates };
-
-  const data = newRows.map((row) => {
-    const reference = row.submittedDate ?? row.serviceDate;
-    const days = daysOutstandingSince(reference, now);
-    const amountNum = Number(row.claimAmount);
-    return {
-      organizationId,
-      patientDOBHash: hashPatientDOB({
-        dob: row.patientDOB,
-        organizationId,
-        secret: dobHashSecret,
-      }),
+  const hash = createHmac('sha256', opts.dobHashSecret)
+    .update(
+      JSON.stringify([
+        'csv-source-v1',
+        opts.organizationId,
+        opts.source,
+        opts.sourceNamespace,
+        row.sourceClaimId,
+        row.sourceVersion,
+        row.sourcePatientId,
+        row.sourceFields,
+        patientDOBHash,
+        row.claimNumber,
+        row.subscriberId,
+        row.claimAmount,
+        row.cdtCodes,
+        row.payerCode,
+        row.payerLabel,
+        row.serviceDate,
+        row.submittedDate,
+      ]),
+    )
+    .digest('hex');
+  return {
+    row,
+    hash,
+    data: {
+      organizationId: opts.organizationId,
+      patientDOBHash,
       patientDOBLast4: patientDOBLast4(row.patientDOB),
+      sourceSystem: opts.source,
+      sourceNamespace: opts.sourceNamespace,
+      sourceClaimId: row.sourceClaimId,
+      sourceVersion: row.sourceVersion,
+      sourceContentHash: hash,
       claimNumber: row.claimNumber,
       subscriberId: row.subscriberId,
       cdtCodes: [...row.cdtCodes],
@@ -84,16 +104,161 @@ export async function bulkInsertClaims(opts: BulkInsertOptions): Promise<BulkIns
       payerCode: row.payerCode,
       serviceDate: new Date(row.serviceDate),
       submittedDate: row.submittedDate ? new Date(row.submittedDate) : null,
-      priority: scoreClaim({ claimAmount: amountNum, daysOutstanding: days }),
-    };
-  });
+      priority: scoreClaim({
+        claimAmount: Number(row.claimAmount),
+        daysOutstanding: daysOutstandingSince(row.submittedDate ?? row.serviceDate, now),
+      }),
+    },
+  };
+}
 
-  let inserted = 0;
-  for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-    const chunk = data.slice(i, i + CHUNK_SIZE);
-    const result = await prisma.claim.createMany({ data: chunk });
-    inserted += result.count;
+export async function bulkInsertClaims(opts: BulkInsertOptions): Promise<BulkInsertResult> {
+  const { organizationId, canonicalRows, source, sourceNamespace } = opts;
+  if (
+    !organizationId ||
+    !ImportSourceNamespaceSchema.safeParse(sourceNamespace).success ||
+    !z.enum(SUPPORTED_CSV_SOURCES).safeParse(source).success ||
+    canonicalRows.length > MAX_IMPORT_ROWS
+  ) {
+    throw new ApiError('VALIDATION_ERROR', 'Invalid import source or row limit exceeded.');
+  }
+  const now = opts.now ?? new Date();
+  const prepared = canonicalRows.map((row) => prepareRow(opts, row, now));
+  const grouped = new Map<string, PreparedRow[]>();
+  for (const item of prepared) {
+    if (item.row.sourceClaimId === null) continue;
+    const group = grouped.get(item.row.sourceClaimId) ?? [];
+    group.push(item);
+    grouped.set(item.row.sourceClaimId, group);
   }
 
-  return { insertedRows: inserted, skippedDuplicates };
+  return prisma.$transaction(
+    async (tx) => {
+      // Serialize import decisions within a tenant. NO KEY UPDATE avoids blocking
+      // the FK key-share locks held by other claim workflows. The unique index
+      // also rejects duplicate identity from writers outside this importer.
+      const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "Organization" WHERE id = ${organizationId} FOR NO KEY UPDATE`;
+      if (locked.length !== 1) throw new ApiError('NOT_FOUND', 'Organization not found.');
+      const existing = await tx.claim.findMany({
+        where: {
+          organizationId,
+          sourceSystem: source,
+          sourceNamespace,
+          sourceClaimId: { in: [...grouped.keys()] },
+        },
+        select: { id: true, sourceClaimId: true, sourceContentHash: true },
+      });
+      const bySourceId = new Map(existing.map((claim) => [claim.sourceClaimId, claim]));
+      const legacy = await tx.claim.groupBy({
+        by: ['claimNumber'],
+        where: {
+          organizationId,
+          sourceSystem: null,
+          claimNumber: { in: [...new Set(canonicalRows.map((row) => row.claimNumber))] },
+        },
+        _count: { _all: true },
+        _min: { id: true },
+      });
+      const legacyByNumber = new Map(legacy.map((claim) => [claim.claimNumber, claim]));
+      const rows: ImportRowResult[] = prepared
+        .filter((item) => item.row.sourceClaimId === null)
+        .map(({ row }) => ({
+          rowIndex: row.rowIndex,
+          disposition: 'MISSING_SOURCE_ID',
+          claimId: null,
+        }));
+      const pending: PreparedRow[] = [];
+      for (const [sourceClaimId, items] of grouped) {
+        const first = items[0];
+        if (!first) continue;
+        const saved = bySourceId.get(sourceClaimId);
+        if (new Set(items.map((item) => item.hash)).size > 1) {
+          rows.push(
+            ...items.map(
+              ({ row }): ImportRowResult => ({
+                rowIndex: row.rowIndex,
+                disposition: 'BATCH_CONFLICT',
+                claimId: saved?.id ?? null,
+              }),
+            ),
+          );
+        } else if (saved) {
+          rows.push(
+            ...items.map(
+              ({ row }): ImportRowResult => ({
+                rowIndex: row.rowIndex,
+                disposition:
+                  saved.sourceContentHash === first.hash ? 'DUPLICATE' : 'SOURCE_CHANGED',
+                claimId: saved.id,
+              }),
+            ),
+          );
+        } else {
+          const legacyIds = legacyByNumber.get(first.row.claimNumber);
+          if (legacyIds) {
+            rows.push(
+              ...items.map(
+                ({ row }): ImportRowResult => ({
+                  rowIndex: row.rowIndex,
+                  disposition: 'LEGACY_MATCH',
+                  claimId: legacyIds._count._all === 1 ? legacyIds._min.id : null,
+                }),
+              ),
+            );
+          } else {
+            pending.push(first);
+          }
+        }
+      }
+      // Every chunk and the audit commit together. A late failure leaves no
+      // partial import; retry observes either the entire commit or none of it.
+      for (let i = 0; i < pending.length; i += CHUNK_SIZE) {
+        const inserted = await tx.claim.createManyAndReturn({
+          data: pending.slice(i, i + CHUNK_SIZE).map((item) => item.data),
+          select: { id: true, sourceClaimId: true },
+        });
+        for (const saved of inserted) {
+          const items = saved.sourceClaimId === null ? undefined : grouped.get(saved.sourceClaimId);
+          if (!items) throw new Error('Import identity missing after insert.');
+          items.forEach(({ row }, index) =>
+            rows.push({
+              rowIndex: row.rowIndex,
+              disposition: index === 0 ? 'INSERTED' : 'DUPLICATE',
+              claimId: saved.id,
+            }),
+          );
+        }
+      }
+      rows.sort((a, b) => a.rowIndex - b.rowIndex);
+      const insertedRows = rows.filter((row) => row.disposition === 'INSERTED').length;
+      const skippedDuplicates = rows.filter((row) => row.disposition === 'DUPLICATE').length;
+      const conflictRows = rows.length - insertedRows - skippedDuplicates;
+      const actor = opts.actorId
+        ? await tx.user.findFirst({
+            where: { organizationId, id: opts.actorId },
+            select: { id: true },
+          })
+        : null;
+      await audit(
+        {
+          organizationId,
+          ...(actor ? { userId: actor.id } : {}),
+          action: 'claim.import',
+          resourceType: 'ClaimImport',
+          resourceId: randomUUID(),
+          metadata: {
+            source,
+            totalRows: rows.length,
+            insertedRows,
+            skippedDuplicates,
+            conflictRows,
+          },
+        },
+        tx,
+      );
+      return { insertedRows, skippedDuplicates, conflictRows, rows };
+    },
+    { maxWait: 5000, timeout: 30000 },
+  );
 }

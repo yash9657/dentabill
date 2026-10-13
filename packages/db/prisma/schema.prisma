@@ -209,28 +209,35 @@ model User {
 }
 
 model Claim {
-  id              String      @id @default(cuid())
-  organizationId  String
-  patientDOBHash  String
-  patientDOBLast4 String?
-  claimNumber     String
+  id                String      @id @default(cuid())
+  organizationId    String
+  patientDOBHash    String
+  patientDOBLast4   String?
+  claimNumber       String
+  // CSV provenance is explicit. Legacy/manual claims stay null; display
+  // claim numbers are not promoted into source identity.
+  sourceSystem      String?     @db.VarChar(32)
+  sourceNamespace   String?     @db.VarChar(80)
+  sourceClaimId     String?     @db.VarChar(200)
+  sourceVersion     String?     @db.VarChar(200)
+  sourceContentHash String?     @db.VarChar(64)
   // Nullable for imports without subscriber identity. Missing values block
   // outbound calls until supplied by an authorized source or biller;
   // claim numbers and inferred values are never substitutes.
-  subscriberId    String?
-  cdtCodes        String[]
-  claimAmount     Decimal     @db.Decimal(10, 2)
-  payerCode       PayerCode
-  serviceDate     DateTime
-  submittedDate   DateTime?
-  status          ClaimStatus @default(PENDING)
-  priority        Int         @default(0)
-  lastCallAt      DateTime?
-  nextCallAt      DateTime?
-  retryCount      Int         @default(0)
-  maxRetries      Int         @default(3)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  subscriberId      String?
+  cdtCodes          String[]
+  claimAmount       Decimal     @db.Decimal(10, 2)
+  payerCode         PayerCode
+  serviceDate       DateTime
+  submittedDate     DateTime?
+  status            ClaimStatus @default(PENDING)
+  priority          Int         @default(0)
+  lastCallAt        DateTime?
+  nextCallAt        DateTime?
+  retryCount        Int         @default(0)
+  maxRetries        Int         @default(3)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
   organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   calls                    Call[]
@@ -239,6 +246,8 @@ model Claim {
   observationRegenerations ObservationRegeneration[]
 
   @@unique([id, organizationId])
+  @@unique([organizationId, sourceSystem, sourceNamespace, sourceClaimId], map: "Claim_source_identity_key")
+  @@index([organizationId, claimNumber])
   @@index([organizationId, status])
   @@index([organizationId, priority])
 }

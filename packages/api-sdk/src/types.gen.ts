@@ -2471,11 +2471,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Upload a CSV export from Dentrix, Eaglesoft, or Open Dental for the authenticated organization. Returns a parse summary; bulk DB insert lands in T48. */
+        /** @description Import claims using an explicit source database and stable source record IDs. Unchanged rows are skipped; conflicts are reported without overwriting existing work. */
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header: {
+                    "x-import-source": string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -2490,10 +2492,18 @@ export interface paths {
                         "application/json": {
                             /** @enum {string} */
                             source: "DENTRIX" | "EAGLESOFT" | "OPEN_DENTAL";
+                            sourceNamespace: string;
                             totalRows: number;
                             validRows: number;
                             insertedRows: number;
                             skippedDuplicates: number;
+                            conflictRows: number;
+                            rows: {
+                                rowIndex: number;
+                                /** @enum {string} */
+                                disposition: "INSERTED" | "DUPLICATE" | "SOURCE_CHANGED" | "BATCH_CONFLICT" | "LEGACY_MATCH" | "MISSING_SOURCE_ID";
+                                claimId: string | null;
+                            }[];
                             errors: {
                                 rowIndex: number;
                                 message: string;

@@ -157,7 +157,7 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(cors, {
     origin: [env.NEXT_PUBLIC_APP_URL, ...corsOrigins],
     credentials: true,
-    allowedHeaders: ['authorization', 'content-type', 'x-request-id'],
+    allowedHeaders: ['authorization', 'content-type', 'x-request-id', 'x-import-source'],
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 

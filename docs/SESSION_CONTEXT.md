@@ -4,7 +4,65 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: bounded contract discovery (ADR-070)
+### Latest continuation: source-aware CSV imports (ADR-071)
+
+The preceding turn answered the user's status question and made no code progress. This
+continuation resumed FW-19/20 on clean `402d3c2` rather than treating the unanswered $4
+Fireworks experiment question as an overall blocker. Full parity remains active. No paid
+inference, speech, call, production migration, deployment or external message ran.
+
+- New claims have explicit source-system/database/record identity and optional opaque version.
+  Display claim numbers are never the identity fallback. The schema preserves legacy duplicates,
+  checks complete provenance, enforces tenant-scoped uniqueness and protects imported provenance.
+- Imports now serialize tenant admission and commit all chunks plus aggregate audit together.
+  Same-file/concurrent identical records create one claim. Conflicting same-file IDs are all
+  withheld; changed source data and legacy display matches are reported without overwriting
+  claim state, local corrections, review history or `updatedAt`. Legacy candidate aggregation
+  returns at most one row per incoming display number rather than materializing every duplicate.
+- The HMAC includes every source cell as well as normalized fields, so currently unmodeled source
+  changes cannot silently look unchanged. Raw cells are transient. Header case/order are normalized;
+  changed cell formatting, namespaces or hash secrets may require conservative reconciliation.
+- Parser validation rejects ambiguous headers/aliases/layouts, malformed rows, invalid UTF-8,
+  calendar dates and out-of-range amounts without reflecting raw inputs. Papa's record preview
+  caps input at 5,000 logical data records before normalization, with its full-file split fast path
+  disabled. The route's 10 MiB bound still applies to the decoded input; this is not streaming
+  constant-memory parsing. Missing source IDs yield explicit no-insert row results.
+- The import screen requires a stable database name, sends the CORS-supported source header,
+  validates replies, separates unchanged/attention counts, links identified claims, and exposes
+  every parsed row/validation error through pagination. Downloads omit raw cells. Tenant switch
+  resets the form, and late auth resolution cannot send an unmounted form. SDK and synthetic
+  fixtures reflect the new contract. No customer export or PMS connection is claimed.
+
+**Verification:** local migration23 deployed on localhost `dentabill_test`. A separate-schema
+replay of all prior22 migrations, seeded duplicate reviewed claims, then migration23 preserved
+all original payloads and left provenance null; the test rolls back that schema. Import-focused
+API/parser/real-DB **113/113** pass, including six concurrent callers, changed-payload races,
+legacy ambiguity/isolation, direct constraints and 501-row rollback/retry. Full API run had
+**554 passes and one assertion failure** solely from expecting `5,000` versus the fixed message
+`5000`; the corrected route suite and all affected importer/parser tests pass in the 113 result.
+No broad full-suite rerun was needed after that assertion correction and bounded legacy query.
+SDK **30/30**, import UI **24/24**, and affected Turbo typecheck/lint **30/30** pass. API TypeScript
+build and the API build script's **both Lambda bundles** pass (35.6/28.8 MB unzipped). A redundant
+worker `build:lambda` command reported no such script; packaging already happened in the API
+script, so no separate worker build is required. The full Next.js production build also passes. Final scoped import ESLint passes after the bounded legacy-query change.
+Logs: `/tmp/dentabill-import-{api-tests,final-tests,final-checks,sdk-tests,ui-tests,web-build}.log`
+and `/tmp/dentabill-source-migration-test.log`. Independent review found/fixed the parser limit's
+late application and fast-path split; no other material issue remained in the reviewed boundary.
+
+Actual-component Chromium checks with synthetic API/auth at1280/390px passed form validation,
+exact namespace header, all six outcomes, ambiguous legacy handling, links, report download and
+no overflow/page errors. This is local component evidence, not authenticated Clerk/AWS/PMS e2e.
+Artifacts: `/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-import-visual-k5165w46`;
+Vite stopped. Final validation-error pagination is covered by the 51-error component regression.
+
+**Next task:** FW-21 procedure-level claims, coverage sequence and partial-payment/reversal
+modeling with synthetic fixtures and reviewed financial invariants. FW-43 retains source-revision
+history, approved source updates/legacy binding, cross-system mapping and recurring authorized
+PMS sync. Those workflows are not implemented by a conflict report. The prepared Fireworks
+experiment remains pending the user's up-to-$4 answer; do not infer approval from continuations.
+No clinic yet; maintain fake data. Keep the existing stashes and the full parity scope intact.
+
+### Previous continuation: bounded contract discovery (ADR-070)
 
 The previous goal turn made concrete progress by committing independent evaluation tooling in
 `4ca7508`. This continuation started clean on `codex/w0-containment`; full parity remains active.

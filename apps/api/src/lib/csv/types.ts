@@ -19,6 +19,7 @@ import type { PayerCode } from '@dentabill/db';
 
 export const SUPPORTED_CSV_SOURCES = ['DENTRIX', 'EAGLESOFT', 'OPEN_DENTAL'] as const;
 export type CsvSource = (typeof SUPPORTED_CSV_SOURCES)[number];
+export const MAX_IMPORT_ROWS = 5000;
 
 /**
  * Canonical row produced after detection + parse + normalise. Row
@@ -29,9 +30,21 @@ export interface CanonicalClaimRow {
   readonly rowIndex: number;
   /** Patient DOB as ISO `YYYY-MM-DD`. The hash + last-4 are derived later. */
   readonly patientDOB: string;
-  /** Source-system claim identifier — preserved verbatim. */
+  /** Display/reference number; never treated as a stable source identity. */
   readonly claimNumber: string;
-  /** Decimal-string amount (no `$`, no commas). */
+  /** Explicit source record ID, preserving case and leading zeroes; absent stays null. */
+  readonly sourceClaimId: string | null;
+  /** Opaque source edit/version marker; no ordering is inferred. */
+  readonly sourceVersion: string | null;
+  /** Optional source patient reference; never inferred from DOB or subscriber identity. */
+  readonly sourcePatientId: string | null;
+  /**
+   * All exact source cell values, keyed by trimmed lowercase headers in
+   * deterministic binary order. Transient input to the keyed import fingerprint
+   * only: never persist, log, or expose these potentially sensitive raw cells.
+   */
+  readonly sourceFields: readonly (readonly [string, string])[];
+  /** Decimal(10,2) amount with exactly two fractional digits (no `$`, no commas). */
   readonly claimAmount: string;
   /** ADA / CDT procedure codes. Preserved order, no duplicates. */
   readonly cdtCodes: readonly string[];
@@ -42,17 +55,17 @@ export interface CanonicalClaimRow {
   /**
    * Insurance subscriber ID — the policy-side identifier the IVR
    * usually requests. Optional because some source systems (Dentrix)
-   * don't surface it on every claim layout; the agent's metadata
-   * falls back to `claimNumber` when this is null. (ADR-045 expand)
+   * don't surface it on every claim layout; calls remain blocked
+   * until the missing identity is supplied.
    */
   readonly subscriberId: string | null;
   /**
    * The mapped `PayerCode` enum value. `UNKNOWN` when no rule
-   * matched — the original free-text label is preserved on
-   * `payerLabel` so the import summary can show "we didn't
-   * recognise '<their text>'".
+   * matched. The original free-text label is retained separately
+   * so distinct unrecognised payers do not become identical source facts.
    */
   readonly payerCode: PayerCode;
+  /** Exact source payer cell, not the resolver's canonical display label. */
   readonly payerLabel: string;
 }
 
@@ -69,8 +82,17 @@ export interface ParseResult {
 }
 
 export class UnknownCsvFormatError extends Error {
-  public constructor(public readonly headers: readonly string[]) {
-    super('Unrecognised CSV format. Supported sources: Dentrix, Eaglesoft, Open Dental.');
+  public constructor() {
+    super(
+      'Unrecognised or ambiguous CSV format. Supported sources: Dentrix, Eaglesoft, Open Dental.',
+    );
     this.name = 'UnknownCsvFormatError';
+  }
+}
+
+export class CsvRowLimitError extends Error {
+  public constructor() {
+    super(`CSV exceeds the ${String(MAX_IMPORT_ROWS)} data-record limit, including blank records.`);
+    this.name = 'CsvRowLimitError';
   }
 }

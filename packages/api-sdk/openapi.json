@@ -6760,7 +6760,18 @@
     },
     "/v1/ingest/claims": {
       "post": {
-        "description": "Upload a CSV export from Dentrix, Eaglesoft, or Open Dental for the authenticated organization. Returns a parse summary; bulk DB insert lands in T48.",
+        "description": "Import claims using an explicit source database and stable source record IDs. Unchanged rows are skipped; conflicts are reported without overwriting existing work.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+            },
+            "in": "header",
+            "name": "x-import-source",
+            "required": true
+          }
+        ],
         "security": [
           {
             "bearer": []
@@ -6782,6 +6793,10 @@
                         "OPEN_DENTAL"
                       ]
                     },
+                    "sourceNamespace": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                    },
                     "totalRows": {
                       "type": "integer",
                       "minimum": 0,
@@ -6801,6 +6816,45 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "conflictRows": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rowIndex": {
+                            "type": "integer",
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "disposition": {
+                            "type": "string",
+                            "enum": [
+                              "INSERTED",
+                              "DUPLICATE",
+                              "SOURCE_CHANGED",
+                              "BATCH_CONFLICT",
+                              "LEGACY_MATCH",
+                              "MISSING_SOURCE_ID"
+                            ]
+                          },
+                          "claimId": {
+                            "nullable": true,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "rowIndex",
+                          "disposition",
+                          "claimId"
+                        ],
+                        "additionalProperties": false
+                      }
                     },
                     "errors": {
                       "type": "array",
@@ -6826,10 +6880,13 @@
                   },
                   "required": [
                     "source",
+                    "sourceNamespace",
                     "totalRows",
                     "validRows",
                     "insertedRows",
                     "skippedDuplicates",
+                    "conflictRows",
+                    "rows",
                     "errors"
                   ],
                   "additionalProperties": false
