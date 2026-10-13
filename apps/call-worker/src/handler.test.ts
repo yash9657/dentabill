@@ -171,6 +171,55 @@ describe('createCallJobHandler — happy path', () => {
   });
 });
 
+describe('createCallJobHandler — reviewed state protection', () => {
+  it('preserves a reviewed claim and audits the skipped transition after the provider ends', async () => {
+    const { orgId, claimId } = await seedOrgAndClaim();
+    const retellCallId = 'fake_reviewed_claim';
+    const fake = new FakeRetell({ retellCallIdFactory: () => retellCallId });
+    const handler = createCallJobHandler({
+      logger: silentLogger,
+      prisma,
+      retellPort: fake,
+      env,
+      outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+    });
+    const pending = handler(
+      jobFor({
+        organizationId: orgId,
+        claimId,
+        payerCode: 'DELTA_DENTAL_PPO',
+        attemptNumber: 1,
+        claimPriority: 80,
+        idempotencyKey: 'reviewed-claim-test',
+      }),
+      'token',
+    );
+    await waitFor(() => fake.startedCalls.length === 1);
+    await prisma.claim.updateMany({
+      where: { id: claimId, organizationId: orgId },
+      data: { status: 'RESOLVED' },
+    });
+    await fake.simulateHappyPath(retellCallId);
+    const result = await pending;
+    expect(
+      (await prisma.claim.findFirstOrThrow({ where: { id: claimId, organizationId: orgId } }))
+        .status,
+    ).toBe('RESOLVED');
+    const event = await prisma.auditLog.findFirstOrThrow({
+      where: {
+        organizationId: orgId,
+        resourceId: result.callId,
+        action: 'call.end',
+      },
+    });
+    expect(event.metadata).toMatchObject({
+      proposedClaimStatus: 'COMPLETED',
+      claimTransitionApplied: false,
+    });
+    expect(event.metadata).not.toHaveProperty('finalClaimStatus');
+  });
+});
+
 describe('createCallJobHandler — denial path', () => {
   it('flips Claim.status → DENIED when collectedInfo.claimStatus = "denied"', async () => {
     const { orgId, claimId } = await seedOrgAndClaim();

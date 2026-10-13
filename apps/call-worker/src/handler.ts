@@ -266,7 +266,7 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
         durationSeconds: ended.durationSeconds,
       },
     });
-    await deps.prisma.claim.updateMany({
+    const claimTransition = await deps.prisma.claim.updateMany({
       where: {
         id: claim.id,
         organizationId: data.organizationId,
@@ -287,8 +287,9 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
       organizationId: data.organizationId,
       metadata: {
         claimId: claim.id,
-        finalCallStatus,
-        finalClaimStatus,
+        providerCallStatus: finalCallStatus,
+        proposedClaimStatus: finalClaimStatus,
+        claimTransitionApplied: claimTransition.count === 1,
         durationSeconds: ended.durationSeconds,
         endReason: ended.endReason,
       },
