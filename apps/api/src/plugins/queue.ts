@@ -4,6 +4,7 @@ import {
   createCallsQueue,
   createInlineJobDispatcher,
   createRedisConnection,
+  createSqsJobDispatcher,
   createSummariesQueue,
   type JobDispatcher,
   type JobDispatchMode,
@@ -25,6 +26,11 @@ import { runInBackground } from '../lib/background.js';
  *     POSTs jobs to `/v1/internal/jobs/*`. Redis is opened only when
  *     `REDIS_URL` is set (SSE pub/sub + readiness); otherwise every Redis
  *     surface is `null` and its consumers fall back (see ADR-053).
+ *   - `sqs` mode: NO queues and NO workers either. The dispatcher sends
+ *     each job to the SQS queue at `JOBS_QUEUE_URL`; the worker Lambda
+ *     consumes it. Nothing runs after the response (no `waitUntil`), which
+ *     matters on Lambda, where the process is frozen between requests.
+ *     Redis is optional exactly as in `inline` mode.
  *
  * In `NODE_ENV === 'test'` the plugin installs no-op stub queues behind a
  * BullMQ dispatcher instead. Tests that exercise enqueue paths replace
@@ -36,8 +42,8 @@ declare module 'fastify' {
     /** Producer surface for every job. Routes MUST use this, not the queues. */
     jobDispatcher: JobDispatcher;
     /**
-     * Raw BullMQ queues backing the `bullmq` dispatcher. In `inline` mode
-     * (and under test) these are stubs whose `add` throws.
+     * Raw BullMQ queues backing the `bullmq` dispatcher. In `inline` / `sqs`
+     * mode (and under test) these are stubs whose `add` throws.
      */
     callsQueue: CallsQueue;
     summariesQueue: SummariesQueue;
@@ -63,6 +69,10 @@ export interface RegisterQueuePluginInput {
     readonly secret: string;
     /** Extra headers on the internal trigger (e.g. Vercel protection bypass). */
     readonly headers?: Readonly<Record<string, string>>;
+  };
+  /** Required in `sqs` mode. */
+  readonly sqs?: {
+    readonly queueUrl: string;
   };
   /** Override the test detection (default: `NODE_ENV === 'test'`). */
   readonly stubInTest?: boolean;
@@ -122,6 +132,28 @@ export function registerQueuePlugin(
       await summariesQueue.close();
       connection.disconnect();
     });
+    return;
+  }
+
+  if (input.mode === 'sqs') {
+    if (!input.sqs) throw new Error('JOB_DISPATCH_MODE=sqs requires JOBS_QUEUE_URL');
+    const { calls, summaries } = stubQueues('JOB_DISPATCH_MODE=sqs has no BullMQ queues.');
+    fastify.decorate('callsQueue', calls);
+    fastify.decorate('summariesQueue', summaries);
+    fastify.decorate(
+      'jobDispatcher',
+      createSqsJobDispatcher({
+        queueUrl: input.sqs.queueUrl,
+        onDelayClamped: (ctx) => {
+          fastify.log.warn(ctx, 'sqs job delay clamped to the 900 s SQS maximum');
+        },
+      }),
+    );
+    if (connection !== null) {
+      fastify.addHook('onClose', () => {
+        connection.disconnect();
+      });
+    }
     return;
   }
 

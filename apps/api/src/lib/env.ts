@@ -78,7 +78,9 @@ const envSchema = z.object({
    * ADR-053 — how jobs are run. `bullmq` (default): Redis queues drained by
    * the always-on call-worker / summary-worker. `inline`: no workers; the
    * API POSTs each job to its own `/v1/internal/jobs/*` route, which runs
-   * the processor to completion (serverless / Vercel deployments).
+   * the processor to completion (serverless / Vercel deployments). `sqs`:
+   * jobs are sent to the SQS queue at `JOBS_QUEUE_URL` and run by the
+   * worker Lambda (`src/lambda-worker.ts`, AWS deployments).
    */
   JOB_DISPATCH_MODE: z
     .string()
@@ -96,6 +98,14 @@ const envSchema = z.object({
    * Set it explicitly when Deployment Protection guards *.vercel.app.
    */
   INTERNAL_API_BASE_URL: z.string().includes('://').optional(),
+  /**
+   * SQS standard queue URL every job is sent to. Required in `sqs` mode.
+   * Region and credentials come from the standard AWS environment
+   * (`AWS_REGION`, the Lambda execution role).
+   */
+  JOBS_QUEUE_URL: z.string().includes('://').optional(),
+  /** Set by AWS Lambda; used only to pick platform-specific defaults. */
+  AWS_LAMBDA_FUNCTION_NAME: z.string().optional(),
   /** Vercel system env (set automatically on Vercel). */
   VERCEL: z.string().optional(),
   VERCEL_ENV: z.string().optional(),
@@ -107,7 +117,8 @@ const envSchema = z.object({
    * Upper bound on one SSE response. The client reconnects (and replays,
    * de-duplicated by event id) when a stream ends without a `close` event,
    * so this only needs to sit under the platform's function timeout.
-   * Unset = unbounded, except on Vercel where it defaults to 780 s.
+   * Unset = unbounded, except on Vercel and AWS Lambda (900 s function
+   * timeout) where it defaults to 780 s.
    */
   SSE_MAX_STREAM_MS: z.coerce.number().int().positive().optional(),
   /** Postgres poll cadence for SSE when Redis is not configured. */
@@ -200,6 +211,9 @@ function dispatchModeErrors(candidate: Env): string[] {
   if (candidate.JOB_DISPATCH_MODE === 'inline' && !candidate.INTERNAL_JOB_SECRET) {
     errors.push('INTERNAL_JOB_SECRET: required (min 32 chars) when JOB_DISPATCH_MODE=inline');
   }
+  if (candidate.JOB_DISPATCH_MODE === 'sqs' && !candidate.JOBS_QUEUE_URL) {
+    errors.push('JOBS_QUEUE_URL: required when JOB_DISPATCH_MODE=sqs');
+  }
   return errors;
 }
 
@@ -221,5 +235,5 @@ export function resolveInternalApiBaseUrl(candidate: Env = getEnv()): string {
 /** Effective SSE stream cap — see `SSE_MAX_STREAM_MS`. */
 export function sseMaxStreamMs(candidate: Env = getEnv()): number | null {
   if (candidate.SSE_MAX_STREAM_MS !== undefined) return candidate.SSE_MAX_STREAM_MS;
-  return candidate.VERCEL ? 780_000 : null;
+  return candidate.VERCEL || candidate.AWS_LAMBDA_FUNCTION_NAME ? 780_000 : null;
 }

@@ -41,13 +41,27 @@ describe('loadEnv — JOB_DISPATCH_MODE', () => {
     expect(env.REDIS_URL).toBeUndefined();
   });
 
+  it('sqs mode boots without REDIS_URL / INTERNAL_JOB_SECRET but requires JOBS_QUEUE_URL', () => {
+    process.env = { ...BASE, JOB_DISPATCH_MODE: 'sqs' };
+    expect(() => loadEnv()).toThrow(/JOBS_QUEUE_URL: required when JOB_DISPATCH_MODE=sqs/);
+    process.env = {
+      ...BASE,
+      JOB_DISPATCH_MODE: 'sqs',
+      JOBS_QUEUE_URL: 'https://sqs.us-east-1.amazonaws.com/123456789012/jobs',
+    };
+    const env = loadEnv();
+    expect(env.JOB_DISPATCH_MODE).toBe('sqs');
+    expect(env.INTERNAL_JOB_SECRET).toBeUndefined();
+    expect(env.REDIS_URL).toBeUndefined();
+  });
+
   it('accepts a TLS rediss:// URL (Upstash-style)', () => {
     process.env = { ...BASE, REDIS_URL: 'rediss://default:token@example.upstash.io:6379' };
     expect(loadEnv().REDIS_URL).toMatch(/^rediss:\/\//);
   });
 
   it('rejects an unknown mode', () => {
-    process.env = { ...BASE, REDIS_URL: 'redis://x:6379', JOB_DISPATCH_MODE: 'sqs' };
+    process.env = { ...BASE, REDIS_URL: 'redis://x:6379', JOB_DISPATCH_MODE: 'kafka' };
     expect(() => loadEnv()).toThrow(/JOB_DISPATCH_MODE/);
   });
 });
@@ -83,10 +97,12 @@ describe('resolveInternalApiBaseUrl', () => {
 });
 
 describe('sseMaxStreamMs', () => {
-  it('is unbounded off Vercel, 780 s on Vercel, and overridable', () => {
+  it('is unbounded off-platform, 780 s on Vercel / Lambda, and overridable', () => {
     process.env = { ...BASE, REDIS_URL: 'redis://x:6379' };
     expect(sseMaxStreamMs(loadEnv())).toBeNull();
     process.env = { ...BASE, REDIS_URL: 'redis://x:6379', VERCEL: '1' };
+    expect(sseMaxStreamMs(loadEnv())).toBe(780_000);
+    process.env = { ...BASE, REDIS_URL: 'redis://x:6379', AWS_LAMBDA_FUNCTION_NAME: 'api' };
     expect(sseMaxStreamMs(loadEnv())).toBe(780_000);
     process.env = { ...BASE, REDIS_URL: 'redis://x:6379', VERCEL: '1', SSE_MAX_STREAM_MS: '5000' };
     expect(sseMaxStreamMs(loadEnv())).toBe(5_000);
@@ -108,6 +124,28 @@ describe('registerQueuePlugin', () => {
     expect(app.jobDispatcher.mode).toBe('inline');
     expect(() => app.callsQueue.add('call.place', {} as never)).toThrow(/inline/);
     await app.close();
+  });
+
+  it('sqs mode without Redis wires the SQS dispatcher and no BullMQ queues', async () => {
+    const app = Fastify();
+    registerQueuePlugin(app, {
+      redisUrl: undefined,
+      mode: 'sqs',
+      sqs: { queueUrl: 'https://sqs.us-east-1.amazonaws.com/123456789012/jobs' },
+      stubInTest: false,
+    });
+    await app.ready();
+    expect(app.queueRedis).toBeNull();
+    expect(app.jobDispatcher.mode).toBe('sqs');
+    expect(() => app.summariesQueue.add('summary.generate', {} as never)).toThrow(/sqs/);
+    await app.close();
+  });
+
+  it('sqs mode refuses to start without a queue URL', () => {
+    const app = Fastify();
+    expect(() => {
+      registerQueuePlugin(app, { redisUrl: undefined, mode: 'sqs', stubInTest: false });
+    }).toThrow(/JOBS_QUEUE_URL/);
   });
 
   it('bullmq mode refuses to start without Redis', () => {

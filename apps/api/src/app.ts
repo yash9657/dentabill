@@ -205,6 +205,8 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
           }),
         },
       }),
+    ...(env.JOB_DISPATCH_MODE === 'sqs' &&
+      env.JOBS_QUEUE_URL !== undefined && { sqs: { queueUrl: env.JOBS_QUEUE_URL } }),
   });
 
   // Raw-body capture for HMAC-verified routes (P3-T17). Registered
@@ -226,7 +228,8 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(reportsRoutes, { prefix: '/v1' });
   await fastify.register(auditLogsRoutes, { prefix: '/v1' });
   // ADR-053 — inline job execution. Registered in every mode; the route
-  // refuses all requests unless INTERNAL_JOB_SECRET is configured.
+  // refuses all requests unless INTERNAL_JOB_SECRET is configured (so it
+  // is inert in `sqs` mode, where the worker Lambda runs jobs instead).
   fastify.decorate('inlineJobRuntime', null);
   await fastify.register(internalJobsRoutes, { prefix: '/v1' });
 
