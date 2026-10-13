@@ -34,7 +34,7 @@ Each FW item is a 1–3 hour slice; larger workstreams require further decomposi
 - [ ] **FW-14** Redacted inference telemetry and PHI/secret log-capture regression.
 - [ ] **FW-15** Annotation schema and first 25 adjudicated synthetic edge cases.
 - [ ] **FW-16** Deterministic evaluation runner and report (FW-15).
-- [ ] **FW-17** Intent/inbox/outbox persistence and scoped uniqueness contracts. _Retell pending inbox implemented with additive migration; general call intents and outbox remain pending._
+- [ ] **FW-17** Intent/inbox/outbox persistence and scoped uniqueness contracts. _Retell pending inbox and scoped call intents implemented locally; transactional outbox remains pending._
 - [ ] **FW-18** Atomic state/audit/outbox commit and crash/replay test (FW-17).
 - [ ] **FW-19** Canonical source identity and non-destructive duplicate report.
 - [ ] **FW-20** Validated uniqueness migration and concurrent import regression (FW-19).
@@ -50,15 +50,19 @@ require durable execution and applicable PHI agreements even for an unpaid pilot
 
 ### Follow-on slices discovered during implementation
 
-- [ ] **FW-25** SQS call intent ownership, ambiguous-acceptance reconciliation, and no-redial separate-process proof (AWS already deployed; updates FW-23 assumption).
+- [ ] **FW-25** SQS call intent ownership, ambiguous-acceptance reconciliation, and no-redial separate-process proof (AWS already deployed; updates FW-23 assumption). _Local reservation/fence/accepted-resume/DLQ and two worker SIGKILL regressions pass; unknown-ID reconciliation and persisted deadlines split into FW-34/36. Not deployed._
 - [ ] **FW-26** Durable notification outbox and inference-attempt usage ledger; failed DB commits must not erase incurred provider spend.
 - [ ] **FW-27** Versioned summary replacement/retry; preserve prior evidence and reject nonterminal-call retries.
 - [ ] **FW-28** Reconcile Retell webhook-badged signing key vs generated deployment secret; verify stop-call API vs delete-call/data before any live termination. _Local config and installed-SDK transport tests pass; stop replaces destructive delete, generated secret removed; deployment/live confirmation pending._
 - [ ] **FW-29** Verify custom API DNS and cold readiness behavior, restore test, and actual deployment settings without relying on Terraform alone.
 - [ ] **FW-30** Investigate API rate-limit hook ordering; authenticated requests may share the pre-auth anon bucket.
-- [ ] **FW-31** Fix SSE stable `(timestamp,id)` pagination, >200-event catch-up, and replay/subscription race; UI scope isolation is locally fixed.
+- [ ] **FW-31** Fix SSE stable `(timestamp,id)` pagination, >200-event catch-up, and replay/subscription race; UI scope isolation is locally fixed. _Implemented locally, 13 regressions pass including cancellation-before-final; full-history polling IO remains an optimization limit._
 - [ ] **FW-32** Make cancellation atomic and version-conditional; never overwrite a concurrently committed provider terminal time or reviewed claim state.
 - [ ] **FW-33** Operate the Retell pending inbox: scoped account reconciliation, unmatched-event retention/deletion, age/count alerts, conflicting lifecycle evidence review, and safe replay tooling.
+
+- [ ] **FW-34** Reconcile ambiguous call intent IDs using verified provider metadata and exact agent/number identity; quarantine multiple matches and never redial on an empty lookup.
+- [ ] **FW-35** Transactional call/summary outbox and bounded leased relay with crash-after-send replay, including inline acknowledgement and AWS recovery scheduling (FW-18 concrete next slice).
+- [ ] **FW-36** Persist observer leases and hard termination/reconciliation deadlines; stale workers must not lose accepted calls or infer terminal evidence.
 
 No pilot clinic yet (user confirmed); fake data is authorized. Real connector/clinic evidence
 is visibly blocked pending a test partner and authorized system access. Open Dental is a rollout

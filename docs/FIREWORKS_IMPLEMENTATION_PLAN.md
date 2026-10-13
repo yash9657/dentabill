@@ -10,7 +10,9 @@
 > business inference; AWS Lambda/SQS/Aurora supersedes the old Vercel-only assumption.
 > Actual configured telephony is Retell-managed Twilio; Telnyx is a candidate, not a
 > verified existing carrier. User has no clinic yet and requests fake patient data.
-> Local containment fixes do not establish full production parity.
+> Local containment fixes, call-intent submission fencing and synthetic worker-crash
+> tests do not establish full production parity. Outbox, automated reconciliation and
+> persisted deadlines remain current durability gaps (ADR-058).
 
 ## 1. The blunt assessment
 

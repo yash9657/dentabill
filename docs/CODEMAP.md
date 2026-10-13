@@ -139,14 +139,15 @@ end-to-end. Fastify-based health probe at `:3010/healthz`.
 **Key files:**
 
 - `handler.ts` — the real call-job handler (P3-T10): claim load via
-  `getOrgScopedDb` → IVR map + agent prompt resolve → Claim → CALLING →
-  `RetellPort.startCall` → `Call`/`CallEvent` persist → `waitForCallEnd`
-  serialised chain → final state.
-- `hold-detector.ts` — `MAX_HOLD_MS=600_000`; tear-down + reschedule
-  with the 2-attempts-per-day cap (ADR-039).
+  exact CallIntent lookup → claim-version CAS + SUBMITTING commit → one
+  `RetellPort.startCall` → atomic ACCEPTED/Call/audit → durable evidence observation
+  → atomic terminal state. UNKNOWN/SUBMITTING never redial; ACCEPTED resumes.
+- `hold-detector.ts` — `MAX_HOLD_MS=600_000`; request stop then await verified
+  termination/review. Stop acknowledgement does not authorize automatic rescheduling.
 - `duration-guard.ts` — `MAX_CALL_DURATION_MS=900_000`; per-call cap →
   DLQ + Claim → `MANUAL_REVIEW` (ADR-038).
-- `dlq-consumer.ts` — drains `calls-dlq` into Postgres `CallEvent type=DLQ`.
+- `dlq-consumer.ts` — cancels only exact READY intents with claim-version CAS/audit;
+  submitted and uncertain provider calls remain protected.
 - `e2e.test.ts` — full lifecycle against real BullMQ + Postgres + FakeRetell.
 
 ### `@dentabill/summary-worker` — apps/summary-worker (stub) — Phase 4
@@ -156,16 +157,16 @@ end-to-end. Fastify-based health probe at `:3010/healthz`.
 
 ## Cross-cutting integrations
 
-| Integration            | Used by                               | Notes                                                         |
-| ---------------------- | ------------------------------------- | ------------------------------------------------------------- |
-| Postgres 16 + Prisma 6 | `@dentabill/db` (consumed everywhere) | Multi-tenant; every query filtered by `organizationId`        |
-| Redis 7 + BullMQ       | api + workers + `@dentabill/queue`    | Local: docker-compose. Prod: TBD per ADR-004                  |
-| Retell AI              | `apps/call-worker`                    | IVR navigation + voice calls (Phase 3)                        |
-| Anthropic Claude       | `apps/summary-worker`                 | Call transcript analysis (Phase 4)                            |
-| Clerk                  | `apps/web`, `apps/api`                | Auth and org membership (Phase 2)                             |
-| Telnyx                 | `apps/call-worker` (via Retell)       | Outbound PSTN (Phase 3)                                       |
-| Resend                 | `apps/api`                            | Transactional email — call-completion notifications (Phase 4) |
-| Stripe                 | `apps/web`, `apps/api`                | Metered billing (Phase 6)                                     |
+| Integration            | Used by                               | Notes                                                            |
+| ---------------------- | ------------------------------------- | ---------------------------------------------------------------- |
+| Postgres 16 + Prisma 6 | `@dentabill/db` (consumed everywhere) | Multi-tenant; every query filtered by `organizationId`           |
+| Redis 7 + BullMQ       | api + workers + `@dentabill/queue`    | Local: docker-compose. Prod: TBD per ADR-004                     |
+| Retell AI              | `apps/call-worker`                    | IVR navigation + voice calls (Phase 3)                           |
+| Anthropic Claude       | `apps/summary-worker`                 | Call transcript analysis (Phase 4)                               |
+| Clerk                  | `apps/web`, `apps/api`                | Auth and org membership (Phase 2)                                |
+| Retell-managed Twilio  | `apps/call-worker` (via Retell)       | Verified configured carrier; Telnyx remains a deferred candidate |
+| Resend                 | `apps/api`                            | Transactional email — call-completion notifications (Phase 4)    |
+| Stripe                 | `apps/web`, `apps/api`                | Metered billing (Phase 6)                                        |
 
 ## Conventions (cross-reference)
 
@@ -194,3 +195,12 @@ end-to-end. Fastify-based health probe at `:3010/healthz`.
 - `packages/types/src/call-transcript.ts` — pure canonical final/provisional source selector shared by worker/UI.
 - `apps/call-worker/src/retell-webhook-process.test.ts` and fixture — producer-crash cross-process regression.
 - `apps/web/src/lib/calls/use-call-event-stream.test.ts` — call/auth/reconnect isolation regressions.
+
+### FW-25 intent ownership and FW-31 streaming (2026-10-13)
+
+- `packages/db/prisma/schema.prisma` — CallIntent submission states, payload/hash and scoped references.
+- `packages/db/prisma/migrations/20261013100000_call_intents/` — active-intent uniqueness and lifecycle persistence.
+- `packages/db/prisma/migrations/20261013110000_call_intent_scope/` — database-enforced claim/call tenant binding.
+- `apps/call-worker/src/call-intents.test.ts` — concurrency, rollback, stale-version and tenant constraints.
+- `apps/call-worker/src/call-intent-process.test.ts` and fixture — worker crash/restart against an independent synthetic acceptance ledger.
+- `apps/api/src/routes/v1/calls-sse.ts` — stable paginated DB replay/catch-up; provider terminal evidence before close.

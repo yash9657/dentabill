@@ -1,10 +1,10 @@
 # DentaBill Deploy — AWS Lambda (API + SQS job worker)
 
-**Decision record:** ADR-053 (job dispatch modes). **Branch:** `infra/aws`. Infrastructure (Terraform) lives outside this repo; this page describes what the code expects from it and how the artifacts are built.
+**Decision record:** ADR-053 (job dispatch modes). **Branch:** `infra/aws`. Infrastructure (Terraform) is in `infra/aws/main.tf`; this page describes what the code expects from it and how the artifacts are built.
 
 ## Job dispatch modes
 
-`JOB_DISPATCH_MODE` selects how `call.place` / `summary.generate` jobs reach their processors. Every producer (`POST /v1/claims/:id/calls`, `POST /v1/calls/:id/summary/retry`, the call handler's summary fan-out, the hold-detector reschedule) goes through `JobDispatcher`, so all of them follow the mode.
+`JOB_DISPATCH_MODE` selects how `call.place` / `summary.generate` jobs reach their processors. Every producer (`POST /v1/claims/:id/calls`, `POST /v1/calls/:id/summary/retry`, the call handler's summary fan-out) goes through `JobDispatcher`, so all of them follow the mode.
 
 | Mode               | Transport                                            | Consumer                                            | Use                         |
 | ------------------ | ---------------------------------------------------- | --------------------------------------------------- | --------------------------- |
@@ -20,22 +20,46 @@ Body: `{"type":"call.place"|"summary.generate","data":<job payload>}`, validated
 
 ### Delays
 
-`DispatchOptions.delayMs` maps to SQS `DelaySeconds`, rounded up to whole seconds and **clamped to 900 s** (the SQS maximum); a clamp is logged as a warning. No current producer passes a delay; the hold-detector reschedule is dispatched immediately in every mode.
+`DispatchOptions.delayMs` maps to SQS `DelaySeconds`, rounded up to whole seconds and **clamped to 900 s** (the SQS maximum); a clamp is logged as a warning. No current producer passes a delay; hold-stop acknowledgement no longer automatically dispatches another call. A new reviewed reservation is required after confirmed termination.
 
 ### Retries, duplicates and the DLQ
 
 The worker runs **one attempt per receive**; the attempt number is `ApproximateReceiveCount`.
 
-| Result of the attempt                                 | Worker action                                                                                                                    |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| success, or skipped as a duplicate                    | message deleted                                                                                                                  |
-| failure, receive count < `JOBS_MAX_RECEIVE_COUNT` (3) | visibility timeout set to the BullMQ backoff (calls 30 s, 60 s; summaries 15 s, 30 s), returned in `batchItemFailures`           |
-| failure on the final receive                          | calls: DLQ escalation runs (claim → `MANUAL_REVIEW`, `Call.dlqReason`, `call.dlq` event); summaries: error logged. Then deleted. |
-| unparseable body, or a crash outside the processor    | returned in `batchItemFailures` with no visibility change, and never deleted, so the redrive policy moves it to the SQS DLQ      |
+| Result of the attempt                                 | Worker action                                                                                                                                                                                  |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| success, duplicate, or fenced uncertainty             | message deleted                                                                                                                                                                                |
+| failure, receive count < `JOBS_MAX_RECEIVE_COUNT` (3) | visibility timeout set to the BullMQ backoff (calls 30 s, 60 s; summaries 15 s, 30 s), returned in `batchItemFailures`                                                                         |
+| failure on the final receive                          | calls: atomically cancel only exact READY intent and conditionally route claim to review; submitted/unknown calls stay protected. Failed persistence stays retryable. Summaries: error logged. |
+| unparseable body, or a crash outside the processor    | returned in `batchItemFailures` with no visibility change, and never deleted, so the redrive policy moves it to the SQS DLQ                                                                    |
 
-Duplicate suppression is the same as inline mode, in Postgres. A call job atomically moves its claim `IN_QUEUE → CALLING` (on a redelivery `CALLING → CALLING` is also accepted; any other claim state is skipped). Summary jobs skip when a `CallSummary` already exists. SQS standard queues deliver at least once, so these checks are the only dedupe.
+Call submission ownership is a persisted CallIntent, shared by all dispatch modes. API
+reservation/claim version/audit commit before delivery; the worker commits SUBMITTING before
+create and never redials SUBMITTING/UNKNOWN. ACCEPTED resumes the stored call. Legacy jobs
+without an exact reservation fail closed. Summary jobs skip existing CallSummary records.
+Queue exhaustion does not prove an external call failed.
 
-The SQS DLQ therefore holds only messages the code never handled: poison messages, or jobs whose Lambda invocation died (for example a timeout) on every receive.
+The SQS DLQ still requires monitored recovery; messages may outlive the processor through
+poison payloads, repeated crashes or persistence failure. The local safety slice has no
+outbox relay or automatic unknown-ID reconciliation yet. A crash before dispatch can leave
+READY work undispatched, and a final-commit/summary-dispatch gap remains. Do not enable real
+telephony until these gates plus persisted termination deadlines are closed.
+
+### Coordinated call-intent release (not executed)
+
+Apply additive migrations `20261013100000_call_intents` and
+`20261013110000_call_intent_scope` before the new API/worker code. Pause new dispatch and
+review/drain old queues/active provider calls during the coordinated rollout; old workers
+ignore CallIntent and are unsafe alongside live new intents. Do not guess a legacy job's
+provider acceptance or create replacement intents for ambiguous jobs. Backfill/requeue only
+from reviewed evidence with an exact current claim version. The migrations preserve old
+Call rows and do not invent historical intents.
+
+Rollback stops dispatch and preserves all new tables/evidence, then reconciles existing
+provider calls. Do not simply restore a worker that blindly reissues create. New request
+snapshots contain PHI and require access/retention operating controls before real data use.
+Only isolated local databases have received these migrations; production release still
+requires the user's explicit authorization after remaining release gates are satisfied.
 
 ## Infrastructure expectations
 
@@ -105,7 +129,7 @@ curl -XPOST localhost:9000/2015-03-31/functions/function/invocations -d @sqs-eve
 
 ## Known limitations
 
-- A call job runs the whole phone call inside one worker invocation. If a call outlives the 900 s Lambda timeout, the invocation dies and SQS redelivers the job after the visibility timeout. The redelivery is allowed to take the `CALLING` lease and dials again, the same as a stalled BullMQ job. The duration and hold guards in `apps/call-worker` (`createDurationGuard`, `createHoldDetector`) exist but are not wired into the call handler yet, so `MAX_CALL_DURATION_MS` / `MAX_HOLD_MS` do not currently bound a call. Wire them in with caps well under 900 s before running real telephony on Lambda.
+- A call job runs the whole phone call inside one worker invocation. If a call outlives the 900 s Lambda timeout, the invocation dies and SQS redelivers the job after the visibility timeout. Local FW-25 code now resumes an ACCEPTED intent or fences a SUBMITTING/UNKNOWN intent instead of redialling; this is not yet deployed, and stalled intents still need automated reconciliation. The duration and hold guards in `apps/call-worker` (`createDurationGuard`, `createHoldDetector`) exist but are not wired into the call handler yet, so `MAX_CALL_DURATION_MS` / `MAX_HOLD_MS` do not currently bound a call. Wire them in with caps well under 900 s before running real telephony on Lambda.
 - SQS ignores BullMQ priority, so call jobs run in arrival order.
 
 ## W0 containment release validation (2026-10-13)
@@ -155,4 +179,4 @@ in place. Do not roll back by dropping pending event evidence. An accepted unkno
 event is durably pending, but operational unmatched-event reconciliation/retention and
 age alerts are not implemented yet (FW-33). The row payload clears after successful
 binding; its tenant-bound CallEvent follows the existing transcript lifecycle. Real
-provider stop confirmation, worker crash/no-redial and summary outbox remain unverified.
+provider stop confirmation, actual AWS worker recovery and summary outbox remain unverified. Later FW-25 local worker-crash tests establish synthetic no-redial only.

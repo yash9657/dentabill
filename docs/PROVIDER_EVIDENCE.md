@@ -18,7 +18,9 @@ The eleven synthetic contract checks pass without expected failures. HTTP/real-P
 checks cover duplicate/early/out-of-order delivery, rollback/retry and tenant binding.
 A separate-process test persists an early event, kills its producer, then verifies worker
 completion through Postgres and a replay with no duplicate writes. This proves producer
-crash persistence only; worker crash/no-redial and AWS deployment remain unverified.
+crash persistence. A later local FW-25 slice adds two independent-provider-ledger worker
+SIGKILL/restart regressions with one synthetic acceptance and no redial; actual Retell/AWS
+behavior remains unverified.
 Canonical final transcripts feed the summary/UI; snapshots remain provisional and missing
 or empty final evidence abstains. No Retell post-call model analysis becomes business evidence.
 
@@ -33,6 +35,21 @@ current primary [webhook](https://docs.retellai.com/features/webhook-overview),
 No actual delivery/termination, provider replacement, production deployment or PHI
 contractual suitability is established by these checks. See ADR-057 and session results.
 
+FW-25 additionally sends body `idempotency_key` with the durable opaque intent ID, matching
+current [Create Phone Call](https://docs.retellai.com/api-references/create-phone-call)
+documentation: 5–255 ASCII letters/digits/underscore/hyphen, one-hour deduplication window.
+Actual installed-SDK synthetic fetch tests verify the body, zero SDK retries and 30-second
+request timeout. Correlation metadata alone was not idempotency. Unknown outcomes remain
+fenced in Postgres; the one-hour window never authorizes later blind retry. No live creation
+or provider deduplication measurement was performed.
+
+Reconciliation contract warning: current [List Calls](https://docs.retellai.com/api-references/list-calls)
+is v3 with typed metadata predicates, `{items,has_more,pagination_key}` and opaque cursors.
+Installed SDK 5.16.0 `call.list` is v2 with a metadata map, array response and last-ID pagination.
+Do not silently mix these contracts. No negative-lookup consistency guarantee was found;
+empty, incomplete or timed-out lookup cannot prove no external call exists. Metadata recovery
+is still FW-34; SDK create-field passthrough does not establish list compatibility.
+
 ## Public capability baseline
 
 Lunabill currently markets hospital/RCM AR automation. Its public workflow includes eligibility, portal checks, payer calls, denials/appeals with records, corrected resubmissions, and EHR payment/notes posting. It names Epic, Cerner, GoRev, Waystar, and Availity. These are **vendor claims**, not proof of dental coverage or DentaBill functionality. Its recovery-based pricing describes net collections, which must not be equated with claim face value. [Lunabill product](https://lunabill.com/)
@@ -42,7 +59,7 @@ Lunabill currently markets hospital/RCM AR automation. Its public workflow inclu
 | Work an AR queue                    | Claims list/detail, filters, priority score; CSV snapshots in `apps/api/src/lib/csv`; import screen                         | `parser.test.ts`, `ingest.test.ts`, claim route tests                       | Recurring authorized PMS sync, source versions, stable identity under corrections, owners/deadlines; no demonstrated PMS API session   |
 | Eligibility/plan verification       | No contracted eligibility connector found                                                                                   | No eligibility contract test found                                          | Partner sandbox/production enrollment, plan/product/region coverage, permission and source responses                                   |
 | Portal/electronic status first      | Call initiation dominates; no live status/portal/clearinghouse connector found                                              | Call/enqueue fixtures do not validate electronic status                     | Contracted electronic channel, receipt/acknowledgement semantics, authorization, status evidence and escalation rules                  |
-| IVR, hold, representative follow-up | Retell adapter/prompts, IVR maps, hold/navigation helpers, call timeline                                                    | `packages/payer-ivr` tests; synthetic worker + separate-process inbox tests | Authorized controlled telephony, worker-crash recovery, real DTMF/hold/interruption/termination; comparative suite below               |
+| IVR, hold, representative follow-up | Retell adapter/prompts, IVR maps, hold/navigation helpers, call timeline                                                    | `packages/payer-ivr` tests; synthetic worker + separate-process inbox tests | Authorized controlled telephony, real worker/provider reconciliation, DTMF/hold/interruption/termination; comparative suite below      |
 | Denial handling and appeal filing   | Summary recommendations and denial-code lookup; `APPEAL`/`SUBMIT_DOCS` actions are recommendations                          | Summarizer fixtures, denial-code tests                                      | Domain-adjudicated codes; exact-plan policy; evidence-backed draft, reviewer approval, actual submission receipt, deadline follow-up   |
 | Corrected claim/COB resubmission    | `RESUBMIT` recommendation and status changes                                                                                | Fixtures do not exercise actual claim submission                            | Procedure/coverage source data; version-bound payload approval; clearinghouse contract, acknowledgements/rejections and reconciliation |
 | Records/attachments                 | No complete evidence request → receipt → authorized attachment submission path found                                        | No end-to-end attachment submission evidence                                | Practice document access, secure storage/retention, attachment partner enrollment and external receipt                                 |
@@ -169,6 +186,6 @@ Parent's read-only AWS verification authenticated via STS and found both `dentab
 
 The actual SQS event-source mapping was Enabled, batch size one, with `ReportBatchItemFailures`. A local request to `api.dentabill.site` could not resolve DNS; this is a local probe failure, not proof of a global outage. A direct Lambda readiness probe initially returned 503 and returned 200 on retry, with Postgres healthy and approximately 0.67-second request duration. Aurora metadata showed available state, PostgreSQL 17.11, encryption enabled and seven-day backup retention. These checks establish a point-in-time application/database response and configured backup retention; they do not prove restore, sustained availability or end-to-end recovery workflows.
 
-SQS persists job delivery, but the current worker still owns the complete call in one invocation. The AWS runbook explicitly identifies that redelivery can accept `CALLING` and dial again, and duration/hold guards are not yet wired into the handler. A 900-second timeout plus a 60-minute configured Retell maximum is therefore not a safe live-call lifecycle. Persisted call intent, external-ID reconciliation, owned termination and event-driven continuation remain required. The older inline mode's 760-second limit is a historical alternative, not the current production recommendation. Existing budgets remain controlling; this record does not authorize a purchase or expanded recurring spend.
+SQS persists job delivery, but the current worker still owns the complete call in one invocation. Local FW-25 code now fences submission with CallIntent instead of accepting `CALLING` as permission to redial; the deployed worker was not updated. Duration/hold guards and persisted recovery deadlines are not yet wired into the handler. A 900-second timeout plus a 60-minute configured Retell maximum is therefore not a safe live-call lifecycle. Persisted call intent, external-ID reconciliation, owned termination and event-driven continuation remain required. The older inline mode's 760-second limit is a historical alternative, not the current production recommendation. Existing budgets remain controlling; this record does not authorize a purchase or expanded recurring spend.
 
 Preserve provider-neutral durable intent/event identity and immutable historical evidence. Rollback stops new dispatch, reconciles or safely terminates existing calls, and routes work to humans or a previously approved Fireworks release. Retell remains useful for controlled comparison, but its current GPT/Claude paths are not an approved automatic production fallback. Changing providers must not redial an ambiguous existing intent or erase receipts. Production cutover, real third-party calls, claims/payment changes and migrations retain their explicit approval gates.

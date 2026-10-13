@@ -3,7 +3,7 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-13
-**Current work:** implementing W0 containment on AWS baseline `bfd4e8f`, branch
+**Current work:** implementing W0 containment on AWS baseline through `c34e970`, branch
 `codex/w0-containment`. The full parity goal is active; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
@@ -17,8 +17,11 @@ annotations corrected. Retell wire events now enter a transactional pending inbo
 canonical final transcripts feed summaries without duplicate cumulative snapshots, and
 missing/empty/provisional transcripts abstain. Producer crash/early-delivery recovery
 passes across separate processes. Stop-call replaces data deletion; signing configuration
-uses the provider-designated API key. All remain local and synthetic; worker no-redial,
-outbox delivery, and authorized real provider tests are still pending. Detailed test
+uses the provider-designated API key. Call intents now fence submissions before the provider request; two separate-process worker
+crash tests verify one synthetic acceptance with no redial. Accepted calls resume; uncertain
+calls remain reserved for reconciliation. SSE catches up across replay/Redis gaps and waits
+for actual terminal evidence. All remain local and synthetic; automated unknown-ID recovery,
+outbox delivery, persisted deadlines, and authorized real provider tests are still pending. Detailed test
 counts and limits are in the session record. No production deploy or real calls ran.
 
 **User direction:** ElevenLabs speech/orchestration is permitted, business inference stays
@@ -70,6 +73,12 @@ older deployment target for the zero-extra-hosting demo.
 - [ ] Step 12 — Cloud Deployment (Phase 5; cloud target deferred per ADR-004)
 
 ## Recent activity
+
+- 2026-10-13 — Local call intents now prevent blind redial after ambiguous acceptance and
+  resume accepted calls across worker crashes; two process-crash regressions use an independent
+  synthetic provider ledger. SSE catch-up and provider-terminal closure fixed. Latest AWS
+  certificate commit `c34e970` merged into this working branch. Full suites: API 257, worker 78,
+  provider 196, DB 65, queue 56, SDK 19; type/lint/Lambda build checks passed. No production changes.
 
 - 2026-04-29 (autonomous burst — Phase 3 complete). 21 PRs merged (PRs #80–#99) covering all of Phase 3:
   - **W0 / W1 / W2 (call worker spine):** ADR-cluster 031–040 (T0); BullMQ queue + retry/DLQ (T1, T2); IVR maps + business hours (T3, T4); RetellPort + FakeRetell + LiveRetell (T5, T6, T7); Prisma `Call` columns + index (T8); call-worker bootstrap + real handler (T9, T10) with the three corrections caught while testing (`findFirst` over `findUnique`, `updateMany` with composite where, serialised `waitForCallEnd` chain); IVR navigator (T11); hold detector + reschedule resolver (T12); per-call duration cap (T13); DLQ consumer (T14); full lifecycle e2e against real BullMQ + real Postgres + FakeRetell (T15).

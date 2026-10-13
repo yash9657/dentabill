@@ -803,3 +803,32 @@ This slice does not solve call acceptance ambiguity, worker-crash redial, outbox
 source revision ordering, unmatched inbox retention/operations, or real vendor behavior.
 Synthetic separate-process producer-crash proof must not be presented as those stronger
 claims. Production migration and provider actions retain the user's approval boundaries.
+
+## ADR-058 — A persisted intent owns external submission, not a queue delivery
+
+**Date:** 2026-10-13. **Status:** first safety slice implemented and verified locally;
+reconciliation/outbox/deadlines remain open release gates.
+
+Reserve one active CallIntent per tenant/claim with the exact queued claim version and
+atomic audit. Queue keys identify that reservation; legacy/unreserved or mismatched jobs
+cannot place calls. Composite database references prevent cross-tenant claim/call binding.
+Commit READY → SUBMITTING, exact request/hash and conditional claim transition before any
+provider create request. The opaque intent ID supplies provider idempotency/correlation.
+Current Retell create documentation specifies a one-hour body `idempotency_key` window;
+SDK 5.16.0 transmits this field although its types predate it. Disable create retries and
+bound the request to 30 seconds. Provider errors never prove non-acceptance.
+
+An uncertain response persists UNKNOWN; a crashed submitter can remain SUBMITTING. Both
+retain active ownership indefinitely until verified reconciliation. Do not automatically
+reset them, create another intent, switch providers or treat an empty lookup as non-acceptance.
+Known ACCEPTED calls resume from durable IDs/evidence. Call completion and conditional claim
+state/audit/intent terminalization form one transaction. Missing current identity does not
+prevent observing an already accepted call. DLQ cancels only an exact READY intent; failed
+terminal persistence keeps SQS delivery retryable. Stop acceptance alone cannot authorize
+hold rescheduling. Local cancellation status cannot close the SSE transcript prematurely.
+
+Two OS-process crash tests use an independent synthetic acceptance ledger, with SDK network
+contract tests separate. This is synthetic no-redial evidence, not real Retell/AWS validation
+or completed durable delivery. Next add transactional outbox/relay, scoped provider recovery,
+observer leases/deadlines, versioned HTTP request replay and PHI snapshot retention. An old
+worker that ignores these records is not a safe rollback while intents remain unresolved.

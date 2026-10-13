@@ -4,7 +4,72 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Continuation: FW-07/FW-08/FW-28
+### Latest continuation: FW-25 submission ownership and FW-31 streaming
+
+The goal remains active. Implementation commit: `d77eb18`; AWS merge: `57608ad`.
+This turn made tested implementation progress; neither complete parity nor full durable
+recovery is claimed. User clarified the existing key is Retell:
+local Retell access and Retell-managed Twilio were already verified. Telnyx is not an
+existing dependency and no Telnyx key is required for the current integration. A fresh
+name-only local inventory confirms Retell is nonempty; Fireworks, ElevenLabs and Telnyx
+are empty/absent. No keys were printed or changed, and this inventory did not reauthenticate.
+
+- Fetched `main` and `infra/aws` again. Main remains `55a1896`; incorporated new AWS
+  certificate-default commit `c34e970` by normal merge, preserving all W0 work. No deployment.
+- API reserves `CallIntent`, exact queued claim version and audit in one transaction.
+  Concurrent requests reuse the active intent. Delivery failure keeps the same reservation;
+  API retry dispatches that same job key. One active intent per tenant/claim is a partial
+  unique index. Composite foreign keys bind both Claim and accepted Call to its tenant.
+- Worker requires the exact reserved job payload. It commits SUBMITTING, the exact outbound
+  request/hash, claim CAS and audit before invoking the provider. A lost response is UNKNOWN;
+  a crash leaves SUBMITTING. Neither state is reset or redialled. Known ACCEPTED calls resume
+  from stored Call/provider identity, even if source identity has since been removed.
+  Terminal intent/Call/conditional claim/audit commit atomically; duplicate finalization is
+  a no-op. Both webhook and same-process persisted terminal evidence support restart.
+- SDK create sends the opaque intent ID as documented body `idempotency_key` and correlation
+  metadata, disables retries and uses a 30-second bound. Current Retell docs promise only a
+  one-hour deduplication window, not permanent idempotency. No automatic retry depends on it.
+  Removed practice/NPI metadata while retaining necessary dynamic agent variables.
+- Inline/SQS/BullMQ use the same durable fence. Removed claim-status lease and `-rN` bypass.
+  DLQ cancels only the exact READY reservation, with versioned claim CAS and audit together;
+  it never marks an accepted/uncertain/provider call failed. Failed final DLQ persistence
+  remains retryable. Hold-stop acknowledgement no longer automatically schedules a redial.
+- SSE drains stable `(timestamp,id)` pages, catches up from Postgres in both Redis/noRedis
+  modes and deduplicates IDs. Redis is only a wake-up hint. A valid persisted terminal
+  provider event is required for closure; local cancellation alone cannot truncate transcript.
+
+**Verification:** full API **257 tests/25 files**, call-worker **78/12**, payer-ivr
+**196/12**, db **65/6**, queue **56/5**, SDK **19/2** passed. These include two worker
+SIGKILL/restart tests with an independent synthetic provider process and fsynced acceptance
+ledger: exactly one external acceptance after lost response and after known acceptance;
+fresh workers do not redial. Accepted recovery preserves intervening manual review despite
+missing current identity. Other regressions cover concurrent HTTP/job delivery, real audit
+failure rollback, cross-tenant FK rejection, stale versions, prior-day reservations submitted
+today, exact-intent DLQ, and terminal-event finalization retry. SSE's 13 regressions include
+451 tied timestamps, commits behind the replay cursor and cancellation before final evidence.
+Affected package types/lints, regenerated SDK contracts and Lambda packaging passed
+(API38.4MB/11.2MB zip; worker30.5MB/9.8MB zip). Only isolated local DBs received the two
+new migrations; no cloud migration, provider call, claim submission or production mutation.
+
+**Explicit limitations:** missing provider IDs remain fenced for review, not automatically
+reconciled. SUBMITTING can mean a live in-flight owner or a dead worker; persisted lease/
+deadline logic and recovery operations are still required. There is no outbox relay yet:
+crash before dispatch can leave READY work undispatched, and crash/failure after final commit
+can lose summary fan-out. Inline dispatch can acknowledge before its background trigger runs.
+HTTP Idempotency-Key replay beyond the active-intent lifetime is not implemented. Legacy jobs
+without an intent fail closed and need reviewed migration/requeue. Request snapshots contain
+PHI and need retention/access operating controls. SSE scans full history in bounded pages
+and retains a per-connection ID set; total IO is not optimized. Cancellation CAS remains FW-32.
+Provider/platform/clinic evidence remains blocked as recorded below; independent work remains.
+
+**Exact next task:** FW-35 / FW-18 — transactional call + summary outbox, bounded leased relay,
+crash-after-send replay, and actual recoverable scheduling within the existing AWS budget.
+Then FW-34 (verified metadata/provider-ID reconciliation; empty lookup never permits redial)
+and FW-36 (persisted observation/termination deadlines). Keep FW-32 cancellation atomicity
+and the synthetic Fireworks gateway moving as independent tracks. Do not undo the no-redial
+fence to make old jobs or test fixtures run.
+
+### Earlier continuation: FW-07/FW-08/FW-28
 
 The preceding turn made progress (committed W0 implementation/audit). This continuation
 implements the actual Retell wire boundary and a first durable event path; goal stays active.
@@ -51,7 +116,7 @@ work remains available. W2 needs call intent ownership/ambiguous acceptance reco
 persisted deadlines and outbox dispatch. Pending unknown-event retention/reconciliation is
 FW-33; server SSE pagination/race is FW-31. No production migration/deployment/calls.
 
-**Exact next:** implement FW-25's durable call intent before any further live-path use:
+**Next at that checkpoint (superseded above):** implement FW-25's durable call intent before any further live-path use:
 API enqueue transaction, one externally submitted attempt per intent, ambiguous outcomes
 reconcile instead of redial, SQS retry/deadline recovery, and worker-crash process tests.
 Then durable summary dispatch and generic outbox; keep Fireworks gateway work progressing
