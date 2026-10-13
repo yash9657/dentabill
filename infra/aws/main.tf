@@ -42,7 +42,7 @@ data "terraform_remote_state" "platform" {
 variable "api_domain" {
   description = "Custom domain for CloudFront, e.g. api.dentabill.site. Empty until the certificate is wanted."
   type        = string
-  default     = ""
+  default     = "api.dentabill.site"
 }
 
 variable "app_url" {
