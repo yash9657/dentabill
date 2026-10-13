@@ -227,6 +227,9 @@ importers:
       '@dentabill/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@dentabill/model-gateway':
+        specifier: workspace:*
+        version: link:../../packages/model-gateway
       '@dentabill/notifier':
         specifier: workspace:*
         version: link:../../packages/notifier

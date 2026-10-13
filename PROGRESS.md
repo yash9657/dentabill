@@ -53,11 +53,23 @@ Unknown usage stays reserved across days; retries cannot resubmit an ambiguous r
 Owner/Admin summary status and safe delivery retry are available; final SQS exceptions remain
 retryable. Configured legacy Claude is blocked by the production factory. Local migrations14/15,
 concurrency/rollback checks and three separate-process crash proofs support this boundary.
-Fireworks still needs awaited per-send accounting (FW-41) and versioned summaries (FW-27);
+That slice left Fireworks per-send accounting (now implemented in FW-41 below) and versioned
+summaries (FW-27) outstanding;
 review notifications still need an outbox (FW-40). Verification: **791 affected-package tests**
 (API415, DB94, summary-worker64, summarizer84, queue79, types36, SDK19), typecheck/lint24/24
 and both AWS Lambda packages pass. No paid inference or production change ran. See ADR-064
 and the latest session entry for evidence and limits.
+
+**Native inference slice:** FW-41 now journals admission before every Fireworks HTTP request,
+saves bounded response evidence before validation, and accounts for retries independently.
+The explicit worker adapter recovers saved responses without resending, retains uncertain usage,
+rejects contradictory token totals, and refunds expired reservations only when no attempt was
+admitted. Process crash and pending-transaction cancellation proofs use localhost synthetic
+providers. Migrations16–18 are local only; existing jobs remain synthetic and model releases
+remain unapproved. Versioned observation application is next (FW-27); notification delivery
+still needs FW-40. **910 affected-package tests** pass (gateway297, DB111, summary-worker87,
+API415), along with typecheck/lint24/24 and both AWS Lambda packages. No live inference or
+production change ran. See ADR-065.
 
 **User direction:** ElevenLabs speech/orchestration is permitted, business inference stays
 on Fireworks open weights. There is no pilot clinic yet: all development uses fake patient
@@ -108,6 +120,10 @@ older deployment target for the zero-extra-hosting demo.
 - [ ] Step 12 — Cloud Deployment (Phase 5; cloud target deferred per ADR-004)
 
 ## Recent activity
+
+- **2026-10-13 — FW-41:** durable native HTTP admission/response journal and worker adapter,
+  independent retry allocation, cancellation/restart proofs and conservative usage settlement.
+  Migrations16–18 only on localhost; no production activation or paid-provider execution.
 
 - **2026-10-13 — FW-26:** durable synthetic inference reservations/receipts, resumable local
   application/review, tenant-scoped status/retry and process-crash proof. Migrations14/15 only

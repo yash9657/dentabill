@@ -116,6 +116,12 @@ export const GATEWAY_ERROR_CODES = [
   'OUTPUT_SCHEMA_INVALID',
   'OUTPUT_SEMANTIC_INVALID',
   'VALIDATOR_FAILED',
+  'ACCOUNTING_REQUIRED',
+  'ADMISSION_DENIED',
+  'JOURNAL_ERROR',
+  'INFERENCE_BUSY',
+  'INFERENCE_REVIEW_REQUIRED',
+  'BUDGET_EXCEEDED',
 ] as const;
 export type GatewayErrorCode = (typeof GATEWAY_ERROR_CODES)[number];
 export interface Usage {
@@ -156,6 +162,29 @@ export interface TransportProgress {
   readonly completedAttempts: readonly TransportAttempt[];
   readonly activeAttempt: Omit<TransportAttempt, 'outcome'> | null;
 }
+/** Sensitive bounded response evidence. Store it before parsing or interpreting vendor JSON. */
+export interface TransportResponseReceipt {
+  readonly index: number;
+  readonly status: number;
+  readonly body: string | null;
+  readonly retryDelayMs: number;
+}
+export interface TransportReplay {
+  /** Completed earlier attempts only; the response's ordinal is revalidated locally. */
+  readonly attempts: readonly TransportAttempt[];
+  readonly response: TransportResponseReceipt;
+}
+export interface TransportJournal {
+  beforeAttempt(input: {
+    readonly index: number;
+    readonly wireRequestHash: string;
+  }): Promise<'ADMITTED' | 'REPLAY' | 'BUDGET_EXCEEDED' | 'DEADLINE_EXCEEDED' | 'BLOCKED'>;
+  recordResponse(receipt: TransportResponseReceipt): Promise<void>;
+  completeAttempt(receipt: {
+    readonly attempt: TransportAttempt;
+    readonly errorCode: GatewayErrorCode | null;
+  }): Promise<void>;
+}
 export interface FireworksTransportRequest {
   readonly apiKey: string;
   readonly body: string;
@@ -164,6 +193,10 @@ export interface FireworksTransportRequest {
   /** performance.now()-based end-to-end deadline, shared with gateway validation. */
   readonly deadlineAt: number;
   readonly maxAttempts: 1 | 2;
+  /** An original monotonic send deadline; local receipt replay may use a fresh validation budget. */
+  readonly sendDeadlineAt?: number;
+  readonly journal?: TransportJournal;
+  readonly replay?: TransportReplay;
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: TransportProgress) => void;
 }
@@ -192,6 +225,98 @@ export type GatewayResult =
       readonly attempts: readonly TransportAttempt[];
       readonly elapsedMs: number;
     };
+const UsageSchema = z
+  .object({
+    inputTokens: z.number().int().nonnegative().safe().nullable(),
+    outputTokens: z.number().int().nonnegative().safe().nullable(),
+    totalTokens: z.number().int().nonnegative().safe().nullable(),
+    cachedInputTokens: z.number().int().nonnegative().safe().nullable(),
+  })
+  .strict();
+export const TransportAttemptSchema = z
+  .object({
+    index: z.number().int().min(1).max(2),
+    httpStatus: z.number().int().min(100).max(599).nullable(),
+    outcome: z.enum([
+      'COMPLETED',
+      'HTTP_ERROR',
+      'NETWORK_ERROR',
+      'DEADLINE_EXCEEDED',
+      'CANCELLED',
+      'INVALID_RESPONSE',
+    ]),
+    acceptance: z.enum(['NOT_SENT', 'POSSIBLE', 'RESPONDED']),
+    elapsedMs: z.number().nonnegative().finite(),
+    usage: UsageSchema,
+  })
+  .strict();
+export const GatewayResultSchema = z.union([
+  z
+    .object({
+      status: z.enum(['VALIDATED', 'ABSTAINED']),
+      output: ObservationSchema,
+      requiresHumanReview: z.literal(true),
+      provenance: z
+        .object({
+          kind: z.enum(['FIREWORKS', 'SYNTHETIC']),
+          releaseId: OpaqueIdSchema,
+          task: z.literal(TASK_VERSION),
+          promptVersion: z.literal(PROMPT_VERSION),
+          schemaVersion: z.literal(SCHEMA_VERSION),
+          responseId: OpaqueIdSchema.nullable(),
+          model: z.string().max(256).nullable(),
+          attempts: z.array(TransportAttemptSchema).max(2),
+          usage: UsageSchema,
+          elapsedMs: z.number().nonnegative().finite(),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal('FAILED'),
+      code: z.enum(GATEWAY_ERROR_CODES),
+      attempts: z.array(TransportAttemptSchema).max(2),
+      elapsedMs: z.number().nonnegative().finite(),
+    })
+    .strict(),
+]);
+export interface GatewayJournalBinding {
+  readonly request: GatewayRequest;
+  readonly wireRequestHash: string;
+  readonly releasePolicyHash: string;
+  readonly requestBytes: number;
+  readonly executionDeadlineAt: string;
+  readonly limits: {
+    readonly requestBytes: number;
+    readonly responseBytes: number;
+    readonly outputTokens: number;
+    readonly deadlineMs: number;
+    readonly maxAttempts: 1 | 2;
+  };
+}
+export interface GatewayJournalSession {
+  readonly journal: TransportJournal;
+  /** Original persisted wall-clock deadline. A restart cannot extend the send window. */
+  readonly executionDeadlineAt: string;
+  readonly replay?: TransportReplay;
+  /** Called after validation; per-attempt receipts and usage have already committed. */
+  complete(result: GatewayResult): Promise<void>;
+}
+export type GatewayJournalOpen =
+  | { readonly kind: 'READY'; readonly session: GatewayJournalSession }
+  | { readonly kind: 'RESULT'; readonly result: GatewayResult }
+  | {
+      readonly kind: 'DENIED';
+      readonly code: GatewayErrorCode;
+      readonly attempts?: readonly TransportAttempt[];
+    };
+export interface GatewayJournalFactory {
+  open(
+    binding: GatewayJournalBinding,
+    options: { readonly signal: AbortSignal },
+  ): Promise<GatewayJournalOpen>;
+}
 export interface ModelGateway {
   generate(
     request: GatewayRequest,

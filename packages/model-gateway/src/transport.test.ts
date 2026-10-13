@@ -6,6 +6,7 @@ import {
   type FireworksTransportRequest,
   type TransportProgress,
 } from './contracts.js';
+import { journalFixture } from './test-fixtures.js';
 import { createFireworksTransport, isWithinJsonDepth } from './transport.js';
 
 const MODEL = 'accounts/synthetic/models/approved';
@@ -37,6 +38,7 @@ function request(overrides: Partial<FireworksTransportRequest> = {}): FireworksT
     maxResponseBytes: 4096,
     deadlineAt: performance.now() + 5000,
     maxAttempts: 2,
+    journal: journalFixture(),
     ...overrides,
   };
 }

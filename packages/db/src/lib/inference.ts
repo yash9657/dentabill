@@ -164,6 +164,12 @@ export async function reserveInferenceRun(
     const where = { organizationId: input.organizationId, callId: input.callId, generation: 1 };
     const existing = await tx.inferenceRun.findFirst({ where });
     if (existing) {
+      if (
+        existing.provider !== input.provider ||
+        existing.maxAttempts !== 1 ||
+        existing.wireRequestHash !== null
+      )
+        fail();
       if (existing.state === 'APPLIED') return { kind: 'ALREADY_APPLIED', run: existing };
       if (existing.state === 'UNKNOWN' || existing.state === 'REJECTED') {
         return { kind: 'REVIEW_REQUIRED', run: existing };
@@ -309,13 +315,19 @@ export async function beginInferenceAttempt(db: Db, input: InferenceOwnership): 
     const run = await tx.inferenceRun.findFirst({
       where: { id: input.runId, organizationId: input.organizationId },
     });
-    if (run?.state !== 'RESERVED' || run.leaseToken !== input.leaseToken || !active(run, now))
+    if (
+      run?.provider !== 'SYNTHETIC' ||
+      run.state !== 'RESERVED' ||
+      run.leaseToken !== input.leaseToken ||
+      !active(run, now)
+    )
       return false;
     await tx.inferenceAttempt.create({
       data: {
         organizationId: input.organizationId,
         runId: run.id,
         attemptNumber: 1,
+        billingDay: run.billingDay,
         tokenAllowance: run.tokenAllowance,
         reservedTokens: run.reservedTokens,
         submittedAt: now,
@@ -369,7 +381,7 @@ export async function saveInferenceReceipt(
     const run = await tx.inferenceRun.findFirst({
       where: { id: input.runId, organizationId: input.organizationId },
     });
-    if (!run) fail();
+    if (run?.provider !== 'SYNTHETIC') fail();
     if (run.receiptHash === receiptHash) return run;
     if (run.leaseToken !== input.leaseToken || !['SUBMITTING', 'UNKNOWN'].includes(run.state))
       fail();

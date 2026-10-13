@@ -4,7 +4,62 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: FW-26 durable synthetic inference and receipt recovery
+### Latest continuation: FW-41 durable native Fireworks attempts
+
+The parity goal remains active on `codex/w0-containment`. A fresh fetch confirms zero commits
+behind main `4497459`; the AWS backend baseline is incorporated. Fireworks/ElevenLabs keys
+already passed basic read-only authentication and Retell remains configured. Retell-managed
+Twilio needs no Telnyx key. No new private account request, paid inference, speech, call, purchase,
+production migration or deployment ran. The user has no clinic; all fixtures use fake data.
+Preserve both pre-existing stashes.
+
+- The native gateway now requires an awaited journal before any HTTP send. The worker exports
+  `createDurableObservationGateway`, binding a scoped terminal call, claim/source versions,
+  request/wire/release hashes, attempt cap and original send deadline to the database. It is
+  an explicit adapter, not a new production job/runtime selector. Both live releases remain
+  unapproved and the existing summary handler remains synthetic.
+- Migrations16–18 add per-attempt billing day, raw response and completion evidence/history.
+  Every retry needs a committed prior error response/interpretation and another full budget
+  allocation. Unknown prior usage remains reserved across days, even after a later success;
+  contradictory usage rejects output and cannot release liability using a false zero. These
+  operational token allocations are not provider-certified dollar ceilings.
+- Complete bounded success responses are stored before JSON/model/finish/usage/semantic
+  validation. Non-success response bodies are discarded; status/retry delay are saved.
+  Raw evidence survives failed final-result audit, and later owners validate it without another
+  provider request, even after the original send deadline. Unknown acceptance without a saved
+  response cannot authorize a retry. Partial/oversized bodies that never become durable raw
+  receipts conservatively remain unknown; they cannot create recovery sends.
+- Native fetch rechecks cancellation/deadline after database admission. Interrupted parsing
+  may later refine an unknown-usage completion from saved evidence once, retaining history.
+  A definite parsed interpretation and known usage survive later caller cancellation unchanged.
+  Completion identity excludes nondeterministic replay timing; cache reads do not create a
+  send lease. Expired zero-attempt reservations refund exactly once when revisited under the org lock and
+  invalidate old ownership; attempted/ambiguous requests are not refunded by expiry alone.
+- Independent review corrected cancellation replay lockout, inconsistent-usage settlement,
+  unsent-expiry leakage and known-usage interruption. Real native HTTP also exposed fractional
+  timing storage and cached-read lease issues. Local processes scrub provider credentials,
+  use a localhost provider with fsynced acceptance records, and SIGKILL at reservation,
+  raw-response commit and second admission. Pending-admission cancellation uses a real blocked
+  Postgres transaction, then releases it and proves no late HTTP.
+
+**Verification:** full model-gateway **297/6 files**, database **111/9**, summary-worker
+**87/8** and API **415/30** pass: **910 tests** in these affected packages. Summary includes
+8 native process proofs plus the 3 earlier synthetic summary process proofs. The native
+process suite also passed independently on its dedicated database. Affected Turbo type/lint
+passes **24/24**, with gateway **4/4** repeated after the final interpretation fix. Both Lambda
+packages build (API35.0MB/10.6MBzip; worker28.3MB/9.3MBzip). All 18 migrations are applied only
+on isolated localhost identity/runtime/summary/process databases. The first full process run
+exposed a too-short 1s fixture deadline under concurrent checks; fixtures now use 5s, wait for
+actual original expiry and pass as a full suite. Production limit remains unchanged.
+
+**Exact next task:** FW-27 versioned observations and summary replacement, preserving historical
+source/release evidence and never inventing legacy confidence/representative fields. FW-40
+notification outbox, source-access/review workflow, account spend/retention/region evidence,
+model evaluation/approval, ElevenLabs configuration/streaming and real connectors remain open.
+FW-41 local implementation/proof is complete; its checkbox awaits merge. No live quality,
+provider compatibility or full Lunabill parity is established. See ADR-065 and DEPLOY_AWS.md.
+
+### Earlier continuation: FW-26 durable synthetic inference and receipt recovery
 
 The active parity goal continues on `codex/w0-containment`, with latest main `4497459`
 incorporated. Both added provider keys already passed read-only authentication; no new account

@@ -511,6 +511,7 @@ describe('durable inference admission and receipt accounting', () => {
         data: {
           organizationId: other.organizationId,
           runId: original.run.id,
+          billingDay: original.run.billingDay,
           tokenAllowance: 10,
           reservedTokens: 10,
         },

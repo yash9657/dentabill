@@ -77,7 +77,8 @@ isolated localhost databases; this runbook is not deployment authorization.
 The current worker accepts only `synthetic-summary.v1`. Nonempty `ANTHROPIC_API_KEY` makes
 production summarizer creation fail with `SUMMARY_PROVIDER_DISABLED`; there is no silent
 fake or proprietary fallback. Do not enable Fireworks by adding its key: released model
-approval, versioned summary mapping and awaited durable per-HTTP-send hooks remain open.
+approval and versioned summary mapping remain open. Awaited durable per-HTTP-send hooks are
+implemented locally in the explicit observation adapter (ADR-065), not selected by job routing.
 `SUMMARIZER_DAILY_TOKEN_BUDGET` is operational admission, not a verified dollar ceiling.
 Unknown usage remains held across UTC days; legacy `summaryTokensUsed` is a display projection,
 not the admission authority. Review notifications still need a durable outbox (FW-40).
@@ -385,16 +386,17 @@ delayed old failure notice and process loss. The existing AWS recovery rule rema
 Keep source evidence, original command, attempt history and audit rows on rollback. This local
 slice does not authorize production migration, scheduler activation or real payer calls.
 
-## Fireworks text gateway rollout boundary (ADR-063)
+## Fireworks text gateway rollout boundary (ADR-063/065)
 
-`@dentabill/model-gateway` is currently a tested leaf library, not an API endpoint or a new
-Lambda runtime selection. Adding local `FIREWORKS_API_KEY` / `ELEVENLABS_API_KEY` does not modify
+`@dentabill/model-gateway` now has an explicit durable adapter exported by summary-worker,
+but no API endpoint or new Lambda runtime selection. Adding local `FIREWORKS_API_KEY` /
+`ELEVENLABS_API_KEY` does not modify
 AWS secrets or enable either provider. Both checked-in model releases are CANDIDATE. Existing
 AWS demo/Retell configuration remains as deployed; Telnyx is not required for the current
 Retell-managed Twilio numbers (the outbound number variable still has its legacy name).
 
-Before integration, complete FW-26 durable inference reservations/attempt/usage accounting and
-FW-27 versioned summary replacement. A trusted server caller must authorize and load evidence,
+FW-26/41 now implement local reservations/attempt/usage accounting; complete FW-27 versioned
+summary replacement before automatic job integration. A trusted server caller must authorize and load evidence,
 derive the organization/data class and exact claim version, load a reviewed scoped manifest,
 provide the deployed implementation artifact SHA-256, and inject the server-only Fireworks key.
 Do not accept manifest, artifact hash, data class or provider settings from an untrusted request.
@@ -404,8 +406,21 @@ the future build/release pipeline must verify artifact identity against review.
 
 Release review must bind current provider contracts, observed model identity, license/artifact/
 serving revision, region/retention/PHI evidence, price snapshot, evaluation and run authorization.
-The library enforces per-request bounds; it does not implement a cumulative spend ledger or
-source access control. Keep it disconnected from automatic retries until those callers exist.
+The leaf library requires an awaited journal; the worker adapter supplies the org-scoped token
+ledger. This is an operational allocation, not a provider-certified dollar ceiling. Source
+access control and versioned workflow application remain the trusted caller's responsibility.
+Native retries require committed error evidence and a second allocation; unknown prior usage
+remains held. Original send deadlines survive process restarts, while saved responses may be
+validated locally afterward. No response-retrieval or provider-idempotency guarantee is assumed.
 Rollback disables the release/new inference and returns work to human review; it never selects
 Claude/GPT or another provider automatically. Enabling or changing AWS provider settings remains
 a separate reviewed production action. No such action occurred in this slice.
+
+Before a future coordinated release, apply migrations `20261013180000_fireworks_attempt_journal`,
+`20261013190000_fireworks_receipt_refinement` and `20261013200000_fireworks_error_refinement`
+after the summary-ledger migrations. They ran only on isolated localhost test databases.
+Drain old consumers, retain raw response and completion history, and preserve unknown liabilities
+on rollback. A cancelled interpretation may be refined once from its already-saved response;
+this cannot authorize a new send. On a later scoped reservation lookup, zero-attempt expired reservations refund only under the
+organization lock after proving no attempt exists and invalidating old ownership. Requests
+that may have reached the provider remain reserved. This runbook does not authorize deployment.

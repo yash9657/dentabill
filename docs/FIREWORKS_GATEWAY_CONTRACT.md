@@ -4,6 +4,50 @@
 
 This supplements [provider evidence](./PROVIDER_EVIDENCE.md) and the [implementation plan](./FIREWORKS_IMPLEMENTATION_PLAN.md). The first slice is a text-only, nonstreaming, stateless adapter and fake behind one typed interface. Streaming voice/tool execution, embeddings, reranking, document media, inference-job persistence and provider cutover remain separate work. The user's ElevenLabs exception covers speech/orchestration; business inference remains restricted to approved Fireworks-hosted open weights.
 
+## FW-41 local durable integration — 2026-10-13
+
+The native gateway now requires an awaited journal. `createDurableObservationGateway` in
+summary-worker binds the request, source/claim version, release policy, exact wire hash,
+attempt cap and original send deadline to the Postgres inference ledger. It remains an explicit
+adapter; existing summary jobs and the voice path do not select it. No candidate model became
+approved and no external inference ran (ADR-065).
+
+Each native HTTP request waits for its own committed admission. The first retryable response
+and completed attempt must commit before retry allocation; each retry reserves the full
+allowance separately. A bounded complete success body is persisted before JSON/model/finish/
+usage or semantic validation. For non-success HTTP responses only status and bounded retry
+delay are retained; arbitrary error bodies are discarded. Known usage survives validation
+failure. Missing or contradictory totals remain unknown, and any unknown attempt makes the
+invocation total unknown even when a later attempt succeeds. The local ledger holds unknown
+liability across UTC days; token allocations do not certify actual dollar cost.
+
+The implementation rechecks cancellation/deadline after awaited admission and immediately
+before native fetch. Saved responses can be revalidated after restart using a fresh local
+validation budget, but the original deadline still prohibits a new HTTP send. Ambiguous sends
+without a saved response are never automatically resubmitted. Cancellation interpretation
+can be refined once from an already-saved response while retaining its prior history.
+Expired reservations with no attempt are refunded when revisited under the organization lock; expired or
+cancelled attempts with uncertain provider acceptance retain their allocation.
+
+Primary docs were refreshed for this boundary. Chat Completions does not document an
+idempotency/retrieval contract that makes a lost response safe to resend. The separate stored
+Responses API is not a Chat Completions recovery mechanism. Retry guidance recommends explicit
+HTTP statuses but does not prove the first request was unbilled. Billing exports and quotas
+also do not establish a synchronous atomic budget gate. Therefore no absent usage, elapsed
+timeout or retryable status is treated as proof of zero cost.
+[Chat reference](https://docs.fireworks.ai/api-reference/post-chatcompletions),
+[reliability](https://docs.fireworks.ai/guides/reliability),
+[stored response retrieval](https://docs.fireworks.ai/api-reference/get-response),
+[usage exports](https://docs.fireworks.ai/accounts/exporting-usage-and-costs),
+[account quotas](https://docs.fireworks.ai/guides/quotas_usage/account-quotas).
+
+Local evidence includes native localhost HTTP + Postgres, separate-process SIGKILL at request
+reservation, raw-response commit and second-attempt admission, a provider's independently
+fsynced acceptance ledger, and cancellation while admission is blocked in a real transaction.
+These prove local failure behavior; selected-route protocol, dental quality, account policy,
+streaming voice and real-provider recovery remain unverified. Versioned observation application
+is FW-27 and notification delivery is FW-40.
+
 ## Current primary contracts and limits
 
 ### Endpoint and model identity

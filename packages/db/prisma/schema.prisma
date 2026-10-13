@@ -372,8 +372,9 @@ model InferenceBudget {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   runs         InferenceRun[]
+  attempts     InferenceAttempt[]
 
   @@unique([organizationId, billingDay])
   @@index([organizationId, reservedTokens])
@@ -382,35 +383,39 @@ model InferenceBudget {
 // Request and result snapshots contain protected evidence. Never log these rows.
 // Generation one is the only automatic generation until versioned review is implemented.
 model InferenceRun {
-  id              String            @id @default(cuid())
-  organizationId  String
-  callId          String
-  claimId         String
-  generation      Int               @default(1)
-  claimVersion    DateTime
-  sourceHash      String            @db.VarChar(64)
-  requestHash     String            @db.VarChar(64)
-  provider        InferenceProvider
-  releaseId       String
-  promptVersion   String
-  billingDay      String            @db.VarChar(10)
-  tokenAllowance  BigInt
-  reservedTokens  BigInt
-  totalTokens     BigInt?
-  state           InferenceRunState @default(RESERVED)
-  requestPayload  Json
-  resultPayload   Json?
-  receiptHash     String?           @db.VarChar(64)
-  leaseToken      String?
-  leaseExpiresAt  DateTime?
-  submittedAt     DateTime?
-  respondedAt     DateTime?
-  appliedAt       DateTime?
-  reviewAppliedAt DateTime?
-  summaryId       String?           @unique
-  lastErrorCode   String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id                  String            @id @default(cuid())
+  organizationId      String
+  callId              String
+  claimId             String
+  generation          Int               @default(1)
+  maxAttempts         Int               @default(1)
+  executionDeadlineAt DateTime?
+  releasePolicyHash   String?           @db.VarChar(64)
+  wireRequestHash     String?           @db.VarChar(64)
+  claimVersion        DateTime
+  sourceHash          String            @db.VarChar(64)
+  requestHash         String            @db.VarChar(64)
+  provider            InferenceProvider
+  releaseId           String
+  promptVersion       String
+  billingDay          String            @db.VarChar(10)
+  tokenAllowance      BigInt
+  reservedTokens      BigInt
+  totalTokens         BigInt?
+  state               InferenceRunState @default(RESERVED)
+  requestPayload      Json
+  resultPayload       Json?
+  receiptHash         String?           @db.VarChar(64)
+  leaseToken          String?
+  leaseExpiresAt      DateTime?
+  submittedAt         DateTime?
+  respondedAt         DateTime?
+  appliedAt           DateTime?
+  reviewAppliedAt     DateTime?
+  summaryId           String?           @unique
+  lastErrorCode       String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   call         Call               @relation(fields: [callId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
@@ -423,26 +428,38 @@ model InferenceRun {
   @@index([state, leaseExpiresAt])
 }
 
-// This first integration admits exactly one send per run. Further HTTP sends require
-// independent durable admission before the Fireworks retrying transport can be connected.
+// Each native HTTP attempt has independent admission, raw evidence, and accounting.
+// Nullable usage keeps its full reservation even after another attempt succeeds.
 model InferenceAttempt {
-  id                String                @id @default(cuid())
-  organizationId    String
-  runId             String
-  attemptNumber     Int                   @default(1)
-  state             InferenceAttemptState @default(SUBMITTING)
-  tokenAllowance    BigInt
-  reservedTokens    BigInt
-  totalTokens       BigInt?
-  inputTokens       BigInt?
-  outputTokens      BigInt?
-  cachedInputTokens BigInt?
-  submittedAt       DateTime              @default(now())
-  respondedAt       DateTime?
-  lastErrorCode     String?
+  id                 String                @id @default(cuid())
+  organizationId     String
+  runId              String
+  attemptNumber      Int                   @default(1)
+  billingDay         String                @db.VarChar(10)
+  responsePayload    Json?
+  responseRecordedAt DateTime?
+  responseHash       String?               @db.VarChar(64)
+  completionHash     String?               @db.VarChar(64)
+  completionHistory  Json                  @default("[]")
+  completedAt        DateTime?
+  outcome            String?
+  acceptance         String?
+  httpStatus         Int?
+  elapsedMs          Float?
+  state              InferenceAttemptState @default(SUBMITTING)
+  tokenAllowance     BigInt
+  reservedTokens     BigInt
+  totalTokens        BigInt?
+  inputTokens        BigInt?
+  outputTokens       BigInt?
+  cachedInputTokens  BigInt?
+  submittedAt        DateTime              @default(now())
+  respondedAt        DateTime?
+  lastErrorCode      String?
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  run          InferenceRun @relation(fields: [runId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  run          InferenceRun    @relation(fields: [runId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  budget       InferenceBudget @relation(fields: [organizationId, billingDay], references: [organizationId, billingDay], onDelete: Restrict)
 
   @@unique([organizationId, runId, attemptNumber])
   @@index([organizationId, state, submittedAt])

@@ -6,6 +6,8 @@ import {
   type ClaimObservation,
   type GatewayRequest,
   type TransportResult,
+  type TransportJournal,
+  type GatewayJournalFactory,
 } from './contracts.js';
 import {
   CONTRACT_FINGERPRINTS,
@@ -16,6 +18,29 @@ import {
 } from './release.js';
 
 export const TEST_ARTIFACT_HASH = '1'.repeat(64);
+
+/** Explicit in-memory fixture only. Production callers must supply durable accounting. */
+export function journalFixture(): TransportJournal {
+  return {
+    beforeAttempt: () => Promise.resolve('ADMITTED'),
+    recordResponse: () => Promise.resolve(),
+    completeAttempt: () => Promise.resolve(),
+  };
+}
+
+export function journalFactoryFixture(): GatewayJournalFactory {
+  return {
+    open: (binding) =>
+      Promise.resolve({
+        kind: 'READY',
+        session: {
+          journal: journalFixture(),
+          executionDeadlineAt: binding.executionDeadlineAt,
+          complete: () => Promise.resolve(),
+        },
+      }),
+  };
+}
 
 export function requestFixture(): GatewayRequest {
   return {

@@ -1,4 +1,8 @@
 export { loadSummaryWorkerEnv, type SummaryWorkerEnv } from './env.js';
+export {
+  createDurableObservationGateway,
+  type DurableObservationGatewayOptions,
+} from './observation-inference.js';
 export { bootSummaryWorker, runSummaryWorker, type SummaryWorkerHandle } from './server.js';
 export {
   applyTransitionPolicy,

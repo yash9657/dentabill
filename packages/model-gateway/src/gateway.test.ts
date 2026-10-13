@@ -10,6 +10,7 @@ import { createFakeModelGateway, SYNTHETIC_RELEASE_ID } from './fake.js';
 import { createFireworksGateway } from './gateway.js';
 import { CANDIDATE_RELEASES, releasePolicyHash } from './release.js';
 import {
+  journalFactoryFixture,
   observationFixture,
   releaseFixture,
   requestFixture,
@@ -28,6 +29,7 @@ function gateway(transport: FireworksTransport, deadlineMs = 30_000) {
   release.policy.limits.deadlineMs = deadlineMs;
   release.approval!.policySha256 = releasePolicyHash(release.policy);
   return createFireworksGateway({
+    journalFactory: journalFactoryFixture(),
     apiKey: 'synthetic-key',
     releases: [release],
     implementationArtifactSha256: TEST_ARTIFACT_HASH,
@@ -191,6 +193,7 @@ describe('typed Fireworks gateway', () => {
     second.policy.id = 'fixture-evaluation.v2';
     second.approval!.policySha256 = releasePolicyHash(second.policy);
     const instance = createFireworksGateway({
+      journalFactory: journalFactoryFixture(),
       apiKey: 'synthetic-key',
       releases: [first, second],
       implementationArtifactSha256: TEST_ARTIFACT_HASH,
@@ -296,11 +299,17 @@ describe('typed Fireworks gateway', () => {
   it('propagates cancellation to a hanging transport and keeps the failure sanitized', async () => {
     const controller = new AbortController();
     let signal: AbortSignal | undefined;
+    let started: (() => void) | undefined;
+    const transportStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
     const transport = vi.fn<FireworksTransport>().mockImplementation((request) => {
       signal = request.signal;
+      started?.();
       return new Promise(() => undefined);
     });
     const pending = gateway(transport).generate(requestFixture(), { signal: controller.signal });
+    await transportStarted;
     controller.abort(new Error('SYNTHETIC_PRIVATE_CANCELLATION'));
     const result = await pending;
     expect(result).toMatchObject({ status: 'FAILED', code: 'CANCELLED' });

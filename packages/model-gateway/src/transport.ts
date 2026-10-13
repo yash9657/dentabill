@@ -1,5 +1,8 @@
+import { createHash } from 'node:crypto';
+
 import {
   FIREWORKS_ENDPOINT,
+  TransportAttemptSchema,
   unknownUsage,
   type FireworksTransport,
   type FireworksTransportRequest,
@@ -262,6 +265,20 @@ function usageFrom(value: unknown): { usage: Usage; valid: boolean } {
     totalTokens: count(row.total_tokens),
     cachedInputTokens: count(promptDetails?.cached_tokens),
   };
+  const { inputTokens, outputTokens, totalTokens, cachedInputTokens } = usage;
+  const inconsistent =
+    (totalTokens !== null && inputTokens !== null && totalTokens < inputTokens) ||
+    (totalTokens !== null && outputTokens !== null && totalTokens < outputTokens) ||
+    (totalTokens !== null &&
+      inputTokens !== null &&
+      outputTokens !== null &&
+      (!Number.isSafeInteger(inputTokens + outputTokens) ||
+        totalTokens !== inputTokens + outputTokens)) ||
+    (cachedInputTokens !== null && inputTokens !== null && cachedInputTokens > inputTokens) ||
+    (cachedInputTokens !== null && totalTokens !== null && cachedInputTokens > totalTokens);
+  if (inconsistent) {
+    return { usage: { ...usage, totalTokens: null, cachedInputTokens: null }, valid: false };
+  }
   return { usage, valid };
 }
 
@@ -341,6 +358,45 @@ function validConfiguration(request: FireworksTransportRequest): boolean {
   );
 }
 
+/** Accounting may finish after caller cancellation, but cannot permit a late network send. */
+async function persist<T>(operation: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve()
+        .then(operation)
+        .catch(() => {
+          throw new TransportFailure('JOURNAL_ERROR');
+        }),
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new TransportFailure('JOURNAL_ERROR'));
+        }, 5000);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+function invocationUsage(attempts: readonly TransportAttempt[]): Usage {
+  const sum = (field: keyof Usage): number | null => {
+    let total = 0;
+    for (const attempt of attempts) {
+      const value = attempt.usage[field];
+      if (value === null || !Number.isSafeInteger(total + value)) return null;
+      total += value;
+    }
+    return total;
+  };
+  return {
+    inputTokens: sum('inputTokens'),
+    outputTokens: sum('outputTokens'),
+    totalTokens: sum('totalTokens'),
+    cachedInputTokens: sum('cachedInputTokens'),
+  };
+}
+
 export function createFireworksTransport(
   options: { readonly fetch?: typeof globalThis.fetch } = {},
 ): FireworksTransport {
@@ -360,20 +416,72 @@ export function createFireworksTransport(
             : null,
         });
       } catch {
-        /* An accounting observer cannot change inference behavior. */
+        /* Diagnostics cannot substitute for or bypass the awaited journal. */
       }
     };
     publish();
     if (!validConfiguration(request) || typeof fetcher !== 'function')
       return { ok: false, code: 'CONFIGURATION_ERROR', attempts };
+    const journal = request.journal;
+    if (
+      !journal ||
+      typeof journal.beforeAttempt !== 'function' ||
+      typeof journal.recordResponse !== 'function' ||
+      typeof journal.completeAttempt !== 'function'
+    )
+      return { ok: false, code: 'ACCOUNTING_REQUIRED', attempts };
+    const replay = request.replay;
+    if (replay) {
+      if (
+        !Number.isSafeInteger(replay.response.index) ||
+        replay.response.index < 1 ||
+        replay.response.index > request.maxAttempts ||
+        replay.attempts.length !== replay.response.index - 1 ||
+        replay.attempts.some(
+          (attempt, i) =>
+            !TransportAttemptSchema.safeParse(attempt).success || attempt.index !== i + 1,
+        ) ||
+        !Number.isSafeInteger(replay.response.status) ||
+        replay.response.status < 100 ||
+        replay.response.status > 599 ||
+        !Number.isFinite(replay.response.retryDelayMs) ||
+        replay.response.retryDelayMs < 0 ||
+        replay.response.retryDelayMs > 60_000 ||
+        (replay.response.status >= 200 && replay.response.status < 300
+          ? typeof replay.response.body !== 'string' ||
+            Buffer.byteLength(replay.response.body, 'utf8') > request.maxResponseBytes
+          : replay.response.body !== null)
+      )
+        return { ok: false, code: 'CONFIGURATION_ERROR', attempts };
+      attempts.push(...structuredClone(replay.attempts));
+      publish();
+    }
+    const wireRequestHash = createHash('sha256').update(request.body).digest('hex');
+    const sendDeadlineAt = Math.min(
+      request.sendDeadlineAt ?? request.deadlineAt,
+      request.deadlineAt,
+    );
+    if (!Number.isFinite(sendDeadlineAt))
+      return { ok: false, code: 'CONFIGURATION_ERROR', attempts };
     const deadline = new Deadline(request);
     try {
-      for (let index = 1; index <= request.maxAttempts; index += 1) {
+      for (let index = replay?.response.index ?? 1; index <= request.maxAttempts; index += 1) {
         deadline.check();
         const started = performance.now();
         let status: number | null = null;
         let acceptance: TransportAttempt['acceptance'] = 'NOT_SENT';
         let usage = unknownUsage();
+        let admitted = false;
+        let completed = false;
+        let journalFailed = false;
+        let interpretation: {
+          outcome: TransportAttempt['outcome'];
+          errorCode: GatewayErrorCode | null;
+        } | null = null;
+        const completionState = (): { completed: boolean; journalFailed: boolean } => ({
+          completed,
+          journalFailed,
+        });
         const updateProgress = (): void => {
           activeAttempt = {
             index,
@@ -384,82 +492,183 @@ export function createFireworksTransport(
           };
           publish();
         };
-        const save = (outcome: TransportAttempt['outcome']): void => {
-          attempts.push({
+        const save = async (
+          outcome: TransportAttempt['outcome'],
+          code: GatewayErrorCode | null,
+        ): Promise<void> => {
+          if (!admitted) {
+            activeAttempt = null;
+            completed = true;
+            publish();
+            return;
+          }
+          const attempt: TransportAttempt = {
             index,
             httpStatus: status,
             outcome,
             acceptance,
             elapsedMs: Math.max(0, performance.now() - started),
             usage,
-          });
+          };
+          try {
+            await persist(() => journal.completeAttempt({ attempt, errorCode: code }));
+          } catch {
+            journalFailed = true;
+            throw new TransportFailure('JOURNAL_ERROR');
+          }
+          attempts.push(attempt);
           activeAttempt = null;
+          completed = true;
           publish();
         };
         updateProgress();
         let response: Response | undefined;
         try {
-          response = await deadline.run(async () => {
-            acceptance = 'POSSIBLE';
+          let text: string | null;
+          let delay = 0;
+          const saved = replay?.response.index === index ? replay.response : null;
+          if (saved) {
+            admitted = true;
+            status = saved.status;
+            acceptance = 'RESPONDED';
+            text = saved.body;
+            delay = saved.retryDelayMs;
             updateProgress();
-            deadline.check();
-            const received = await fetcher(FIREWORKS_ENDPOINT, {
-              method: 'POST',
-              redirect: 'error',
-              headers: {
-                Authorization: `Bearer ${request.apiKey}`,
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-              },
-              body: request.body,
-              signal: deadline.controller.signal,
-            });
-            if (deadline.inactive) discard(received);
-            else {
-              status = received.status;
-              acceptance = 'RESPONDED';
-              updateProgress();
+          } else {
+            if (performance.now() >= sendDeadlineAt)
+              throw new TransportFailure('DEADLINE_EXCEEDED');
+            const admission = await persist(() =>
+              journal.beforeAttempt({ index, wireRequestHash }),
+            );
+            if (admission !== 'ADMITTED') {
+              const code =
+                admission === 'BUDGET_EXCEEDED'
+                  ? 'BUDGET_EXCEEDED'
+                  : admission === 'DEADLINE_EXCEEDED'
+                    ? 'DEADLINE_EXCEEDED'
+                    : 'ADMISSION_DENIED';
+              throw new TransportFailure(code);
             }
-            return received;
-          });
-          status = response.status;
-          acceptance = 'RESPONDED';
-          if (!response.ok) {
-            const delay = retryDelay(response);
-            discard(response);
-            save('HTTP_ERROR');
+            admitted = true;
+            // Awaited admission may finish after cancellation/deadline. Recheck at the actual send boundary.
+            deadline.check();
+            if (performance.now() >= sendDeadlineAt)
+              throw new TransportFailure('DEADLINE_EXCEEDED');
+            response = await deadline.run(async () => {
+              deadline.check();
+              if (performance.now() >= sendDeadlineAt)
+                throw new TransportFailure('DEADLINE_EXCEEDED');
+              acceptance = 'POSSIBLE';
+              updateProgress();
+              const received = await fetcher(FIREWORKS_ENDPOINT, {
+                method: 'POST',
+                redirect: 'error',
+                headers: {
+                  Authorization: `Bearer ${request.apiKey}`,
+                  'Content-Type': 'application/json',
+                  Accept: 'application/json',
+                },
+                body: request.body,
+                signal: deadline.controller.signal,
+              });
+              if (deadline.inactive) discard(received);
+              else {
+                status = received.status;
+                acceptance = 'RESPONDED';
+                updateProgress();
+              }
+              return received;
+            });
+            status = response.status;
+            acceptance = 'RESPONDED';
+            if (response.ok) text = await readBody(response, request.maxResponseBytes, deadline);
+            else {
+              delay = Math.min(60_000, retryDelay(response));
+              text = null;
+              discard(response);
+            }
+            // Preserve bounded wire evidence before JSON, model, finish, usage or observation validation.
+            try {
+              await persist(() =>
+                journal.recordResponse({
+                  index,
+                  status: status ?? 0,
+                  body: text,
+                  retryDelayMs: delay,
+                }),
+              );
+            } catch {
+              journalFailed = true;
+              throw new TransportFailure('JOURNAL_ERROR');
+            }
+          }
+          deadline.check();
+          if (status < 200 || status >= 300) {
+            await save('HTTP_ERROR', 'HTTP_ERROR');
             if (
               index < request.maxAttempts &&
               RETRY_STATUSES.has(status) &&
-              delay < deadline.remaining()
+              delay < Math.min(deadline.remaining(), sendDeadlineAt - performance.now())
             ) {
               await deadline.sleep(delay);
               continue;
             }
             return { ok: false, code: 'HTTP_ERROR', attempts };
           }
-          const text = await readBody(response, request.maxResponseBytes, deadline);
+          if (text === null) throw new TransportFailure('INVALID_RESPONSE');
           const parsed = parseJson(text, deadline);
           const accounting = usageFrom(object(parsed)?.usage);
           usage = accounting.usage;
           updateProgress();
           if (!accounting.valid) throw new TransportFailure('INVALID_RESPONSE');
           const result = completion(parsed, request.expectedResponseModels);
+          interpretation = { outcome: 'COMPLETED', errorCode: null };
           deadline.check();
-          save('COMPLETED');
+          await save('COMPLETED', null);
           deadline.check();
-          return { ok: true, ...result, usage, attempts };
+          return { ok: true, ...result, usage: invocationUsage(attempts), attempts };
         } catch (error) {
           if (response) discard(response);
           let code: GatewayErrorCode =
             error instanceof TransportFailure ? error.code : 'NETWORK_ERROR';
-          try {
-            deadline.check();
-          } catch (deadlineError) {
-            if (deadlineError instanceof TransportFailure) code = deadlineError.code;
+          const interpretedError = code;
+          if (code === 'JOURNAL_ERROR') journalFailed = true;
+          if (!journalFailed) {
+            try {
+              deadline.check();
+            } catch (deadlineError) {
+              if (deadlineError instanceof TransportFailure) code = deadlineError.code;
+            }
           }
-          // A failure during backoff belongs to the request, not a new delivery attempt.
-          if (attempts.at(-1)?.index !== index) save(attemptOutcome(code));
+          if (!completionState().completed && !completionState().journalFailed) {
+            try {
+              // A caller interrupt cannot replace an interpretation already obtained from saved evidence.
+              const definite =
+                interpretation ??
+                (!['CANCELLED', 'DEADLINE_EXCEEDED'].includes(interpretedError)
+                  ? { outcome: attemptOutcome(interpretedError), errorCode: interpretedError }
+                  : null);
+              await save(
+                definite?.outcome ?? attemptOutcome(code),
+                definite ? definite.errorCode : code,
+              );
+            } catch {
+              code = 'JOURNAL_ERROR';
+            }
+          }
+          // If storage failed, preserve the active attempt in the safe result without fabricating a receipt.
+          if (!completionState().completed) {
+            attempts.push({
+              index,
+              httpStatus: status,
+              outcome: attemptOutcome(code),
+              acceptance,
+              elapsedMs: Math.max(0, performance.now() - started),
+              usage,
+            });
+            activeAttempt = null;
+            publish();
+          }
           return { ok: false, code, attempts };
         }
       }

@@ -1,3 +1,4 @@
+export * from './lib/fireworks-inference.js';
 export { prisma } from './client.js';
 export {
   reserveInferenceRun,

@@ -20,6 +20,7 @@
   "dependencies": {
     "@dentabill/db": "workspace:*",
     "@dentabill/logger": "workspace:*",
+    "@dentabill/model-gateway": "workspace:*",
     "@dentabill/notifier": "workspace:*",
     "@dentabill/payer-ivr": "workspace:*",
     "@dentabill/queue": "workspace:*",

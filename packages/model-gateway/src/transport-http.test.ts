@@ -3,6 +3,7 @@ import { createServer, type RequestListener } from 'node:http';
 import { describe, expect, it } from 'vitest';
 
 import { FIREWORKS_ENDPOINT, type FireworksTransportRequest } from './contracts.js';
+import { journalFixture } from './test-fixtures.js';
 import { createFireworksTransport } from './transport.js';
 
 const model = 'accounts/synthetic/models/http-test';
@@ -23,6 +24,7 @@ function request(overrides: Partial<FireworksTransportRequest> = {}): FireworksT
     maxResponseBytes: body.byteLength,
     deadlineAt: performance.now() + 3000,
     maxAttempts: 2,
+    journal: journalFixture(),
     ...overrides,
   };
 }

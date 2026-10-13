@@ -59,14 +59,17 @@ enum mirrors.
 
 ### `@dentabill/model-gateway` — packages/model-gateway
 
-**Purpose:** Versioned claim observations from source-bound final transcripts. No worker or
-voice integration yet; default live releases remain unapproved (ADR-063).
+**Purpose:** Versioned claim observations from source-bound final transcripts. An explicit
+durable adapter now lives in summary-worker; automatic job/voice routing is not enabled and
+default live releases remain unapproved (ADR-063/065).
 **Entry:** `packages/model-gateway/src/index.ts`.
 **Key files:** `contracts.ts` typed request/result; `release.ts` scoped reviewed policy and
 contract/artifact hashes; `task.ts` prompt/schema/evidence/lexical rules; `transport.ts` fixed
-US native fetch with byte/depth/deadline/retry/progress controls; `gateway.ts` orchestration;
+US native fetch with byte/depth/deadline/retry controls and required awaited attempt journal;
+`gateway.ts` bounded journal opening, saved-result validation and final receipt orchestration;
 `fake.ts` exact synthetic fixtures and explicit abstention. Tests cover policy/input isolation,
-protocol/transport faults, cancellation accounting and semantic constraints.
+protocol/transport faults, cancellation accounting and semantic constraints. `journal.test.ts`
+proves admission/receipt/retry ordering, no late send, original deadline and usage consistency.
 **Depends on:** `zod`, Node crypto/fetch. No SDK retries, database access or logging dependency.
 
 ### `@dentabill/logger` — packages/logger
@@ -89,6 +92,11 @@ atomic review markers. `inference.test.ts` exercises concurrency, midnight liabi
 receipt replay, application rollback and tenant isolation. Migrations fourteen/fifteen
 add the ledger and review marker; snapshots are immutable at the database boundary.
 Allocations are operational units, not provider dollar ceilings (ADR-064).
+`fireworks-inference.ts` adds the native per-attempt journal: frozen request/release/deadline,
+separate retry allocation, bounded raw response, stable completion identity, accounting and
+validated-result receipt. Migrations16–18 add per-attempt billing day and immutable evidence;
+narrow cancellation/deadline refinement preserves prior completion history. Its integration
+tests cover concurrency, midnight, audit rollback, replay and proven-unsent expiry refunds.
 
 ### `@dentabill/queue` — packages/queue
 
@@ -175,8 +183,12 @@ saves usage independently, and resumes response/review effects with original cla
 `inference-process.test.ts` / fixture use child processes, localhost HTTP and fsynced provider
 receipts to prove SIGKILL recovery boundaries. Legacy Redis cost guards are unused by production
 wiring. `@dentabill/summarizer` production factory refuses a configured Anthropic key; explicit
-LiveClaude comparison fixtures remain available. Fireworks observations need a new versioned
-summary contract and awaited per-send accounting before worker integration.
+LiveClaude comparison fixtures remain available. `observation-inference.ts` exports the explicit
+durable Fireworks gateway, authorizing a terminal call and claim version before reservation.
+`observation-inference.test.ts` uses native localhost HTTP and Postgres; `observation-process`
+tests/fixture use separate processes and fsynced synthetic receipts for admission/response
+SIGKILL and cancellation proofs. This adapter does not apply observations to claims or select
+the live provider in production jobs. Versioned summary integration remains FW-27.
 
 ## Cross-cutting integrations
 

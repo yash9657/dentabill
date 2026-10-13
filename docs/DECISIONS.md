@@ -1102,3 +1102,50 @@ The best-effort post-commit review notification can still be lost; its transacti
 split into FW-40. No production deployment, account mutation, paid inference, speech or calls
 were performed. Production rollout must drain old consumers and preserve this evidence on
 rollback; this ADR does not authorize deployment or messaging.
+
+## ADR-065 — Journal each native Fireworks request before sending
+
+**Date:** 2026-10-13. **Status:** implemented and verified locally; production routing and
+model approval remain disabled.
+
+The gateway's progress callback could describe a request but could not await a reservation
+or preserve a response across process death. A retrying worker therefore needed a durable
+boundary for each HTTP attempt, separate from validated observations and later claim effects.
+
+1. Require an awaited journal at native transport and gateway entry. The worker's explicit
+   durable observation adapter binds scoped terminal call, claim/source versions, request and
+   wire hashes, release-policy hash, attempt cap and original send deadline. Migrations16–18
+   extend the existing ledger with per-attempt billing day, bounded raw response, completion
+   identity/history and fractional elapsed time. Only isolated localhost databases were changed.
+2. Commit admission before every fetch, and recheck cancellation and the original deadline
+   after storage returns. At most one retry follows an explicit supported HTTP error; its
+   response and interpretation commit first, then a fresh full allocation commits. Different
+   UTC days cannot erase outstanding liability. The progress callback remains diagnostic.
+3. Save complete bounded response evidence before interpreting it. Non-success bodies are
+   discarded; status and normalized retry delay are sufficient for retry policy. Known usage
+   commits independently of model/finish/schema/semantic rejection or final-result audit.
+   Missing usage stays null. Contradictory totals/cache values reject the response and cannot
+   release a reservation using a false zero; the database also rejects inconsistent DTOs.
+   Invocation usage is unknown if any constituent attempt is unknown.
+4. A later owner locally revalidates saved raw evidence without another provider request,
+   including after the original send deadline. A response lost before durable storage leaves
+   an uncertain attempt that cannot be resent. A cancelled/deadline interpretation with unknown
+   usage may be refined once from its immutable saved response; retain the original completion
+   in history and never overwrite known component values. A definite parsed interpretation and known usage survive later caller cancellation unchanged.
+   Completion identity excludes replay timing so recalculating elapsed time cannot duplicate accounting.
+5. A final result requires matching committed attempt DTOs; cached reads create no new send
+   lease. Raw receipts survive failure of final-result audit/application. Expired zero-attempt
+   reservations refund the exact original allocation under the org lock, clear ownership and
+   remain terminal. No refund follows expiry alone when an attempt may have been sent.
+6. Keep the production summary handler synthetic. The new adapter returns versioned reviewed
+   observations but does not apply them to claims, create legacy confidence/representative
+   fields, replace historical summaries or introduce a new API/runtime selector. FW-27 owns
+   that workflow; FW-40 owns notifications. Credentials alone cannot activate a release.
+
+Independent review found and corrected cancelled-response replay lockout, contradictory usage
+settlement and a permanently held unsent reservation. Real localhost transport exposed the
+fractional-timing schema mismatch and cached-result lease contention. Process proofs kill
+workers at durable boundaries and compare separate fsynced synthetic provider acceptances;
+they also cover cancellation while a real admission transaction is blocked. These are local
+invariants, not provider idempotency, accuracy, end-to-end clinical evidence or dollar caps.
+No paid inference, speech, call, account mutation, production migration or deployment ran.
