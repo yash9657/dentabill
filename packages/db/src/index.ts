@@ -1,3 +1,4 @@
+export * from './lib/claim-observations.js';
 export * from './lib/fireworks-inference.js';
 export { prisma } from './client.js';
 export {
@@ -40,6 +41,10 @@ export type {
   InferenceBudget,
   InferenceRun,
   InferenceAttempt,
+  ClaimObservation,
+  ClaimObservationReview,
+  ObservationDataClass,
+  ObservationReviewDecision,
   CallSummary,
   CallEvent,
   PayerConfig,

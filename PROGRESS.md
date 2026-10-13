@@ -66,10 +66,20 @@ The explicit worker adapter recovers saved responses without resending, retains 
 rejects contradictory token totals, and refunds expired reservations only when no attempt was
 admitted. Process crash and pending-transaction cancellation proofs use localhost synthetic
 providers. Migrations16–18 are local only; existing jobs remain synthetic and model releases
-remain unapproved. Versioned observation application is next (FW-27); notification delivery
+remain unapproved. Versioned observation publication/review is now local (FW-27 below); notification delivery
 still needs FW-40. **910 affected-package tests** pass (gateway297, DB111, summary-worker87,
 API415), along with typecheck/lint24/24 and both AWS Lambda packages. No live inference or
 production change ran. See ADR-065.
+
+**Finding review slice:** FW-27 now publishes immutable native findings from saved responses,
+with exact final-event/text binding, original-intent chronology, source excerpts and version-bound
+biller acknowledgment/dismissal. Changed claims, newer calls and changed transcripts make
+review stale; historical review receipts remain visible. Publication failure/retry cannot erase
+usage or resend inference. Legacy summaries and financial state remain unchanged. Migration19
+is local only. Same-call regeneration and automatic native job routing remain unfinished; no
+live model or connector evidence follows from these synthetic workflows. Full DB130, summary95,
+API434, web397 and SDK23 passed; final affected API20/web18/worker8 tests pass after the last
+isolated edits. Desktop/mobile component checks and Lambda packaging pass. See ADR-066.
 
 **User direction:** ElevenLabs speech/orchestration is permitted, business inference stays
 on Fireworks open weights. There is no pilot clinic yet: all development uses fake patient
@@ -120,6 +130,11 @@ older deployment target for the zero-extra-hosting demo.
 - [ ] Step 12 — Cloud Deployment (Phase 5; cloud target deferred per ADR-004)
 
 ## Recent activity
+
+- **2026-10-13 — FW-27 publication/review:** immutable native findings and exact-version biller
+  reviews, scoped APIs/SDK/evidence UI, final-event binding and recovered-call chronology.
+  Migration19 only on localhost; same-call regeneration remains open. No production or paid
+  provider action ran.
 
 - **2026-10-13 — FW-41:** durable native HTTP admission/response journal and worker adapter,
   independent retry allocation, cancellation/restart proofs and conservative usage settlement.

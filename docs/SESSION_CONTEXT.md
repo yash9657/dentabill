@@ -4,7 +4,69 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: FW-41 durable native Fireworks attempts
+### Latest continuation: FW-27 immutable findings and biller review
+
+The parity goal remains active on `codex/w0-containment` with main `4497459` incorporated.
+The user has no clinic and uses fake data. Existing Fireworks/ElevenLabs keys already passed
+read-only authentication; Retell-managed Twilio still needs no Telnyx key. No provider account
+request, model generation, speech, call, purchase, production migration or deployment ran.
+Preserve both existing stashes. The user asked how much remained; current publication/review
+is one local slice, while voice, workflow automation, evaluation/operations and real connectors
+remain substantial work. Do not estimate overall completion from fixture counts.
+
+- Migration19 adds tenant-scoped immutable `ClaimObservation` and `ClaimObservationReview`
+  records. Publication freezes source/output/provenance and commits its audit plus inference
+  APPLIED marker atomically. Provider usage survives failed publication and replay sends no
+  new model request. Existing CallSummary and claim/financial state remain unchanged.
+- `generateAndPublishObservation` / `publishStoredObservation` validate strict native results
+  and source evidence. New inference requires one latest final CallEvent with raw text; source
+  ID is `transcript.<eventId>` and version is SHA-256 of exact text. Replay checks the bound
+  event. Publication repeats binding inside the transaction with a shared event lock. Older
+  unbound receipts fail closed; provisional/missing/mismatched sources cannot be published.
+- Publication versions preserve arrival history. Currentness follows original CallIntent
+  creation chronology (Call creation for legacy rows), not reconciliation insertion time.
+  This prevents a recovered older call from displacing newer evidence.
+- Stored Owner/Admin/Billing Staff roles can acknowledge or dismiss a finding. Reviews bind
+  its immutable digest and exact claim version; dismissal needs a note. Changed claims,
+  superseded findings, newer calls and changed/missing final transcripts block new review.
+  Exact duplicate actor/decision/note returns the historical receipt, including after later
+  changes. An overlapping later source/call can linearize after a review and then appear stale.
+- Scoped APIs list history, publish saved results and record reviews; generated SDK types
+  match. Claim detail shows exact evidence excerpts/transcripts, release information, synthetic
+  labeling independent of FIREWORKS provenance, unverified payer-reported amounts, and stale
+  warnings even after prior review. Publication/review never requests inference or performs
+  external/financial actions. Actor-attributed safe access audits precede GET and POST evidence
+  responses, including duplicate receipts; audit failure withholds evidence. Auth scope changes
+  clear cached findings and draft notes.
+- Independent review caught recovered-call ordering, missing event binding and hidden stale
+  warnings. These are corrected; final-source correction also makes review stale. No legacy
+  confidence, representative identity, verified payment or production model approval is invented.
+
+**Verification:** full database **130/10 files**, summary-worker **95/9**, API **434/31**,
+web **397/70** and SDK **23/2** pass. After the last isolated changes, API observation **20/20**,
+web observation/detail **18/18** and worker publication **8/8** pass; the broad API/web suites
+preceded the final POST-access-audit and transcript-warning/hash-display edits respectively.
+Separate native/synthetic process recovery proofs are included in the summary-worker suite.
+Affected Turbo typecheck/lint passes **30/30**. All 19 migrations are applied only to localhost
+identity/runtime/summary/process databases.
+Both Lambda packages build (API35.1MB/10.6MBzip; worker28.4MB/9.3MBzip).
+
+Headless Chrome rendered the actual component/CSS/tokens/local Inter at 1280 and 390px,
+with synthetic mocked auth/API and nonlocal requests blocked. Evidence expansion, note validation,
+exact review payload, recorded state and stale history worked, with no page errors or overflow.
+The final mobile check uses the real 64-character source-version shape: abbreviated excerpt
+label, full wrapping hash in details. This is component verification, not live Clerk/API E2E.
+Screenshots: `/private/tmp/dentabill-observation-visual-WE4K6l/final-1280.png` and
+`/private/tmp/dentabill-observation-visual-WE4K6l/hash-390.png`. Temporary server stopped.
+
+**Exact next task:** finish FW-27 with explicitly authorized same-call replacement generations,
+protected original receipts and deterministic publication supersession; then automatic native
+job routing once a release is approved. FW-40 notification outbox, FW-39 operational monitoring,
+provider spend/retention/region evidence, model evaluation/approval, ElevenLabs voice integration
+and real connectors remain open. Current production jobs remain synthetic. This local review
+slice does not complete FW-27 or establish live quality/full Lunabill parity. See ADR-066.
+
+### Earlier continuation: FW-41 durable native Fireworks attempts
 
 The parity goal remains active on `codex/w0-containment`. A fresh fetch confirms zero commits
 behind main `4497459`; the AWS backend baseline is incorporated. Fireworks/ElevenLabs keys

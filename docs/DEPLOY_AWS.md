@@ -77,11 +77,25 @@ isolated localhost databases; this runbook is not deployment authorization.
 The current worker accepts only `synthetic-summary.v1`. Nonempty `ANTHROPIC_API_KEY` makes
 production summarizer creation fail with `SUMMARY_PROVIDER_DISABLED`; there is no silent
 fake or proprietary fallback. Do not enable Fireworks by adding its key: released model
-approval and versioned summary mapping remain open. Awaited durable per-HTTP-send hooks are
+approval, same-call replacement generations and automatic job routing remain open. Awaited durable per-HTTP-send hooks are
 implemented locally in the explicit observation adapter (ADR-065), not selected by job routing.
 `SUMMARIZER_DAILY_TOKEN_BUDGET` is operational admission, not a verified dollar ceiling.
 Unknown usage remains held across UTC days; legacy `summaryTokensUsed` is a display projection,
 not the admission authority. Review notifications still need a durable outbox (FW-40).
+
+### Versioned observation release (not executed)
+
+Apply additive migration `20261013210000_claim_observations` before the coordinated API/web
+release. It adds scoped immutable findings/reviews and preserves all legacy summaries; no
+historical model result is backfilled as validated evidence. Publication requires a saved
+Fireworks receipt with an exact final CallEvent and text-hash binding. Unbound older receipts
+fail closed. Only localhost identity/runtime/summary/process databases have this migration.
+
+The new APIs publish saved results and record biller reviews without requesting inference,
+changing claim status, confirming payments or sending messages. Native inference remains an
+explicit server adapter with unapproved checked-in releases and no production job selector.
+Same-call replacement generation and automatic dispatch remain open. Rollback retains the new tables, source snapshots and reviews; immutable records must
+not be rewritten or deleted by old application code. No production release was authorized.
 
 ## Infrastructure expectations
 
@@ -389,7 +403,7 @@ slice does not authorize production migration, scheduler activation or real paye
 ## Fireworks text gateway rollout boundary (ADR-063/065)
 
 `@dentabill/model-gateway` now has an explicit durable adapter exported by summary-worker,
-but no API endpoint or new Lambda runtime selection. Adding local `FIREWORKS_API_KEY` /
+plus scoped saved-result publication and review APIs, but no new Lambda runtime selection. Adding local `FIREWORKS_API_KEY` /
 `ELEVENLABS_API_KEY` does not modify
 AWS secrets or enable either provider. Both checked-in model releases are CANDIDATE. Existing
 AWS demo/Retell configuration remains as deployed; Telnyx is not required for the current

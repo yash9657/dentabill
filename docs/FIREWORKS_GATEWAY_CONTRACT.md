@@ -4,6 +4,23 @@
 
 This supplements [provider evidence](./PROVIDER_EVIDENCE.md) and the [implementation plan](./FIREWORKS_IMPLEMENTATION_PLAN.md). The first slice is a text-only, nonstreaming, stateless adapter and fake behind one typed interface. Streaming voice/tool execution, embeddings, reranking, document media, inference-job persistence and provider cutover remain separate work. The user's ElevenLabs exception covers speech/orchestration; business inference remains restricted to approved Fireworks-hosted open weights.
 
+## FW-27 local observation publication/review — 2026-10-13
+
+The explicit worker can now publish validated saved native results into immutable observation
+history. Every new request has one source from the latest durable final CallEvent with exact
+raw text; source ID identifies the event and source version is SHA-256 of that text. Replay and
+publication verify the bound event belongs to the run's call. Publication rechecks this inside
+its database transaction, freezes output/source/provenance and commits its audit plus APPLIED
+marker independently of provider usage. It does not rewrite legacy summaries or financial state.
+
+Biller review binds the immutable digest and exact claim version, rejects changed claims/newer
+calls/superseded findings, and is idempotent for the same actor/decision/note. Original intent
+creation time orders recovered calls; later database insertion cannot promote old evidence.
+The UI preserves review history alongside later stale warnings and labels synthetic data even
+when a local native HTTP fixture uses FIREWORKS provenance. This establishes local workflow
+invariants only. Same-call regeneration, automatic production routing, live evaluation and notification delivery
+remain open. Corrected, changed or missing final transcripts make existing reviews stale. ADR-066.
+
 ## FW-41 local durable integration — 2026-10-13
 
 The native gateway now requires an awaited journal. `createDurableObservationGateway` in

@@ -116,6 +116,22 @@ export function getOrgScopedDb(orgId: string) {
         aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
         groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
       },
+      claimObservation: {
+        findMany: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirst: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirstOrThrow: ({ args, query }) => query(injectOrg(args, orgId)),
+        count: ({ args, query }) => query(injectOrg(args, orgId)),
+        aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
+        groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
+      },
+      claimObservationReview: {
+        findMany: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirst: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirstOrThrow: ({ args, query }) => query(injectOrg(args, orgId)),
+        count: ({ args, query }) => query(injectOrg(args, orgId)),
+        aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
+        groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
+      },
       // P4-T1A — CallSummary holds PHI (rawTranscript + claudeSummary)
       // and must be tenant-isolated. The `MULTI_TENANT_MODELS` registry
       // (lib/multi-tenant.ts) is the source of truth; both this read

@@ -15,6 +15,8 @@ export const MULTI_TENANT_MODELS = [
   'inferenceBudget',
   'inferenceRun',
   'inferenceAttempt',
+  'claimObservation',
+  'claimObservationReview',
   'callSummary',
   'payerConfig',
   'auditLog',

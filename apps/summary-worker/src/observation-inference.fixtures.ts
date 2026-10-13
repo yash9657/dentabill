@@ -9,6 +9,8 @@ import {
   type ModelRelease,
 } from '@dentabill/model-gateway';
 
+import { observationSourceVersion } from './observation-source.js';
+
 export const OBSERVATION_TEST_ARTIFACT = '1'.repeat(64);
 export const OBSERVATION_TEST_MODEL = 'accounts/synthetic/models/observation';
 
@@ -41,6 +43,14 @@ export async function seedObservation(
     },
   });
   const version = claim.updatedAt.toISOString();
+  const text = 'Payer: The claim is pending review.';
+  const event = await db.callEvent.create({
+    data: {
+      callId: call.id,
+      eventType: 'webhook.call.ended',
+      data: { transcript: { text, turns: null } },
+    },
+  });
   return {
     callId: call.id,
     request: {
@@ -58,13 +68,13 @@ export async function seedObservation(
       },
       sources: [
         {
-          id: `transcript.${call.id}`,
+          id: `transcript.${event.id}`,
           organizationId: org.id,
           claimId: claim.id,
           claimVersion: version,
-          version: 'transcript.v1',
+          version: observationSourceVersion(text),
           kind: 'FINAL_CALL_TRANSCRIPT',
-          text: 'Payer: The claim is pending review.',
+          text,
         },
       ],
     },

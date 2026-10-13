@@ -18,6 +18,7 @@ import { ClaimCallRecovery } from '../calls/claim-call-recovery.js';
 import { DashboardEmptyState } from '../dashboard-empty-state.js';
 import { SkeletonList } from '../skeleton-list.js';
 
+import { ClaimObservations } from './claim-observations.js';
 import { ClaimStatusDialog } from './claim-status-dialog.js';
 
 export interface ClaimDetailPageProps {
@@ -109,6 +110,7 @@ function DetailLayout({ claim }: { readonly claim: Claim }): React.ReactElement 
         claimStatus={claim.status}
         payerCode={claim.payerCode}
       />
+      <ClaimObservations claimId={claim.id} />
       <Timeline claim={claim} />
     </section>
   );

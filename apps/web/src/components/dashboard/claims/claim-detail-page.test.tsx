@@ -5,6 +5,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { ClaimDetailPage } from './claim-detail-page.js';
 
 const getMock = vi.fn();
+vi.mock('@clerk/nextjs', () => ({
+  useAuth: () => ({ isLoaded: true, orgId: 'org_a', userId: 'user_a' }),
+}));
 
 vi.mock('../../../lib/api-client.js', () => ({
   useDentaBillApi: () => ({
@@ -34,6 +37,8 @@ beforeEach(() => {
 describe('<ClaimDetailPage />', () => {
   it('renders the claim summary card from the SDK response', async () => {
     getMock.mockImplementation(async (path: string) => {
+      if (path === '/v1/claims/{id}/observations')
+        return { data: { items: [], publishableCalls: [], nextCursor: null, hasMore: false } };
       if (path === '/v1/claims/{id}/call-recovery')
         return {
           data: { intent: null, canCheck: false, canReview: true, availability: 'AVAILABLE' },

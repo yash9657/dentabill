@@ -133,14 +133,26 @@ application boundary proofs, not authenticated Fireworks or real billing evidenc
 
 No documented Chat Completions request-id recovery or idempotent resend guarantee was verified.
 The separate Responses retrieve API is not a substitute for recovering an ambiguous chat request.
-Billing exports may lag, so absent usage deltas do not release a reservation. The current gateway
-progress callback is best effort and cannot durably admit another send. FW-41 must provide
-awaited per-attempt admission/receipt hooks; the summary task contract is separately FW-27.
+Billing exports may lag, so absent usage deltas do not release a reservation. The diagnostic progress callback is best effort; FW-41 now supplies awaited per-attempt
+admission/receipt hooks in the explicit worker adapter (ADR-065). FW-27 now supplies immutable
+observation publication and version-bound review (ADR-066). Automatic production routing,
+same-call replacement and live provider evaluation remain open.
 Sources: [Chat Completions](https://docs.fireworks.ai/api-reference/post-chatcompletions),
 [Responses retrieval](https://docs.fireworks.ai/api-reference/get-response),
 [usage/cost exports](https://docs.fireworks.ai/accounts/exporting-usage-and-costs),
 [quota behavior](https://docs.fireworks.ai/guides/quotas_usage/account-quotas).
 No additional account requests or inference ran in this continuation.
+
+## Local observation/review evidence — 2026-10-13
+
+FW-27 preserves native model output, exact final-event source text, release provenance and
+review history without editing legacy summaries or confirming payment. Tenant-scoped APIs
+publish existing saved receipts and acknowledge/dismiss exact finding/claim versions. Original
+intent chronology prevents a recovered older call from displacing newer evidence. Local tests
+cover stale/concurrent reviews, source-call mismatch, transaction rollback and retry without
+another model request. Browser evidence uses synthetic data and mocked authentication; no
+live provider, clinical accuracy, external action or payment reconciliation is established.
+Same-call replacement remains open; corrected or missing final transcripts block new review.
 
 ## Public capability baseline
 

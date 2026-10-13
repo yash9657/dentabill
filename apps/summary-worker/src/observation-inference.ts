@@ -26,6 +26,8 @@ import {
   type TransportReplay,
 } from '@dentabill/model-gateway';
 
+import { isStoredObservationSource } from './observation-source.js';
+
 type Db = typeof prisma;
 
 export interface DurableObservationGatewayOptions {
@@ -100,6 +102,8 @@ export function createDurableObservationGateway(
           wireRequestHash: true,
         },
       });
+      if (!(await isStoredObservationSource(options.prisma, call.id, request, !existing)))
+        return { kind: 'DENIED', code: 'INVALID_REQUEST' };
       if (
         existing &&
         (existing.provider !== 'FIREWORKS' ||
@@ -143,8 +147,9 @@ export function createDurableObservationGateway(
           reservation.run.wireRequestHash !== binding.wireRequestHash)
       )
         return { kind: 'DENIED', code: 'INFERENCE_REVIEW_REQUIRED' };
-      if (reservation.kind === 'RESUME') {
-        const result = GatewayResultSchema.safeParse(reservation.run.resultPayload);
+      const finalRun = reservation.run;
+      if ((reservation.kind === 'RESUME' || reservation.kind === 'ALREADY_APPLIED') && finalRun) {
+        const result = GatewayResultSchema.safeParse(finalRun.resultPayload);
         if (!result.success) return { kind: 'DENIED', code: 'INFERENCE_REVIEW_REQUIRED' };
         return { kind: 'RESULT', result: result.data };
       }

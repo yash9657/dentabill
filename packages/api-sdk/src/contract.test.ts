@@ -39,6 +39,9 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/claims',
   '/v1/claims/{id}',
   '/v1/claims/{id}/calls',
+  '/v1/claims/{id}/observations',
+  '/v1/observations/{id}/review',
+  '/v1/calls/{id}/observations/publish',
   '/v1/calls',
   '/v1/calls/stats',
   '/v1/reports/summary',
@@ -98,6 +101,49 @@ describe('OpenAPI ↔ generated types contract', () => {
       ...payerProperties,
       'resolvedCount',
     ]);
+  });
+
+  it('requires the reviewed snapshot and exposes evidence without accepting provider output', () => {
+    const body = ['post', 'requestBody', 'content', 'application/json', 'schema'];
+    expect(spec.paths['/v1/observations/{id}/review']).toHaveProperty(
+      [...body, 'required'],
+      ['expectedDigest', 'expectedClaimVersion', 'decision'],
+    );
+    expect(spec.paths['/v1/observations/{id}/review']).toHaveProperty(
+      [...body, 'properties', 'note', 'maxLength'],
+      1000,
+    );
+    for (const path of ['/v1/observations/{id}/review', '/v1/calls/{id}/observations/publish'])
+      expect(spec.paths[path]).toHaveProperty([...body, 'additionalProperties'], false);
+    expect(spec.paths['/v1/calls/{id}/observations/publish']).toHaveProperty(
+      [...body, 'properties'],
+      {},
+    );
+    const observation = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+      'items',
+      'items',
+      'properties',
+    ];
+    expect(spec.paths['/v1/claims/{id}/observations']).toHaveProperty(
+      [...observation, 'dataClass', 'enum'],
+      ['SYNTHETIC', 'PROTECTED'],
+    );
+    for (const field of [
+      'digest',
+      'claimVersion',
+      'sources',
+      'provenance',
+      'canReview',
+      'staleReason',
+    ])
+      expect(spec.paths['/v1/claims/{id}/observations']).toHaveProperty([...observation, field]);
   });
 
   it.each(REQUIRED_PATHS)(

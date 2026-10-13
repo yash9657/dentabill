@@ -1,5 +1,10 @@
 export { loadSummaryWorkerEnv, type SummaryWorkerEnv } from './env.js';
 export {
+  publishStoredObservation,
+  generateAndPublishObservation,
+  type ObservationPublication,
+} from './observation-publication.js';
+export {
   createDurableObservationGateway,
   type DurableObservationGatewayOptions,
 } from './observation-inference.js';

@@ -2114,6 +2114,2553 @@
         }
       }
     },
+    "/v1/claims/{id}/observations": {
+      "get": {
+        "description": "Immutable claim findings and evidence. Acknowledgment never verifies payment.",
+        "parameters": [
+          {
+            "schema": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "claimId": {
+                            "type": "string"
+                          },
+                          "callId": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "integer",
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "claimVersion": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                          },
+                          "digest": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                          },
+                          "dataClass": {
+                            "type": "string",
+                            "enum": [
+                              "SYNTHETIC",
+                              "PROTECTED"
+                            ]
+                          },
+                          "output": {
+                            "type": "object",
+                            "properties": {
+                              "disposition": {
+                                "type": "string",
+                                "enum": [
+                                  "OBSERVED",
+                                  "ABSTAIN"
+                                ]
+                              },
+                              "claimId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 128
+                              },
+                              "claimVersion": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              },
+                              "status": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "type": "string",
+                                    "enum": [
+                                      "PAID_REPORTED",
+                                      "DENIED_REPORTED",
+                                      "PENDING_REPORTED",
+                                      "UNKNOWN"
+                                    ]
+                                  },
+                                  "evidence": {
+                                    "maxItems": 8,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "sourceId": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 128
+                                        },
+                                        "sourceVersion": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 128
+                                        },
+                                        "start": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 65536
+                                        },
+                                        "end": {
+                                          "type": "integer",
+                                          "minimum": 1,
+                                          "maximum": 65536
+                                        },
+                                        "quote": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 4096
+                                        }
+                                      },
+                                      "required": [
+                                        "sourceId",
+                                        "sourceVersion",
+                                        "start",
+                                        "end",
+                                        "quote"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "evidence"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "payerReportedPayment": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "amountMinorUnits": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 1000000000
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "enum": [
+                                      "USD"
+                                    ]
+                                  },
+                                  "evidence": {
+                                    "minItems": 1,
+                                    "maxItems": 8,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "sourceId": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 128
+                                        },
+                                        "sourceVersion": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 128
+                                        },
+                                        "start": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 65536
+                                        },
+                                        "end": {
+                                          "type": "integer",
+                                          "minimum": 1,
+                                          "maximum": 65536
+                                        },
+                                        "quote": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 4096
+                                        }
+                                      },
+                                      "required": [
+                                        "sourceId",
+                                        "sourceVersion",
+                                        "start",
+                                        "end",
+                                        "quote"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "amountMinorUnits",
+                                  "currency",
+                                  "evidence"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "denialCodes": {
+                                "maxItems": 16,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "system": {
+                                      "type": "string",
+                                      "enum": [
+                                        "CARC",
+                                        "RARC",
+                                        "PAYER_LOCAL",
+                                        "UNKNOWN"
+                                      ]
+                                    },
+                                    "code": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64
+                                    },
+                                    "evidence": {
+                                      "minItems": 1,
+                                      "maxItems": 8,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "sourceId": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 128
+                                          },
+                                          "sourceVersion": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 128
+                                          },
+                                          "start": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 65536
+                                          },
+                                          "end": {
+                                            "type": "integer",
+                                            "minimum": 1,
+                                            "maximum": 65536
+                                          },
+                                          "quote": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 4096
+                                          }
+                                        },
+                                        "required": [
+                                          "sourceId",
+                                          "sourceVersion",
+                                          "start",
+                                          "end",
+                                          "quote"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "system",
+                                    "code",
+                                    "evidence"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "proposedAction": {
+                                "type": "string",
+                                "enum": [
+                                  "REVIEW_PAYMENT",
+                                  "REVIEW_DENIAL",
+                                  "FOLLOW_UP",
+                                  "REQUEST_INFORMATION",
+                                  "MANUAL_REVIEW"
+                                ]
+                              },
+                              "abstentionReason": {
+                                "nullable": true,
+                                "type": "string",
+                                "enum": [
+                                  "INSUFFICIENT_EVIDENCE",
+                                  "CONTRADICTORY_EVIDENCE",
+                                  "UNSUPPORTED_CONTENT"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "disposition",
+                              "claimId",
+                              "claimVersion",
+                              "status",
+                              "payerReportedPayment",
+                              "denialCodes",
+                              "proposedAction",
+                              "abstentionReason"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "sources": {
+                            "minItems": 1,
+                            "maxItems": 8,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 128
+                                },
+                                "version": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 128
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "FINAL_CALL_TRANSCRIPT"
+                                  ]
+                                },
+                                "text": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 65536
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "version",
+                                "kind",
+                                "text"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "provenance": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "FIREWORKS",
+                                  "SYNTHETIC"
+                                ]
+                              },
+                              "releaseId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 128
+                              },
+                              "task": {
+                                "type": "string",
+                                "enum": [
+                                  "claim-observation.v1"
+                                ]
+                              },
+                              "promptVersion": {
+                                "type": "string",
+                                "enum": [
+                                  "claim-observation-prompt.v1"
+                                ]
+                              },
+                              "schemaVersion": {
+                                "type": "string",
+                                "enum": [
+                                  "claim-observation-schema.v1"
+                                ]
+                              },
+                              "responseId": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 128
+                              },
+                              "model": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 500
+                              },
+                              "attempts": {
+                                "maxItems": 2,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "index": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 2
+                                    },
+                                    "httpStatus": {
+                                      "nullable": true,
+                                      "type": "integer",
+                                      "minimum": 100,
+                                      "maximum": 599
+                                    },
+                                    "outcome": {
+                                      "type": "string",
+                                      "enum": [
+                                        "COMPLETED",
+                                        "HTTP_ERROR",
+                                        "NETWORK_ERROR",
+                                        "DEADLINE_EXCEEDED",
+                                        "CANCELLED",
+                                        "INVALID_RESPONSE"
+                                      ]
+                                    },
+                                    "acceptance": {
+                                      "type": "string",
+                                      "enum": [
+                                        "NOT_SENT",
+                                        "POSSIBLE",
+                                        "RESPONDED"
+                                      ]
+                                    },
+                                    "elapsedMs": {
+                                      "type": "number",
+                                      "minimum": 0
+                                    },
+                                    "usage": {
+                                      "type": "object",
+                                      "properties": {
+                                        "inputTokens": {
+                                          "nullable": true,
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "outputTokens": {
+                                          "nullable": true,
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "totalTokens": {
+                                          "nullable": true,
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "cachedInputTokens": {
+                                          "nullable": true,
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        }
+                                      },
+                                      "required": [
+                                        "inputTokens",
+                                        "outputTokens",
+                                        "totalTokens",
+                                        "cachedInputTokens"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "required": [
+                                    "index",
+                                    "httpStatus",
+                                    "outcome",
+                                    "acceptance",
+                                    "elapsedMs",
+                                    "usage"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "usage": {
+                                "type": "object",
+                                "properties": {
+                                  "inputTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "outputTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "totalTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "cachedInputTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "inputTokens",
+                                  "outputTokens",
+                                  "totalTokens",
+                                  "cachedInputTokens"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "elapsedMs": {
+                                "type": "number",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "releaseId",
+                              "task",
+                              "promptVersion",
+                              "schemaVersion",
+                              "responseId",
+                              "model",
+                              "attempts",
+                              "usage",
+                              "elapsedMs"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "review": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "decision": {
+                                "type": "string",
+                                "enum": [
+                                  "ACKNOWLEDGED",
+                                  "DISMISSED"
+                                ]
+                              },
+                              "note": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 1000
+                              },
+                              "reviewedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              },
+                              "reviewedByUserId": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "decision",
+                              "note",
+                              "reviewedAt",
+                              "reviewedByUserId"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "isCurrent": {
+                            "type": "boolean"
+                          },
+                          "canReview": {
+                            "type": "boolean"
+                          },
+                          "staleReason": {
+                            "nullable": true,
+                            "type": "string",
+                            "enum": [
+                              "CLAIM_CHANGED",
+                              "SUPERSEDED",
+                              "NEWER_CALL",
+                              "TRANSCRIPT_CHANGED",
+                              "ALREADY_REVIEWED"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "claimId",
+                          "callId",
+                          "version",
+                          "claimVersion",
+                          "digest",
+                          "createdAt",
+                          "dataClass",
+                          "output",
+                          "sources",
+                          "provenance",
+                          "review",
+                          "isCurrent",
+                          "canReview",
+                          "staleReason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    },
+                    "publishableCalls": {
+                      "maxItems": 10,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "callId": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "callId",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor",
+                    "hasMore",
+                    "publishableCalls"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/observations/{id}/review": {
+      "post": {
+        "description": "Record a review against an unchanged current finding. Does not update claim status or financial values.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "expectedClaimVersion": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "ACKNOWLEDGED",
+                      "DISMISSED"
+                    ]
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "expectedDigest",
+                  "expectedClaimVersion",
+                  "decision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "claimId": {
+                      "type": "string"
+                    },
+                    "callId": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "claimVersion": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "digest": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "dataClass": {
+                      "type": "string",
+                      "enum": [
+                        "SYNTHETIC",
+                        "PROTECTED"
+                      ]
+                    },
+                    "output": {
+                      "type": "object",
+                      "properties": {
+                        "disposition": {
+                          "type": "string",
+                          "enum": [
+                            "OBSERVED",
+                            "ABSTAIN"
+                          ]
+                        },
+                        "claimId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "claimVersion": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "status": {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "type": "string",
+                              "enum": [
+                                "PAID_REPORTED",
+                                "DENIED_REPORTED",
+                                "PENDING_REPORTED",
+                                "UNKNOWN"
+                              ]
+                            },
+                            "evidence": {
+                              "maxItems": 8,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "sourceId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "sourceVersion": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "start": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 65536
+                                  },
+                                  "end": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 65536
+                                  },
+                                  "quote": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4096
+                                  }
+                                },
+                                "required": [
+                                  "sourceId",
+                                  "sourceVersion",
+                                  "start",
+                                  "end",
+                                  "quote"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "evidence"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "payerReportedPayment": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "amountMinorUnits": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000000
+                            },
+                            "currency": {
+                              "type": "string",
+                              "enum": [
+                                "USD"
+                              ]
+                            },
+                            "evidence": {
+                              "minItems": 1,
+                              "maxItems": 8,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "sourceId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "sourceVersion": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "start": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 65536
+                                  },
+                                  "end": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 65536
+                                  },
+                                  "quote": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4096
+                                  }
+                                },
+                                "required": [
+                                  "sourceId",
+                                  "sourceVersion",
+                                  "start",
+                                  "end",
+                                  "quote"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "amountMinorUnits",
+                            "currency",
+                            "evidence"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "denialCodes": {
+                          "maxItems": 16,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "system": {
+                                "type": "string",
+                                "enum": [
+                                  "CARC",
+                                  "RARC",
+                                  "PAYER_LOCAL",
+                                  "UNKNOWN"
+                                ]
+                              },
+                              "code": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
+                              },
+                              "evidence": {
+                                "minItems": 1,
+                                "maxItems": 8,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sourceId": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 128
+                                    },
+                                    "sourceVersion": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 128
+                                    },
+                                    "start": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 65536
+                                    },
+                                    "end": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 65536
+                                    },
+                                    "quote": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 4096
+                                    }
+                                  },
+                                  "required": [
+                                    "sourceId",
+                                    "sourceVersion",
+                                    "start",
+                                    "end",
+                                    "quote"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "system",
+                              "code",
+                              "evidence"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "proposedAction": {
+                          "type": "string",
+                          "enum": [
+                            "REVIEW_PAYMENT",
+                            "REVIEW_DENIAL",
+                            "FOLLOW_UP",
+                            "REQUEST_INFORMATION",
+                            "MANUAL_REVIEW"
+                          ]
+                        },
+                        "abstentionReason": {
+                          "nullable": true,
+                          "type": "string",
+                          "enum": [
+                            "INSUFFICIENT_EVIDENCE",
+                            "CONTRADICTORY_EVIDENCE",
+                            "UNSUPPORTED_CONTENT"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "disposition",
+                        "claimId",
+                        "claimVersion",
+                        "status",
+                        "payerReportedPayment",
+                        "denialCodes",
+                        "proposedAction",
+                        "abstentionReason"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "sources": {
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "version": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "FINAL_CALL_TRANSCRIPT"
+                            ]
+                          },
+                          "text": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 65536
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "version",
+                          "kind",
+                          "text"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "FIREWORKS",
+                            "SYNTHETIC"
+                          ]
+                        },
+                        "releaseId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "task": {
+                          "type": "string",
+                          "enum": [
+                            "claim-observation.v1"
+                          ]
+                        },
+                        "promptVersion": {
+                          "type": "string",
+                          "enum": [
+                            "claim-observation-prompt.v1"
+                          ]
+                        },
+                        "schemaVersion": {
+                          "type": "string",
+                          "enum": [
+                            "claim-observation-schema.v1"
+                          ]
+                        },
+                        "responseId": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 128
+                        },
+                        "model": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "attempts": {
+                          "maxItems": 2,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "index": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              },
+                              "httpStatus": {
+                                "nullable": true,
+                                "type": "integer",
+                                "minimum": 100,
+                                "maximum": 599
+                              },
+                              "outcome": {
+                                "type": "string",
+                                "enum": [
+                                  "COMPLETED",
+                                  "HTTP_ERROR",
+                                  "NETWORK_ERROR",
+                                  "DEADLINE_EXCEEDED",
+                                  "CANCELLED",
+                                  "INVALID_RESPONSE"
+                                ]
+                              },
+                              "acceptance": {
+                                "type": "string",
+                                "enum": [
+                                  "NOT_SENT",
+                                  "POSSIBLE",
+                                  "RESPONDED"
+                                ]
+                              },
+                              "elapsedMs": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "usage": {
+                                "type": "object",
+                                "properties": {
+                                  "inputTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "outputTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "totalTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "cachedInputTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "inputTokens",
+                                  "outputTokens",
+                                  "totalTokens",
+                                  "cachedInputTokens"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "index",
+                              "httpStatus",
+                              "outcome",
+                              "acceptance",
+                              "elapsedMs",
+                              "usage"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "usage": {
+                          "type": "object",
+                          "properties": {
+                            "inputTokens": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "outputTokens": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "totalTokens": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "cachedInputTokens": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "inputTokens",
+                            "outputTokens",
+                            "totalTokens",
+                            "cachedInputTokens"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "elapsedMs": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "releaseId",
+                        "task",
+                        "promptVersion",
+                        "schemaVersion",
+                        "responseId",
+                        "model",
+                        "attempts",
+                        "usage",
+                        "elapsedMs"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "review": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "decision": {
+                          "type": "string",
+                          "enum": [
+                            "ACKNOWLEDGED",
+                            "DISMISSED"
+                          ]
+                        },
+                        "note": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        "reviewedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "reviewedByUserId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "decision",
+                        "note",
+                        "reviewedAt",
+                        "reviewedByUserId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isCurrent": {
+                      "type": "boolean"
+                    },
+                    "canReview": {
+                      "type": "boolean"
+                    },
+                    "staleReason": {
+                      "nullable": true,
+                      "type": "string",
+                      "enum": [
+                        "CLAIM_CHANGED",
+                        "SUPERSEDED",
+                        "NEWER_CALL",
+                        "TRANSCRIPT_CHANGED",
+                        "ALREADY_REVIEWED"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "claimId",
+                    "callId",
+                    "version",
+                    "claimVersion",
+                    "digest",
+                    "createdAt",
+                    "dataClass",
+                    "output",
+                    "sources",
+                    "provenance",
+                    "review",
+                    "isCurrent",
+                    "canReview",
+                    "staleReason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/calls/{id}/observations/publish": {
+      "post": {
+        "description": "Publish findings from an existing saved inference receipt. Never sends a model request.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "claimId": {
+                      "type": "string"
+                    },
+                    "callId": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "claimVersion": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "digest": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "dataClass": {
+                      "type": "string",
+                      "enum": [
+                        "SYNTHETIC",
+                        "PROTECTED"
+                      ]
+                    },
+                    "output": {
+                      "type": "object",
+                      "properties": {
+                        "disposition": {
+                          "type": "string",
+                          "enum": [
+                            "OBSERVED",
+                            "ABSTAIN"
+                          ]
+                        },
+                        "claimId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "claimVersion": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "status": {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "type": "string",
+                              "enum": [
+                                "PAID_REPORTED",
+                                "DENIED_REPORTED",
+                                "PENDING_REPORTED",
+                                "UNKNOWN"
+                              ]
+                            },
+                            "evidence": {
+                              "maxItems": 8,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "sourceId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "sourceVersion": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "start": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 65536
+                                  },
+                                  "end": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 65536
+                                  },
+                                  "quote": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4096
+                                  }
+                                },
+                                "required": [
+                                  "sourceId",
+                                  "sourceVersion",
+                                  "start",
+                                  "end",
+                                  "quote"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "evidence"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "payerReportedPayment": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "amountMinorUnits": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000000
+                            },
+                            "currency": {
+                              "type": "string",
+                              "enum": [
+                                "USD"
+                              ]
+                            },
+                            "evidence": {
+                              "minItems": 1,
+                              "maxItems": 8,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "sourceId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "sourceVersion": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "start": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 65536
+                                  },
+                                  "end": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 65536
+                                  },
+                                  "quote": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4096
+                                  }
+                                },
+                                "required": [
+                                  "sourceId",
+                                  "sourceVersion",
+                                  "start",
+                                  "end",
+                                  "quote"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "amountMinorUnits",
+                            "currency",
+                            "evidence"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "denialCodes": {
+                          "maxItems": 16,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "system": {
+                                "type": "string",
+                                "enum": [
+                                  "CARC",
+                                  "RARC",
+                                  "PAYER_LOCAL",
+                                  "UNKNOWN"
+                                ]
+                              },
+                              "code": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
+                              },
+                              "evidence": {
+                                "minItems": 1,
+                                "maxItems": 8,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sourceId": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 128
+                                    },
+                                    "sourceVersion": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 128
+                                    },
+                                    "start": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 65536
+                                    },
+                                    "end": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 65536
+                                    },
+                                    "quote": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 4096
+                                    }
+                                  },
+                                  "required": [
+                                    "sourceId",
+                                    "sourceVersion",
+                                    "start",
+                                    "end",
+                                    "quote"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "system",
+                              "code",
+                              "evidence"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "proposedAction": {
+                          "type": "string",
+                          "enum": [
+                            "REVIEW_PAYMENT",
+                            "REVIEW_DENIAL",
+                            "FOLLOW_UP",
+                            "REQUEST_INFORMATION",
+                            "MANUAL_REVIEW"
+                          ]
+                        },
+                        "abstentionReason": {
+                          "nullable": true,
+                          "type": "string",
+                          "enum": [
+                            "INSUFFICIENT_EVIDENCE",
+                            "CONTRADICTORY_EVIDENCE",
+                            "UNSUPPORTED_CONTENT"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "disposition",
+                        "claimId",
+                        "claimVersion",
+                        "status",
+                        "payerReportedPayment",
+                        "denialCodes",
+                        "proposedAction",
+                        "abstentionReason"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "sources": {
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "version": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "FINAL_CALL_TRANSCRIPT"
+                            ]
+                          },
+                          "text": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 65536
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "version",
+                          "kind",
+                          "text"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "FIREWORKS",
+                            "SYNTHETIC"
+                          ]
+                        },
+                        "releaseId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "task": {
+                          "type": "string",
+                          "enum": [
+                            "claim-observation.v1"
+                          ]
+                        },
+                        "promptVersion": {
+                          "type": "string",
+                          "enum": [
+                            "claim-observation-prompt.v1"
+                          ]
+                        },
+                        "schemaVersion": {
+                          "type": "string",
+                          "enum": [
+                            "claim-observation-schema.v1"
+                          ]
+                        },
+                        "responseId": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 128
+                        },
+                        "model": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "attempts": {
+                          "maxItems": 2,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "index": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              },
+                              "httpStatus": {
+                                "nullable": true,
+                                "type": "integer",
+                                "minimum": 100,
+                                "maximum": 599
+                              },
+                              "outcome": {
+                                "type": "string",
+                                "enum": [
+                                  "COMPLETED",
+                                  "HTTP_ERROR",
+                                  "NETWORK_ERROR",
+                                  "DEADLINE_EXCEEDED",
+                                  "CANCELLED",
+                                  "INVALID_RESPONSE"
+                                ]
+                              },
+                              "acceptance": {
+                                "type": "string",
+                                "enum": [
+                                  "NOT_SENT",
+                                  "POSSIBLE",
+                                  "RESPONDED"
+                                ]
+                              },
+                              "elapsedMs": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "usage": {
+                                "type": "object",
+                                "properties": {
+                                  "inputTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "outputTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "totalTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "cachedInputTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "inputTokens",
+                                  "outputTokens",
+                                  "totalTokens",
+                                  "cachedInputTokens"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "index",
+                              "httpStatus",
+                              "outcome",
+                              "acceptance",
+                              "elapsedMs",
+                              "usage"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "usage": {
+                          "type": "object",
+                          "properties": {
+                            "inputTokens": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "outputTokens": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "totalTokens": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "cachedInputTokens": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "inputTokens",
+                            "outputTokens",
+                            "totalTokens",
+                            "cachedInputTokens"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "elapsedMs": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "releaseId",
+                        "task",
+                        "promptVersion",
+                        "schemaVersion",
+                        "responseId",
+                        "model",
+                        "attempts",
+                        "usage",
+                        "elapsedMs"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "review": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "decision": {
+                          "type": "string",
+                          "enum": [
+                            "ACKNOWLEDGED",
+                            "DISMISSED"
+                          ]
+                        },
+                        "note": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        "reviewedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "reviewedByUserId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "decision",
+                        "note",
+                        "reviewedAt",
+                        "reviewedByUserId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isCurrent": {
+                      "type": "boolean"
+                    },
+                    "canReview": {
+                      "type": "boolean"
+                    },
+                    "staleReason": {
+                      "nullable": true,
+                      "type": "string",
+                      "enum": [
+                        "CLAIM_CHANGED",
+                        "SUPERSEDED",
+                        "NEWER_CALL",
+                        "TRANSCRIPT_CHANGED",
+                        "ALREADY_REVIEWED"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "claimId",
+                    "callId",
+                    "version",
+                    "claimVersion",
+                    "digest",
+                    "createdAt",
+                    "dataClass",
+                    "output",
+                    "sources",
+                    "provenance",
+                    "review",
+                    "isCurrent",
+                    "canReview",
+                    "staleReason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "claimId": {
+                      "type": "string"
+                    },
+                    "callId": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "claimVersion": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "digest": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "dataClass": {
+                      "type": "string",
+                      "enum": [
+                        "SYNTHETIC",
+                        "PROTECTED"
+                      ]
+                    },
+                    "output": {
+                      "type": "object",
+                      "properties": {
+                        "disposition": {
+                          "type": "string",
+                          "enum": [
+                            "OBSERVED",
+                            "ABSTAIN"
+                          ]
+                        },
+                        "claimId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "claimVersion": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "status": {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "type": "string",
+                              "enum": [
+                                "PAID_REPORTED",
+                                "DENIED_REPORTED",
+                                "PENDING_REPORTED",
+                                "UNKNOWN"
+                              ]
+                            },
+                            "evidence": {
+                              "maxItems": 8,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "sourceId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "sourceVersion": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "start": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 65536
+                                  },
+                                  "end": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 65536
+                                  },
+                                  "quote": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4096
+                                  }
+                                },
+                                "required": [
+                                  "sourceId",
+                                  "sourceVersion",
+                                  "start",
+                                  "end",
+                                  "quote"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "evidence"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "payerReportedPayment": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "amountMinorUnits": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000000
+                            },
+                            "currency": {
+                              "type": "string",
+                              "enum": [
+                                "USD"
+                              ]
+                            },
+                            "evidence": {
+                              "minItems": 1,
+                              "maxItems": 8,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "sourceId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "sourceVersion": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "start": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 65536
+                                  },
+                                  "end": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 65536
+                                  },
+                                  "quote": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4096
+                                  }
+                                },
+                                "required": [
+                                  "sourceId",
+                                  "sourceVersion",
+                                  "start",
+                                  "end",
+                                  "quote"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "amountMinorUnits",
+                            "currency",
+                            "evidence"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "denialCodes": {
+                          "maxItems": 16,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "system": {
+                                "type": "string",
+                                "enum": [
+                                  "CARC",
+                                  "RARC",
+                                  "PAYER_LOCAL",
+                                  "UNKNOWN"
+                                ]
+                              },
+                              "code": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
+                              },
+                              "evidence": {
+                                "minItems": 1,
+                                "maxItems": 8,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sourceId": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 128
+                                    },
+                                    "sourceVersion": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 128
+                                    },
+                                    "start": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 65536
+                                    },
+                                    "end": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 65536
+                                    },
+                                    "quote": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 4096
+                                    }
+                                  },
+                                  "required": [
+                                    "sourceId",
+                                    "sourceVersion",
+                                    "start",
+                                    "end",
+                                    "quote"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "system",
+                              "code",
+                              "evidence"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "proposedAction": {
+                          "type": "string",
+                          "enum": [
+                            "REVIEW_PAYMENT",
+                            "REVIEW_DENIAL",
+                            "FOLLOW_UP",
+                            "REQUEST_INFORMATION",
+                            "MANUAL_REVIEW"
+                          ]
+                        },
+                        "abstentionReason": {
+                          "nullable": true,
+                          "type": "string",
+                          "enum": [
+                            "INSUFFICIENT_EVIDENCE",
+                            "CONTRADICTORY_EVIDENCE",
+                            "UNSUPPORTED_CONTENT"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "disposition",
+                        "claimId",
+                        "claimVersion",
+                        "status",
+                        "payerReportedPayment",
+                        "denialCodes",
+                        "proposedAction",
+                        "abstentionReason"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "sources": {
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "version": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "FINAL_CALL_TRANSCRIPT"
+                            ]
+                          },
+                          "text": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 65536
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "version",
+                          "kind",
+                          "text"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "FIREWORKS",
+                            "SYNTHETIC"
+                          ]
+                        },
+                        "releaseId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "task": {
+                          "type": "string",
+                          "enum": [
+                            "claim-observation.v1"
+                          ]
+                        },
+                        "promptVersion": {
+                          "type": "string",
+                          "enum": [
+                            "claim-observation-prompt.v1"
+                          ]
+                        },
+                        "schemaVersion": {
+                          "type": "string",
+                          "enum": [
+                            "claim-observation-schema.v1"
+                          ]
+                        },
+                        "responseId": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 128
+                        },
+                        "model": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "attempts": {
+                          "maxItems": 2,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "index": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              },
+                              "httpStatus": {
+                                "nullable": true,
+                                "type": "integer",
+                                "minimum": 100,
+                                "maximum": 599
+                              },
+                              "outcome": {
+                                "type": "string",
+                                "enum": [
+                                  "COMPLETED",
+                                  "HTTP_ERROR",
+                                  "NETWORK_ERROR",
+                                  "DEADLINE_EXCEEDED",
+                                  "CANCELLED",
+                                  "INVALID_RESPONSE"
+                                ]
+                              },
+                              "acceptance": {
+                                "type": "string",
+                                "enum": [
+                                  "NOT_SENT",
+                                  "POSSIBLE",
+                                  "RESPONDED"
+                                ]
+                              },
+                              "elapsedMs": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "usage": {
+                                "type": "object",
+                                "properties": {
+                                  "inputTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "outputTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "totalTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "cachedInputTokens": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "inputTokens",
+                                  "outputTokens",
+                                  "totalTokens",
+                                  "cachedInputTokens"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "index",
+                              "httpStatus",
+                              "outcome",
+                              "acceptance",
+                              "elapsedMs",
+                              "usage"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "usage": {
+                          "type": "object",
+                          "properties": {
+                            "inputTokens": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "outputTokens": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "totalTokens": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "cachedInputTokens": {
+                              "nullable": true,
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "inputTokens",
+                            "outputTokens",
+                            "totalTokens",
+                            "cachedInputTokens"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "elapsedMs": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "releaseId",
+                        "task",
+                        "promptVersion",
+                        "schemaVersion",
+                        "responseId",
+                        "model",
+                        "attempts",
+                        "usage",
+                        "elapsedMs"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "review": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "decision": {
+                          "type": "string",
+                          "enum": [
+                            "ACKNOWLEDGED",
+                            "DISMISSED"
+                          ]
+                        },
+                        "note": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        "reviewedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "reviewedByUserId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "decision",
+                        "note",
+                        "reviewedAt",
+                        "reviewedByUserId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "isCurrent": {
+                      "type": "boolean"
+                    },
+                    "canReview": {
+                      "type": "boolean"
+                    },
+                    "staleReason": {
+                      "nullable": true,
+                      "type": "string",
+                      "enum": [
+                        "CLAIM_CHANGED",
+                        "SUPERSEDED",
+                        "NEWER_CALL",
+                        "TRANSCRIPT_CHANGED",
+                        "ALREADY_REVIEWED"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "claimId",
+                    "callId",
+                    "version",
+                    "claimVersion",
+                    "digest",
+                    "createdAt",
+                    "dataClass",
+                    "output",
+                    "sources",
+                    "provenance",
+                    "review",
+                    "isCurrent",
+                    "canReview",
+                    "staleReason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/claims/{id}/calls": {
       "post": {
         "description": "Reserve an outbound payer call intent and dispatch it. Repeated requests reuse the active intent; ambiguous provider submission requires reconciliation.",

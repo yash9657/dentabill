@@ -187,8 +187,13 @@ LiveClaude comparison fixtures remain available. `observation-inference.ts` expo
 durable Fireworks gateway, authorizing a terminal call and claim version before reservation.
 `observation-inference.test.ts` uses native localhost HTTP and Postgres; `observation-process`
 tests/fixture use separate processes and fsynced synthetic receipts for admission/response
-SIGKILL and cancellation proofs. This adapter does not apply observations to claims or select
-the live provider in production jobs. Versioned summary integration remains FW-27.
+SIGKILL and cancellation proofs. `observation-source.ts` binds a single final CallEvent and exact
+text hash to the call; `observation-publication.ts` validates saved results before immutable
+publication, preserving legacy summaries and financial state. `packages/db/src/lib/claim-observations.ts`
+serializes versions, checks original call-intent chronology and records exact-version reviews.
+API `routes/v1/claim-observations.ts` exposes scoped list/publish/review; web claim-detail
+`claim-observations.tsx` shows source excerpts, synthetic labeling and review freshness.
+Production jobs still do not select native inference; same-call regeneration remains FW-27.
 
 ## Cross-cutting integrations
 

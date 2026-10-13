@@ -1149,3 +1149,41 @@ workers at durable boundaries and compare separate fsynced synthetic provider ac
 they also cover cancellation while a real admission transaction is blocked. These are local
 invariants, not provider idempotency, accuracy, end-to-end clinical evidence or dollar caps.
 No paid inference, speech, call, account mutation, production migration or deployment ran.
+
+## ADR-066 — Immutable native observations and exact-version biller review
+
+**Date:** 2026-10-13. **Status:** accepted for local implementation; not deployed.
+
+Native Fireworks observations do not contain the legacy confidence/representative fields, and
+an acknowledged payer statement is not financial settlement. The application needs inspectable
+sources and review receipts without fabricating a CallSummary or mutating claim/payment state.
+
+1. Store append-only ClaimObservation rows per durable inference run and append-only review
+   receipts, protected by tenant-scoped foreign keys and database immutability triggers.
+   Freeze output, exact source text, request/source hashes, release/task/prompt/schema versions
+   and provenance. Publish the observation, APPLIED marker and safe audit atomically; preserve
+   provider usage independently so application failure cannot erase spend or cause a resend.
+2. Bind one source to a persisted final CallEvent on the run's call. Its identifier contains
+   the event ID, and its version is SHA-256 of exact raw text. A new reservation requires the
+   latest final event; replay/publication verify the original bound event. Publication holds
+   a shared event lock while verifying, avoiding a validation-to-publication mutation gap.
+   Provisional, missing, mismatched and fabricated sources fail closed.
+3. Append publication versions for history, but use original CallIntent creation chronology
+   (legacy Call creation as fallback), then call ID, to choose current evidence. Reconciliation
+   can create an older call later; receipt arrival must not make its evidence current.
+4. Require a stored organization billing role, exact observation digest and claim version
+   for acknowledgment/dismissal. Dismissal needs a note. Changed claims, newer calls and
+   superseded observations and changed/missing final transcripts reject new reviews. Identical retries return the original receipt,
+   even if later work makes the finding stale. A review is a snapshot decision; an overlapping
+   later call may subsequently make it stale, which current eligibility and UI disclose.
+5. Expose scoped list, saved-result publish and review APIs, generated SDK types and an evidence
+   section on claim detail. Display payer-reported amounts as unverified and label synthetic
+   data independently of provider provenance. Preserve reviewed history alongside stale
+   warnings. Actor-attributed access audits precede GET/POST evidence responses, including
+   retries; failed audit withholds the response. No review writes claim status, confirms payment
+   or dispatches external actions.
+
+This completes the local publication/review portion of FW-27. One generation per call remains:
+explicit replacement authorization and automatic native job routing require follow-on work. Both model releases remain unapproved; synthetic/local HTTP
+proofs do not establish dental accuracy or external parity. No provider generation, speech,
+real calls, production migrations or deployments ran.

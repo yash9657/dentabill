@@ -891,6 +891,604 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/claims/{id}/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Immutable claim findings and evidence. Acknowledgment never verifies payment. */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                id: string;
+                                claimId: string;
+                                callId: string;
+                                version: number;
+                                /** Format: date-time */
+                                claimVersion: string;
+                                digest: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** @enum {string} */
+                                dataClass: "SYNTHETIC" | "PROTECTED";
+                                output: {
+                                    /** @enum {string} */
+                                    disposition: "OBSERVED" | "ABSTAIN";
+                                    claimId: string;
+                                    /** Format: date-time */
+                                    claimVersion: string;
+                                    status: {
+                                        /** @enum {string} */
+                                        value: "PAID_REPORTED" | "DENIED_REPORTED" | "PENDING_REPORTED" | "UNKNOWN";
+                                        evidence: {
+                                            sourceId: string;
+                                            sourceVersion: string;
+                                            start: number;
+                                            end: number;
+                                            quote: string;
+                                        }[];
+                                    };
+                                    payerReportedPayment: {
+                                        amountMinorUnits: number;
+                                        /** @enum {string} */
+                                        currency: "USD";
+                                        evidence: {
+                                            sourceId: string;
+                                            sourceVersion: string;
+                                            start: number;
+                                            end: number;
+                                            quote: string;
+                                        }[];
+                                    } | null;
+                                    denialCodes: {
+                                        /** @enum {string} */
+                                        system: "CARC" | "RARC" | "PAYER_LOCAL" | "UNKNOWN";
+                                        code: string;
+                                        evidence: {
+                                            sourceId: string;
+                                            sourceVersion: string;
+                                            start: number;
+                                            end: number;
+                                            quote: string;
+                                        }[];
+                                    }[];
+                                    /** @enum {string} */
+                                    proposedAction: "REVIEW_PAYMENT" | "REVIEW_DENIAL" | "FOLLOW_UP" | "REQUEST_INFORMATION" | "MANUAL_REVIEW";
+                                    /** @enum {string|null} */
+                                    abstentionReason: "INSUFFICIENT_EVIDENCE" | "CONTRADICTORY_EVIDENCE" | "UNSUPPORTED_CONTENT" | null;
+                                };
+                                sources: {
+                                    id: string;
+                                    version: string;
+                                    /** @enum {string} */
+                                    kind: "FINAL_CALL_TRANSCRIPT";
+                                    text: string;
+                                }[];
+                                provenance: {
+                                    /** @enum {string} */
+                                    kind: "FIREWORKS" | "SYNTHETIC";
+                                    releaseId: string;
+                                    /** @enum {string} */
+                                    task: "claim-observation.v1";
+                                    /** @enum {string} */
+                                    promptVersion: "claim-observation-prompt.v1";
+                                    /** @enum {string} */
+                                    schemaVersion: "claim-observation-schema.v1";
+                                    responseId: string | null;
+                                    model: string | null;
+                                    attempts: {
+                                        index: number;
+                                        httpStatus: number | null;
+                                        /** @enum {string} */
+                                        outcome: "COMPLETED" | "HTTP_ERROR" | "NETWORK_ERROR" | "DEADLINE_EXCEEDED" | "CANCELLED" | "INVALID_RESPONSE";
+                                        /** @enum {string} */
+                                        acceptance: "NOT_SENT" | "POSSIBLE" | "RESPONDED";
+                                        elapsedMs: number;
+                                        usage: {
+                                            inputTokens: number | null;
+                                            outputTokens: number | null;
+                                            totalTokens: number | null;
+                                            cachedInputTokens: number | null;
+                                        };
+                                    }[];
+                                    usage: {
+                                        inputTokens: number | null;
+                                        outputTokens: number | null;
+                                        totalTokens: number | null;
+                                        cachedInputTokens: number | null;
+                                    };
+                                    elapsedMs: number;
+                                };
+                                review: {
+                                    /** @enum {string} */
+                                    decision: "ACKNOWLEDGED" | "DISMISSED";
+                                    note: string | null;
+                                    /** Format: date-time */
+                                    reviewedAt: string;
+                                    reviewedByUserId: string;
+                                } | null;
+                                isCurrent: boolean;
+                                canReview: boolean;
+                                /** @enum {string|null} */
+                                staleReason: "CLAIM_CHANGED" | "SUPERSEDED" | "NEWER_CALL" | "TRANSCRIPT_CHANGED" | "ALREADY_REVIEWED" | null;
+                            }[];
+                            nextCursor: string | null;
+                            hasMore: boolean;
+                            publishableCalls: {
+                                callId: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/observations/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Record a review against an unchanged current finding. Does not update claim status or financial values. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        expectedDigest: string;
+                        /** Format: date-time */
+                        expectedClaimVersion: string;
+                        /** @enum {string} */
+                        decision: "ACKNOWLEDGED" | "DISMISSED";
+                        note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            claimId: string;
+                            callId: string;
+                            version: number;
+                            /** Format: date-time */
+                            claimVersion: string;
+                            digest: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** @enum {string} */
+                            dataClass: "SYNTHETIC" | "PROTECTED";
+                            output: {
+                                /** @enum {string} */
+                                disposition: "OBSERVED" | "ABSTAIN";
+                                claimId: string;
+                                /** Format: date-time */
+                                claimVersion: string;
+                                status: {
+                                    /** @enum {string} */
+                                    value: "PAID_REPORTED" | "DENIED_REPORTED" | "PENDING_REPORTED" | "UNKNOWN";
+                                    evidence: {
+                                        sourceId: string;
+                                        sourceVersion: string;
+                                        start: number;
+                                        end: number;
+                                        quote: string;
+                                    }[];
+                                };
+                                payerReportedPayment: {
+                                    amountMinorUnits: number;
+                                    /** @enum {string} */
+                                    currency: "USD";
+                                    evidence: {
+                                        sourceId: string;
+                                        sourceVersion: string;
+                                        start: number;
+                                        end: number;
+                                        quote: string;
+                                    }[];
+                                } | null;
+                                denialCodes: {
+                                    /** @enum {string} */
+                                    system: "CARC" | "RARC" | "PAYER_LOCAL" | "UNKNOWN";
+                                    code: string;
+                                    evidence: {
+                                        sourceId: string;
+                                        sourceVersion: string;
+                                        start: number;
+                                        end: number;
+                                        quote: string;
+                                    }[];
+                                }[];
+                                /** @enum {string} */
+                                proposedAction: "REVIEW_PAYMENT" | "REVIEW_DENIAL" | "FOLLOW_UP" | "REQUEST_INFORMATION" | "MANUAL_REVIEW";
+                                /** @enum {string|null} */
+                                abstentionReason: "INSUFFICIENT_EVIDENCE" | "CONTRADICTORY_EVIDENCE" | "UNSUPPORTED_CONTENT" | null;
+                            };
+                            sources: {
+                                id: string;
+                                version: string;
+                                /** @enum {string} */
+                                kind: "FINAL_CALL_TRANSCRIPT";
+                                text: string;
+                            }[];
+                            provenance: {
+                                /** @enum {string} */
+                                kind: "FIREWORKS" | "SYNTHETIC";
+                                releaseId: string;
+                                /** @enum {string} */
+                                task: "claim-observation.v1";
+                                /** @enum {string} */
+                                promptVersion: "claim-observation-prompt.v1";
+                                /** @enum {string} */
+                                schemaVersion: "claim-observation-schema.v1";
+                                responseId: string | null;
+                                model: string | null;
+                                attempts: {
+                                    index: number;
+                                    httpStatus: number | null;
+                                    /** @enum {string} */
+                                    outcome: "COMPLETED" | "HTTP_ERROR" | "NETWORK_ERROR" | "DEADLINE_EXCEEDED" | "CANCELLED" | "INVALID_RESPONSE";
+                                    /** @enum {string} */
+                                    acceptance: "NOT_SENT" | "POSSIBLE" | "RESPONDED";
+                                    elapsedMs: number;
+                                    usage: {
+                                        inputTokens: number | null;
+                                        outputTokens: number | null;
+                                        totalTokens: number | null;
+                                        cachedInputTokens: number | null;
+                                    };
+                                }[];
+                                usage: {
+                                    inputTokens: number | null;
+                                    outputTokens: number | null;
+                                    totalTokens: number | null;
+                                    cachedInputTokens: number | null;
+                                };
+                                elapsedMs: number;
+                            };
+                            review: {
+                                /** @enum {string} */
+                                decision: "ACKNOWLEDGED" | "DISMISSED";
+                                note: string | null;
+                                /** Format: date-time */
+                                reviewedAt: string;
+                                reviewedByUserId: string;
+                            } | null;
+                            isCurrent: boolean;
+                            canReview: boolean;
+                            /** @enum {string|null} */
+                            staleReason: "CLAIM_CHANGED" | "SUPERSEDED" | "NEWER_CALL" | "TRANSCRIPT_CHANGED" | "ALREADY_REVIEWED" | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calls/{id}/observations/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Publish findings from an existing saved inference receipt. Never sends a model request. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            claimId: string;
+                            callId: string;
+                            version: number;
+                            /** Format: date-time */
+                            claimVersion: string;
+                            digest: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** @enum {string} */
+                            dataClass: "SYNTHETIC" | "PROTECTED";
+                            output: {
+                                /** @enum {string} */
+                                disposition: "OBSERVED" | "ABSTAIN";
+                                claimId: string;
+                                /** Format: date-time */
+                                claimVersion: string;
+                                status: {
+                                    /** @enum {string} */
+                                    value: "PAID_REPORTED" | "DENIED_REPORTED" | "PENDING_REPORTED" | "UNKNOWN";
+                                    evidence: {
+                                        sourceId: string;
+                                        sourceVersion: string;
+                                        start: number;
+                                        end: number;
+                                        quote: string;
+                                    }[];
+                                };
+                                payerReportedPayment: {
+                                    amountMinorUnits: number;
+                                    /** @enum {string} */
+                                    currency: "USD";
+                                    evidence: {
+                                        sourceId: string;
+                                        sourceVersion: string;
+                                        start: number;
+                                        end: number;
+                                        quote: string;
+                                    }[];
+                                } | null;
+                                denialCodes: {
+                                    /** @enum {string} */
+                                    system: "CARC" | "RARC" | "PAYER_LOCAL" | "UNKNOWN";
+                                    code: string;
+                                    evidence: {
+                                        sourceId: string;
+                                        sourceVersion: string;
+                                        start: number;
+                                        end: number;
+                                        quote: string;
+                                    }[];
+                                }[];
+                                /** @enum {string} */
+                                proposedAction: "REVIEW_PAYMENT" | "REVIEW_DENIAL" | "FOLLOW_UP" | "REQUEST_INFORMATION" | "MANUAL_REVIEW";
+                                /** @enum {string|null} */
+                                abstentionReason: "INSUFFICIENT_EVIDENCE" | "CONTRADICTORY_EVIDENCE" | "UNSUPPORTED_CONTENT" | null;
+                            };
+                            sources: {
+                                id: string;
+                                version: string;
+                                /** @enum {string} */
+                                kind: "FINAL_CALL_TRANSCRIPT";
+                                text: string;
+                            }[];
+                            provenance: {
+                                /** @enum {string} */
+                                kind: "FIREWORKS" | "SYNTHETIC";
+                                releaseId: string;
+                                /** @enum {string} */
+                                task: "claim-observation.v1";
+                                /** @enum {string} */
+                                promptVersion: "claim-observation-prompt.v1";
+                                /** @enum {string} */
+                                schemaVersion: "claim-observation-schema.v1";
+                                responseId: string | null;
+                                model: string | null;
+                                attempts: {
+                                    index: number;
+                                    httpStatus: number | null;
+                                    /** @enum {string} */
+                                    outcome: "COMPLETED" | "HTTP_ERROR" | "NETWORK_ERROR" | "DEADLINE_EXCEEDED" | "CANCELLED" | "INVALID_RESPONSE";
+                                    /** @enum {string} */
+                                    acceptance: "NOT_SENT" | "POSSIBLE" | "RESPONDED";
+                                    elapsedMs: number;
+                                    usage: {
+                                        inputTokens: number | null;
+                                        outputTokens: number | null;
+                                        totalTokens: number | null;
+                                        cachedInputTokens: number | null;
+                                    };
+                                }[];
+                                usage: {
+                                    inputTokens: number | null;
+                                    outputTokens: number | null;
+                                    totalTokens: number | null;
+                                    cachedInputTokens: number | null;
+                                };
+                                elapsedMs: number;
+                            };
+                            review: {
+                                /** @enum {string} */
+                                decision: "ACKNOWLEDGED" | "DISMISSED";
+                                note: string | null;
+                                /** Format: date-time */
+                                reviewedAt: string;
+                                reviewedByUserId: string;
+                            } | null;
+                            isCurrent: boolean;
+                            canReview: boolean;
+                            /** @enum {string|null} */
+                            staleReason: "CLAIM_CHANGED" | "SUPERSEDED" | "NEWER_CALL" | "TRANSCRIPT_CHANGED" | "ALREADY_REVIEWED" | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            claimId: string;
+                            callId: string;
+                            version: number;
+                            /** Format: date-time */
+                            claimVersion: string;
+                            digest: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** @enum {string} */
+                            dataClass: "SYNTHETIC" | "PROTECTED";
+                            output: {
+                                /** @enum {string} */
+                                disposition: "OBSERVED" | "ABSTAIN";
+                                claimId: string;
+                                /** Format: date-time */
+                                claimVersion: string;
+                                status: {
+                                    /** @enum {string} */
+                                    value: "PAID_REPORTED" | "DENIED_REPORTED" | "PENDING_REPORTED" | "UNKNOWN";
+                                    evidence: {
+                                        sourceId: string;
+                                        sourceVersion: string;
+                                        start: number;
+                                        end: number;
+                                        quote: string;
+                                    }[];
+                                };
+                                payerReportedPayment: {
+                                    amountMinorUnits: number;
+                                    /** @enum {string} */
+                                    currency: "USD";
+                                    evidence: {
+                                        sourceId: string;
+                                        sourceVersion: string;
+                                        start: number;
+                                        end: number;
+                                        quote: string;
+                                    }[];
+                                } | null;
+                                denialCodes: {
+                                    /** @enum {string} */
+                                    system: "CARC" | "RARC" | "PAYER_LOCAL" | "UNKNOWN";
+                                    code: string;
+                                    evidence: {
+                                        sourceId: string;
+                                        sourceVersion: string;
+                                        start: number;
+                                        end: number;
+                                        quote: string;
+                                    }[];
+                                }[];
+                                /** @enum {string} */
+                                proposedAction: "REVIEW_PAYMENT" | "REVIEW_DENIAL" | "FOLLOW_UP" | "REQUEST_INFORMATION" | "MANUAL_REVIEW";
+                                /** @enum {string|null} */
+                                abstentionReason: "INSUFFICIENT_EVIDENCE" | "CONTRADICTORY_EVIDENCE" | "UNSUPPORTED_CONTENT" | null;
+                            };
+                            sources: {
+                                id: string;
+                                version: string;
+                                /** @enum {string} */
+                                kind: "FINAL_CALL_TRANSCRIPT";
+                                text: string;
+                            }[];
+                            provenance: {
+                                /** @enum {string} */
+                                kind: "FIREWORKS" | "SYNTHETIC";
+                                releaseId: string;
+                                /** @enum {string} */
+                                task: "claim-observation.v1";
+                                /** @enum {string} */
+                                promptVersion: "claim-observation-prompt.v1";
+                                /** @enum {string} */
+                                schemaVersion: "claim-observation-schema.v1";
+                                responseId: string | null;
+                                model: string | null;
+                                attempts: {
+                                    index: number;
+                                    httpStatus: number | null;
+                                    /** @enum {string} */
+                                    outcome: "COMPLETED" | "HTTP_ERROR" | "NETWORK_ERROR" | "DEADLINE_EXCEEDED" | "CANCELLED" | "INVALID_RESPONSE";
+                                    /** @enum {string} */
+                                    acceptance: "NOT_SENT" | "POSSIBLE" | "RESPONDED";
+                                    elapsedMs: number;
+                                    usage: {
+                                        inputTokens: number | null;
+                                        outputTokens: number | null;
+                                        totalTokens: number | null;
+                                        cachedInputTokens: number | null;
+                                    };
+                                }[];
+                                usage: {
+                                    inputTokens: number | null;
+                                    outputTokens: number | null;
+                                    totalTokens: number | null;
+                                    cachedInputTokens: number | null;
+                                };
+                                elapsedMs: number;
+                            };
+                            review: {
+                                /** @enum {string} */
+                                decision: "ACKNOWLEDGED" | "DISMISSED";
+                                note: string | null;
+                                /** Format: date-time */
+                                reviewedAt: string;
+                                reviewedByUserId: string;
+                            } | null;
+                            isCurrent: boolean;
+                            canReview: boolean;
+                            /** @enum {string|null} */
+                            staleReason: "CLAIM_CHANGED" | "SUPERSEDED" | "NEWER_CALL" | "TRANSCRIPT_CHANGED" | "ALREADY_REVIEWED" | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/claims/{id}/calls": {
         parameters: {
             query?: never;
