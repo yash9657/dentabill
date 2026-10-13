@@ -13,6 +13,16 @@ Evidence labels:
 
 ## Local implementation evidence added after the baseline
 
+FW-15/16 now provides a functioning offline evaluation workflow in `@dentabill/evals`:
+25 independent DRAFT synthetic development hypotheses, strict split/inventory binding,
+separate field/citation/abstention/subgroup metrics, and replay/review recomputation. Its
+empty-fixture fake baseline intentionally abstains on every input. No outputs are populated
+from reference labels. Every review packet blocks production approval; source/label/result
+hashes do not authenticate dental reviewers or imported provider declarations. There are no
+adjudicated cases, real-model scores, verified model costs or live latency claims from this
+slice. Domain reviewers, representative held-out data and authorized provider captures remain
+required. See ADR-069, `packages/evals/README.md`, and the latest session verification.
+
 FW-07 now normalizes the documented Retell wire payload with strict raw-body SDK signatures.
 The eleven synthetic contract checks pass without expected failures. HTTP/real-Postgres
 checks cover duplicate/early/out-of-order delivery, rollback/retry and tenant binding.

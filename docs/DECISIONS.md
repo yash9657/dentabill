@@ -1275,3 +1275,43 @@ dental quality, provider-contract suitability or production readiness. Validatio
 Postgres and synthetic providers; no paid inference, real calls or AWS deployment is implied.
 Model evaluation/approval, notification outbox, operational monitoring, voice and supported
 connectors remain required by the full objective.
+
+## ADR-069 — Independent reference annotations and deterministic evaluation evidence
+
+**Date:** 2026-10-13. **Status:** accepted for local tooling; no model approval.
+
+The native gateway's structural and lexical checks cannot establish payer attribution,
+negation handling, dental correctness or settlement. Reusing expected labels as fake model
+outputs would create circular evidence. FW-15/16 therefore adds a separate `@dentabill/evals`
+workspace with a complete offline seed, score and verification workflow.
+
+1. Reference annotations are authored independently. The initial 25 examples remain DRAFT,
+   synthetic and DEVELOPMENT, with explicit rationale and prohibited interpretations. These
+   are engineering hypotheses, not domain adjudication. An adjudicated record must retain two
+   distinct reviewers' original annotations, evidence references and input digests, plus final
+   adjudication bound to the entire case. Declarations alone cannot prove qualifications.
+2. Corpus and result schemas are strict. Every declared case must have exactly one result
+   bound to the exact target-adjusted request. Missing, extra, duplicate or swapped entries
+   reject the evaluation. Practice/patient/claim/scenario groups, claim IDs and exact duplicate
+   source texts cannot cross development/calibration/held-out partitions. Undeclared near
+   duplicates still need human detection; this seed is not an untouched evaluation set.
+3. Scoring separates schema/lexical validity, complete reference values, exact field-bound
+   citation agreement, coverage and abstention. Errors, malformed outputs and failed requests
+   stay visible. Null fields on abstention do not generate trivial successes. Every tag/split
+   has denominators; empty rates are null. Citation multiset agreement is deliberately
+   conservative and does not establish entailment or clinical truth.
+4. Usage counts attempt receipts once, including failed/retried work; unknown usage is not
+   zero. Costs and measured human review seconds remain null. Saved latency is unverified
+   reported latency. Field/citation edits are a correction proxy. The correlated draft seed
+   cannot justify a confidence interval or production quality threshold.
+5. The CLI's seed baseline calls the existing fake gateway with no registered outputs and
+   therefore abstains. Score performs no inference. Verify recomputes the full report and
+   review packet, including original inputs, target policy, current evaluator/gateway source
+   and dependency fingerprints. Artifacts use exclusive private local files. Closed error
+   codes and redacted reports exclude transcript/output bodies.
+6. Imported provenance and review IDs remain unauthenticated declarations. Every review
+   packet keeps `productionApproval: false`; this tool has no authority to promote a release.
+   Runtime model policy is unchanged. Actual provider capture, independent human adjudication,
+   ratified thresholds, applicable vendor evidence and authorized deployment remain required.
+
+No new inference provider, paid request, production migration or deployment is introduced.

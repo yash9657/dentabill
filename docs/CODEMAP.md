@@ -26,6 +26,7 @@ packages/
   logger/           pino with PHI-field redaction
   queue/            BullMQ job definitions — Phase 3
   model-gateway/    Release-gated Fireworks text inference + explicit synthetic adapter
+  evals/            Offline synthetic observation scoring and evidence-bound review packets
   payer-ivr/        Insurance IVR navigation maps — Phase 3
   ui/               Shared shadcn components — Phase 2
 ```
@@ -71,6 +72,19 @@ US native fetch with byte/depth/deadline/retry controls and required awaited att
 protocol/transport faults, cancellation accounting and semantic constraints. `journal.test.ts`
 proves admission/receipt/retry ordering, no late send, original deadline and usage consistency.
 **Depends on:** `zod`, Node crypto/fetch. No SDK retries, database access or logging dependency.
+
+### `@dentabill/evals` — packages/evals
+
+**Purpose:** Independent synthetic reference annotations, deterministic offline evaluation and
+recomputed review evidence. No production runtime import, network transport or release promotion.
+**Entry:** `packages/evals/src/index.ts`; CLI `pnpm --filter @dentabill/evals evaluate`.
+**Key files:** `contracts.ts` strict corpus/review/result binding and split leakage checks;
+`seed.ts` 25 DRAFT development cases; `baseline.ts` empty-fixture fake gateway baseline;
+`scoring.ts` field/citation/abstention/subgroup and usage metrics; `review.ts` recomputed report
+and artifact bindings with mandatory blockers; `cli.ts` exclusive local artifacts and verification.
+**Depends on:** `@dentabill/model-gateway`, `zod`, Node crypto/filesystem. Review attestations and
+imported provenance are not authenticated; every packet keeps production approval false.
+**Workflow and limits:** `packages/evals/README.md` (ADR-069).
 
 ### `@dentabill/logger` — packages/logger
 

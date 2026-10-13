@@ -149,6 +149,16 @@ Monitor durable work, not just broker
 delivery receipts. Retain all new tables/evidence on rollback; old consumers cannot safely
 interpret native completion. Production deployment and scheduler activation remain unperformed.
 
+## Offline evaluation evidence (ADR-069; no deployment change)
+
+`@dentabill/evals` is local tooling and is not imported by the API or workers. Use its
+`seed`, `score` and `verify` commands from `packages/evals/README.md` to preserve and recompute
+evaluation evidence before proposing a model release. Each packet binds the corpus, labels,
+inventory, results, target policy/artifact and evaluator implementation; it never approves
+production. The current 25-case seed is unadjudicated development data and the CLI baseline
+does not call Fireworks. Model/voice selectors, AWS secrets and deployed artifacts are unchanged.
+Authenticated captures, qualified review and the existing release/deployment gates still apply.
+
 ## Infrastructure expectations
 
 | Item             | API function                                                                                           | Worker function                                                                                                     |

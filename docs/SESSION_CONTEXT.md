@@ -4,7 +4,61 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: automatic native generation1 jobs (ADR-068)
+### Latest continuation: independent observation evaluation (ADR-069)
+
+The previous goal turn made concrete progress with automatic native jobs in `f8bdf99`.
+The full parity goal remains active on `codex/w0-containment`; the worktree was clean at
+this continuation's start. This slice implements FW-15/16 tooling without claiming model
+quality or completing the still-missing qualified dental review. No external model request,
+speech, call, paid service, database migration or AWS deployment ran. User still has no clinic;
+only fake data is authorized for the present corpus. Existing credentials/stashes are preserved.
+
+- New `@dentabill/evals` has strict corpus/result/reviewer contracts. Each complete result
+  inventory binds its exact corpus and target-adjusted requests. Missing/duplicate/extra or
+  swapped records fail closed. Group, claim-ID and exact-source leakage across partitions is
+  rejected. Case changes invalidate review digests; two independent original annotations and
+  final adjudication are preserved when supplied, but their credentials remain unauthenticated.
+- The 25 independently authored seed hypotheses remain DRAFT/DEVELOPMENT. They cover negation,
+  corrections, claim/speaker attribution, partial/unallocated/reversed payments, COB, ambiguous
+  currency, unknown code systems, injection and noise. Expected source anchors are exact UTF-16
+  spans. No fixture output is generated from the gold labels. The baseline invokes the existing
+  fake gateway with no registered outputs and therefore abstains on every case.
+- Deterministic scoring separates gateway/output schema, lexical validation, full reference
+  values, exact field-bound citation agreement, answerable coverage, false/required abstention
+  and all declared subgroups. Failed and malformed answers stay visible in denominators.
+  Citation equality is conservative reference agreement, not entailment. Usage includes attempt
+  receipts once and exposes missing/inconsistent/overflowed amounts; price and human-time
+  measurements remain null. Correlated synthetic development cases get no confidence interval.
+- The `seed`, `score`, `verify` CLI creates private exclusive artifacts, recomputes reports and
+  evidence packets from original inputs, and pins evaluator/gateway source, manifests/configs
+  and lockfile fingerprints. Stored provenance is always an unauthenticated declaration.
+  Packets bind all annotations, inventory, results, target policy/artifact and report; every
+  packet keeps production approval false. Runtime release configuration is unchanged.
+
+**Verification:** full evaluator **108 tests / 5 files**, affected Turbo typecheck/lint/build
+**9/9**, and frozen offline dependency installation pass. Initial CLI assertions were corrected
+to tolerate Node26/tsx's unrelated deprecation warning while still checking closed errors and
+private-text exclusion. Lint exceptions are confined to intentional local CLI/test filesystem
+paths; no global rule changed. The lockfile adds only the new workspace importer.
+
+An actual pnpm CLI seed → score → verify run passed with byte-identical report and review packet:
+`/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-observation-eval-iofeu8dq/`.
+Baseline reference agreement is **4/25**, answerable correct coverage **0/17**, false abstention
+**17/17**, selective accuracy **null (0 answered)**. All25 cases are DRAFT, no reviewer evidence
+is claimed, no provider attempts occurred, and cost remains unknown/null in this report schema.
+These numbers characterize the deliberately weak fake baseline, never a Fireworks model.
+Logs: `/tmp/dentabill-evals-tests-final.log`, `-checks-final.log`, `-frozen-install.log`, and
+`-cli-{smoke,replay,verify}.log` (all share the `dentabill-evals` prefix).
+
+**Exact next task:** FW-42: refresh read-only account/model/contract evidence and build a capped,
+auditable synthetic capture workflow through the durable native gateway, retaining actual
+request/response/usage provenance against this frozen evaluation inventory. Confirm the existing
+budget and execution authorization before paid requests; prepare any needed approval as a
+concrete scoped run. Two qualified dental billers, representative untouched held-out cases and
+ratified quality thresholds remain separate requirements. FW-39 monitoring, FW-40 notifications,
+voice and supported connectors remain open; no clinic-dependent capability is complete.
+
+### Earlier continuation: automatic native generation1 jobs (ADR-068)
 
 The full parity goal remains active on `codex/w0-containment`. Fresh fetch confirms zero commits
 behind main `4497459`; both pre-existing stashes remain intact. The user asked how much remains:

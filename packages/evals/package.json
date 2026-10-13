@@ -1,0 +1,29 @@
+{
+  "name": "@dentabill/evals",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Offline synthetic observation evaluation and evidence-bound review packets.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings=0 --no-warn-ignored",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "evaluate": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@dentabill/model-gateway": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@dentabill/config": "workspace:*",
+    "@types/node": "^20.17.6",
+    "tsx": "^4.16.2",
+    "vitest": "^2.1.9"
+  }
+}

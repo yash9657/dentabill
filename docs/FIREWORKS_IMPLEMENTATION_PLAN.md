@@ -7,6 +7,9 @@
 > and FW-27 adds immutable findings/reviews (ADR-066) and explicitly approved same-call
 > regeneration with durable recovery (ADR-067), plus explicit automatic native job routing and
 > visible post-call status (ADR-068), all local and disabled by default.
+> FW-15/16 now adds 25 DRAFT synthetic development hypotheses and deterministic offline
+> field/evidence/abstention scoring with bound review packets (ADR-069). Domain adjudication,
+> untouched held-out cases and authenticated provider evaluation are still missing.
 > Notification outbox (FW-40), live model
 > evaluation and provider approval remain open.
 > Fireworks/ElevenLabs credentials are now present locally. FW-37 adds scoped operations and audited delivery

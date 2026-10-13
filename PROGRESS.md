@@ -9,7 +9,15 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice:** automatic native post-call jobs now publish immutable findings through
+**Latest local slice:** FW-15/16 now has 25 independent DRAFT synthetic cases, deterministic
+offline scoring and an executable seed/replay/verification CLI (ADR-069). Exact corpus/input
+bindings expose omissions and swaps; separate coverage/abstention/subgroup measures prevent
+blanket refusal from looking accurate. The baseline uses the fake gateway without gold-label
+fixtures. Review packets bind all evidence and keep production approval false. Qualified human
+adjudication, provider capture, real model quality/cost and held-out evidence remain missing.
+No external inference, deployment or model approval ran. Final checks are in session context.
+
+**Previous local slice:** automatic native post-call jobs now publish immutable findings through
 the shared worker runtime and expose safe status, owner recovery, operations completion and a
 claim-findings link (ADR-068). Persisted provider/request identity survives duplicate delivery
 and configuration changes. Migration22 archives release approvals for no-send receipt recovery;

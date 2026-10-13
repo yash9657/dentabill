@@ -32,8 +32,8 @@ Each FW item is a 1–3 hour slice; larger workstreams require further decomposi
 - [ ] **FW-12** Structured output, truncation, and semantic validation (FW-11). _Local strict schemas, source/version/UTF-16 anchors, conservative amount/code invariants and review-only abstention implemented. Lexical checks do not establish truth or dental accuracy._
 - [ ] **FW-13** Bounded retries/deadlines/cancellation and vendor failure fixtures (FW-11). _Implemented locally: end-to-end monotonic deadline, bounded body/depth, explicit status-only retry, no fallback and cancellation-safe attempt journal. Live latency/billing behavior unverified._
 - [ ] **FW-14** Redacted inference telemetry and PHI/secret log-capture regression.
-- [ ] **FW-15** Annotation schema and first 25 adjudicated synthetic edge cases.
-- [ ] **FW-16** Deterministic evaluation runner and report (FW-15).
+- [ ] **FW-15** Annotation schema and first 25 adjudicated synthetic edge cases. _Local strict corpus/review contract and 25 independent assistant-authored DRAFT development cases implemented (ADR-069). Two qualified billers' independent annotations and adjudication are still missing; draft labels are not domain truth._
+- [ ] **FW-16** Deterministic evaluation runner and report (FW-15). _Local offline scoring, all-abstaining baseline, exact-input replay, integrity verification and evidence-bound review packets implemented (ADR-069). Failed/invalid outputs remain in denominators; separate field/evidence/abstention/subgroup and unknown-usage metrics. No authenticated provider capture, measured model quality, ratified release thresholds or production approval._
 - [ ] **FW-17** Intent/inbox/outbox persistence and scoped uniqueness contracts. _Retell pending inbox and scoped call intents implemented locally; transactional call/summary outbox now implemented locally with lease/backoff/quarantine and crash evidence; deployment pending._
 - [ ] **FW-18** Atomic state/audit/outbox commit and crash/replay test (FW-17). _Local call/summary producer transactions and independent broker/consumer crash tests pass; scheduled production proof pending._
 - [ ] **FW-19** Canonical source identity and non-destructive duplicate report.
@@ -76,6 +76,8 @@ require durable execution and applicable PHI agreements even for an unpaid pilot
 No pilot clinic yet (user confirmed); fake data is authorized. Real connector/clinic evidence
 is visibly blocked pending a test partner and authorized system access. Open Dental is a rollout
 sequence; the broader capability matrix remains in scope.
+
+- [ ] **FW-42** Auditable synthetic model-evaluation capture. Refresh account/model/license/region/retention and pricing evidence; bind a capped authorized run to the frozen corpus, exact release and implementation artifact; retain actual per-attempt provider request/response/usage receipts through the durable gateway. Preserve failures and uncertain spend. Compare candidates on the same inventory. The offline FW-16 runner and imported provenance alone do not establish this evidence; no paid request without confirmed budget/authorization.
 
 ---
 
