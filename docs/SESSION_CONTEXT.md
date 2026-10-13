@@ -8,8 +8,10 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 The goal remains active. Implementation commit: `bd519a8` on `codex/w0-containment`.
 This continuation made tested progress; no production deployment, schedule activation or external calls.
-A fresh fetch confirms `origin/main=55a1896` and `origin/infra/aws=c34e970` are already
-included. The existing Retell key/carrier answer is unchanged: Retell-managed Twilio;
+Main remains `55a1896`. Final ancestry checks found the additional AWS domain move
+`23cdc7b` after the earlier fetch; it is now merged into this work branch, including
+`usedentabill.xyz` / `api.usedentabill.xyz` defaults and diagrams. Terraform format passes
+after the merge; no deployment occurred. Both remote branches are ancestors of HEAD. The existing Retell key/carrier answer is unchanged: Retell-managed Twilio;
 Telnyx is not a current dependency. No new credential probe or key change occurred.
 
 - Additive migration `20261013120000_job_outbox` creates tenant-scoped immutable queue

@@ -3,7 +3,7 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-13
-**Current work:** implementing W0 containment on AWS baseline through `c34e970`, branch
+**Current work:** implementing W0 containment on AWS baseline through `23cdc7b`, branch
 `codex/w0-containment`. The full parity goal is active; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
@@ -81,7 +81,8 @@ older deployment target for the zero-extra-hosting demo.
 - 2026-10-13 — Local transactional call/summary outbox and bounded leased recovery; AWS
   schedule prepared but disabled, inline premature receipt fixed, cancellation made atomic
   and pending in the UI. API 325, worker 99, DB 66, queue 65, SDK 19 and call UI 73 checks pass;
-  types/lint/Lambda packaging and Terraform validation passed. Separate-process crash proof
+  types/lint/Lambda packaging and Terraform validation passed. Latest AWS domain move
+  `23cdc7b` (`usedentabill.xyz`) incorporated at final ancestry check. Separate-process crash proof
   uses synthetic broker/provider ledgers. No production changes. See ADR-059.
 
 - 2026-10-13 — Local call intents now prevent blind redial after ambiguous acceptance and

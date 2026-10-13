@@ -134,7 +134,7 @@ curl -XPOST localhost:9000/2015-03-31/functions/function/invocations -d @sqs-eve
 
 ## W0 containment release validation (2026-10-13)
 
-Current intended baseline is `infra/aws` through `c34e970`; W0 changes are local on
+Current intended baseline is `infra/aws` through `23cdc7b` (usedentabill.xyz domain move); W0 changes are local on
 `codex/w0-containment`, not deployed. See ADR-055/056 and `SESSION_CONTEXT.md`.
 
 The reporting API contract removes legacy recovered-value fields. Deploy matching
