@@ -16,6 +16,7 @@ export default tseslint.config(
     ignores: [
       '**/dist/**',
       '**/dist-vercel/**',
+      '**/dist-lambda/**',
       '**/.vercel/**',
       '**/build/**',
       '**/.next/**',

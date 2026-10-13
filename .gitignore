@@ -11,6 +11,7 @@ yarn-error.log*
 # Build outputs
 dist/
 dist-vercel/
+dist-lambda/
 .vercel/
 build/
 .next/

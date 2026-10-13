@@ -19,7 +19,8 @@
     "seed:demo": "tsx scripts/demo-seed.mts",
     "demo:call": "tsx scripts/simulate-live-call.mts",
     "gen:openapi": "tsx scripts/dump-openapi.mts",
-    "build:vercel": "pnpm --filter @dentabill/db db:generate && node scripts/build-vercel.mjs"
+    "build:vercel": "pnpm --filter @dentabill/db db:generate && node scripts/build-vercel.mjs",
+    "build:lambda": "pnpm --filter @dentabill/db db:generate && node scripts/build-lambda.mjs"
   },
   "dependencies": {
     "@clerk/backend": "^3.4.1",
