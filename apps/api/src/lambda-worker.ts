@@ -23,7 +23,11 @@
  *
  * Module scope holds one runtime (and with it the `@dentabill/db` Prisma
  * singleton) that is reused across warm invocations.
+ * A private EventBridge invocation also performs one bounded outbox sweep;
+ * it does not instantiate the call/summary runtime or accept tenant input.
  */
+import { relayJobOutbox } from '@dentabill/call-worker';
+import { prisma } from '@dentabill/db';
 import { createLogger, type Logger } from '@dentabill/logger';
 import {
   createRedisConnection,
@@ -31,6 +35,7 @@ import {
   createSqsRetryScheduler,
   parseSqsJobMessage,
 } from '@dentabill/queue';
+import { z } from 'zod';
 
 import {
   createInlineJobRuntime,
@@ -44,7 +49,7 @@ export interface SqsRecord {
   readonly messageId: string;
   readonly receiptHandle: string;
   readonly body: string;
-  readonly attributes: { readonly ApproximateReceiveCount?: string };
+  readonly attributes: { readonly ApproximateReceiveCount?: string | undefined };
 }
 
 export interface SqsEvent {
@@ -159,13 +164,88 @@ export function createSqsJobWorker(
   };
 }
 
+// ─── Trusted Lambda invocation boundary ────────────────────────────────────
+
+const relayEventSchema = z.strictObject({
+  type: z.literal('outbox.relay'),
+  version: z.literal(1),
+});
+
+const sqsEventSchema = z.strictObject({
+  Records: z.array(
+    z.looseObject({
+      eventSource: z.literal('aws:sqs'),
+      messageId: z.string().min(1),
+      receiptHandle: z.string().min(1),
+      body: z.string(),
+      attributes: z.looseObject({ ApproximateReceiveCount: z.string().optional() }),
+    }),
+  ),
+});
+
+export const OUTBOX_RELAY_LIMIT = 25;
+export const OUTBOX_RELAY_BUDGET_MS = 20_000;
+
+export interface OutboxRelayReport {
+  selected: number;
+  sent: number;
+  failed: number;
+  quarantined: number;
+}
+
+export interface LambdaJobWorkerDeps {
+  readonly sqsWorker: (event: SqsEvent) => Promise<SqsBatchResponse>;
+  readonly relayOutbox: (options: {
+    limit: number;
+    budgetMs: number;
+  }) => Promise<OutboxRelayReport>;
+  readonly logger: Logger;
+}
+
+export type LambdaJobWorkerResponse = SqsBatchResponse | OutboxRelayReport;
+
+/**
+ * IAM on the private worker Lambda is the authorization boundary, not these
+ * fields. Only its scoped EventBridge rule (or an authorized operator) may
+ * request a cross-tenant sweep. No HTTP route or SQS message body uses this
+ * branch. The relay scopes each write to the organization stored on its row.
+ */
+export function createLambdaJobWorker(
+  deps: LambdaJobWorkerDeps,
+): (event: unknown) => Promise<LambdaJobWorkerResponse> {
+  return async (event) => {
+    if (relayEventSchema.safeParse(event).success) {
+      try {
+        const { selected, sent, failed, quarantined } = await deps.relayOutbox({
+          limit: OUTBOX_RELAY_LIMIT,
+          budgetMs: OUTBOX_RELAY_BUDGET_MS,
+        });
+        const counts = { selected, sent, failed, quarantined };
+        deps.logger[failed > 0 || quarantined > 0 ? 'warn' : 'info'](
+          counts,
+          'outbox relay sweep completed',
+        );
+        return counts;
+      } catch {
+        // Never emit DB errors, job payloads, or tenant data to Lambda's logs.
+        deps.logger.error({ code: 'OUTBOX_RELAY_FAILED' }, 'outbox relay sweep failed');
+        throw new Error('lambda-worker: outbox relay sweep failed');
+      }
+    }
+
+    const sqs = sqsEventSchema.safeParse(event);
+    if (sqs.success) return deps.sqsWorker(sqs.data);
+    throw new Error('lambda-worker: unsupported invocation envelope');
+  };
+}
+
 // ─── Lambda entry ───────────────────────────────────────────────────────────
 
-let worker: ((event: SqsEvent) => Promise<SqsBatchResponse>) | null = null;
+let worker: ReturnType<typeof createLambdaJobWorker> | null = null;
 
 function buildWorker(
   env: NodeJS.ProcessEnv = process.env,
-): (event: SqsEvent) => Promise<SqsBatchResponse> {
+): ReturnType<typeof createLambdaJobWorker> {
   const queueUrl = env.JOBS_QUEUE_URL;
   if (queueUrl === undefined || queueUrl.trim() === '') {
     throw new Error('lambda-worker: JOBS_QUEUE_URL is required');
@@ -174,29 +254,41 @@ function buildWorker(
   const logger = createLogger({
     base: { service: 'job-worker', env: env.NODE_ENV ?? 'development' },
   });
-  const redis =
-    env.REDIS_URL !== undefined && env.REDIS_URL !== ''
-      ? createRedisConnection(env.REDIS_URL, { lazyConnect: true })
-      : null;
   const jobDispatcher = createSqsJobDispatcher({
     queueUrl,
     onDelayClamped: (ctx) => {
       logger.warn(ctx, 'sqs job delay clamped to the 900 s SQS maximum');
     },
   });
-  const runtime = createInlineJobRuntime({ jobDispatcher, redis, logger, env });
-  return createSqsJobWorker({
-    runtime,
+  let sqsWorker: ReturnType<typeof createSqsJobWorker> | null = null;
+  return createLambdaJobWorker({
     logger,
-    maxReceiveCount:
-      Number.isFinite(maxReceiveCount) && maxReceiveCount >= 1
-        ? maxReceiveCount
-        : DEFAULT_MAX_RECEIVE_COUNT,
-    scheduleRetry: createSqsRetryScheduler({ queueUrl }),
+    relayOutbox: ({ limit, budgetMs }) =>
+      relayJobOutbox({ prisma, jobDispatcher, limit, budgetMs }),
+    sqsWorker: (event) => {
+      // Scheduled recovery must work even when voice/summary runtime config
+      // is unavailable. Keep runtime construction on the SQS path only.
+      if (sqsWorker === null) {
+        const redis =
+          env.REDIS_URL !== undefined && env.REDIS_URL !== ''
+            ? createRedisConnection(env.REDIS_URL, { lazyConnect: true })
+            : null;
+        sqsWorker = createSqsJobWorker({
+          runtime: createInlineJobRuntime({ jobDispatcher, redis, logger, env }),
+          logger,
+          maxReceiveCount:
+            Number.isFinite(maxReceiveCount) && maxReceiveCount >= 1
+              ? maxReceiveCount
+              : DEFAULT_MAX_RECEIVE_COUNT,
+          scheduleRetry: createSqsRetryScheduler({ queueUrl }),
+        });
+      }
+      return sqsWorker(event);
+    },
   });
 }
 
-export async function handler(event: SqsEvent): Promise<SqsBatchResponse> {
+export async function handler(event: unknown): Promise<LambdaJobWorkerResponse> {
   worker ??= buildWorker();
   return worker(event);
 }

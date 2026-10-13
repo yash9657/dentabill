@@ -229,6 +229,46 @@ describe('durable outbound call ownership', () => {
     ).toBe(1);
   });
 
+  it('rolls back terminal intent and audit if the summary outbox cannot commit, then resumes without dialing', async () => {
+    const s = await seed();
+    const faultDb = prisma.$extends({
+      query: {
+        jobOutbox: {
+          createMany() {
+            throw new Error('synthetic summary outbox fault');
+          },
+        },
+      },
+    });
+    const handler = createCallJobHandler({
+      prisma: faultDb,
+      logger,
+      env,
+      retellPort: s.fake,
+      outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+    });
+    const pending = handler(s.job, 'first');
+    const rejection = expect(pending).rejects.toThrow('synthetic summary outbox fault');
+    await waitStarted(s.fake);
+    await s.fake.simulateHappyPath(`fake_${s.intent.id}`);
+    await rejection;
+    expect(
+      await prisma.callIntent.findFirst({ where: { id: s.intent.id, organizationId: s.org.id } }),
+    ).toMatchObject({ state: 'ACCEPTED' });
+    expect(
+      await prisma.auditLog.count({ where: { organizationId: s.org.id, action: 'call.end' } }),
+    ).toBe(0);
+    expect(await prisma.jobOutbox.count({ where: { organizationId: s.org.id } })).toBe(0);
+    expect((await s.handler(s.job, 'resume')).outcome).toBe('COMPLETED');
+    expect(s.fake.startedCalls).toHaveLength(1);
+    expect(await prisma.jobOutbox.findFirst({ where: { organizationId: s.org.id } })).toMatchObject(
+      { state: 'PENDING', kind: 'SUMMARY_GENERATE', deliveryAttempts: 0 },
+    );
+    expect(
+      await prisma.auditLog.count({ where: { organizationId: s.org.id, action: 'call.end' } }),
+    ).toBe(1);
+  });
+
   it('database constraints reject intent claims and accepted calls from another tenant', async () => {
     const first = await seed();
     const second = await seed();

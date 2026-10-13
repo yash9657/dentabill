@@ -11,6 +11,7 @@ import type { Redis } from 'ioredis';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { loadWorkerEnv } from './env.js';
+import { enqueueJobOutbox } from './job-outbox.js';
 import { bootCallWorker, type CallWorkerHandle } from './server.js';
 
 /**
@@ -151,7 +152,7 @@ async function waitFor(
 }
 
 describe('call-worker e2e — happy path lifecycle', () => {
-  it('drives PENDING → CALLING → COMPLETED through real BullMQ + Postgres + FakeRetell', async () => {
+  it('recovers a saved outbox command through BullMQ and persists summary delivery after completion', async () => {
     const { orgId, claimId } = await seedOrgAndClaim();
     const retellCallId = 'fake_e2e_happy_1';
     const fake = new FakeRetell({ retellCallIdFactory: () => retellCallId });
@@ -159,6 +160,7 @@ describe('call-worker e2e — happy path lifecycle', () => {
     workerHandle = await bootCallWorker({
       env: buildEnv({ workerPort: pickWorkerPort() }), // 0 → kernel-assigned ephemeral port
       retellPort: fake,
+      outboxRelayIntervalMs: 25,
     });
 
     const queue = createCallsQueue({ connection: queueConnection });
@@ -172,10 +174,7 @@ describe('call-worker e2e — happy path lifecycle', () => {
         idempotencyKey: 'e2e-happy-1',
       };
       await seedIntent(data);
-      await queue.add(CALL_JOB_NAME, data, {
-        jobId: 'e2e-happy-1',
-        ...CALLS_DEFAULT_JOB_OPTIONS,
-      });
+      await enqueueJobOutbox(prisma, { organizationId: orgId, kind: 'CALL_PLACE', data });
 
       // Worker picks the job up and calls FakeRetell.startCall.
       await waitFor(() => fake.startedCalls.length === 1);
@@ -211,6 +210,17 @@ describe('call-worker e2e — happy path lifecycle', () => {
     expect(events.map((e) => e.eventType)).toContain('call.transcript');
     expect(events.map((e) => e.eventType)).toContain('call.ended');
 
+    await waitFor(
+      async () =>
+        (await prisma.jobOutbox.count({
+          where: { organizationId: orgId, state: 'DELIVERED' },
+        })) === 2,
+    );
+    const summaryCommand = await prisma.jobOutbox.findFirstOrThrow({
+      where: { organizationId: orgId, kind: 'SUMMARY_GENERATE' },
+    });
+    expect(summaryCommand.idempotencyKey).toBe(`call.${callRow.id}`);
+    expect(summaryCommand.deliveryAttempts).toBe(1);
     expect(fake.startedCalls).toHaveLength(1);
     expect(fake.startedCalls[0]!.agentMetadata.providerNpi).toBe('1234567890');
   });

@@ -106,6 +106,17 @@ enum CallIntentState {
   CANCELLED
 }
 
+enum JobOutboxKind {
+  CALL_PLACE
+  SUMMARY_GENERATE
+}
+
+enum JobOutboxState {
+  PENDING
+  DELIVERED
+  QUARANTINED
+}
+
 model Organization {
   id                   String    @id @default(cuid())
   clerkOrgId           String    @unique
@@ -135,6 +146,7 @@ model Organization {
   claims              Claim[]
   calls               Call[]
   callIntents         CallIntent[]
+  jobOutbox           JobOutbox[]
   callSummaries       CallSummary[]
   payerConfigs        PayerConfig[]
   auditLogs           AuditLog[]
@@ -271,6 +283,31 @@ model CallIntent {
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, claimId, createdAt])
   @@index([organizationId, state, updatedAt])
+}
+
+// Only validated queue commands (opaque IDs and routing fields), never transcripts.
+model JobOutbox {
+  id               String         @id @default(cuid())
+  organizationId   String
+  kind             JobOutboxKind
+  idempotencyKey   String
+  payload          Json
+  payloadHash      String
+  state            JobOutboxState @default(PENDING)
+  availableAt      DateTime       @default(now())
+  leaseToken       String?
+  leaseExpiresAt   DateTime?
+  deliveryAttempts Int            @default(0)
+  deliveredAt      DateTime?
+  lastErrorCode    String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, kind, idempotencyKey])
+  @@index([organizationId, state, availableAt])
+  @@index([state, availableAt, leaseExpiresAt])
 }
 
 // PHI-relevant: rawTranscript + claudeSummary may contain patient

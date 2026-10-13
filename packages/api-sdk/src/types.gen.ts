@@ -654,6 +654,8 @@ export interface paths {
                                 startedAt: string | null;
                                 /** Format: date-time */
                                 endedAt: string | null;
+                                /** Format: date-time */
+                                cancelRequestedAt: string | null;
                                 durationSeconds: number | null;
                                 /** @enum {string|null} */
                                 dlqReason: "EXCEEDED_MAX_ATTEMPTS" | "EXCEEDED_MAX_DURATION" | "EXCEEDED_MAX_HOLD" | "CANCELLED_BY_OPERATOR" | null;
@@ -766,6 +768,8 @@ export interface paths {
                             startedAt: string | null;
                             /** Format: date-time */
                             endedAt: string | null;
+                            /** Format: date-time */
+                            cancelRequestedAt: string | null;
                             durationSeconds: number | null;
                             /** @enum {string|null} */
                             dlqReason: "EXCEEDED_MAX_ATTEMPTS" | "EXCEEDED_MAX_DURATION" | "EXCEEDED_MAX_HOLD" | "CANCELLED_BY_OPERATOR" | null;
@@ -812,7 +816,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Cancel an in-flight call. Idempotent — re-cancellation of a terminal call is a 200 no-op. Phase 3 cancellation is soft: it stamps Call.dlqReason = CANCELLED_BY_OPERATOR + flips Claim → MANUAL_REVIEW; the live Retell call continues until natural termination (true mid-call cancel lands in Phase 4 once the worker bridges a cancel channel). */
+        /** @description Request cancellation of an active call. The worker observes the durable request and asks the provider to stop; status and end time await provider evidence. Repeated requests and terminal calls are idempotent. */
         post: {
             parameters: {
                 query?: never;
@@ -845,6 +849,8 @@ export interface paths {
                             startedAt: string | null;
                             /** Format: date-time */
                             endedAt: string | null;
+                            /** Format: date-time */
+                            cancelRequestedAt: string | null;
                             durationSeconds: number | null;
                             /** @enum {string|null} */
                             dlqReason: "EXCEEDED_MAX_ATTEMPTS" | "EXCEEDED_MAX_DURATION" | "EXCEEDED_MAX_HOLD" | "CANCELLED_BY_OPERATOR" | null;
@@ -926,7 +932,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description OWNER/ADMIN-gated retry of summary generation for a Call. Re-enqueues a `summary.generate` job onto the summaries queue. Idempotent on the BullMQ side — the jobId is `call.<id>.retry.<n>` derived from existing audit history. */
+        /** @description OWNER/ADMIN-gated retry of summary generation for a terminal Call. Atomically reserves a durable delivery command and audit record; retry reservations are serialized for each call. */
         post: {
             parameters: {
                 query?: never;

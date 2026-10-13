@@ -34,6 +34,7 @@ import {
 import { UnrecoverableError } from 'bullmq';
 
 import type { WorkerEnv } from './env.js';
+import { enqueueJobOutbox, relayJobOutbox } from './job-outbox.js';
 
 /**
  * Concrete type of the singleton `prisma` exported by `@dentabill/db`.
@@ -64,15 +65,8 @@ export interface CallJobHandlerDeps {
   readonly clock?: () => Date;
   /** Outbound caller number in E.164 (the worker's own dial-out line). */
   readonly outboundNumberE164: string;
-  /**
-   * Optional job dispatcher (Phase 4 / P4-T2G; ADR-053). When present,
-   * the handler dispatches a `summary.generate` job after `Call.endedAt`
-   * is persisted — onto BullMQ in the worker deployment, or to the
-   * inline internal route on serverless. Absent → the handler skips
-   * emission, which is the Phase-3 behaviour. Production wiring always
-   * provides it.
-   */
-  readonly jobDispatcher?: Pick<JobDispatcher, 'dispatchSummary'>;
+  /** Optional immediate delivery; the summary obligation is always saved transactionally. */
+  readonly jobDispatcher?: Pick<JobDispatcher, 'dispatchCall' | 'dispatchSummary'>;
 }
 
 export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
@@ -401,6 +395,16 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
         },
         tx,
       );
+      await enqueueJobOutbox(tx, {
+        organizationId: data.organizationId,
+        kind: 'SUMMARY_GENERATE',
+        data: {
+          organizationId: data.organizationId,
+          callId: call.id,
+          promptVersion: 'v1',
+          idempotencyKey: `call.${call.id}`,
+        },
+      });
       return true;
     });
     if (!finalized)
@@ -411,32 +415,18 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
         durationSeconds: ended.durationSeconds,
       };
 
-    // P4-T2G — enqueue post-call summarisation. Only fired when a
-    // dispatcher is wired (production deploys + the explicit tests for
-    // this path). The job payload uses `call.<id>` as the idempotency
-    // key (= BullMQ jobId) so a double-finalise never produces two
-    // summary jobs.
     if (deps.jobDispatcher) {
       try {
-        await deps.jobDispatcher.dispatchSummary({
+        await relayJobOutbox({
+          prisma: deps.prisma,
+          jobDispatcher: deps.jobDispatcher,
           organizationId: data.organizationId,
-          callId: call.id,
-          promptVersion: 'v1',
           idempotencyKey: `call.${call.id}`,
+          limit: 1,
+          budgetMs: 5_000,
         });
-      } catch (err) {
-        // Failure to enqueue is NOT fatal for the call lifecycle —
-        // the call is already finalised, the operator dashboard will
-        // surface the missing summary, and ops can replay via the
-        // /v1/calls/:id/summary/retry route (W2H).
-        deps.logger.error(
-          {
-            callId: call.id,
-            organizationId: data.organizationId,
-            errorType: err instanceof Error ? err.name : 'UnknownError',
-          },
-          'call-worker: failed to enqueue summary.generate — call lifecycle still healthy',
-        );
+      } catch {
+        deps.logger.error('Summary delivery remains pending in the durable outbox.');
       }
     }
 

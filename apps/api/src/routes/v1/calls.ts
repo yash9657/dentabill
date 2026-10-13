@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { enqueueJobOutbox, relayJobOutbox } from '@dentabill/call-worker';
 import { audit, type CallIntent, getOrgScopedDb, prisma } from '@dentabill/db';
 import { checkPayerHours, validateCallIdentity } from '@dentabill/payer-ivr';
 import type { CallJobData, SummaryJobData } from '@dentabill/queue';
@@ -7,6 +8,7 @@ import { ApiError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@dentabill/types';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { requestCallCancellation } from '../../lib/cancel-call.js';
 import { payerHoursOverridden } from '../../lib/env.js';
 import {
   unavailableVerifiedPayments,
@@ -87,6 +89,7 @@ const CallResponseSchema = z.object({
   holdTimeSeconds: z.number().int().nullable(),
   startedAt: z.iso.datetime().nullable(),
   endedAt: z.iso.datetime().nullable(),
+  cancelRequestedAt: z.iso.datetime().nullable(),
   durationSeconds: z.number().int().nullable(),
   dlqReason: CallDLQReasonEnum.nullable(),
   createdAt: z.iso.datetime(),
@@ -254,6 +257,7 @@ interface CallRowForResponse {
   holdTimeSeconds: number | null;
   startedAt: Date | null;
   endedAt: Date | null;
+  cancelRequestedAt: Date | null;
   durationSeconds: number | null;
   dlqReason:
     | 'EXCEEDED_MAX_ATTEMPTS'
@@ -277,6 +281,7 @@ function toCallResponse(row: CallRowForResponse): CallResponse {
     holdTimeSeconds: row.holdTimeSeconds,
     startedAt: row.startedAt ? row.startedAt.toISOString() : null,
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
+    cancelRequestedAt: row.cancelRequestedAt?.toISOString() ?? null,
     durationSeconds: row.durationSeconds,
     dlqReason: row.dlqReason,
     createdAt: row.createdAt.toISOString(),
@@ -357,7 +362,10 @@ export function callsRoutes(fastify: FastifyInstance): void {
         throw new ApiError('NOT_FOUND', 'Claim not found in your organization.');
       }
 
-      const dispatchIntent = async (intent: CallIntent): Promise<EnqueueCallResponse> => {
+      const dispatchIntent = async (
+        intent: CallIntent,
+        commandSaved = false,
+      ): Promise<EnqueueCallResponse> => {
         if (intent.state === 'SUBMITTING' || intent.state === 'UNKNOWN') {
           throw new ApiError(
             'INVALID_STATE_TRANSITION',
@@ -373,8 +381,21 @@ export function callsRoutes(fastify: FastifyInstance): void {
             claimPriority: intent.claimPriority,
             idempotencyKey: intent.idempotencyKey,
           };
-          // Delivery can be ambiguous too. Preserve the same READY intent on failure.
-          await fastify.jobDispatcher.dispatchCall(data, { priority: 101 - data.claimPriority });
+          // Also backfill READY intents reserved before the outbox migration.
+          if (!commandSaved)
+            await enqueueJobOutbox(prisma, { organizationId: orgId, kind: 'CALL_PLACE', data });
+          try {
+            await relayJobOutbox({
+              prisma,
+              jobDispatcher: fastify.jobDispatcher,
+              organizationId: orgId,
+              idempotencyKey: intent.idempotencyKey,
+              limit: 1,
+              budgetMs: 5_000,
+            });
+          } catch {
+            request.log.error('Call delivery remains pending in the durable outbox.');
+          }
         }
         reply.code(202);
         return {
@@ -484,7 +505,22 @@ export function callsRoutes(fastify: FastifyInstance): void {
               state: { in: ['READY', 'SUBMITTING', 'UNKNOWN', 'ACCEPTED'] },
             },
           });
-          if (concurrent) return concurrent;
+          if (concurrent) {
+            if (concurrent.state === 'READY')
+              await enqueueJobOutbox(tx, {
+                organizationId: orgId,
+                kind: 'CALL_PLACE',
+                data: {
+                  organizationId: orgId,
+                  claimId: id,
+                  payerCode: concurrent.payerCode,
+                  attemptNumber: concurrent.attemptNumber,
+                  claimPriority: concurrent.claimPriority,
+                  idempotencyKey: concurrent.idempotencyKey,
+                },
+              });
+            return concurrent;
+          }
           throw new ApiError(
             'INVALID_STATE_TRANSITION',
             'Claim changed before the call was queued.',
@@ -552,9 +588,21 @@ export function callsRoutes(fastify: FastifyInstance): void {
           },
           tx,
         );
+        await enqueueJobOutbox(tx, {
+          organizationId: orgId,
+          kind: 'CALL_PLACE',
+          data: {
+            organizationId: orgId,
+            claimId: id,
+            payerCode: intent.payerCode,
+            attemptNumber: intent.attemptNumber,
+            claimPriority: intent.claimPriority,
+            idempotencyKey: intent.idempotencyKey,
+          },
+        });
         return intent;
       });
-      return dispatchIntent(reserved);
+      return dispatchIntent(reserved, true);
     },
   );
 
@@ -788,7 +836,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       preHandler: requireAuth,
       schema: {
         description:
-          'Cancel an in-flight call. Idempotent — re-cancellation of a terminal call is a 200 no-op. Phase 3 cancellation is soft: it stamps Call.dlqReason = CANCELLED_BY_OPERATOR + flips Claim → MANUAL_REVIEW; the live Retell call continues until natural termination (true mid-call cancel lands in Phase 4 once the worker bridges a cancel channel).',
+          'Request cancellation of an active call. The worker observes the durable request and asks the provider to stop; status and end time await provider evidence. Repeated requests and terminal calls are idempotent.',
         security,
         params: CallIdParamSchema,
         response: { 200: CallResponseSchema },
@@ -800,63 +848,12 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const { orgId } = auth;
       const { id } = request.params as z.infer<typeof CallIdParamSchema>;
 
-      const db = getOrgScopedDb(orgId);
-      const existing = await db.call.findFirst({ where: { id } });
-      if (!existing) {
-        throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
-      }
-
-      // Idempotent: terminal status → echo current state, no side effects.
-      if (TERMINAL_CALL_STATUSES.has(existing.status)) {
-        return toCallResponse(existing);
-      }
-
-      // P4-T7-prep-4 / ADR-047 — stamp the durable cancel marker so the
-      // call-worker's poll loop tears the live Retell session down. The
-      // status flip below is the dashboard-visible signal; the marker is
-      // the worker-visible signal.
-      const cancelStamp = new Date();
-      await prisma.call.updateMany({
-        where: { id, organizationId: orgId },
-        data: {
-          status: 'FAILED',
-          dlqReason: 'CANCELLED_BY_OPERATOR',
-          endedAt: cancelStamp,
-          cancelRequestedAt: cancelStamp,
-          cancelRequestedBy: auth.userId,
-        },
-      });
-      await prisma.callEvent.create({
-        data: {
-          callId: id,
-          eventType: 'call.cancelled',
-          data: {
-            cancelledBy: auth.userId,
-            cancelledAt: new Date().toISOString(),
-          },
-        },
-      });
-      // Flip Claim → MANUAL_REVIEW so the dashboard reflects the
-      // operator decision. Conditional updateMany — already-MANUAL_REVIEW
-      // claims keep their updatedAt for downstream UI freshness markers.
-      await prisma.claim.updateMany({
-        where: {
-          id: existing.claimId,
-          organizationId: orgId,
-          status: { not: 'MANUAL_REVIEW' },
-        },
-        data: { status: 'MANUAL_REVIEW' },
-      });
-      await audit({
-        action: 'call.cancel',
-        resourceType: 'Call',
-        resourceId: id,
+      const updated = await requestCallCancellation(prisma, {
         organizationId: orgId,
-        metadata: { clerkUserId: auth.userId, previousStatus: existing.status },
+        callId: id,
+        clerkUserId: auth.clerkUserId,
       });
-
-      const updated = await db.call.findFirst({ where: { id } });
-      if (!updated) throw new ApiError('NOT_FOUND', 'Call not found after cancel.');
+      if (!updated) throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
       return toCallResponse(updated);
     },
   );
@@ -912,7 +909,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       preHandler: requireAuth,
       schema: {
         description:
-          'OWNER/ADMIN-gated retry of summary generation for a Call. Re-enqueues a `summary.generate` job onto the summaries queue. Idempotent on the BullMQ side — the jobId is `call.<id>.retry.<n>` derived from existing audit history.',
+          'OWNER/ADMIN-gated retry of summary generation for a terminal Call. Atomically reserves a durable delivery command and audit record; retry reservations are serialized for each call.',
         security,
         params: CallIdParamSchema,
         response: { 202: SummaryRetryResponseSchema },
@@ -946,41 +943,66 @@ export function callsRoutes(fastify: FastifyInstance): void {
         );
       }
 
-      // Derive a deterministic retry key from the count of past
-      // retry-audit rows on this call. BullMQ collapses duplicate jobIds
-      // so a UI double-click never enqueues twice.
-      const previousRetries = await prisma.auditLog.count({
-        where: {
+      const queued = await prisma.$transaction(async (tx) => {
+        const reserved = await tx.call.updateMany({
+          where: { id, organizationId: orgId, status: call.status },
+          data: { status: call.status },
+        });
+        if (reserved.count !== 1) {
+          throw new ApiError('INVALID_STATE_TRANSITION', 'Call changed before the summary retry.');
+        }
+        const previousRetries = await tx.auditLog.count({
+          where: {
+            organizationId: orgId,
+            action: 'callSummary.retry',
+            resourceType: 'Call',
+            resourceId: id,
+          },
+        });
+        const retryNumber = previousRetries + 1;
+        const idempotencyKey = `call.${id}.retry.${String(retryNumber)}`;
+        const data: SummaryJobData = {
           organizationId: orgId,
-          action: 'callSummary.retry',
-          resourceType: 'Call',
-          resourceId: id,
-        },
+          callId: id,
+          promptVersion: 'v1',
+          idempotencyKey,
+        };
+        const outbox = await enqueueJobOutbox(tx, {
+          organizationId: orgId,
+          kind: 'SUMMARY_GENERATE',
+          data,
+        });
+        await audit(
+          {
+            action: 'callSummary.retry',
+            resourceType: 'Call',
+            resourceId: id,
+            organizationId: orgId,
+            metadata: { clerkUserId: auth.userId, jobId: idempotencyKey, retryNumber },
+          },
+          tx,
+        );
+        return { jobId: idempotencyKey, retryNumber, queuedAt: outbox.createdAt };
       });
-      const retryNumber = previousRetries + 1;
-      const idempotencyKey = `call.${id}.retry.${String(retryNumber)}`;
-      const data: SummaryJobData = {
-        organizationId: orgId,
-        callId: id,
-        promptVersion: 'v1',
-        idempotencyKey,
-      };
-      const jobId = await fastify.jobDispatcher.dispatchSummary(data);
-
-      await audit({
-        action: 'callSummary.retry',
-        resourceType: 'Call',
-        resourceId: id,
-        organizationId: orgId,
-        metadata: { clerkUserId: auth.userId, jobId, retryNumber },
-      });
+      try {
+        await relayJobOutbox({
+          prisma,
+          jobDispatcher: fastify.jobDispatcher,
+          organizationId: orgId,
+          idempotencyKey: queued.jobId,
+          limit: 1,
+          budgetMs: 5_000,
+        });
+      } catch {
+        request.log.error('Summary retry delivery remains pending in the durable outbox.');
+      }
 
       reply.code(202);
       return {
-        jobId,
+        jobId: queued.jobId,
         callId: id,
-        retryNumber,
-        queuedAt: new Date().toISOString(),
+        retryNumber: queued.retryNumber,
+        queuedAt: queued.queuedAt.toISOString(),
       };
     },
   );

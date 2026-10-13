@@ -1,17 +1,20 @@
 'use client';
 
-import { Skeleton, StatusDot } from '@dentabill/ui';
+import { Button, Skeleton, StatusDot } from '@dentabill/ui';
 import Link from 'next/link';
 import * as React from 'react';
 
 import {
   callStatusIndicatorVariant,
   callStatusLabel,
+  isCallCancellationPending,
+  isLiveCallStatus,
   type CallDetailResponse,
   type CallEvent,
   type CallStatus,
 } from '../../../lib/calls/types.js';
 import { useCall } from '../../../lib/calls/use-call.js';
+import { useCancelCall } from '../../../lib/calls/use-cancel-call.js';
 import { payerLabel } from '../../../lib/claims/types.js';
 import { DashboardEmptyState } from '../dashboard-empty-state.js';
 import { SkeletonList } from '../skeleton-list.js';
@@ -90,9 +93,49 @@ function DetailLayout({ call }: { readonly call: CallDetailResponse }): React.Re
         </p>
       </header>
 
+      <CancellationControl call={call} />
       <SummaryCard call={call} />
       <Timeline events={call.events} />
     </section>
+  );
+}
+
+function CancellationControl({
+  call,
+}: {
+  readonly call: CallDetailResponse;
+}): React.ReactElement | null {
+  const cancellation = useCancelCall(call.id);
+  if (!isLiveCallStatus(call.status)) return null;
+  const pending = isCallCancellationPending(call);
+
+  return (
+    <div className="flex flex-col items-start gap-3">
+      <Button
+        variant="secondary"
+        disabled={pending || cancellation.isPending}
+        aria-busy={cancellation.isPending}
+        onClick={() => {
+          cancellation.mutate();
+        }}
+      >
+        {pending
+          ? 'Cancellation requested'
+          : cancellation.isPending
+            ? 'Requesting cancellation…'
+            : 'Cancel call'}
+      </Button>
+      {pending ? (
+        <p role="status" className="text-body text-gray-dark max-w-prose text-sm">
+          Waiting for the call to end. The call remains active until its end is confirmed.
+        </p>
+      ) : null}
+      {cancellation.isError ? (
+        <p role="alert" className="text-body text-danger text-sm">
+          Couldn’t request cancellation. Try again.
+        </p>
+      ) : null}
+    </div>
   );
 }
 

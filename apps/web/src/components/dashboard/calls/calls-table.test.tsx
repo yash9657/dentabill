@@ -34,6 +34,7 @@ const baseCall: CallSummary = {
   endedAt: null,
   durationSeconds: null,
   dlqReason: null,
+  cancelRequestedAt: null,
   createdAt: '2026-04-29T10:00:00.000Z',
 };
 
@@ -121,5 +122,37 @@ describe('<CallsTable />', () => {
     );
     // Three "—" appear (started, hold, duration).
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('shows cancellation pending alongside the current active status', () => {
+    render(
+      <CallsTable
+        items={[{ ...baseCall, cancelRequestedAt: '2026-04-29T10:01:00.000Z' }]}
+        isLoading={false}
+        isFetchingMore={false}
+        hasMore={false}
+        onReachEnd={() => undefined}
+      />,
+    );
+    expect(
+      screen.getByRole('gridcell', { name: 'Status: Navigating IVR. Cancellation requested' }),
+    ).toHaveTextContent('Cancellation requested');
+    expect(screen.queryByText('Failed')).not.toBeInTheDocument();
+  });
+
+  it('shows the terminal outcome after a requested cancellation is confirmed ended', () => {
+    render(
+      <CallsTable
+        items={[
+          { ...baseCall, status: 'COMPLETED', cancelRequestedAt: '2026-04-29T10:01:00.000Z' },
+        ]}
+        isLoading={false}
+        isFetchingMore={false}
+        hasMore={false}
+        onReachEnd={() => undefined}
+      />,
+    );
+    expect(screen.getByRole('gridcell', { name: 'Status: Completed' })).toBeInTheDocument();
+    expect(screen.queryByText('Cancellation requested')).not.toBeInTheDocument();
   });
 });

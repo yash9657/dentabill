@@ -8,6 +8,7 @@ import * as React from 'react';
 import {
   callStatusIndicatorVariant,
   callStatusLabel,
+  isCallCancellationPending,
   type CallSummary,
 } from '../../../lib/calls/types.js';
 
@@ -155,6 +156,7 @@ function CallRow({
   readonly rowIndex: number;
   readonly style: React.CSSProperties;
 }): React.ReactElement {
+  const cancellationPending = isCallCancellationPending(call);
   return (
     <div role="row" aria-rowindex={rowIndex} style={style}>
       <Link
@@ -172,10 +174,15 @@ function CallRow({
         <span
           role="gridcell"
           className="flex items-center gap-2 text-sm text-black"
-          aria-label={`Status: ${callStatusLabel(call.status)}`}
+          aria-label={`Status: ${callStatusLabel(call.status)}${cancellationPending ? '. Cancellation requested' : ''}`}
         >
           <StatusDot variant={callStatusIndicatorVariant(call.status)} aria-hidden />
-          {callStatusLabel(call.status)}
+          <span className="min-w-0 leading-tight">
+            {callStatusLabel(call.status)}
+            {cancellationPending ? (
+              <span className="text-gray-warm block text-[13px]">Cancellation requested</span>
+            ) : null}
+          </span>
         </span>
         <span role="gridcell" className="text-body text-right text-sm tabular-nums text-black">
           {call.attemptNumber}

@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import { loadWorkerEnv } from './env.js';
 import { createCallJobHandler, MissingCallIdentityError, providerLineToE164 } from './handler.js';
+import { relayJobOutbox } from './job-outbox.js';
 
 /**
  * Integration tests for the real call-job handler (P3-T10).
@@ -566,6 +567,26 @@ describe('createCallJobHandler — summary emission (P4-T2G)', () => {
     const result = await handlerPromise;
     if (result.callId === null) throw new Error('Expected accepted call');
     expect(result.outcome).toBe('COMPLETED');
+    const pending = await prisma.jobOutbox.findFirstOrThrow({
+      where: { organizationId: orgId, idempotencyKey: `call.${result.callId}` },
+    });
+    expect(pending).toMatchObject({
+      state: 'PENDING',
+      deliveryAttempts: 1,
+      lastErrorCode: 'DISPATCH_FAILED',
+    });
+    const recoveredQueue = createFakeSummariesQueue();
+    await relayJobOutbox({
+      prisma,
+      jobDispatcher: createBullMqJobDispatcher({ summariesQueue: recoveredQueue }),
+      organizationId: orgId,
+      clock: () => new Date(pending.availableAt.getTime() + 1),
+    });
+    expect(recoveredQueue.added).toHaveLength(1);
+    expect(fake.startedCalls).toHaveLength(1);
+    expect(
+      await prisma.jobOutbox.findFirst({ where: { id: pending.id, organizationId: orgId } }),
+    ).toMatchObject({ state: 'DELIVERED', deliveryAttempts: 2 });
   });
 });
 

@@ -62,6 +62,15 @@ variable "retell_webhook_api_key_secret_id" {
   nullable    = false
 }
 
+variable "outbox_relay_schedule_enabled" {
+  description = "Enable the minute outbox recovery sweep only after deploying the outbox migration and worker code. Disabled by default; disabling stops new ticks, not invocations already accepted by Lambda."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
+data "aws_caller_identity" "current" {}
+
 locals {
   name     = "dentabill"
   platform = data.terraform_remote_state.platform.outputs
@@ -286,6 +295,47 @@ resource "aws_lambda_event_source_mapping" "jobs" {
     maximum_concurrency = 5
   }
   depends_on = [aws_iam_role_policy.worker_sqs]
+}
+
+# ---------------------------------------------------------------- outbox recovery
+
+# Constant target input replaces the scheduled event. This worker has no
+# public Function URL; Lambda's resource policy is the invocation boundary.
+# https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Target.html
+# https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html
+resource "aws_cloudwatch_event_rule" "outbox_relay" {
+  name                = "${local.name}-outbox-relay"
+  description         = "Recover durable call and summary outbox rows (25 rows / 20 s per sweep)."
+  schedule_expression = "rate(1 minute)"
+  state               = var.outbox_relay_schedule_enabled ? "ENABLED" : "DISABLED"
+}
+
+resource "aws_lambda_permission" "outbox_relay" {
+  statement_id   = "AllowOutboxRelaySchedule"
+  action         = "lambda:InvokeFunction"
+  function_name  = aws_lambda_function.worker.function_name
+  principal      = "events.amazonaws.com"
+  source_arn     = aws_cloudwatch_event_rule.outbox_relay.arn
+  source_account = data.aws_caller_identity.current.account_id
+}
+
+resource "aws_cloudwatch_event_target" "outbox_relay" {
+  rule      = aws_cloudwatch_event_rule.outbox_relay.name
+  target_id = "outbox-relay-worker"
+  arn       = aws_lambda_function.worker.arn
+  input     = jsonencode({ type = "outbox.relay", version = 1 })
+
+  # A lost tick is recovered by the next sweep of durable rows. Do not build
+  # a backlog of stale ticks. Lambda async retries/duplicates are separate;
+  # the DB lease must still tolerate concurrent or repeated invocations.
+  # https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_RetryPolicy.html
+  # https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-error-handling.html
+  retry_policy {
+    maximum_event_age_in_seconds = 60
+    maximum_retry_attempts       = 0
+  }
+
+  depends_on = [aws_lambda_permission.outbox_relay, aws_iam_role_policy.worker_sqs]
 }
 
 # ---------------------------------------------------------------- edge

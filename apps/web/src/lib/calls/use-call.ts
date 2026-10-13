@@ -6,7 +6,7 @@ import { useDentaBillApi } from '../api-client.js';
 
 import { isLiveCallStatus, type CallDetailResponse } from './types.js';
 
-const callQueryKey = (id: string): readonly unknown[] => ['calls', 'detail', id];
+export const callQueryKey = (id: string): readonly unknown[] => ['calls', 'detail', id];
 
 const LIVE_POLL_MS = 5000;
 const IDLE_POLL_MS = 30000;

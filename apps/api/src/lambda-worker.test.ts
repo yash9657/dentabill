@@ -7,10 +7,12 @@ import type { CallJobData, SummaryJobData } from '@dentabill/queue';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createLambdaJobWorker,
   createSqsJobWorker,
   decide,
   processRecord,
   receiveAttempt,
+  type LambdaJobWorkerDeps,
   type SqsJobWorkerDeps,
   type SqsRecord,
 } from './lambda-worker.js';
@@ -72,6 +74,136 @@ describe('receiveAttempt', () => {
     expect(receiveAttempt(record({}, null))).toBe(1);
     expect(receiveAttempt(record({}, 'garbage'))).toBe(1);
     expect(receiveAttempt(record({}, '0'))).toBe(1);
+  });
+});
+
+describe('createLambdaJobWorker', () => {
+  function lambdaDeps() {
+    return {
+      logger: createLogger({ level: 'fatal', pretty: false }),
+      sqsWorker: vi.fn<LambdaJobWorkerDeps['sqsWorker']>().mockResolvedValue({
+        batchItemFailures: [{ itemIdentifier: 'retry-me' }],
+      }),
+      relayOutbox: vi.fn<LambdaJobWorkerDeps['relayOutbox']>().mockResolvedValue({
+        selected: 3,
+        sent: 1,
+        failed: 1,
+        quarantined: 1,
+      }),
+    };
+  }
+
+  it('runs one bounded relay sweep and logs only counters', async () => {
+    const d = lambdaDeps();
+    const warn = vi.spyOn(d.logger, 'warn');
+    // Runtime extras must not leak through the response or logs.
+    d.relayOutbox.mockResolvedValue({
+      selected: 3,
+      sent: 1,
+      failed: 1,
+      quarantined: 1,
+      ...{ payload: { patientName: 'Synthetic private patient' } },
+    });
+    const worker = createLambdaJobWorker(d);
+    await expect(worker({ type: 'outbox.relay', version: 1 })).resolves.toEqual({
+      selected: 3,
+      sent: 1,
+      failed: 1,
+      quarantined: 1,
+    });
+    expect(d.relayOutbox).toHaveBeenCalledTimes(1);
+    expect(d.relayOutbox).toHaveBeenCalledWith({ limit: 25, budgetMs: 20_000 });
+    expect(d.sqsWorker).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      { selected: 3, sent: 1, failed: 1, quarantined: 1 },
+      'outbox relay sweep completed',
+    );
+  });
+
+  it('reports an idle successful sweep without tenant or job identifiers', async () => {
+    const d = lambdaDeps();
+    const info = vi.spyOn(d.logger, 'info');
+    const counts = { selected: 0, sent: 0, failed: 0, quarantined: 0 };
+    d.relayOutbox.mockResolvedValue(counts);
+    await expect(createLambdaJobWorker(d)({ type: 'outbox.relay', version: 1 })).resolves.toEqual(
+      counts,
+    );
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info).toHaveBeenCalledWith(counts, 'outbox relay sweep completed');
+  });
+
+  it('fails the invocation on relay infrastructure failure without exposing its error', async () => {
+    const d = lambdaDeps();
+    const error = vi.spyOn(d.logger, 'error');
+    d.relayOutbox.mockRejectedValue(new Error('DB query contains synthetic private patient'));
+    await expect(createLambdaJobWorker(d)({ type: 'outbox.relay', version: 1 })).rejects.toThrow(
+      'lambda-worker: outbox relay sweep failed',
+    );
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith(
+      { code: 'OUTBOX_RELAY_FAILED' },
+      'outbox relay sweep failed',
+    );
+    expect(d.sqsWorker).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    null,
+    {},
+    { type: 'outbox.relay' },
+    { type: 'outbox.relay', version: 2 },
+    { type: 'outbox.relay', version: '1' },
+    { type: 'outbox.relay', version: 1, organizationId: 'org_injected' },
+    { type: 'outbox.relay', version: 1, limit: 10_000 },
+    { type: 'outbox.relay', version: 1, budgetMs: 900_000 },
+    { type: 'outbox.relay', version: 1, Records: [] },
+    { Records: 'invalid' },
+    { Records: [{ ...record('body'), eventSource: 'aws:sns' }] },
+    { Records: [{ ...record('body'), eventSource: 'aws:sqs', receiptHandle: null }] },
+  ])('rejects unsupported or caller-configured envelopes (%j)', async (event) => {
+    const d = lambdaDeps();
+    await expect(createLambdaJobWorker(d)(event)).rejects.toThrow(
+      'lambda-worker: unsupported invocation envelope',
+    );
+    expect(d.relayOutbox).not.toHaveBeenCalled();
+    expect(d.sqsWorker).not.toHaveBeenCalled();
+  });
+
+  it('preserves the SQS envelope and partial failure response', async () => {
+    const d = lambdaDeps();
+    const event = {
+      Records: [
+        {
+          ...record({ type: 'call.place', data: callData }),
+          eventSource: 'aws:sqs',
+          eventSourceARN: 'arn:aws:sqs:us-east-1:000000000000:synthetic-jobs',
+          awsRegion: 'us-east-1',
+          attributes: { ApproximateReceiveCount: '2', SentTimestamp: '1700000000000' },
+          messageAttributes: {},
+        },
+      ],
+    };
+    await expect(createLambdaJobWorker(d)(event)).resolves.toEqual({
+      batchItemFailures: [{ itemIdentifier: 'retry-me' }],
+    });
+    expect(d.sqsWorker).toHaveBeenCalledTimes(1);
+    expect(d.sqsWorker).toHaveBeenCalledWith(event);
+    expect(d.relayOutbox).not.toHaveBeenCalled();
+  });
+
+  it('does not allow an SQS message body to request a global relay', async () => {
+    const d = lambdaDeps();
+    const sqsDeps = deps({ status: 'completed', attempt: 1 });
+    const worker = createLambdaJobWorker({ ...d, sqsWorker: createSqsJobWorker(sqsDeps) });
+    await expect(
+      worker({
+        Records: [{ ...record({ type: 'outbox.relay', version: 1 }), eventSource: 'aws:sqs' }],
+      }),
+    ).resolves.toEqual({ batchItemFailures: [{ itemIdentifier: 'm-1' }] });
+    expect(d.relayOutbox).not.toHaveBeenCalled();
+    expect(sqsDeps.runtime.runCallAttempt).not.toHaveBeenCalled();
+    expect(sqsDeps.runtime.runSummaryAttempt).not.toHaveBeenCalled();
   });
 });
 

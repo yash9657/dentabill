@@ -11,6 +11,7 @@ export const MULTI_TENANT_MODELS = [
   'claim',
   'call',
   'callIntent',
+  'jobOutbox',
   'callSummary',
   'payerConfig',
   'auditLog',

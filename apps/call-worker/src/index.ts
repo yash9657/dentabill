@@ -40,3 +40,10 @@ export {
   type DlqProcessor,
   type DlqWorker,
 } from './dlq-consumer.js';
+export {
+  enqueueJobOutbox,
+  relayJobOutbox,
+  type EnqueueJobOutboxInput,
+  type RelayJobOutboxOptions,
+  type RelayJobOutboxResult,
+} from './job-outbox.js';
