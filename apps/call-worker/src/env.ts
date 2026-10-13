@@ -47,15 +47,12 @@ const envSchema = z.object({
   QUEUE_CONCURRENCY: z.coerce.number().int().positive().max(64).default(4),
 
   /**
-   * Per-call hard cap (ADR-038). 15 min default; lower for tests.
-   * Worker uses this to enforce the wall-clock guard inside the
-   * job handler.
+   * Per-call provider cap and persisted observer deadline. 15 min default.
    */
-  MAX_CALL_DURATION_MS: z.coerce.number().int().positive().default(900_000),
+  MAX_CALL_DURATION_MS: z.coerce.number().int().min(60_000).max(7_200_000).default(900_000),
 
   /**
-   * Per-call hold cap (ADR-039). 10 min default. Hold detector
-   * tears the call down + reschedules when this is exceeded.
+   * Hold detector helper threshold (ADR-039). Not yet enforced by the call runtime.
    */
   MAX_HOLD_MS: z.coerce.number().int().positive().default(600_000),
 });

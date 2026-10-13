@@ -205,6 +205,40 @@ describe('LiveRetell — installed SDK create-call contract (synthetic transport
     });
   });
 
+  it.each([60_000, 1_800_000, 7_200_000])(
+    'sends only a per-call duration override of %s ms through the installed SDK',
+    async (maxDurationMs) => {
+      const requests: unknown[] = [];
+      const fetch = vi.fn<RetellFetch>(async (url, init) => {
+        const request = new Request(url, init);
+        expect(request.method).toBe('POST');
+        expect(request.url).toBe('https://api.retellai.com/v2/create-phone-call');
+        requests.push(await request.json());
+        return Response.json({ call_id: 'call_synthetic_fw36' }, { status: 201 }) as RetellResponse;
+      });
+      const live = buildSdkRetell(fetch);
+      const input = sampleInput({ idempotencyKey: 'intent_synthetic_fw36' });
+      await live.startCall(input);
+      await live.startCall({ ...input, maxDurationMs });
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+      const historicalBody = requests[0] as Record<string, unknown>;
+      expect(historicalBody).not.toHaveProperty('agent_override');
+      expect(requests[1]).toEqual({
+        ...historicalBody,
+        agent_override: { agent: { max_call_duration_ms: maxDurationMs } },
+      });
+    },
+  );
+
+  it('rejects an invalid duration before any installed SDK transport request', async () => {
+    const fetch = vi.fn<RetellFetch>();
+    await expect(
+      buildSdkRetell(fetch).startCall(sampleInput({ maxDurationMs: 59_999 })),
+    ).rejects.toThrow();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it.each([400, 401, 402, 408, 409, 422, 429, 500])(
     'propagates create HTTP %s without an implicit SDK retry',
     async (status) => {

@@ -40,10 +40,10 @@ without an exact reservation fail closed. Summary jobs skip existing CallSummary
 Queue exhaustion does not prove an external call failed.
 
 The SQS DLQ still requires monitored recovery; messages may outlive the processor through
-poison payloads, repeated crashes or persistence failure. The local safety slice has no
-outbox relay or automatic unknown-ID reconciliation yet. A crash before dispatch can leave
-READY work undispatched, and a final-commit/summary-dispatch gap remains. Do not enable real
-telephony until these gates plus persisted termination deadlines are closed.
+poison payloads, repeated crashes or persistence failure. Local FW-35/36 close the transactional
+delivery gap and persist accepted-call observation/termination state. FW-34 adds manual positive
+unknown-ID reconciliation. These changes remain undeployed; quarantine operations, authorized
+external validation and verified recovery scheduling still gate real telephony.
 
 ### Coordinated call-intent release (not executed)
 
@@ -129,7 +129,7 @@ curl -XPOST localhost:9000/2015-03-31/functions/function/invocations -d @sqs-eve
 
 ## Known limitations
 
-- A call job runs the whole phone call inside one worker invocation. If a call outlives the 900 s Lambda timeout, the invocation dies and SQS redelivers the job after the visibility timeout. Local FW-25 code now resumes an ACCEPTED intent or fences a SUBMITTING/UNKNOWN intent instead of redialling; this is not yet deployed, and stalled intents still need automated reconciliation. The duration and hold guards in `apps/call-worker` (`createDurationGuard`, `createHoldDetector`) exist but are not wired into the call handler yet, so `MAX_CALL_DURATION_MS` / `MAX_HOLD_MS` do not currently bound a call. Wire them in with caps well under 900 s before running real telephony on Lambda.
+- The inspected deployed worker still runs the whole call inside one invocation. The local FW-36 release below replaces that wait with durable bounded observation, a provider duration cap and Stop confirmation state. Roll out the matching migrations/API/worker and verify the scheduler before real telephony. Hold detection remains unwired; a Lambda timeout or Stop ACK is never proof of a terminated call.
 - SQS ignores BullMQ priority, so call jobs run in arrival order.
 
 ## W0 containment release validation (2026-10-13)
@@ -219,8 +219,8 @@ GROUP BY "state";
 Pending eligible work should recover on a later sweep. DELIVERED proves transport receipt,
 not business completion. QUARANTINED is not success: inspect its error code, intent state,
 provider evidence and transport health before any reviewed replay. Do not reset UNKNOWN or
-SUBMITTING call intents or manufacture a new job key to force a dial. A supported recovery
-UI, alerts and reviewed quarantine replay remain follow-on work; there is no automatic reset.
+SUBMITTING call intents or manufacture a new job key to force a dial. Supported outbox/quarantine recovery
+UI, alerts and reviewed replay remain follow-on work; there is no automatic reset.
 Existing READY intents from older code have no inferred outbox history; the API backfills an
 identical command on a repeated request. Historical lost summary jobs are not reconstructed.
 
@@ -261,8 +261,9 @@ A positive match saves a `CALL_PLACE` outbox command with optional `resume:{inte
 and distinct key `call.resume.<intentId>`. The new worker validates the exact binding and only
 observes it. Retained original queue IDs cannot suppress this command. Delivery depends on
 the existing outbox relay: an authorized AWS release must verify/enable that prepared schedule.
-No schedule was activated here. On retained inline mode, matching receipts require terminal
-intent state; lost/long receipts can still quarantine and require operating review.
+No schedule was activated here. The FW-36 worker/receipt release also accepts an exact ACCEPTED
+binding only when its deadline and next observation are persisted; this is a monitoring obligation,
+not terminal provider evidence. Lost receipts can still quarantine and require operating review.
 
 Rollout order matters: apply reviewed additive migrations, deploy the matching worker and
 allow old invocations to drain before exposing the new API/web recovery action. An older
@@ -272,6 +273,53 @@ and worker before authorized live usage. Retain the new worker/evidence semantic
 do not discard intents, source events or resume commands. Local two-process crash and both
 create-response-race tests do not substitute for this deployed verification.
 
-A recovered nonterminal call remains subject to the existing observer limitations. FW-36
-must add persisted ownership/deadlines and missing-terminal-event reconciliation before live
-calls; this action does not sweep the account, hard-stop a call, or resolve provider absence.
+FW-36 now adds the local accepted-call observer described below. These recovery actions do
+not enumerate the whole provider account or prove provider absence.
+
+## Accepted-call observation release gate (FW-36 / FW-38)
+
+Apply additive migration `20261013140000_call_observation` before this worker/API version.
+Only isolated localhost synthetic databases were migrated during implementation. Deploy and
+drain the matching workers before exposing status controls or accepting their durable-monitoring
+receipts. Keep the existing EventBridge recovery rule disabled until the reviewed release and
+an explicit activation approval. Its fixed `outbox.relay` event now runs delivery and observation
+independently; the secret-authenticated internal recovery route does the same. No tenant, limit,
+provider ID, or timeout override is accepted in that scheduled payload. BullMQ runs the same
+recovery work every five seconds while its process is alive.
+
+The worker no longer waits indefinitely for the complete live call. It returns after a bounded
+observation window, with deadline/due state saved in Postgres. Each scheduled invocation checks
+up to five due ACCEPTED rows, including legacy rows lacking timers, within a twenty-five-second
+external-work budget (slow database calls are not preempted). Normal checks become due after thirty
+seconds; actual execution depends on scheduler cadence, backlog and available budget. Leases are sixty seconds, extended for the explicit ninety-second fake demo
+window. Unexpired ownership prevents duplicate observers. SQS completion means that this
+monitoring obligation is durable; the recovery schedule must actually be operating for liveness.
+
+`MAX_CALL_DURATION_MS` accepts 60000–7200000; its code default is 900000, while the example
+configuration is 1800000. New submissions freeze the value in their request/deadline and send
+Retell's per-call duration override. Legacy calls use their saved snapshot cap or 900000 anchored
+to original submission/creation. Changing the environment does not extend existing deadlines.
+Stop requests are limited to three, separated by at least sixty seconds, and confirmation ends
+five minutes after the first request. An ACK is not termination. Thereafter automatic remote
+checks cease, periodic DB-source checks continue, and an Owner/Admin can use Check call status
+for a bounded read-only lookup. No manual action reuses the create endpoint.
+
+Owner/Admin `POST /v1/calls/:id/check-status` accepts an empty body, derives the saved
+provider ID, reserves a sixty-second cooldown and audits the attempt before a read-only
+lookup. An unexpired observer lease also blocks the check. Missing configuration returns503;
+cooldown/conflicting state returns409. The route never accepts provider IDs or Stop flags.
+
+Call detail/list project safe monitoring dates and stable codes, never lease tokens, request
+snapshots, provider error bodies, or transcripts in diagnostics. Inspect `observationReviewAt`,
+`observationErrorCode`, `lastObservedAt`, `nextObservationAt`, and stop counters/timestamps when
+triaging stalled calls. Missing provider configuration is explicit; no synthetic Stop ACK is
+accepted for a persisted live call. Preserve the accepted intent and provider ID for review.
+Do not reset it to READY, drop evidence, or install an old indefinite-wait consumer on rollback.
+
+Before live enablement, verify through staged AWS that the schedule survives worker termination,
+recovers a lost terminal webhook, respects leases/cooldowns and observes actual end confirmation.
+Run only authorized calls to controlled destinations. Confirm the vendor duration override and
+Stop behavior on that line; current tests use actual SDK transports against a loopback synthetic
+provider, not a real telephone network. Hold limits remain unwired. Broader quarantine/age alerts
+and tenant operating controls are FW-37. The Prisma event sink now logs only allowlisted target/
+timestamp data, but this does not certify all application error paths or PHI lifecycle controls.

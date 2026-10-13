@@ -217,10 +217,19 @@ describe('durable outbound call ownership', () => {
       outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
     });
     const pending = handler(s.job, 'first');
-    const rejection = expect(pending).rejects.toThrow('synthetic finalization fault');
+    const rescheduled = expect(pending).resolves.toMatchObject({ outcome: 'RESCHEDULED' });
     await waitStarted(s.fake);
     await s.fake.simulateHappyPath(`fake_${s.intent.id}`);
-    await rejection;
+    await rescheduled;
+    expect(
+      await prisma.callIntent.findFirstOrThrow({
+        where: { id: s.intent.id, organizationId: s.org.id },
+      }),
+    ).toMatchObject({
+      state: 'ACCEPTED',
+      observationErrorCode: 'OBSERVATION_FAILED',
+      nextObservationAt: expect.any(Date),
+    });
     const resumed = await s.handler(s.job, 'resume');
     expect(resumed.outcome).toBe('COMPLETED');
     expect(s.fake.startedCalls).toHaveLength(1);
@@ -248,10 +257,19 @@ describe('durable outbound call ownership', () => {
       outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
     });
     const pending = handler(s.job, 'first');
-    const rejection = expect(pending).rejects.toThrow('synthetic summary outbox fault');
+    const rescheduled = expect(pending).resolves.toMatchObject({ outcome: 'RESCHEDULED' });
     await waitStarted(s.fake);
     await s.fake.simulateHappyPath(`fake_${s.intent.id}`);
-    await rejection;
+    await rescheduled;
+    expect(
+      await prisma.callIntent.findFirstOrThrow({
+        where: { id: s.intent.id, organizationId: s.org.id },
+      }),
+    ).toMatchObject({
+      state: 'ACCEPTED',
+      observationErrorCode: 'OBSERVATION_FAILED',
+      nextObservationAt: expect.any(Date),
+    });
     expect(
       await prisma.callIntent.findFirst({ where: { id: s.intent.id, organizationId: s.org.id } }),
     ).toMatchObject({ state: 'ACCEPTED' });

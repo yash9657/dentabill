@@ -226,3 +226,16 @@ end-to-end. Fastify-based health probe at `:3010/healthz`.
 - `apps/api/src/routes/v1/call-recovery.ts` and tests — scoped safe status projection and Owner/Admin-only existing-call lookup.
 - `apps/web/src/components/dashboard/calls/claim-call-recovery.tsx`, `apps/web/src/lib/calls/use-call-recovery.ts` — review workflow, cooldown/configuration feedback and claim-bound recovery results.
 - `packages/queue/src/types.ts`, worker handler and internal job receipts — exact observation-only resume command with a distinct retained queue ID.
+
+### FW-36 accepted-call observation and FW-38 diagnostics (2026-10-13)
+
+- `packages/db/prisma/migrations/20261013140000_call_observation/` — persisted deadlines, observer leases, due index and separate termination state.
+- `apps/call-worker/src/call-observer.ts` and tests — bounded known-ID observation, source-only finalization, Stop backoff/confirmation and trusted due sweep.
+- `apps/call-worker/src/call-provider-evidence.ts` — shared canonical saved-request and exact provider identity checks.
+- `apps/call-worker/src/call-observer-process.test.ts` and fixture — independent fsynced provider ledger, observer SIGKILL, lost Stop ACK and stale-response races.
+- `apps/call-worker/src/call-reconciliation-deadline.test.ts`, `call-observer-review.test.ts` — historical deadline preservation and legacy timer selection regressions.
+- `apps/api/src/lib/inline-jobs.ts`, `lambda-worker.ts`, internal jobs route and BullMQ server — durable monitoring receipts and independent scheduled observation.
+- `apps/api/src/routes/v1/calls.ts` and call detail/list — safe monitoring projection and pending/review feedback.
+- `apps/api/src/routes/v1/call-recovery.ts`, `check-call-status-control.tsx`, `use-check-call-status.ts` — audited Owner/Admin-only accepted-call reads, cooldown/auth ordering and cache-safe feedback.
+- `apps/call-worker/src/handler-demo-autopilot.test.ts` — real handler/adapter completion and confirmed cancellation with compressed synthetic scenario timers.
+- `packages/db/src/lib/prisma-diagnostics.ts` and tests — closed diagnostic target/timestamp logging, excluding raw messages/query inputs.

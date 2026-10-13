@@ -26,9 +26,14 @@ synthetic call. Inline receipts wait for durable disposition. Cancellation remai
 pending until provider confirmation. Owner/admin lookup now reconciles uncertain call IDs
 against the saved request and commits verified source evidence plus a distinct durable resume
 command; separate-process crashes and create-response races preserve one synthetic call.
-All remain local and synthetic; account sweeps, persisted observer deadlines, quarantine
+Accepted calls now have persisted observer leases/deadlines, bounded provider status/Stop
+checks, review after unconfirmed termination and manual read-only status recovery. Crash tests
+keep one call while Stop ACKs remain distinct from terminal evidence. Prisma diagnostics now
+exclude raw query/error payloads. All remain local and synthetic; account sweeps, quarantine
 operations, deployed recovery and authorized real-provider tests are still pending. Exact tests/limits are in the session record. No production
-deploy, recovery schedule activation or real calls ran.
+deploy, recovery schedule activation or real calls ran. Latest local checks: API379, worker157,
+database77, provider268, queue66, SDK19, and targeted web calls101; affected types/lint and
+Lambda packaging pass. Counts are regression evidence, not external workflow certification.
 
 **User direction:** ElevenLabs speech/orchestration is permitted, business inference stays
 on Fireworks open weights. There is no pilot clinic yet: all development uses fake patient

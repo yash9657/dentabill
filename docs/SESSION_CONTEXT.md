@@ -4,7 +4,75 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: FW-34 positive-only existing-call recovery
+### Latest continuation: FW-36 bounded accepted-call monitoring and FW-38 safe diagnostics
+
+The full parity goal remains active. Retell already has a local API key; current carrier is
+Retell-managed Twilio, so Telnyx is not required. Fireworks/ElevenLabs credentials remain
+absent/empty; testing uses fake data as directed. A fresh fetch confirms main `55a1896` and
+AWS branch `23cdc7b` are still incorporated. No provider calls, deployment, schedule activation,
+production migration, account change or increased spend occurred.
+
+- Additive migration twelve (`20261013140000_call_observation`) persists call deadline,
+  next check, observer lease/attempts/review state and distinct Stop request/attempt/ACK/
+  confirmation fields. Applied only to localhost identity/runtime/process/summary/receipts
+  test databases; Prisma generated. Initial submission freezes cap/deadline before network.
+  Retell per-call max duration override accepts 60000–7200000; existing request hashes remain
+  compatible because the optional field is appended. Code default 900000, example1800000.
+- New `call-observer.ts` replaces the indefinite handler wait with lease-fenced bounded steps.
+  Historical deadline backfill uses submission/creation, never the current worker time.
+  Initial accepted due time includes a thirty-second first-subscriber grace. A sixty-second
+  lease protects source/event/finalization writes; explicit demo windows extend the lease.
+  Known-ID Get Call revalidates exact saved identity, bounded to ten seconds. Actual terminal
+  source, conditional claim transition, audit and one summary outbox commit atomically.
+  Newer biller edits survive; stale owners cannot overwrite the final call or summary.
+- Cancellation/duration expiry persists Stop attempts before sending. Same-ID retries are
+  spaced sixty seconds, at most three; confirmation expires five minutes after first request.
+  ACKs remain nonterminal. Exhaustion surfaces review without invented endedAt/transcript/
+  summary. After confirmation expiry automatic remote reads stop; DB-source checks continue.
+  Fresh no-key FakeRetell cannot acknowledge a persisted live call. Same-process known Fake/
+  DemoAutopilot can complete or stop their own scenario; restarted demo memory is not evidence.
+- Trusted Lambda/private-route/BullMQ recovery runs outbox and accepted-call scans independently.
+  Five-row/twenty-five-second limits and NULLS FIRST avoid skipping legacy missing timers.
+  The existing AWS rule stays disabled. Inline receipts require exact ACCEPTED call binding
+  plus persisted deadline/due state, or matching terminal disposition. RESCHEDULED is distinct
+  from completion. Scheduled observation constructs no summarizer/cost guard.
+- Call detail/list expose only safe monitoring dates/codes. Manual Owner/Admin status lookup
+  retrieves the existing call read-only after automated confirmation expires; it cannot redial
+  or Stop. Role/tenant/payload/cooldown checks and an audited reservation protect this action.
+- FW-38 replaces raw Prisma diagnostic event logging with a closed target/timestamp projection.
+  Error/warn/info callback tests include an actual SQL failure with synthetic private input.
+  Thrown errors elsewhere and complete PHI lifecycle controls remain separate gates.
+
+**Verification:** full API **379 tests / 29 files**, full worker **157/22**, database
+**77/7**, provider **268/13**, queue **66/5**, SDK **19/2**, and targeted web calls
+**101** tests pass. Affected typecheck/lint passed **28/28** tasks; final fixture fixes also
+passed scoped lint/API types. Lambda builds pass: API **38.6 MB / 11.2 MB zip**, worker
+**32.0 MB / 10.0 MB zip**. Actual component/Tailwind synthetic renderings at desktop1280
+and mobile390 have no horizontal overflow; this is not authenticated end-to-end browser proof.
+Independent review fixed legacy null-timer starvation and both recovery routes’ rate-limit
+ordering (tenant keys now run after authentication). The full API suite also exposed two
+outdated entrypoint mocks and one test-owned webhook receipt cleanup issue; these were
+fixed and the complete suite rerun successfully. FW-38 is committed as `89eec8f`.
+New local proof includes three separate-process observer crashes/races against a fsynced
+synthetic provider ledger, exact one-create/summary assertions, Stop ACK nonterminal behavior,
+retry exhaustion/manual later-source recovery, tenant isolation, missing provider safety,
+legacy timer scheduling and finalization rollback. Existing SIGKILL recovery now checks
+pre-expiry ownership, then advances an injected clock in a fresh process without clearing the
+persisted lease. Demo scenarios/cancellation run through the actual adapter with compressed
+injected scenario timers; this is not a ninety-second wall-time or deployed demonstration.
+
+**Limits:** no real telephony/end-to-end AWS recovery evidence, no enabled production schedule,
+no hold detector integration, no clinic or clinical/domain-adjudicated evaluation. Slow DB
+queries are not preempted by network budgets. Stop cannot be exactly once across a lost ACK
+or process pause; retries retain the same existing call ID. Summary spend/attempt ownership
+is FW-26. Preserve the stash and additive evidence on rollback. See ADR-061 and DEPLOY_AWS.md.
+
+**Exact next task:** FW-37 — safe operating visibility for aged delivery/observation work,
+quarantine alerts and audited recovery controls; continue the Fireworks typed gateway and
+synthetic evaluations independently of missing external credentials. Authorized deployment,
+provider comparison, connectors and clinic evidence remain visibly unverified/blocked.
+
+### Earlier continuation: FW-34 positive-only existing-call recovery
 
 The goal remains active. This continuation implements and tests the manual recovery
 vertical slice; no overall parity, deployed recovery or real-provider compatibility claim.

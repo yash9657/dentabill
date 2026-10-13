@@ -162,6 +162,8 @@ export const StartCallInputSchema = z.object({
    * to retry. FakeRetell's in-memory deduplication is only a test convenience.
    */
   idempotencyKey: z.string().min(1),
+  /** Optional provider-enforced cap, in ms. Keep appended for historical request hashes. */
+  maxDurationMs: z.number().int().min(60_000).max(7_200_000).optional(),
 });
 
 export type StartCallInput = z.infer<typeof StartCallInputSchema>;

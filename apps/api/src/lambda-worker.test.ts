@@ -84,6 +84,14 @@ describe('createLambdaJobWorker', () => {
       sqsWorker: vi.fn<LambdaJobWorkerDeps['sqsWorker']>().mockResolvedValue({
         batchItemFailures: [{ itemIdentifier: 'retry-me' }],
       }),
+      observeCalls: vi.fn<LambdaJobWorkerDeps['observeCalls']>().mockResolvedValue({
+        selected: 0,
+        observed: 0,
+        terminal: 0,
+        rescheduled: 0,
+        stopRequested: 0,
+        failed: 0,
+      }),
       relayOutbox: vi.fn<LambdaJobWorkerDeps['relayOutbox']>().mockResolvedValue({
         selected: 3,
         sent: 1,
@@ -110,7 +118,16 @@ describe('createLambdaJobWorker', () => {
       sent: 1,
       failed: 1,
       quarantined: 1,
+      observation: {
+        selected: 0,
+        observed: 0,
+        terminal: 0,
+        rescheduled: 0,
+        stopRequested: 0,
+        failed: 0,
+      },
     });
+    expect(d.observeCalls).toHaveBeenCalledWith({ limit: 5, budgetMs: 25_000 });
     expect(d.relayOutbox).toHaveBeenCalledTimes(1);
     expect(d.relayOutbox).toHaveBeenCalledWith({ limit: 25, budgetMs: 20_000 });
     expect(d.sqsWorker).not.toHaveBeenCalled();
@@ -126,10 +143,18 @@ describe('createLambdaJobWorker', () => {
     const info = vi.spyOn(d.logger, 'info');
     const counts = { selected: 0, sent: 0, failed: 0, quarantined: 0 };
     d.relayOutbox.mockResolvedValue(counts);
-    await expect(createLambdaJobWorker(d)({ type: 'outbox.relay', version: 1 })).resolves.toEqual(
-      counts,
-    );
-    expect(info).toHaveBeenCalledTimes(1);
+    await expect(createLambdaJobWorker(d)({ type: 'outbox.relay', version: 1 })).resolves.toEqual({
+      ...counts,
+      observation: {
+        selected: 0,
+        observed: 0,
+        terminal: 0,
+        rescheduled: 0,
+        stopRequested: 0,
+        failed: 0,
+      },
+    });
+    expect(info).toHaveBeenCalledTimes(2);
     expect(info).toHaveBeenCalledWith(counts, 'outbox relay sweep completed');
   });
 
@@ -140,12 +165,49 @@ describe('createLambdaJobWorker', () => {
     await expect(createLambdaJobWorker(d)({ type: 'outbox.relay', version: 1 })).rejects.toThrow(
       'lambda-worker: outbox relay sweep failed',
     );
+    expect(d.observeCalls).toHaveBeenCalledTimes(1);
     expect(error).toHaveBeenCalledTimes(1);
     expect(error).toHaveBeenCalledWith(
       { code: 'OUTBOX_RELAY_FAILED' },
       'outbox relay sweep failed',
     );
     expect(d.sqsWorker).not.toHaveBeenCalled();
+  });
+
+  it('does not expose observer payloads in sweep responses or logs', async () => {
+    const d = lambdaDeps();
+    const info = vi.spyOn(d.logger, 'info');
+    const observation = {
+      selected: 1,
+      observed: 1,
+      terminal: 0,
+      rescheduled: 1,
+      stopRequested: 1,
+      failed: 0,
+    };
+    d.observeCalls.mockResolvedValue({
+      ...observation,
+      ...{ payload: 'synthetic-private-provider-content' },
+    });
+    const result = await createLambdaJobWorker(d)({ type: 'outbox.relay', version: 1 });
+    expect(result).toHaveProperty('observation', observation);
+    expect(JSON.stringify(result)).not.toContain('private-provider');
+    expect(JSON.stringify(info.mock.calls)).not.toContain('private-provider');
+  });
+
+  it('still relays durable jobs when call observation fails', async () => {
+    const d = lambdaDeps();
+    const error = vi.spyOn(d.logger, 'error');
+    d.observeCalls.mockRejectedValue(new Error('synthetic-private-provider-content'));
+    await expect(createLambdaJobWorker(d)({ type: 'outbox.relay', version: 1 })).rejects.toThrow(
+      'lambda-worker: call observation sweep failed',
+    );
+    expect(d.relayOutbox).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith(
+      { code: 'CALL_OBSERVATION_FAILED' },
+      'call observation sweep failed',
+    );
+    expect(JSON.stringify(error.mock.calls)).not.toContain('private-provider');
   });
 
   it.each([
@@ -167,6 +229,7 @@ describe('createLambdaJobWorker', () => {
       'lambda-worker: unsupported invocation envelope',
     );
     expect(d.relayOutbox).not.toHaveBeenCalled();
+    expect(d.observeCalls).not.toHaveBeenCalled();
     expect(d.sqsWorker).not.toHaveBeenCalled();
   });
 
@@ -190,6 +253,7 @@ describe('createLambdaJobWorker', () => {
     expect(d.sqsWorker).toHaveBeenCalledTimes(1);
     expect(d.sqsWorker).toHaveBeenCalledWith(event);
     expect(d.relayOutbox).not.toHaveBeenCalled();
+    expect(d.observeCalls).not.toHaveBeenCalled();
   });
 
   it('does not allow an SQS message body to request a global relay', async () => {
@@ -202,6 +266,7 @@ describe('createLambdaJobWorker', () => {
       }),
     ).resolves.toEqual({ batchItemFailures: [{ itemIdentifier: 'm-1' }] });
     expect(d.relayOutbox).not.toHaveBeenCalled();
+    expect(d.observeCalls).not.toHaveBeenCalled();
     expect(sqsDeps.runtime.runCallAttempt).not.toHaveBeenCalled();
     expect(sqsDeps.runtime.runSummaryAttempt).not.toHaveBeenCalled();
   });
@@ -210,6 +275,7 @@ describe('createLambdaJobWorker', () => {
 describe('decide', () => {
   it('keeps retry reports and calls whose terminal persistence failed', () => {
     expect(decide({ status: 'completed', attempt: 1 })).toBe('delete');
+    expect(decide({ status: 'rescheduled', attempt: 1 })).toBe('delete');
     expect(decide({ status: 'skipped', reason: 'summary_exists' })).toBe('delete');
     expect(
       decide({

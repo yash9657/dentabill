@@ -13,13 +13,16 @@ import {
   createDlqJobHandler,
   loadWorkerEnv,
   MissingCallIdentityError,
+  sweepDueAcceptedCalls,
 } from '@dentabill/call-worker';
 import { prisma as defaultPrisma } from '@dentabill/db';
 import { createLogger, type Logger } from '@dentabill/logger';
 import {
   createRetellPort,
+  createRetellReconciliationClient,
   type MissingCallIdentityField,
   type RetellPort,
+  type RetellReconciliationClient,
 } from '@dentabill/payer-ivr';
 import {
   asBullMqJob,
@@ -70,6 +73,7 @@ const SUMMARY_RETRY_KEY = /\.retry\.\d+$/;
 
 export type InlineRunReport =
   | { readonly status: 'completed'; readonly attemptsMade: number }
+  | { readonly status: 'rescheduled'; readonly attemptsMade: number }
   | { readonly status: 'skipped'; readonly reason: string }
   | { readonly status: 'reconciliation_required'; readonly attemptsMade: number }
   | {
@@ -97,6 +101,7 @@ export interface JobAttempt {
 
 export type AttemptReport =
   | { readonly status: 'completed'; readonly attempt: number }
+  | { readonly status: 'rescheduled'; readonly attempt: number }
   | { readonly status: 'skipped'; readonly reason: string }
   | { readonly status: 'reconciliation_required'; readonly attempt: number }
   | {
@@ -290,7 +295,10 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
         }
         const disposition = callDisposition(outcome.result);
         if (disposition?.status === 'skipped') return disposition;
-        if (disposition?.status === 'reconciliation_required') {
+        if (
+          disposition?.status === 'reconciliation_required' ||
+          disposition?.status === 'rescheduled'
+        ) {
           return { ...disposition, attemptsMade: outcome.attemptsMade };
         }
         logger.info({ jobId, attemptsMade: outcome.attemptsMade }, 'inline call job completed');
@@ -357,7 +365,10 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
         );
         const disposition = callDisposition(result);
         if (disposition?.status === 'skipped') return disposition;
-        if (disposition?.status === 'reconciliation_required') {
+        if (
+          disposition?.status === 'reconciliation_required' ||
+          disposition?.status === 'rescheduled'
+        ) {
           return { ...disposition, attempt };
         }
         logger.info({ jobId, attempt }, 'call job completed');
@@ -426,11 +437,62 @@ export function createInlineJobRuntime(deps: CreateInlineJobRuntimeDeps): Inline
 /** Queue delivery does not own physical submission; the durable intent does. */
 function callDisposition(
   result: CallJobResult,
-): { status: 'skipped'; reason: string } | { status: 'reconciliation_required' } | null {
+):
+  | { status: 'skipped'; reason: string }
+  | { status: 'reconciliation_required' | 'rescheduled' }
+  | null {
   if (result.outcome === 'BLOCKED') return { status: 'skipped', reason: 'call_intent_blocked' };
   if (result.outcome === 'ALREADY_PROCESSED') {
     return { status: 'skipped', reason: 'call_intent_already_processed' };
   }
   if (result.outcome === 'RECONCILIATION_REQUIRED') return { status: 'reconciliation_required' };
+  if (result.outcome === 'RESCHEDULED') return { status: 'rescheduled' };
   return null;
+}
+
+export interface CallObservationReport {
+  selected: number;
+  observed: number;
+  terminal: number;
+  rescheduled: number;
+  stopRequested: number;
+  failed: number;
+}
+
+export type CallObservationSweep = (bounds: {
+  limit: number;
+  budgetMs: number;
+}) => Promise<CallObservationReport>;
+
+/** Scheduled observation needs only provider read/stop clients, never the summary runtime. */
+export function createCallObservationSweep(
+  deps: {
+    readonly prisma?: DbClient;
+    readonly env?: NodeJS.ProcessEnv;
+    readonly retellPort?: RetellPort;
+    readonly provider?: RetellReconciliationClient | null;
+  } = {},
+): CallObservationSweep {
+  const env = deps.env ?? process.env;
+  let retellPort = deps.retellPort;
+  let provider = deps.provider;
+  return async (bounds) => {
+    const apiKey = env.RETELL_API_KEY ?? '';
+    retellPort ??= apiKey
+      ? createRetellPort({ apiKey }).port
+      : {
+          startCall: () => Promise.reject(new Error('Provider submission unavailable.')),
+          endCall: () => Promise.reject(new Error('Provider stop unavailable.')),
+          subscribe: () => () => undefined,
+        };
+    if (provider === undefined) {
+      provider = apiKey ? createRetellReconciliationClient({ apiKey }) : null;
+    }
+    return sweepDueAcceptedCalls({
+      prisma: deps.prisma ?? defaultPrisma,
+      provider,
+      retellPort,
+      ...bounds,
+    });
+  };
 }

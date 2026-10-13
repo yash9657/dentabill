@@ -29,6 +29,8 @@ import { runInBackground } from '../../lib/background.js';
 import { getEnv } from '../../lib/env.js';
 import {
   createInlineJobRuntime,
+  createCallObservationSweep,
+  type CallObservationSweep,
   type InlineJobRuntime,
   type InlineRunReport,
 } from '../../lib/inline-jobs.js';
@@ -41,6 +43,8 @@ declare module 'fastify' {
      * root instance in app.ts so tests can assign a fake.
      */
     inlineJobRuntime: InlineJobRuntime | null;
+    /** Optional injected observer; production creates provider-only clients lazily. */
+    callObservationSweep?: CallObservationSweep;
   }
 }
 
@@ -59,6 +63,8 @@ export function internalSecretMatches(provided: unknown, expected: string | unde
 }
 
 export function internalJobsRoutes(fastify: FastifyInstance): void {
+  const observe = (): CallObservationSweep =>
+    (fastify.callObservationSweep ??= createCallObservationSweep({ prisma }));
   const runtime = (): InlineJobRuntime =>
     (fastify.inlineJobRuntime ??= createInlineJobRuntime({
       jobDispatcher: fastify.jobDispatcher,
@@ -125,7 +131,15 @@ export function internalJobsRoutes(fastify: FastifyInstance): void {
             claimId: data.claimId,
             attemptNumber: data.attemptNumber,
             claimPriority: data.claimPriority,
-            state: { in: data.resume ? ['TERMINAL'] : ['TERMINAL', 'CANCELLED', 'UNKNOWN'] },
+            OR: [
+              { state: { in: data.resume ? ['TERMINAL'] : ['TERMINAL', 'CANCELLED', 'UNKNOWN'] } },
+              {
+                state: 'ACCEPTED',
+                callId: { not: null },
+                callDeadlineAt: { not: null },
+                nextObservationAt: { not: null },
+              },
+            ],
           },
           select: { payerCode: true },
         });
@@ -177,17 +191,47 @@ export function internalJobsRoutes(fastify: FastifyInstance): void {
         .send({ error: true, code: 'VALIDATION_ERROR', message: 'Invalid relay payload.' });
     }
     // This authenticated system sweep owns scope and bounds; callers cannot override them.
-    const work = relayJobOutbox({
-      prisma,
-      jobDispatcher: fastify.jobDispatcher,
-      limit: 25,
-      leaseMs: 30_000,
-      sendTimeoutMs: 5_000,
-      budgetMs: 20_000,
-    });
+    const work = Promise.allSettled([
+      relayJobOutbox({
+        prisma,
+        jobDispatcher: fastify.jobDispatcher,
+        limit: 25,
+        leaseMs: 30_000,
+        sendTimeoutMs: 5_000,
+        budgetMs: 20_000,
+      }),
+      Promise.resolve().then(() => observe()({ limit: 5, budgetMs: 25_000 })),
+    ]);
     runInBackground(work);
     try {
-      return await reply.code(200).send(await work);
+      const [relay, observation] = await work;
+      if (relay.status === 'rejected' || observation.status === 'rejected') {
+        fastify.log.error({ code: 'RECOVERY_SWEEP_UNCONFIRMED' }, 'recovery sweep unconfirmed');
+        return await unconfirmed(reply);
+      }
+      const { selected, sent, failed, quarantined } = relay.value;
+      const {
+        selected: due,
+        observed,
+        terminal,
+        rescheduled,
+        stopRequested,
+        failed: observationFailed,
+      } = observation.value;
+      return await reply.code(200).send({
+        selected,
+        sent,
+        failed,
+        quarantined,
+        observation: {
+          selected: due,
+          observed,
+          terminal,
+          rescheduled,
+          stopRequested,
+          failed: observationFailed,
+        },
+      });
     } catch {
       fastify.log.error({ code: 'OUTBOX_RELAY_UNCONFIRMED' }, 'outbox relay unconfirmed');
       return await unconfirmed(reply);

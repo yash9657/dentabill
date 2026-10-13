@@ -656,6 +656,21 @@ export interface paths {
                                 endedAt: string | null;
                                 /** Format: date-time */
                                 cancelRequestedAt: string | null;
+                                monitoring: {
+                                    /** Format: date-time */
+                                    deadlineAt: string | null;
+                                    /** Format: date-time */
+                                    nextObservationAt: string | null;
+                                    /** Format: date-time */
+                                    stopRequestedAt: string | null;
+                                    /** Format: date-time */
+                                    stopAcknowledgedAt: string | null;
+                                    /** Format: date-time */
+                                    reviewRequiredAt: string | null;
+                                    /** Format: date-time */
+                                    lastCheckedAt: string | null;
+                                    lastErrorCode: string | null;
+                                } | null;
                                 durationSeconds: number | null;
                                 /** @enum {string|null} */
                                 dlqReason: "EXCEEDED_MAX_ATTEMPTS" | "EXCEEDED_MAX_DURATION" | "EXCEEDED_MAX_HOLD" | "CANCELLED_BY_OPERATOR" | null;
@@ -770,6 +785,21 @@ export interface paths {
                             endedAt: string | null;
                             /** Format: date-time */
                             cancelRequestedAt: string | null;
+                            monitoring: {
+                                /** Format: date-time */
+                                deadlineAt: string | null;
+                                /** Format: date-time */
+                                nextObservationAt: string | null;
+                                /** Format: date-time */
+                                stopRequestedAt: string | null;
+                                /** Format: date-time */
+                                stopAcknowledgedAt: string | null;
+                                /** Format: date-time */
+                                reviewRequiredAt: string | null;
+                                /** Format: date-time */
+                                lastCheckedAt: string | null;
+                                lastErrorCode: string | null;
+                            } | null;
                             durationSeconds: number | null;
                             /** @enum {string|null} */
                             dlqReason: "EXCEEDED_MAX_ATTEMPTS" | "EXCEEDED_MAX_DURATION" | "EXCEEDED_MAX_HOLD" | "CANCELLED_BY_OPERATOR" | null;
@@ -851,6 +881,21 @@ export interface paths {
                             endedAt: string | null;
                             /** Format: date-time */
                             cancelRequestedAt: string | null;
+                            monitoring: {
+                                /** Format: date-time */
+                                deadlineAt: string | null;
+                                /** Format: date-time */
+                                nextObservationAt: string | null;
+                                /** Format: date-time */
+                                stopRequestedAt: string | null;
+                                /** Format: date-time */
+                                stopAcknowledgedAt: string | null;
+                                /** Format: date-time */
+                                reviewRequiredAt: string | null;
+                                /** Format: date-time */
+                                lastCheckedAt: string | null;
+                                lastErrorCode: string | null;
+                            } | null;
                             durationSeconds: number | null;
                             /** @enum {string|null} */
                             dlqReason: "EXCEEDED_MAX_ATTEMPTS" | "EXCEEDED_MAX_DURATION" | "EXCEEDED_MAX_HOLD" | "CANCELLED_BY_OPERATOR" | null;
@@ -956,6 +1001,54 @@ export interface paths {
                             retryNumber: number;
                             /** Format: date-time */
                             queuedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/calls/{id}/check-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description OWNER/ADMIN read-only check of an accepted call. Never starts or stops a call. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            callId: string;
+                            /** @enum {string} */
+                            outcome: "COMPLETED" | "ESCALATED" | "RESCHEDULED" | "CANCELLED" | "BLOCKED" | "RECONCILIATION_REQUIRED" | "ALREADY_PROCESSED";
+                            /** Format: date-time */
+                            checkedAt: string;
                         };
                     };
                 };

@@ -39,6 +39,9 @@ import { z } from 'zod';
 
 import {
   createInlineJobRuntime,
+  createCallObservationSweep,
+  type CallObservationReport,
+  type CallObservationSweep,
   type AttemptReport,
   type InlineJobRuntime,
 } from './lib/inline-jobs.js';
@@ -185,6 +188,8 @@ const sqsEventSchema = z.strictObject({
 
 export const OUTBOX_RELAY_LIMIT = 25;
 export const OUTBOX_RELAY_BUDGET_MS = 20_000;
+export const CALL_OBSERVATION_LIMIT = 5;
+export const CALL_OBSERVATION_BUDGET_MS = 25_000;
 
 export interface OutboxRelayReport {
   selected: number;
@@ -200,9 +205,12 @@ export interface LambdaJobWorkerDeps {
     budgetMs: number;
   }) => Promise<OutboxRelayReport>;
   readonly logger: Logger;
+  readonly observeCalls: CallObservationSweep;
 }
 
-export type LambdaJobWorkerResponse = SqsBatchResponse | OutboxRelayReport;
+export type LambdaJobWorkerResponse =
+  | SqsBatchResponse
+  | (OutboxRelayReport & { observation: CallObservationReport });
 
 /**
  * IAM on the private worker Lambda is the authorization boundary, not these
@@ -215,22 +223,61 @@ export function createLambdaJobWorker(
 ): (event: unknown) => Promise<LambdaJobWorkerResponse> {
   return async (event) => {
     if (relayEventSchema.safeParse(event).success) {
-      try {
-        const { selected, sent, failed, quarantined } = await deps.relayOutbox({
-          limit: OUTBOX_RELAY_LIMIT,
-          budgetMs: OUTBOX_RELAY_BUDGET_MS,
-        });
-        const counts = { selected, sent, failed, quarantined };
-        deps.logger[failed > 0 || quarantined > 0 ? 'warn' : 'info'](
-          counts,
-          'outbox relay sweep completed',
-        );
-        return counts;
-      } catch {
-        // Never emit DB errors, job payloads, or tenant data to Lambda's logs.
+      // Each recovery path runs even when the other fails. Neither depends on
+      // the call/summary job runtime being configured or receiving a delivery.
+      const [relay, observation] = await Promise.allSettled([
+        Promise.resolve().then(() =>
+          deps.relayOutbox({
+            limit: OUTBOX_RELAY_LIMIT,
+            budgetMs: OUTBOX_RELAY_BUDGET_MS,
+          }),
+        ),
+        Promise.resolve().then(() =>
+          deps.observeCalls({
+            limit: CALL_OBSERVATION_LIMIT,
+            budgetMs: CALL_OBSERVATION_BUDGET_MS,
+          }),
+        ),
+      ]);
+      if (relay.status === 'rejected') {
         deps.logger.error({ code: 'OUTBOX_RELAY_FAILED' }, 'outbox relay sweep failed');
+      }
+      if (observation.status === 'rejected') {
+        deps.logger.error({ code: 'CALL_OBSERVATION_FAILED' }, 'call observation sweep failed');
+      }
+      if (relay.status === 'rejected') {
         throw new Error('lambda-worker: outbox relay sweep failed');
       }
+      if (observation.status === 'rejected') {
+        throw new Error('lambda-worker: call observation sweep failed');
+      }
+      const { selected, sent, failed, quarantined } = relay.value;
+      const counts = { selected, sent, failed, quarantined };
+      const {
+        selected: due,
+        observed,
+        terminal,
+        rescheduled,
+        stopRequested,
+        failed: observationFailed,
+      } = observation.value;
+      const observationCounts = {
+        selected: due,
+        observed,
+        terminal,
+        rescheduled,
+        stopRequested,
+        failed: observationFailed,
+      };
+      deps.logger[failed > 0 || quarantined > 0 ? 'warn' : 'info'](
+        counts,
+        'outbox relay sweep completed',
+      );
+      deps.logger[observationFailed > 0 ? 'warn' : 'info'](
+        observationCounts,
+        'call observation sweep completed',
+      );
+      return { ...counts, observation: observationCounts };
     }
 
     const sqs = sqsEventSchema.safeParse(event);
@@ -263,6 +310,7 @@ function buildWorker(
   let sqsWorker: ReturnType<typeof createSqsJobWorker> | null = null;
   return createLambdaJobWorker({
     logger,
+    observeCalls: createCallObservationSweep({ prisma, env }),
     relayOutbox: ({ limit, budgetMs }) =>
       relayJobOutbox({ prisma, jobDispatcher, limit, budgetMs }),
     sqsWorker: (event) => {

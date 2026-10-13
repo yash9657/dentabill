@@ -22,6 +22,9 @@ interface RetellLikeClient {
         readonly to_number: string;
         readonly idempotency_key: string;
         readonly override_agent_id?: string;
+        readonly agent_override?: {
+          readonly agent: { readonly max_call_duration_ms: number };
+        };
         readonly metadata?: unknown;
         readonly retell_llm_dynamic_variables?: Record<string, unknown>;
       },
@@ -41,7 +44,7 @@ export type RetellLoader = () => Promise<RetellCtor>;
 /**
  * `LiveRetell` (ADR-033) — production adapter wrapping `retell-sdk`.
  *
- * The only adapter that touches the network. **Lazy-loads `retell-sdk`**
+ * **Lazy-loads `retell-sdk`**
  * via `await import()` so importing the `@dentabill/payer-ivr` index
  * does NOT pull the SDK into dev / test bundles where the API key is
  * absent — matches the `hasClerkKeys` pattern from ADR-024 / ADR-030.
@@ -106,6 +109,11 @@ export class LiveRetell implements RetellPort {
         to_number: input.toNumberE164,
         idempotency_key: input.idempotencyKey,
         override_agent_id: input.agentId,
+        // Per-call agent override; leave the configured agent untouched.
+        // https://docs.retellai.com/api-references/create-phone-call
+        ...(input.maxDurationMs === undefined
+          ? {}
+          : { agent_override: { agent: { max_call_duration_ms: input.maxDurationMs } } }),
         metadata: {
           dentabill_intent_id: input.idempotencyKey,
           idempotencyKey: input.idempotencyKey,

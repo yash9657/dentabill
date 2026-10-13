@@ -12,7 +12,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import { createSqsJobWorker } from '../lambda-worker.js';
 
-import { createInlineJobRuntime, type CreateInlineJobRuntimeDeps } from './inline-jobs.js';
+import {
+  createCallObservationSweep,
+  createInlineJobRuntime,
+  type CreateInlineJobRuntimeDeps,
+} from './inline-jobs.js';
 
 const silentLogger = createLogger({ level: 'fatal', pretty: false, base: { service: 'test' } });
 
@@ -164,6 +168,59 @@ describe('createInlineJobRuntime — calls', () => {
       reason: 'call_intent_already_processed',
     });
     expect(retell.startedCalls).toHaveLength(1);
+  });
+
+  it.each(['inline', 'sqs'] as const)(
+    'hands an accepted call to persisted observation after one bounded %s attempt',
+    async (mode) => {
+      const { runtime, retell, dispatcher } = runtimeWith();
+      const { data, orgId } = await seed();
+      const report =
+        mode === 'inline'
+          ? await runtime.runCall(data)
+          : await runtime.runCallAttempt(data, { attempt: 1, maxAttempts: 3 });
+      expect(report).toEqual(
+        mode === 'inline'
+          ? { status: 'rescheduled', attemptsMade: 1 }
+          : { status: 'rescheduled', attempt: 1 },
+      );
+      const intent = await prisma.callIntent.findFirstOrThrow({
+        where: { organizationId: orgId, idempotencyKey: data.idempotencyKey },
+      });
+      expect(intent).toMatchObject({
+        state: 'ACCEPTED',
+        callId: expect.any(String),
+        callDeadlineAt: expect.any(Date),
+        nextObservationAt: expect.any(Date),
+      });
+      expect(retell.startedCalls).toHaveLength(1);
+      expect(dispatcher.dispatchSummary).not.toHaveBeenCalled();
+      const replay = await runtime.runCallAttempt(data, { attempt: 2, maxAttempts: 3 });
+      // A later no-key delivery cannot recover the first invocation’s in-memory source.
+      expect(replay).toMatchObject({ status: 'reconciliation_required' });
+      expect(retell.startedCalls).toHaveLength(1);
+      expect(
+        (
+          await prisma.callIntent.findFirstOrThrow({
+            where: { id: intent.id, organizationId: orgId },
+          })
+        ).callDeadlineAt,
+      ).toEqual(intent.callDeadlineAt);
+    },
+  );
+
+  it('constructs scheduled observation independently of summary/worker configuration', async () => {
+    const fake = new FakeRetell();
+    const sweep = createCallObservationSweep({ prisma, env: {}, retellPort: fake, provider: null });
+    expect(await sweep({ limit: 5, budgetMs: 25_000 })).toEqual({
+      selected: 0,
+      observed: 0,
+      terminal: 0,
+      rescheduled: 0,
+      stopRequested: 0,
+      failed: 0,
+    });
+    expect(fake.startedCalls).toHaveLength(0);
   });
 
   it.each(['', '-r2'])(

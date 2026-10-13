@@ -918,3 +918,48 @@ for these local invariants only. A positive nonterminal match can still stall af
 end webhook. Accepted-call deadlines, account sweeps, quarantine operations, real-provider
 compatibility, authorized clinic tests and production rollout remain open. Upgrade/drain old
 workers before exposing recovery so an older parser cannot discard the resume command.
+
+## ADR-061 — Observe accepted calls in bounded steps with durable termination state
+
+**Date:** 2026-10-13. **Status:** local implementation and synthetic verification; deployment and live termination remain release gates.
+
+An accepted provider call must outlive a particular queue consumer. Migration twelve adds
+CallIntent deadlines, due time, observer lease/attempts, last checked result/review marker,
+and separate stop request/attempt/acknowledgement/confirmation timestamps. Submission freezes
+the deadline before the external request. The same duration is appended to the canonical
+request snapshot and sent as `agent_override.agent.max_call_duration_ms`; old request hashes
+remain valid. Accepted binding gives the first subscriber a thirty-second scheduling grace.
+Recovery and legacy backfill anchor to original submission/creation, never worker restart.
+
+Each observation acquires a sixty-second token-fenced lease. The initial same-process window
+is one second; explicit no-key demo autopilot retains a bounded ninety-second window with a
+longer lease. Persisted sources are checked before remote work. Known-ID Get Call is bounded
+to ten seconds and must match the saved hash and exact outbound identity. Verified terminal
+source, terminal intent/call, conditional version-bound claim transition, audit and one summary
+outbox obligation commit atomically. Stale owners cannot insert source or overwrite finalization.
+Concurrent biller edits remain intact. Persistence failures retain ACCEPTED with a due time;
+transport acknowledgement is not a claim that the call or summary finished.
+
+A cancellation marker or saved duration deadline can request Stop. Persist the attempt before
+sending, then recheck current ownership. Retry the same provider ID no sooner than sixty
+seconds, at most three times; confirmation ends five minutes after the first stop request.
+An acknowledged or failed Stop never manufactures endedAt, terminal status, transcript, or a
+summary. Exhaustion requires review. After confirmation expiry, automatic remote reads stop;
+DB-source checks continue every five minutes and an authorized manual status check can retrieve
+later terminal evidence. Read-only checks cannot Stop or create calls. A fresh missing-key
+FakeRetell cannot acknowledge a real persisted call; only the just-started known synthetic
+adapter can stop its own in-memory scenario. Crashed demos require evidence/review.
+
+The existing trusted recovery entrypoints run outbox relay and up to five due accepted-call
+observations independently. Observer selection prioritizes null legacy timers so they cannot
+starve behind recurring calls. A twenty-five-second wall budget admits another row only when
+two ten-second external operations fit; database latency itself is not preempted. No queue
+message generation is needed per tick. AWS recovery remains disabled until explicitly deployed
+and enabled; a saved due time alone is not deployed recovery. Drain old workers before rollout.
+
+The stop/check/lease protocol cannot provide exactly-once Stop across a process pause or lost
+acknowledgement; retries target the same existing call and never authorize redial. The provider
+cap is additional protection, not verified real-line termination. Hold detection/DTMF and
+actual provider behavior remain unverified. Synthetic process tests prove the documented crash
+boundaries only. FW-38 separately replaces raw Prisma event logging with allowlisted target/
+timestamp records; thrown errors elsewhere still need their own safe handling.

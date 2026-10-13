@@ -8,12 +8,19 @@ import { callQueryKey } from '../../../lib/calls/use-call.js';
 
 import { CallDetailPage } from './call-detail-page.js';
 
-const getMock = vi.fn();
+const getMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const postMock = vi.fn();
+let profileRole: 'OWNER' | 'ADMIN' | 'BILLING_STAFF' = 'BILLING_STAFF';
 
 vi.mock('../../../lib/api-client.js', () => ({
   useDentaBillApi: () => ({
-    client: { GET: getMock, POST: postMock },
+    client: {
+      GET: (path: string, ...args: unknown[]) =>
+        path === '/v1/me'
+          ? Promise.resolve({ data: { user: { role: profileRole } } })
+          : getMock(path, ...args),
+      POST: postMock,
+    },
     withAuthHeaders: async () => ({ authorization: 'Bearer synthetic-test-token' }),
   }),
 }));
@@ -33,6 +40,7 @@ const baseCall: CallDetailResponse = {
   durationSeconds: null,
   dlqReason: null,
   cancelRequestedAt: null,
+  monitoring: null,
   createdAt: '2026-10-13T10:00:00.000Z',
   events: [],
   claim: {
@@ -69,11 +77,81 @@ afterAll(() => {
 });
 
 beforeEach(() => {
+  profileRole = 'BILLING_STAFF';
   getMock.mockReset();
   postMock.mockReset();
 });
 
 describe('<CallDetailPage /> cancellation', () => {
+  it.each([
+    ['overdue', null, null, null, 'Deadline exceeded'],
+    ['requested', '2026-01-01T00:01:00.000Z', null, null, 'Stop requested'],
+    [
+      'acknowledged',
+      '2026-01-01T00:01:00.000Z',
+      '2026-01-01T00:01:01.000Z',
+      null,
+      'Stop requested',
+    ],
+    [
+      'unconfirmed',
+      '2026-01-01T00:01:00.000Z',
+      '2026-01-01T00:01:01.000Z',
+      '2026-01-01T00:03:00.000Z',
+      'Stop not confirmed',
+    ],
+  ] as const)(
+    'shows %s monitoring while retaining the provider’s active status',
+    async (_case, stopRequestedAt, stopAcknowledgedAt, reviewRequiredAt, label) => {
+      getMock.mockResolvedValue({
+        data: {
+          ...baseCall,
+          monitoring: {
+            deadlineAt: '2026-01-01T00:00:00.000Z',
+            nextObservationAt: null,
+            stopRequestedAt,
+            stopAcknowledgedAt,
+            reviewRequiredAt,
+            lastCheckedAt: null,
+            lastErrorCode: null,
+          },
+        },
+      });
+      renderDetail();
+      expect(await screen.findByRole('status')).toHaveTextContent(label);
+      expect(screen.getByLabelText('Status: On hold')).toBeInTheDocument();
+      if (stopRequestedAt)
+        expect(screen.getByRole('button', { name: 'Stop requested' })).toBeDisabled();
+      if (stopAcknowledgedAt && !reviewRequiredAt)
+        expect(screen.getByRole('status')).toHaveTextContent(
+          'Waiting for confirmation that the call ended',
+        );
+      expect(postMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('clears overdue and unconfirmed-stop warnings once terminal evidence arrives', async () => {
+    getMock.mockResolvedValue({
+      data: {
+        ...baseCall,
+        status: 'COMPLETED',
+        monitoring: {
+          deadlineAt: '2026-01-01T00:00:00.000Z',
+          nextObservationAt: null,
+          stopRequestedAt: '2026-01-01T00:01:00.000Z',
+          stopAcknowledgedAt: null,
+          reviewRequiredAt: '2026-01-01T00:03:00.000Z',
+          lastCheckedAt: null,
+          lastErrorCode: 'STOP_CONFIRMATION_EXPIRED',
+        },
+      },
+    });
+    renderDetail();
+    await screen.findByLabelText('Status: Completed');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
   it('posts a request once, preserves active call status, and waits for terminal evidence', async () => {
     getMock.mockResolvedValue({ data: baseCall });
     postMock.mockImplementationOnce(async () => {
@@ -249,4 +327,127 @@ describe('<CallDetailPage /> cancellation', () => {
       });
     },
   );
+});
+
+const monitoredCall: CallDetailResponse = {
+  ...baseCall,
+  monitoring: {
+    deadlineAt: '2026-01-01T00:00:00.000Z',
+    nextObservationAt: null,
+    stopRequestedAt: null,
+    stopAcknowledgedAt: null,
+    reviewRequiredAt: null,
+    lastCheckedAt: null,
+    lastErrorCode: null,
+  },
+};
+
+describe('<CallDetailPage /> manual provider status check', () => {
+  it.each(['OWNER', 'ADMIN'] as const)(
+    'offers %s a read-only check without changing active status',
+    async (role) => {
+      profileRole = role;
+      getMock.mockResolvedValue({ data: monitoredCall });
+      postMock.mockResolvedValue({
+        data: {
+          callId: baseCall.id,
+          outcome: 'RECONCILIATION_REQUIRED',
+          checkedAt: '2026-10-13T10:02:00.000Z',
+        },
+      });
+      const { client, user } = renderDetail();
+      const invalidate = vi.spyOn(client, 'invalidateQueries');
+      await user.click(await screen.findByRole('button', { name: 'Check call status' }));
+      expect(
+        await screen.findByText(
+          'Call-end confirmation is still pending. Review the latest status below.',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText('Status: On hold')).toBeInTheDocument();
+      expect(postMock).toHaveBeenCalledTimes(1);
+      expect(postMock).toHaveBeenCalledWith('/v1/calls/{id}/check-status', {
+        params: { path: { id: baseCall.id } },
+        headers: { authorization: 'Bearer synthetic-test-token' },
+        body: {},
+      });
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['calls'] });
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['claims'] });
+    },
+  );
+
+  it('hides the status action for historical calls without a durable intent', async () => {
+    profileRole = 'OWNER';
+    getMock.mockResolvedValue({ data: baseCall });
+    renderDetail();
+    await screen.findByLabelText('Status: On hold');
+    expect(screen.queryByRole('button', { name: 'Check call status' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer billing staff the owner/admin status action', async () => {
+    getMock.mockResolvedValue({ data: monitoredCall });
+    renderDetail();
+    await screen.findByLabelText('Status: On hold');
+    expect(screen.queryByRole('button', { name: 'Check call status' })).not.toBeInTheDocument();
+  });
+
+  it('disables duplicate status checks and preserves terminal evidence arriving before the lookup response', async () => {
+    profileRole = 'OWNER';
+    getMock.mockResolvedValue({ data: monitoredCall });
+    let resolveRequest: (response: unknown) => void = () => undefined;
+    postMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+    const { client, user } = renderDetail();
+    await user.click(await screen.findByRole('button', { name: 'Check call status' }));
+    expect(screen.getByRole('button', { name: 'Checking status…' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Checking status…' }));
+    expect(postMock).toHaveBeenCalledTimes(1);
+    const completed = {
+      ...baseCall,
+      status: 'COMPLETED' as const,
+      endedAt: '2026-10-13T10:02:00.000Z',
+      durationSeconds: 120,
+    };
+    getMock.mockResolvedValue({ data: completed });
+    await act(async () => {
+      client.setQueryData(callQueryKey(baseCall.id), completed);
+      resolveRequest({
+        data: {
+          callId: baseCall.id,
+          outcome: 'RESCHEDULED',
+          checkedAt: '2026-10-13T10:01:00.000Z',
+        },
+      });
+    });
+    await waitFor(() => expect(screen.getByLabelText('Status: Completed')).toBeInTheDocument());
+    expect(client.getQueryData(callQueryKey(baseCall.id))).toMatchObject({
+      status: 'COMPLETED',
+      durationSeconds: 120,
+    });
+    expect(screen.queryByRole('button', { name: /Check.*status/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/The call remains active/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      'INVALID_STATE_TRANSITION',
+      'A status check is underway or was just completed. Try again in a minute.',
+    ],
+    [
+      'CALL_RECONCILIATION_UNAVAILABLE',
+      'Call lookup is not configured. Contact your administrator.',
+    ],
+  ])('gives safe retry feedback for %s', async (code, message) => {
+    profileRole = 'OWNER';
+    getMock.mockResolvedValue({ data: monitoredCall });
+    postMock.mockResolvedValue({ error: { code, message: 'SYNTHETIC_PRIVATE_PROVIDER_MESSAGE' } });
+    const { user } = renderDetail();
+    await user.click(await screen.findByRole('button', { name: 'Check call status' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+    expect(screen.queryByText('SYNTHETIC_PRIVATE_PROVIDER_MESSAGE')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Status: On hold')).toBeInTheDocument();
+  });
 });

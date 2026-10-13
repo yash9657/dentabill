@@ -54,3 +54,11 @@ export {
   type RelayJobOutboxOptions,
   type RelayJobOutboxResult,
 } from './job-outbox.js';
+
+export {
+  observeAcceptedCall,
+  sweepDueAcceptedCalls,
+  type ObserveAcceptedCallOptions,
+  type SweepDueAcceptedCallsOptions,
+  type CallObservationSweepResult,
+} from './call-observer.js';

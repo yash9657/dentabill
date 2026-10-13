@@ -1,15 +1,15 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 import { audit, type Call, type CallIntent, type Prisma } from '@dentabill/db';
 import {
   RetellEventSchema,
-  StartCallInputSchema,
   type RetellCallCandidate,
   type RetellCallEndedEvent,
   type RetellReconciliationClient,
   type StartCallInput,
 } from '@dentabill/payer-ivr';
 
+import { getCallIntentSnapshot, matchesCallCandidate } from './call-provider-evidence.js';
 import type { DbClient } from './handler.js';
 import { enqueueJobOutbox } from './job-outbox.js';
 
@@ -70,31 +70,6 @@ export interface ReconcileCallIntentOptions {
   readonly clock?: () => Date;
 }
 
-function identityMatches(candidate: RetellCallCandidate, snapshot: StartCallInput): boolean {
-  return (
-    candidate.providerCallId.length > 0 &&
-    candidate.intentId === snapshot.idempotencyKey &&
-    candidate.callType === 'phone_call' &&
-    candidate.direction === 'outbound' &&
-    candidate.agentId === snapshot.agentId &&
-    candidate.fromNumberE164 === snapshot.fromNumberE164 &&
-    candidate.toNumberE164 === snapshot.toNumberE164 &&
-    (candidate.startedAt === null || Number.isFinite(Date.parse(candidate.startedAt)))
-  );
-}
-
-function snapshotOf(intent: CallIntent): StartCallInput | null {
-  const parsed = StartCallInputSchema.safeParse(intent.requestPayload);
-  if (!parsed.success) return null;
-  // Parse restores the versioned submission field order after Postgres JSONB normalization.
-  const snapshot = parsed.data;
-  return snapshot.idempotencyKey === intent.id &&
-    snapshot.payerCode === intent.payerCode &&
-    createHash('sha256').update(JSON.stringify(snapshot)).digest('hex') === intent.requestHash
-    ? snapshot
-    : null;
-}
-
 type LookupResult =
   | { outcome: 'NO_MATCH' | 'REVIEW_REQUIRED' | 'LOOKUP_FAILED' }
   | {
@@ -118,7 +93,7 @@ async function lookup(
         });
         if (candidates.length === 0) return { outcome: 'NO_MATCH' };
         const candidate = candidates[0];
-        if (candidates.length !== 1 || !candidate || !identityMatches(candidate, snapshot)) {
+        if (candidates.length !== 1 || !candidate || !matchesCallCandidate(candidate, snapshot)) {
           return { outcome: 'REVIEW_REQUIRED' };
         }
         const detail = await provider.getCall({
@@ -127,7 +102,7 @@ async function lookup(
         });
         if (
           detail.candidate.providerCallId !== candidate.providerCallId ||
-          !identityMatches(detail.candidate, snapshot)
+          !matchesCallCandidate(detail.candidate, snapshot)
         ) {
           return { outcome: 'REVIEW_REQUIRED' };
         }
@@ -236,7 +211,7 @@ async function reconcile(options: ReconcileCallIntentOptions): Promise<CallRecon
     return tx.callIntent.findFirstOrThrow({ where: scope });
   });
   if (!owned) return resultNow();
-  const snapshot = snapshotOf(owned);
+  const snapshot = getCallIntentSnapshot(owned);
   const found: LookupResult = snapshot
     ? await lookup(provider, snapshot)
     : { outcome: 'REVIEW_REQUIRED' };
@@ -338,6 +313,21 @@ async function reconcile(options: ReconcileCallIntentOptions): Promise<CallRecon
         if (confirmed.count === 0) return null;
         call = bound.call;
       }
+      const acceptedScope = { ...scope, state: 'ACCEPTED' as const, callId: call.id };
+      // Preserve an existing deadline, including one saved while lookup was in flight.
+      // Both the deadline and the observation obligation commit with the binding/outbox.
+      await tx.callIntent.updateMany({
+        where: { ...acceptedScope, callDeadlineAt: null },
+        data: {
+          callDeadlineAt: new Date(
+            (owned.submittedAt ?? owned.createdAt).getTime() + (snapshot?.maxDurationMs ?? 900_000),
+          ),
+        },
+      });
+      await tx.callIntent.updateMany({
+        where: acceptedScope,
+        data: { nextObservationAt: clock() },
+      });
       if (found.terminalEvent) {
         await tx.callEvent.create({
           data: {

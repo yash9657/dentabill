@@ -77,6 +77,37 @@ const PayerCodeEnum = z.enum([
   'UNKNOWN',
 ]);
 
+const CallMonitoringSchema = z.object({
+  deadlineAt: z.iso.datetime().nullable(),
+  nextObservationAt: z.iso.datetime().nullable(),
+  stopRequestedAt: z.iso.datetime().nullable(),
+  stopAcknowledgedAt: z.iso.datetime().nullable(),
+  reviewRequiredAt: z.iso.datetime().nullable(),
+  lastCheckedAt: z.iso.datetime().nullable(),
+  lastErrorCode: z.string().nullable(),
+});
+const OBSERVATION_ERROR_CODES = new Set([
+  'PROVIDER_LOOKUP_UNAVAILABLE',
+  'PROVIDER_LOOKUP_FAILED',
+  'PROVIDER_IDENTITY_MISMATCH',
+  'INVALID_REQUEST_SNAPSHOT',
+  'STOP_UNAVAILABLE',
+  'STOP_FAILED',
+  'STOP_CONFIRMATION_EXPIRED',
+  'STOP_ATTEMPTS_EXHAUSTED',
+  'OBSERVATION_FAILED',
+]);
+const MONITORING_SELECT = {
+  callDeadlineAt: true,
+  nextObservationAt: true,
+  stopRequestedAt: true,
+  stopAcknowledgedAt: true,
+  observationReviewAt: true,
+  lastObservedAt: true,
+  observationErrorCode: true,
+} as const;
+type MonitoringRow = Pick<CallIntent, keyof typeof MONITORING_SELECT>;
+
 const CallResponseSchema = z.object({
   id: z.string(),
   claimId: z.string(),
@@ -90,6 +121,7 @@ const CallResponseSchema = z.object({
   startedAt: z.iso.datetime().nullable(),
   endedAt: z.iso.datetime().nullable(),
   cancelRequestedAt: z.iso.datetime().nullable(),
+  monitoring: CallMonitoringSchema.nullable(),
   durationSeconds: z.number().int().nullable(),
   dlqReason: CallDLQReasonEnum.nullable(),
   createdAt: z.iso.datetime(),
@@ -246,6 +278,7 @@ const CallsStatsResponseSchema = z.object({
 type CallsStatsResponse = z.infer<typeof CallsStatsResponseSchema>;
 
 interface CallRowForResponse {
+  intent?: MonitoringRow | null;
   id: string;
   claimId: string;
   retellCallId: string;
@@ -282,6 +315,21 @@ function toCallResponse(row: CallRowForResponse): CallResponse {
     startedAt: row.startedAt ? row.startedAt.toISOString() : null,
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
     cancelRequestedAt: row.cancelRequestedAt?.toISOString() ?? null,
+    monitoring: row.intent
+      ? {
+          deadlineAt: row.intent.callDeadlineAt?.toISOString() ?? null,
+          nextObservationAt: row.intent.nextObservationAt?.toISOString() ?? null,
+          stopRequestedAt: row.intent.stopRequestedAt?.toISOString() ?? null,
+          stopAcknowledgedAt: row.intent.stopAcknowledgedAt?.toISOString() ?? null,
+          reviewRequiredAt: row.intent.observationReviewAt?.toISOString() ?? null,
+          lastCheckedAt: row.intent.lastObservedAt?.toISOString() ?? null,
+          lastErrorCode:
+            row.intent.observationErrorCode &&
+            OBSERVATION_ERROR_CODES.has(row.intent.observationErrorCode)
+              ? row.intent.observationErrorCode
+              : null,
+        }
+      : null,
     durationSeconds: row.durationSeconds,
     dlqReason: row.dlqReason,
     createdAt: row.createdAt.toISOString(),
@@ -661,6 +709,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const db = getOrgScopedDb(orgId);
       const rows = await db.call.findMany({
         where: finalWhere,
+        include: { intent: { select: MONITORING_SELECT } },
         // `startedAt` may be null for INITIATED rows that haven't started
         // yet; Prisma sorts nulls last on desc, which is what we want
         // (in-flight rows surface above null startedAt). Cursor pagination
@@ -778,6 +827,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const row = await db.call.findFirst({
         where: { id },
         include: {
+          intent: { select: MONITORING_SELECT },
           events: { orderBy: { timestamp: 'asc' } },
           claim: {
             select: {
@@ -854,7 +904,11 @@ export function callsRoutes(fastify: FastifyInstance): void {
         clerkUserId: auth.clerkUserId,
       });
       if (!updated) throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
-      return toCallResponse(updated);
+      const intent = await prisma.callIntent.findFirst({
+        where: { organizationId: orgId, callId: updated.id },
+        select: MONITORING_SELECT,
+      });
+      return toCallResponse({ ...updated, intent });
     },
   );
 

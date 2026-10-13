@@ -24,6 +24,7 @@ const commandSchema = z.discriminatedUnion('type', [
     claimId: z.string(),
     queueKey: z.string(),
     providerUrl: z.string().url(),
+    now: z.string().datetime().optional(),
   }),
 ]);
 
@@ -158,12 +159,14 @@ async function runWorker(
     DEMO_AUTOPILOT: 'false',
     WORKER_OUTBOUND_NUMBER: '+15555550100',
   });
+  const now = initial.now;
   const handler = createCallJobHandler({
     prisma,
     retellPort,
     env,
     logger: createLogger({ level: 'fatal', pretty: false }),
     outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+    ...(now ? { clock: () => new Date(now) } : {}),
   });
   const job = {
     id: initial.queueKey,

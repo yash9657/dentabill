@@ -4,6 +4,7 @@ import { Button, Skeleton, StatusDot } from '@dentabill/ui';
 import Link from 'next/link';
 import * as React from 'react';
 
+import { callMonitoringLabel } from '../../../lib/calls/monitoring.js';
 import {
   callStatusIndicatorVariant,
   callStatusLabel,
@@ -18,6 +19,8 @@ import { useCancelCall } from '../../../lib/calls/use-cancel-call.js';
 import { payerLabel } from '../../../lib/claims/types.js';
 import { DashboardEmptyState } from '../dashboard-empty-state.js';
 import { SkeletonList } from '../skeleton-list.js';
+
+import { CheckCallStatusControl } from './check-call-status-control.js';
 
 export interface CallDetailPageProps {
   readonly id: string;
@@ -93,10 +96,42 @@ function DetailLayout({ call }: { readonly call: CallDetailResponse }): React.Re
         </p>
       </header>
 
-      <CancellationControl call={call} />
+      <MonitoringNotice call={call} />
+      <div className="flex flex-wrap items-start gap-4">
+        <CancellationControl call={call} />
+        <CheckCallStatusControl call={call} />
+      </div>
       <SummaryCard call={call} />
       <Timeline events={call.events} />
     </section>
+  );
+}
+
+function MonitoringNotice({
+  call,
+}: {
+  readonly call: CallDetailResponse;
+}): React.ReactElement | null {
+  const label = callMonitoringLabel(call);
+  if (!label) return null;
+  const explanation =
+    label === 'Deadline exceeded'
+      ? 'The call has passed its time limit. A stop request is pending. Its end has not been confirmed.'
+      : label === 'Stop not confirmed'
+        ? 'The call’s end could not be confirmed after a stop request. This call needs manual review.'
+        : label === 'Status needs review'
+          ? 'The latest call status could not be confirmed. Keep the claim in review.'
+          : call.monitoring?.stopAcknowledgedAt
+            ? 'The provider acknowledged the stop request. Waiting for confirmation that the call ended.'
+            : 'A stop has been requested. Waiting for the provider to confirm that the call ended.';
+  return (
+    <div
+      role="status"
+      className="hairline-edge rounded-card bg-warm-stone/30 flex max-w-3xl flex-col gap-2 p-5"
+    >
+      <p className="text-base font-medium text-black">{label}</p>
+      <p className="text-gray-dark text-sm">{explanation}</p>
+    </div>
   );
 }
 
@@ -108,12 +143,13 @@ function CancellationControl({
   const cancellation = useCancelCall(call.id);
   if (!isLiveCallStatus(call.status)) return null;
   const pending = isCallCancellationPending(call);
+  const automaticStop = call.monitoring?.stopRequestedAt != null;
 
   return (
     <div className="flex flex-col items-start gap-3">
       <Button
         variant="secondary"
-        disabled={pending || cancellation.isPending}
+        disabled={pending || automaticStop || cancellation.isPending}
         aria-busy={cancellation.isPending}
         onClick={() => {
           cancellation.mutate();
@@ -121,11 +157,13 @@ function CancellationControl({
       >
         {pending
           ? 'Cancellation requested'
-          : cancellation.isPending
-            ? 'Requesting cancellation…'
-            : 'Cancel call'}
+          : automaticStop
+            ? 'Stop requested'
+            : cancellation.isPending
+              ? 'Requesting cancellation…'
+              : 'Cancel call'}
       </Button>
-      {pending ? (
+      {pending && !callMonitoringLabel(call) ? (
         <p role="status" className="text-body text-gray-dark max-w-prose text-sm">
           Waiting for the call to end. The call remains active until its end is confirmed.
         </p>

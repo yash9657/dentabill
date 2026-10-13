@@ -87,6 +87,38 @@ describe('StartCallInputSchema', () => {
     expect(() => StartCallInputSchema.parse(valid)).not.toThrow();
   });
 
+  it('preserves historical request serialization and appends the optional duration field', () => {
+    const legacyJson = JSON.stringify(valid);
+    // JSONB may reorder both the outer request and nested metadata keys.
+    const reordered = Object.fromEntries(
+      Object.entries({
+        ...valid,
+        agentMetadata: Object.fromEntries(Object.entries(valid.agentMetadata).reverse()),
+      }).reverse(),
+    );
+    expect(JSON.stringify(StartCallInputSchema.parse(reordered))).toBe(legacyJson);
+    expect(StartCallInputSchema.parse(reordered)).not.toHaveProperty('maxDurationMs');
+    expect(
+      JSON.stringify(StartCallInputSchema.parse({ maxDurationMs: 1_800_000, ...reordered })),
+    ).toBe(`${legacyJson.slice(0, -1)},"maxDurationMs":1800000}`);
+  });
+
+  it.each([60_000, 7_200_000])(
+    'accepts the documented inclusive duration boundary %s',
+    (maxDurationMs) => {
+      expect(StartCallInputSchema.parse({ ...valid, maxDurationMs }).maxDurationMs).toBe(
+        maxDurationMs,
+      );
+    },
+  );
+
+  it.each([59_999, 7_200_001, 60_000.5, Number.NaN, Number.POSITIVE_INFINITY, null, '60000'])(
+    'rejects invalid duration %s',
+    (maxDurationMs) => {
+      expect(StartCallInputSchema.safeParse({ ...valid, maxDurationMs }).success).toBe(false);
+    },
+  );
+
   it('rejects a 9-digit NPI', () => {
     expect(() =>
       StartCallInputSchema.parse({

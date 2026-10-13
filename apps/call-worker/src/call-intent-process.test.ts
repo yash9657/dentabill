@@ -248,9 +248,16 @@ describe('Durable call intents across process death (synthetic external provider
     const first = fixture();
     first.send(command);
     await first.reply('worker.waiting');
+    // Subscription begins only after the observation lease is committed. Kill at
+    // that barrier before inspecting state so the bounded tick cannot release it.
+    first.child.kill('SIGKILL');
+    expect(await first.exited()).toEqual({ code: null, signal: 'SIGKILL' });
     const acceptedIntent = await prisma.callIntent.findUniqueOrThrow({ where: { id: intent.id } });
     expect(acceptedIntent.state).toBe('ACCEPTED');
     expect(acceptedIntent.callId).not.toBeNull();
+    expect(acceptedIntent.observationLeaseToken).not.toBeNull();
+    expect(acceptedIntent.observationLeaseExpiresAt).toBeInstanceOf(Date);
+    if (!acceptedIntent.observationLeaseExpiresAt) throw new Error('Missing observation lease.');
     const calls = await prisma.call.findMany({ where: { organizationId: organization.id } });
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
@@ -259,8 +266,6 @@ describe('Durable call intents across process death (synthetic external provider
     });
     const ledger = [{ intentId: intent.id, retellCallId: external.retellCallId }];
     expect(await external.ledger()).toEqual(ledger);
-    first.child.kill('SIGKILL');
-    expect(await first.exited()).toEqual({ code: null, signal: 'SIGKILL' });
 
     // A newer operator edit invalidates dial identity, but the accepted call still
     // needs finalization. Recovery must resume it and preserve the operator's state.
@@ -291,8 +296,46 @@ describe('Durable call intents across process death (synthetic external provider
       replayed: false,
     });
 
+    const beforeExpiry = fixture();
+    beforeExpiry.send({
+      ...command,
+      now: new Date(acceptedIntent.observationLeaseExpiresAt.getTime() - 1).toISOString(),
+    });
+    expect(await beforeExpiry.reply('worker.result')).toMatchObject({
+      startCount: 0,
+      result: { outcome: 'RESCHEDULED', callId: acceptedIntent.callId },
+    });
+    expect(await beforeExpiry.exited()).toEqual({ code: 0, signal: null });
+    expect(await external.ledger()).toEqual(ledger);
+    expect(
+      await prisma.callIntent.findFirstOrThrow({
+        where: { id: intent.id, organizationId: organization.id },
+      }),
+    ).toMatchObject({
+      state: 'ACCEPTED',
+      completedAt: null,
+      observationLeaseToken: acceptedIntent.observationLeaseToken,
+      observationLeaseExpiresAt: acceptedIntent.observationLeaseExpiresAt,
+      callDeadlineAt: acceptedIntent.callDeadlineAt,
+    });
+    expect(
+      await prisma.jobOutbox.count({
+        where: { organizationId: organization.id, kind: 'SUMMARY_GENERATE' },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: organization.id, action: 'call.end' },
+      }),
+    ).toBe(0);
+
+    // Advance only the worker's comparison clock, leaving the persisted lease intact.
+    const expiredCommand = {
+      ...command,
+      now: new Date(acceptedIntent.observationLeaseExpiresAt.getTime() + 1).toISOString(),
+    };
     const restarted = fixture();
-    restarted.send(command);
+    restarted.send(expiredCommand);
     expect(await restarted.reply('worker.result')).toMatchObject({
       startCount: 0,
       result: {
@@ -303,11 +346,21 @@ describe('Durable call intents across process death (synthetic external provider
       },
     });
     expect(await restarted.exited()).toEqual({ code: 0, signal: null });
+    const duplicate = fixture();
+    duplicate.send(expiredCommand);
+    expect(await duplicate.reply('worker.result')).toMatchObject({
+      startCount: 0,
+      result: { outcome: 'ALREADY_PROCESSED', callId: null },
+    });
+    expect(await duplicate.exited()).toEqual({ code: 0, signal: null });
     expect(await external.ledger()).toEqual(ledger);
     expect(await prisma.call.count({ where: { organizationId: organization.id } })).toBe(1);
     expect(await prisma.callIntent.findUniqueOrThrow({ where: { id: intent.id } })).toMatchObject({
       state: 'TERMINAL',
       callId: acceptedIntent.callId,
+      observationLeaseToken: null,
+      observationLeaseExpiresAt: null,
+      callDeadlineAt: acceptedIntent.callDeadlineAt,
     });
     expect(
       await prisma.call.findUniqueOrThrow({ where: { retellCallId: external.retellCallId } }),
@@ -336,6 +389,11 @@ describe('Durable call intents across process death (synthetic external provider
           resourceId: acceptedIntent.callId!,
           action: 'call.end',
         },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.jobOutbox.count({
+        where: { organizationId: organization.id, kind: 'SUMMARY_GENERATE' },
       }),
     ).toBe(1);
     expect(

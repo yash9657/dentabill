@@ -10,6 +10,8 @@ const seams = vi.hoisted(() => ({
   createRedisConnection: vi.fn(),
   createSqsRetryScheduler: vi.fn(),
   createInlineJobRuntime: vi.fn(),
+  createCallObservationSweep: vi.fn(),
+  observeCalls: vi.fn(),
   runCallAttempt: vi.fn(),
   runSummaryAttempt: vi.fn(),
 }));
@@ -24,6 +26,7 @@ vi.mock('@dentabill/queue', async (importOriginal) => ({
 }));
 vi.mock('./lib/inline-jobs.js', () => ({
   createInlineJobRuntime: seams.createInlineJobRuntime,
+  createCallObservationSweep: seams.createCallObservationSweep,
 }));
 
 beforeEach(() => {
@@ -36,6 +39,15 @@ beforeEach(() => {
   seams.createSqsJobDispatcher.mockReturnValue(seams.jobDispatcher);
   seams.createSqsRetryScheduler.mockReturnValue(vi.fn());
   seams.relayJobOutbox.mockResolvedValue({ selected: 2, sent: 2, failed: 0, quarantined: 0 });
+  seams.createCallObservationSweep.mockReturnValue(seams.observeCalls);
+  seams.observeCalls.mockResolvedValue({
+    selected: 1,
+    observed: 1,
+    terminal: 0,
+    rescheduled: 1,
+    stopRequested: 0,
+    failed: 0,
+  });
   seams.createInlineJobRuntime.mockReturnValue({
     runCallAttempt: seams.runCallAttempt,
     runSummaryAttempt: seams.runSummaryAttempt,
@@ -48,7 +60,20 @@ afterEach(() => vi.unstubAllEnvs());
 describe('Lambda scheduled relay wiring', () => {
   it('reuses the configured dispatcher and Prisma without loading the voice/summary runtime', async () => {
     const { handler } = await import('./lambda-worker.js');
-    const expected = { selected: 2, sent: 2, failed: 0, quarantined: 0 };
+    const expected = {
+      selected: 2,
+      sent: 2,
+      failed: 0,
+      quarantined: 0,
+      observation: {
+        selected: 1,
+        observed: 1,
+        terminal: 0,
+        rescheduled: 1,
+        stopRequested: 0,
+        failed: 0,
+      },
+    };
     await expect(handler({ type: 'outbox.relay', version: 1 })).resolves.toEqual(expected);
     await expect(handler({ type: 'outbox.relay', version: 1 })).resolves.toEqual(expected);
 
@@ -65,6 +90,12 @@ describe('Lambda scheduled relay wiring', () => {
       budgetMs: 20_000,
     });
     expect(seams.createInlineJobRuntime).not.toHaveBeenCalled();
+    expect(seams.createCallObservationSweep).toHaveBeenCalledTimes(1);
+    expect(seams.createCallObservationSweep).toHaveBeenCalledWith(
+      expect.objectContaining({ prisma: seams.prisma }),
+    );
+    expect(seams.observeCalls).toHaveBeenCalledTimes(2);
+    expect(seams.observeCalls).toHaveBeenLastCalledWith({ limit: 5, budgetMs: 25_000 });
     expect(seams.createRedisConnection).not.toHaveBeenCalled();
     expect(seams.createSqsRetryScheduler).not.toHaveBeenCalled();
     expect(seams.jobDispatcher.dispatchCall).not.toHaveBeenCalled();
@@ -94,6 +125,7 @@ describe('Lambda scheduled relay wiring', () => {
     await expect(handler(event)).resolves.toEqual({ batchItemFailures: [] });
     await expect(handler(event)).resolves.toEqual({ batchItemFailures: [] });
     expect(seams.relayJobOutbox).toHaveBeenCalledTimes(1);
+    expect(seams.observeCalls).toHaveBeenCalledTimes(1);
     expect(seams.createSqsJobDispatcher).toHaveBeenCalledTimes(1);
     expect(seams.createInlineJobRuntime).toHaveBeenCalledTimes(1);
     expect(seams.createInlineJobRuntime).toHaveBeenCalledWith(

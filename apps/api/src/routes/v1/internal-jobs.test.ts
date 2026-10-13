@@ -17,7 +17,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { buildServer } from '../../app.js';
 import { initEnv } from '../../lib/env.js';
-import type { InlineJobRuntime, InlineRunReport } from '../../lib/inline-jobs.js';
+import type {
+  CallObservationSweep,
+  InlineJobRuntime,
+  InlineRunReport,
+} from '../../lib/inline-jobs.js';
 
 import { internalSecretMatches } from './internal-jobs.js';
 
@@ -60,6 +64,15 @@ describe('POST /v1/internal/jobs/*', () => {
   let callJob: CallJobData;
   let defaultDispatcher: JobDispatcher;
   const organizations: string[] = [];
+  const observeCalls = vi.fn<CallObservationSweep>();
+  const idleObservation = {
+    selected: 0,
+    observed: 0,
+    terminal: 0,
+    rescheduled: 0,
+    stopRequested: 0,
+    failed: 0,
+  };
   const runCall = vi.fn<InlineJobRuntime['runCall']>();
   const runSummary = vi.fn<InlineJobRuntime['runSummary']>();
 
@@ -68,6 +81,7 @@ describe('POST /v1/internal/jobs/*', () => {
     initEnv();
     server = await buildServer({ logger: false });
     defaultDispatcher = server.jobDispatcher;
+    server.callObservationSweep = observeCalls;
     server.inlineJobRuntime = {
       runCall,
       runSummary,
@@ -85,6 +99,7 @@ describe('POST /v1/internal/jobs/*', () => {
 
   beforeEach(async () => {
     server.jobDispatcher = defaultDispatcher;
+    observeCalls.mockReset().mockResolvedValue(idleObservation);
     runCall.mockReset().mockResolvedValue({ status: 'completed', attemptsMade: 1 });
     runSummary.mockReset().mockResolvedValue({ status: 'completed', attemptsMade: 1 });
     callJob = await seedIntent('TERMINAL');
@@ -168,6 +183,81 @@ describe('POST /v1/internal/jobs/*', () => {
         expect(response.json()).toEqual({ accepted: true, jobId: data.idempotencyKey });
     },
   );
+
+  it.each([
+    ['original', 'saved'],
+    ['resume', 'saved'],
+    ['original', 'missing deadline'],
+    ['resume', 'missing deadline'],
+    ['original', 'missing next observation'],
+    ['resume', 'missing next observation'],
+    ['original', 'missing call'],
+    ['resume', 'missing call'],
+    ['original', 'submitting'],
+    ['resume', 'submitting'],
+  ] as const)(
+    'acknowledges %s accepted handoff only with durable monitor fields: %s',
+    async (command, variant) => {
+      const intent = await prisma.callIntent.findFirstOrThrow({
+        where: { organizationId: callJob.organizationId, idempotencyKey: callJob.idempotencyKey },
+      });
+      const call = await prisma.call.create({
+        data: {
+          organizationId: callJob.organizationId,
+          claimId: callJob.claimId,
+          retellCallId: `synthetic_observer_${randomUUID()}`,
+        },
+      });
+      await prisma.callIntent.updateMany({
+        where: { id: intent.id, organizationId: callJob.organizationId },
+        data: {
+          state: variant === 'submitting' ? 'SUBMITTING' : 'ACCEPTED',
+          callId: variant === 'missing call' ? null : call.id,
+          callDeadlineAt: variant === 'missing deadline' ? null : new Date(Date.now() + 900_000),
+          nextObservationAt: variant === 'missing next observation' ? null : new Date(),
+        },
+      });
+      const data: CallJobData =
+        command === 'original'
+          ? callJob
+          : {
+              ...callJob,
+              idempotencyKey: `call.resume.${intent.id}`,
+              resume: { intentId: intent.id, callId: call.id },
+            };
+      runCall.mockResolvedValueOnce({ status: 'rescheduled', attemptsMade: 1 });
+      const response = await server.inject({
+        method: 'POST',
+        url: '/v1/internal/jobs/calls',
+        headers: { [HEADER]: SECRET },
+        payload: data,
+      });
+      expect(response.statusCode).toBe(variant === 'saved' ? 200 : 503);
+      expect(runCall).toHaveBeenCalledWith(data);
+    },
+  );
+
+  it('still delivers pending jobs when observation fails', async () => {
+    const [data] = await seedOutbox();
+    if (!data) throw new Error('Expected seeded job');
+    const dispatchCall = vi.fn(async () => data.idempotencyKey);
+    server.jobDispatcher = { mode: 'inline', dispatchCall, dispatchSummary: vi.fn() };
+    observeCalls.mockRejectedValueOnce(new Error('synthetic private provider failure'));
+    const response = await server.inject({
+      method: 'POST',
+      url: '/v1/internal/jobs/outbox/relay',
+      headers: { [HEADER]: SECRET },
+      payload: {},
+    });
+    expect(response.statusCode).toBe(503);
+    expect(dispatchCall).toHaveBeenCalledTimes(1);
+    expect(response.body).not.toContain('private');
+    expect(
+      await prisma.jobOutbox.findFirst({
+        where: { organizationId: data.organizationId, idempotencyKey: data.idempotencyKey },
+      }),
+    ).toMatchObject({ state: 'DELIVERED' });
+  });
 
   async function seedOutbox(count = 1): Promise<CallJobData[]> {
     const seed = await seedIntent('TERMINAL');
@@ -467,7 +557,13 @@ describe('POST /v1/internal/jobs/*', () => {
     finish({ status: 'completed', attemptsMade: 1 });
     const response = await request;
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ selected: 1, sent: 1, failed: 0, quarantined: 0 });
+    expect(response.json()).toEqual({
+      selected: 1,
+      sent: 1,
+      failed: 0,
+      quarantined: 0,
+      observation: idleObservation,
+    });
     const delivered = await prisma.jobOutbox.findFirstOrThrow({
       where: { organizationId: data.organizationId, id: pending.id },
     });
@@ -509,7 +605,13 @@ describe('POST /v1/internal/jobs/*', () => {
         headers: { [HEADER]: SECRET },
       });
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ selected: 1, sent: 0, failed: 1, quarantined: 0 });
+      expect(response.json()).toEqual({
+        selected: 1,
+        sent: 0,
+        failed: 1,
+        quarantined: 0,
+        observation: idleObservation,
+      });
       const pending = await prisma.jobOutbox.findFirstOrThrow({
         where: { organizationId: data.organizationId, idempotencyKey: data.idempotencyKey },
       });
@@ -559,7 +661,14 @@ describe('POST /v1/internal/jobs/*', () => {
       payload: {},
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ selected: 25, sent: 25, failed: 0, quarantined: 0 });
+    expect(response.json()).toEqual({
+      selected: 25,
+      sent: 25,
+      failed: 0,
+      quarantined: 0,
+      observation: idleObservation,
+    });
+    expect(observeCalls).toHaveBeenCalledWith({ limit: 5, budgetMs: 25_000 });
     expect(dispatchCall).toHaveBeenCalledTimes(25);
     expect(
       await prisma.jobOutbox.count({

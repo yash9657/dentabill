@@ -1,5 +1,11 @@
 # DentaBill: competitive gaps and the Fireworks implementation plan
 
+> Implementation update, 2026-10-13: FW-36 now has local persisted accepted-call observation,
+> duration/Stop confirmation state and synthetic separate-process recovery evidence; FW-38
+> allowlists Prisma diagnostic output. Latest implementation/test/release limits are recorded
+> in SESSION_CONTEXT.md, PROVIDER_EVIDENCE.md and ADR-061. These local changes are not deployed
+> parity or authorized clinic/provider evidence. The remaining backlog below stays in scope.
+
 **Research and repository audit:** 2026-10-12. **Baseline:** commit `25e82a7`.
 **Status:** implementation proposal; no application code, deployment, vendor contract, or production setting was changed by this audit.
 

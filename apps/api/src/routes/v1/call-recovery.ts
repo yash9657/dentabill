@@ -1,8 +1,9 @@
 import {
   getCallIntentReconciliationEligibility,
   reconcileCallIntent,
+  observeAcceptedCall,
 } from '@dentabill/call-worker';
-import { prisma, type CallIntent } from '@dentabill/db';
+import { audit, prisma, type CallIntent } from '@dentabill/db';
 import {
   createRetellReconciliationClient,
   type RetellReconciliationClient,
@@ -47,6 +48,19 @@ const RecoverySchema = z.object({
   availability: z.enum(['AVAILABLE', 'NOT_CONFIGURED']),
 });
 const ReconcileResponseSchema = RecoverySchema.extend({ outcome: OutcomeSchema });
+const StatusCheckResponseSchema = z.object({
+  callId: z.string(),
+  outcome: z.enum([
+    'COMPLETED',
+    'ESCALATED',
+    'RESCHEDULED',
+    'CANCELLED',
+    'BLOCKED',
+    'RECONCILIATION_REQUIRED',
+    'ALREADY_PROCESSED',
+  ]),
+  checkedAt: z.iso.datetime(),
+});
 type RecoveryResponse = z.infer<typeof RecoverySchema>;
 
 const INTENT_SELECT = {
@@ -111,6 +125,119 @@ export function callRecoveryRoutes(
     return actor?.role === 'OWNER' || actor?.role === 'ADMIN';
   };
 
+  fastify.withTypeProvider().post(
+    '/calls/:id/check-status',
+    {
+      preHandler: fastify.auth.requireAuth,
+      preValidation: (request, _reply, done): void => {
+        if (request.body === undefined) request.body = {};
+        done();
+      },
+      config: {
+        rateLimit: {
+          hook: 'preHandler',
+          max: 10,
+          timeWindow: '1 minute',
+          keyGenerator: (request): string => request.dentabillAuth?.orgId ?? request.ip,
+        },
+      },
+      schema: {
+        description:
+          'OWNER/ADMIN read-only check of an accepted call. Never starts or stops a call.',
+        security: [{ bearer: [] as string[] }],
+        params: IdSchema,
+        body: z.object({}).strict().optional(),
+        response: { 200: StatusCheckResponseSchema },
+      },
+    },
+    async (request): Promise<z.infer<typeof StatusCheckResponseSchema>> => {
+      const auth = request.dentabillAuth;
+      if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'Sign in to continue.');
+      const { id } = request.params as z.infer<typeof IdSchema>;
+      const call = await prisma.call.findFirst({
+        where: { id, organizationId: auth.orgId },
+        select: { id: true },
+      });
+      if (!call) throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
+      if (!(await canReview(auth.userId, auth.orgId)))
+        throw new ApiError('FORBIDDEN', 'Only an owner or admin may check call status.');
+      const lookup = provider();
+      if (!lookup)
+        throw new ApiError(
+          'CALL_RECONCILIATION_UNAVAILABLE',
+          'Call lookup is not configured. Contact your administrator.',
+        );
+      const now = new Date();
+      const intentId = await prisma.$transaction(async (tx) => {
+        const scope = { organizationId: auth.orgId, callId: id, state: 'ACCEPTED' as const };
+        const intent = await tx.callIntent.findFirst({ where: scope, select: { id: true } });
+        if (!intent)
+          throw new ApiError(
+            'INVALID_STATE_TRANSITION',
+            'This call is not awaiting a status check.',
+          );
+        const reserved = await tx.callIntent.updateMany({
+          where: {
+            ...scope,
+            id: intent.id,
+            AND: [
+              {
+                OR: [
+                  { lastObservedAt: null },
+                  { lastObservedAt: { lte: new Date(now.getTime() - 60_000) } },
+                ],
+              },
+              {
+                OR: [
+                  { observationLeaseExpiresAt: null },
+                  { observationLeaseExpiresAt: { lte: now } },
+                ],
+              },
+            ],
+          },
+          data: { lastObservedAt: now },
+        });
+        if (reserved.count !== 1)
+          throw new ApiError(
+            'INVALID_STATE_TRANSITION',
+            'A status check is underway or was just completed. Try again shortly.',
+          );
+        await audit(
+          {
+            organizationId: auth.orgId,
+            userId: auth.userId,
+            action: 'call.status.checked',
+            resourceType: 'Call',
+            resourceId: id,
+            metadata: {
+              clerkUserId: auth.clerkUserId,
+              intentId: intent.id,
+              reason: 'MANUAL_READ_ONLY',
+            },
+          },
+          tx,
+        );
+        return intent.id;
+      });
+      const result = await observeAcceptedCall({
+        prisma,
+        organizationId: auth.orgId,
+        intentId,
+        provider: lookup,
+        retellPort: {
+          startCall: () => Promise.reject(new Error('Read-only status check.')),
+          endCall: () => Promise.reject(new Error('Read-only status check.')),
+          subscribe: () => () => undefined,
+        },
+        readOnly: true,
+        forceRead: true,
+        waitMs: 0,
+        clerkUserId: auth.clerkUserId,
+      });
+      return { callId: id, outcome: result.outcome, checkedAt: now.toISOString() };
+    },
+  );
+
   fastify.withTypeProvider().get(
     '/claims/:id/call-recovery',
     {
@@ -156,9 +283,10 @@ export function callRecoveryRoutes(
       },
       config: {
         rateLimit: {
+          hook: 'preHandler',
           max: 10,
           timeWindow: '1 minute',
-          keyGenerator: (request): string => request.dentabillAuth?.orgId ?? 'anon',
+          keyGenerator: (request): string => request.dentabillAuth?.orgId ?? request.ip,
         },
       },
       schema: {

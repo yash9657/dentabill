@@ -5,6 +5,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import Link from 'next/link';
 import * as React from 'react';
 
+import { callMonitoringLabel } from '../../../lib/calls/monitoring.js';
 import {
   callStatusIndicatorVariant,
   callStatusLabel,
@@ -157,6 +158,8 @@ function CallRow({
   readonly style: React.CSSProperties;
 }): React.ReactElement {
   const cancellationPending = isCallCancellationPending(call);
+  const pendingLabel =
+    callMonitoringLabel(call) ?? (cancellationPending ? 'Cancellation requested' : null);
   return (
     <div role="row" aria-rowindex={rowIndex} style={style}>
       <Link
@@ -174,13 +177,13 @@ function CallRow({
         <span
           role="gridcell"
           className="flex items-center gap-2 text-sm text-black"
-          aria-label={`Status: ${callStatusLabel(call.status)}${cancellationPending ? '. Cancellation requested' : ''}`}
+          aria-label={`Status: ${callStatusLabel(call.status)}${pendingLabel ? `. ${pendingLabel}` : ''}`}
         >
           <StatusDot variant={callStatusIndicatorVariant(call.status)} aria-hidden />
           <span className="min-w-0 leading-tight">
             {callStatusLabel(call.status)}
-            {cancellationPending ? (
-              <span className="text-gray-warm block text-[13px]">Cancellation requested</span>
+            {pendingLabel ? (
+              <span className="text-gray-warm block text-[13px]">{pendingLabel}</span>
             ) : null}
           </span>
         </span>

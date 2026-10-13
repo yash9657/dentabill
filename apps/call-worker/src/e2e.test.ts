@@ -1,5 +1,11 @@
+import { createHash, randomUUID } from 'node:crypto';
+
 import { hashPatientDOB, prisma } from '@dentabill/db';
-import { FakeRetell } from '@dentabill/payer-ivr';
+import {
+  FakeRetell,
+  StartCallInputSchema,
+  type RetellReconciliationClient,
+} from '@dentabill/payer-ivr';
 import {
   CALL_JOB_NAME,
   type CallJobData,
@@ -298,6 +304,124 @@ describe('call-worker e2e — graceful shutdown', () => {
     await workerHandle.shutdown();
     workerHandle = null; // already shut down; afterEach must not double-close.
   });
+});
+
+describe('call-worker e2e — persisted accepted-call observation', () => {
+  it.each([true, false])(
+    'resumes monitoring after restart with provider lookup available=%s',
+    async (available) => {
+      const { orgId, claimId } = await seedOrgAndClaim();
+      await prisma.claim.updateMany({
+        where: { id: claimId, organizationId: orgId },
+        data: { status: 'CALLING' },
+      });
+      const claim = await prisma.claim.findFirstOrThrow({
+        where: { id: claimId, organizationId: orgId },
+      });
+      const call = await prisma.call.create({
+        data: {
+          organizationId: orgId,
+          claimId,
+          retellCallId: `synthetic_${randomUUID()}`,
+          status: 'ON_HOLD',
+        },
+      });
+      const intentId = `intent_${randomUUID()}`;
+      const snapshot = StartCallInputSchema.parse({
+        payerCode: claim.payerCode,
+        agentId: 'agent_synthetic_restart',
+        fromNumberE164: '+15555550100',
+        toNumberE164: '+15555550200',
+        agentMetadata: {
+          practiceName: 'Synthetic restart practice',
+          providerNpi: '1234567890',
+          subscriberId: 'SYNTHETIC-RESTART',
+          dateOfService: '2026-01-15',
+        },
+        idempotencyKey: intentId,
+      });
+      await prisma.callIntent.create({
+        data: {
+          id: intentId,
+          organizationId: orgId,
+          claimId,
+          idempotencyKey: `original_${intentId}`,
+          payerCode: claim.payerCode,
+          attemptNumber: 1,
+          claimPriority: 80,
+          claimVersion: claim.updatedAt,
+          state: 'ACCEPTED',
+          callId: call.id,
+          submittedAt: new Date(Date.now() - 900_000),
+          callDeadlineAt: new Date(Date.now() - 1_000),
+          nextObservationAt: new Date(Date.now() - 1_000),
+          requestPayload: snapshot,
+          requestHash: createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'),
+        },
+      });
+      const fake = new FakeRetell();
+      const startCall = vi.spyOn(fake, 'startCall');
+      const endCall = vi.spyOn(fake, 'endCall');
+      const getCall = vi.fn<RetellReconciliationClient['getCall']>(async () => ({
+        candidate: {
+          providerCallId: call.retellCallId,
+          agentId: snapshot.agentId,
+          fromNumberE164: snapshot.fromNumberE164,
+          toNumberE164: snapshot.toNumberE164,
+          intentId,
+          callType: 'phone_call',
+          direction: 'outbound',
+          startedAt: null,
+        },
+        terminalEvent: {
+          type: 'call.ended',
+          retellCallId: call.retellCallId,
+          endReason: 'completed',
+          endedAt: new Date().toISOString(),
+          durationSeconds: 120,
+        },
+      }));
+      workerHandle = await bootCallWorker({
+        env: buildEnv({ workerPort: pickWorkerPort() }),
+        retellPort: fake,
+        reconciliationClient: available ? { findCallsByIntent: async () => [], getCall } : null,
+        outboxRelayIntervalMs: 25,
+      });
+      await waitFor(async () => {
+        const intent = await prisma.callIntent.findFirstOrThrow({
+          where: { id: intentId, organizationId: orgId },
+        });
+        return available ? intent.state === 'TERMINAL' : intent.observationReviewAt !== null;
+      });
+      const intent = await prisma.callIntent.findFirstOrThrow({
+        where: { id: intentId, organizationId: orgId },
+      });
+      const current = await prisma.call.findFirstOrThrow({
+        where: { id: call.id, organizationId: orgId },
+      });
+      expect(startCall).not.toHaveBeenCalled();
+      expect(endCall).not.toHaveBeenCalled();
+      expect(intent.stopAcknowledgedAt).toBeNull();
+      if (available) {
+        expect(getCall).toHaveBeenCalledTimes(1);
+        expect(current).toMatchObject({ status: 'COMPLETED', durationSeconds: 120 });
+        expect(
+          await prisma.jobOutbox.count({
+            where: { organizationId: orgId, kind: 'SUMMARY_GENERATE' },
+          }),
+        ).toBe(1);
+      } else {
+        expect(getCall).not.toHaveBeenCalled();
+        expect(current).toMatchObject({ status: 'ON_HOLD', durationSeconds: null, endedAt: null });
+        expect(intent).toMatchObject({
+          state: 'ACCEPTED',
+          observationErrorCode: 'STOP_UNAVAILABLE',
+          stopAttempts: 0,
+        });
+        expect(intent.nextObservationAt).not.toBeNull();
+      }
+    },
+  );
 });
 
 describe('call-worker e2e — missing identity', () => {
