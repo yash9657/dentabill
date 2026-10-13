@@ -7,13 +7,13 @@
 ## Status
 
 Phases 1–4 are complete and the product runs end to end at
-[dentabill.site](https://dentabill.site) in a disclosed **simulation mode**:
+[usedentabill.xyz](https://usedentabill.xyz) in a disclosed **simulation mode**:
 no payer is actually dialled (`DEMO_AUTOPILOT`) and summaries fall back to a
 transcript-derived summarizer when no Anthropic key is set
 (`DEMO_SUMMARIZER_FALLBACK`). Everything else (queue, worker, database, live
-transcript, claim transition, audit) is the production path. The API is
-moving from Vercel to AWS (branch `infra/aws`); `api.dentabill.site` still
-points at Vercel until the DNS cutover. Real telephony is gated on the Retell
+transcript, claim transition, audit) is the production path. The web app runs
+on Vercel and the API on AWS at `api.usedentabill.xyz` (branch `infra/aws`).
+Real telephony is gated on the Retell
 BAA, IVR tooling for the Retell agents, and wiring the call-duration and hold
 guards (see [Failure modes](#failure-modes-and-resilience)). Roadmap:
 `docs/PHASE_PLAN.md`, `PROGRESS.md`.
@@ -67,7 +67,7 @@ provider), shared with a second app, and the **DentaBill** stack in
 [`infra/aws/main.tf`](infra/aws/main.tf). A request takes this path:
 
 1. The browser loads the Next.js app from Vercel and gets a Clerk session.
-2. API calls go to CloudFront (`api.dentabill.site`) with the Clerk JWT. Caching
+2. API calls go to CloudFront (`api.usedentabill.xyz`) with the Clerk JWT. Caching
    and compression are off so SSE is not buffered.
 3. CloudFront forwards over TLS to the Lambda Function URL, which runs in
    `RESPONSE_STREAM` mode.

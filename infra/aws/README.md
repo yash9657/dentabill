@@ -1,7 +1,7 @@
 # DentaBill API on AWS
 
 ```
-dentabill.site (Vercel) ──▶ api.dentabill.site ──▶ CloudFront ──▶ Lambda Function URL (RESPONSE_STREAM)
+usedentabill.xyz (Vercel) ──▶ api.usedentabill.xyz ──▶ CloudFront ──▶ Lambda Function URL (RESPONSE_STREAM)
                                                                     │  Fastify API behind Lambda Web Adapter
                                                     SendMessage     ▼
                     worker Lambda ◀── SQS dentabill-jobs ◀──────────┘
