@@ -185,3 +185,12 @@ end-to-end. Fastify-based health probe at `:3010/healthz`.
 - `docs/PROVIDER_EVIDENCE.md`: capability matrix, account/provider contracts and blocked probes.
 - `docs/CODE_REFERENCE_EVIDENCE.md`: existing code annotation corrections and licensing/provenance limits.
 - `apps/api/src/lambda-worker.ts`, `packages/queue/src/sqs.ts`, `infra/aws/`: current AWS delivery/deployment baseline.
+
+### FW-07 provider inbox and canonical transcripts (2026-10-13)
+
+- `packages/payer-ivr/src/retell/webhook.ts` — raw SDK signature and documented wire normalization.
+- `packages/payer-ivr/src/retell/inbox.ts` — transactionally accept/reconcile pending provider evidence.
+- `packages/db/prisma/migrations/20261013090000_retell_inbox/` — additive inbox persistence.
+- `packages/types/src/call-transcript.ts` — pure canonical final/provisional source selector shared by worker/UI.
+- `apps/call-worker/src/retell-webhook-process.test.ts` and fixture — producer-crash cross-process regression.
+- `apps/web/src/lib/calls/use-call-event-stream.test.ts` — call/auth/reconnect isolation regressions.

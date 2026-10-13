@@ -107,19 +107,20 @@ File-disjoint groups; each agent gets the DESIGN.md excerpt + the concrete rule;
 
 ## 7. Environment matrix (demo values)
 
-| Var                                                      | api                         | call-worker      | summary-worker            | web (Vercel)                 |
-| -------------------------------------------------------- | --------------------------- | ---------------- | ------------------------- | ---------------------------- |
-| `NODE_ENV`                                               | production                  | production       | production                | production                   |
-| `DATABASE_URL` / `REDIS_URL`                             | Railway refs                | Railway refs     | Railway refs              | —                            |
-| `CLERK_SECRET_KEY` / `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | dev-instance keys           | —                | —                         | dev-instance keys            |
-| `RETELL_API_KEY`                                         | _(empty ⇒ Fake)_            | _(empty ⇒ Fake)_ | —                         | —                            |
-| `DEMO_AUTOPILOT`                                         | —                           | **true**         | —                         | —                            |
-| `ANTHROPIC_API_KEY`                                      | —                           | —                | if available ⇒ LiveClaude | —                            |
-| `SUMMARIZER_AUTO_TRANSITION_ENABLED`                     | —                           | —                | **true**                  | —                            |
-| `STRIPE_*`                                               | empty/false                 | —                | —                         | —                            |
-| `NEXT_PUBLIC_SSE_LIVE_TRANSCRIPT_ENABLED`                | —                           | —                | —                         | **true**                     |
-| `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_APP_URL`            | app URL for CORS            | —                | —                         | Railway api URL / Vercel URL |
-| `DOB_HASH_SECRET`, `RETELL_WEBHOOK_SECRET`               | freshly generated ≥32 chars | —                | —                         | —                            |
+| Var                                                      | api                                                              | call-worker      | summary-worker            | web (Vercel)                 |
+| -------------------------------------------------------- | ---------------------------------------------------------------- | ---------------- | ------------------------- | ---------------------------- |
+| `NODE_ENV`                                               | production                                                       | production       | production                | production                   |
+| `DATABASE_URL` / `REDIS_URL`                             | Railway refs                                                     | Railway refs     | Railway refs              | —                            |
+| `CLERK_SECRET_KEY` / `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | dev-instance keys                                                | —                | —                         | dev-instance keys            |
+| `RETELL_API_KEY`                                         | _(empty ⇒ Fake)_                                                 | _(empty ⇒ Fake)_ | —                         | —                            |
+| `DEMO_AUTOPILOT`                                         | —                                                                | **true**         | —                         | —                            |
+| `ANTHROPIC_API_KEY`                                      | —                                                                | —                | if available ⇒ LiveClaude | —                            |
+| `SUMMARIZER_AUTO_TRANSITION_ENABLED`                     | —                                                                | —                | **true**                  | —                            |
+| `STRIPE_*`                                               | empty/false                                                      | —                | —                         | —                            |
+| `NEXT_PUBLIC_SSE_LIVE_TRANSCRIPT_ENABLED`                | —                                                                | —                | —                         | **true**                     |
+| `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_APP_URL`            | app URL for CORS                                                 | —                | —                         | Railway api URL / Vercel URL |
+| `DOB_HASH_SECRET`                                        | freshly generated ≥32 chars                                      | —                | —                         | —                            |
+| `RETELL_WEBHOOK_SECRET`                                  | empty for demo; real webhooks: Retell API key with webhook badge | —                | —                         | —                            |
 
 ## 8. Track F — Verify + rehearse (MUST, last ~45 min)
 

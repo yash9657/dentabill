@@ -55,7 +55,15 @@ Queue: visibility timeout ≥ 900 s (AWS requires at least the function timeout)
 
 ## Environment variables
 
-**API:** `NODE_ENV=production` (required), `DATABASE_URL` (required), `NEXT_PUBLIC_APP_URL` (required), `JOB_DISPATCH_MODE=sqs` (required), `JOBS_QUEUE_URL` (required), `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` (required: production refuses to boot without them), `DOB_HASH_SECRET` and `RETELL_WEBHOOK_SECRET` (required for production, since the dev defaults are not secret), `PORT` (optional, default 8080), plus the optional ones from `DEPLOY_VERCEL.md` (`API_CORS_ORIGINS`, `NEXT_PUBLIC_API_URL`, `CLERK_WEBHOOK_SECRET`, `RETELL_API_KEY`, `DEMO_IGNORE_PAYER_HOURS`, `REDIS_URL`, `SSE_*`). `AWS_REGION` and `AWS_LAMBDA_FUNCTION_NAME` are set by Lambda.
+**API:** `NODE_ENV=production` (required), `DATABASE_URL` (required), `NEXT_PUBLIC_APP_URL` (required), `JOB_DISPATCH_MODE=sqs` (required), `JOBS_QUEUE_URL` (required), `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` (required: production refuses to boot without them), `DOB_HASH_SECRET` (required for production; generate a private value), `PORT` (optional, default 8080), plus the optional ones from `DEPLOY_VERCEL.md` (`API_CORS_ORIGINS`, `NEXT_PUBLIC_API_URL`, `CLERK_WEBHOOK_SECRET`, `RETELL_API_KEY`, `DEMO_IGNORE_PAYER_HOURS`, `REDIS_URL`, `SSE_*`). `AWS_REGION` and `AWS_LAMBDA_FUNCTION_NAME` are set by Lambda.
+
+**Retell verification:** `RETELL_WEBHOOK_SECRET` must contain the Retell dashboard
+API key marked for webhooks, never a generated signing password. It has no
+default; absent configuration disables inbound webhooks and still permits the
+no-key demo. API startup requires it when `RETELL_API_KEY` is present. The
+outbound key does not automatically qualify as the webhook-designated key.
+For Terraform's existing Secrets Manager reference and migration from the old
+random value, see [`infra/aws/README.md`](../infra/aws/README.md#retell-webhook-credential).
 
 **Worker:** `NODE_ENV=production` (required), `DATABASE_URL` (required), `JOBS_QUEUE_URL` (required: summary fan-out and retry delays), `JOBS_MAX_RECEIVE_COUNT` (optional, default 3, must match the redrive policy), `REDIS_URL` (optional, for a shared summary cost guard; otherwise it is per instance), and the processor settings: `RETELL_API_KEY`, `RETELL_AGENT_ID_*`, `DEMO_AUTOPILOT`, `WORKER_OUTBOUND_NUMBER`, `MAX_CALL_DURATION_MS`, `MAX_HOLD_MS`, `ANTHROPIC_API_KEY`, `DEMO_SUMMARIZER_FALLBACK`, `SUMMARIZER_MAX_OUTPUT_TOKENS`, `SUMMARIZER_DAILY_TOKEN_BUDGET`, `SUMMARIZER_AUTO_TRANSITION_ENABLED`.
 
@@ -126,9 +134,25 @@ pnpm --filter @dentabill/api build:lambda
 ```
 
 These tests include destructive cleanup of their local fixture tables: never configure
-them with the production database. No new migration is required for this W0 slice.
+them with the production database. FW-07 adds migration `20261013090000_retell_inbox`. Apply it to the dedicated test
+DB before running the suite, using an explicit localhost `DATABASE_URL` and
+`pnpm --filter @dentabill/db exec prisma migrate deploy`. Never inherit a production URL.
+The migration adds nullable receipt payload/hash, processed timestamp and tenant binding,
+plus a pending-call index. Old markers are marked processed because their original payload
+was never stored; do not claim it reconstructs historical dropped events.
 A successful build does not prove deployment or external behavior. Require coordinated
 preview/API browser checks before release, and retain prior artifacts for rollback.
-The raw Retell envelope remains unsupported (two explicit expected-failure contract
-checks); do not enable live telephony based on synthetic worker tests. Provider
-credentials alone do not satisfy runtime, signer, duration, consent or agreement gates.
+The raw Retell envelope now has local synthetic HTTP/database/cross-process checks and
+no expected-failure tests. Before an authorized deployment, review/apply the additive
+migration, deploy matching API+worker+frontend artifacts, and supply only the existing
+provider-designated signing key as described in `infra/aws/README.md`. The no-key AWS
+demo configuration still starts; no key is generated or guessed. Keep provider keys
+out of the worker until call intent/deadline/outbox and real-provider gates are met.
+Provider credentials alone do not satisfy runtime, signer, duration, consent or agreement gates.
+
+Retain prior code artifacts for rollback; the nullable additive DB columns may remain
+in place. Do not roll back by dropping pending event evidence. An accepted unknown-call
+event is durably pending, but operational unmatched-event reconciliation/retention and
+age alerts are not implemented yet (FW-33). The row payload clears after successful
+binding; its tenant-bound CallEvent follows the existing transcript lifecycle. Real
+provider stop confirmation, worker crash/no-redial and summary outbox remain unverified.

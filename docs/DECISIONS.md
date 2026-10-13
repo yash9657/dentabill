@@ -771,3 +771,35 @@ external inference/notifications transactional. Incurred inference cost needs it
 notifications need an outbox, and external call acceptance needs durable intents/reconciliation.
 Separate-process crashes, real vendor behavior, and authorized clinic end-to-end runs remain
 required. Current synthetic tests do not establish production accuracy or recovery attribution.
+
+## ADR-057 — Normalize provider evidence through a transactional inbox
+
+**Date:** 2026-10-13. **Status:** implemented locally; no deployment/live certification.
+
+Retell's actual signed `{event,call}` payload is separate from our simulation envelope.
+Accept only the timestamped SDK signature over raw bytes, using the API key designated
+for webhook signing. No random generated credential or untimestamped fixture fallback.
+The provider supplies no delivery event ID: lifecycle identity is event type plus call ID;
+transcript snapshots have a content hash and remain provisional rather than claimed
+provider revision order. Unsupported analysis never supplies business facts.
+
+Store normalized early events before acknowledging 202. Bind them only via our Call's
+unique provider ID, never webhook tenant metadata. Receipt ownership, source event,
+call metadata/status and audit form one transaction; rollback leaves retry possible.
+Clear inbox payload after tenant-bound event persistence. Known duplicate effects collapse,
+conflicting lifecycle data remains a review/reconciliation case. The worker reads terminal
+evidence from Postgres across processes. A hangup does not establish human contact;
+provider timing is independent of local cancellation/workflow status.
+
+Final source transcripts replace cumulative snapshots. Preserve exact text and speaker
+uncertainty; abstain from summarizing missing/empty/provisional evidence. UI streams are
+scoped to call, credential and API origin, including late asynchronous responses.
+
+Use documented Stop Call, never Delete Call, for termination requests. A successful stop
+request is not terminal confirmation; bounded errors propagate for reconciliation.
+Retell remains a comparison adapter, not an approved GPT/Claude business-inference fallback.
+
+This slice does not solve call acceptance ambiguity, worker-crash redial, outbox delivery,
+source revision ordering, unmatched inbox retention/operations, or real vendor behavior.
+Synthetic separate-process producer-crash proof must not be presented as those stronger
+claims. Production migration and provider actions retain the user's approval boundaries.

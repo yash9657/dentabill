@@ -148,9 +148,11 @@ messages the code never handled. Details: [`docs/DEPLOY_AWS.md`](docs/DEPLOY_AWS
 - **Encryption:** TLS on every hop (viewer → CloudFront → Function URL, and
   Lambda → Aurora with `force_ssl`). SQS uses SSE-SQS, and Aurora storage is
   encrypted.
-- **Secrets:** Clerk keys and app secrets (`DATABASE_URL`, `DOB_HASH_SECRET`,
-  `RETELL_WEBHOOK_SECRET`) are stored in Secrets Manager (`dentabill/clerk`,
-  `dentabill/app`), and the Aurora master password is RDS-managed. Today
+- **Secrets:** Clerk keys and app secrets (`DATABASE_URL`, `DOB_HASH_SECRET`)
+  are stored in Secrets Manager (`dentabill/clerk`, `dentabill/app`), and the
+  Aurora master password is RDS-managed. Real Retell webhooks require a separate
+  existing secret containing Retell's webhook-designated API key; the no-key
+  demo omits it (see `infra/aws/README.md`). Today
   Terraform resolves them into Lambda environment variables at deploy time, so
   they also live in the encrypted state bucket. A runtime fetch through the
   Secrets Manager extension is the upgrade path.

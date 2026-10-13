@@ -278,9 +278,11 @@ psql "$DATABASE_URL" -c "
 
 **Decision tree.**
 
-- Spike right after a deploy → `RETELL_WEBHOOK_SECRET` rotation got out
-  of sync. Check the prod env (Vercel / Fly / wherever) matches Retell's
-  dashboard.
+- Spike right after a deploy → check that `RETELL_WEBHOOK_SECRET` contains the
+  API key currently marked for webhooks in Retell's dashboard. An independently
+  generated password or a different outbound API key cannot verify those events.
+  AWS resolves the Secrets Manager value at deployment; after updating it,
+  redeploy the API. See `infra/aws/README.md` for the pre-FW-28 migration.
 - Spike with a known `eventId` repeated → replay attempt or retry
   loop. The unique-on-`eventId` constraint already turns these into
   200 no-ops; a repeated 401 with the same id means the body changed

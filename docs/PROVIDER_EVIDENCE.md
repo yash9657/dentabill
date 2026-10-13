@@ -11,21 +11,43 @@ Evidence labels:
 - **Measured:** an identified run with inputs, configuration, results, and failure evidence. No measured Fireworks–ElevenLabs–Telnyx integration exists in this record.
 - **Blocked:** exact evidence or access needed before enabling the affected workflow.
 
+## Local implementation evidence added after the baseline
+
+FW-07 now normalizes the documented Retell wire payload with strict raw-body SDK signatures.
+The eleven synthetic contract checks pass without expected failures. HTTP/real-Postgres
+checks cover duplicate/early/out-of-order delivery, rollback/retry and tenant binding.
+A separate-process test persists an early event, kills its producer, then verifies worker
+completion through Postgres and a replay with no duplicate writes. This proves producer
+crash persistence only; worker crash/no-redial and AWS deployment remain unverified.
+Canonical final transcripts feed the summary/UI; snapshots remain provisional and missing
+or empty final evidence abstains. No Retell post-call model analysis becomes business evidence.
+
+The installed SDK now uses Stop Call with a 10-second request bound and no automatic SDK
+retries; synthetic transport tests check method/path, errors and timeout. Delete Call is
+not a termination API. Environment/Terraform configuration now requires the designated
+webhook-signing API key rather than generating a random secret. These local fixes follow
+current primary [webhook](https://docs.retellai.com/features/webhook-overview),
+[signing](https://docs.retellai.com/features/secure-webhook),
+[stop](https://docs.retellai.com/api-references/stop-call) and
+[delete](https://docs.retellai.com/api-references/delete-call) contracts.
+No actual delivery/termination, provider replacement, production deployment or PHI
+contractual suitability is established by these checks. See ADR-057 and session results.
+
 ## Public capability baseline
 
 Lunabill currently markets hospital/RCM AR automation. Its public workflow includes eligibility, portal checks, payer calls, denials/appeals with records, corrected resubmissions, and EHR payment/notes posting. It names Epic, Cerner, GoRev, Waystar, and Availity. These are **vendor claims**, not proof of dental coverage or DentaBill functionality. Its recovery-based pricing describes net collections, which must not be equated with claim face value. [Lunabill product](https://lunabill.com/)
 
-| Public workflow                     | DentaBill implementation/customer behavior inspected                                                                 | Existing test evidence                                    | External evidence/dependency still needed                                                                                              |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Work an AR queue                    | Claims list/detail, filters, priority score; CSV snapshots in `apps/api/src/lib/csv`; import screen                  | `parser.test.ts`, `ingest.test.ts`, claim route tests     | Recurring authorized PMS sync, source versions, stable identity under corrections, owners/deadlines; no demonstrated PMS API session   |
-| Eligibility/plan verification       | No contracted eligibility connector found                                                                            | No eligibility contract test found                        | Partner sandbox/production enrollment, plan/product/region coverage, permission and source responses                                   |
-| Portal/electronic status first      | Call initiation dominates; no live status/portal/clearinghouse connector found                                       | Call/enqueue fixtures do not validate electronic status   | Contracted electronic channel, receipt/acknowledgement semantics, authorization, status evidence and escalation rules                  |
-| IVR, hold, representative follow-up | Retell adapter/prompts, IVR maps, hold/navigation helpers, call timeline                                             | `packages/payer-ivr` tests; worker tests use `FakeRetell` | Authorized controlled telephony, separate-process lifecycle, real DTMF/hold/interruption/termination; comparative suite below          |
-| Denial handling and appeal filing   | Summary recommendations and denial-code lookup; `APPEAL`/`SUBMIT_DOCS` actions are recommendations                   | Summarizer fixtures, denial-code tests                    | Domain-adjudicated codes; exact-plan policy; evidence-backed draft, reviewer approval, actual submission receipt, deadline follow-up   |
-| Corrected claim/COB resubmission    | `RESUBMIT` recommendation and status changes                                                                         | Fixtures do not exercise actual claim submission          | Procedure/coverage source data; version-bound payload approval; clearinghouse contract, acknowledgements/rejections and reconciliation |
-| Records/attachments                 | No complete evidence request → receipt → authorized attachment submission path found                                 | No end-to-end attachment submission evidence              | Practice document access, secure storage/retention, attachment partner enrollment and external receipt                                 |
-| Payment and source-system posting   | Legacy `RESOLVED`/face-value reporting is under W0 containment; no remittance/allocation/reversal ledger at baseline | Reports/stats tests existed but are not cash evidence     | Remittance ingestion, actual-payment matching, allocations/adjustments/reversals, reviewed PMS posting and reconciliation              |
-| Auditable human review/handoff      | Scoped APIs, audit rows, status editing, transcript/summary views                                                    | Existing tenant and route tests                           | Review of exact action and source version, owner/deadline queues, stale approval rejection, external receipt and follow-up workflow    |
+| Public workflow                     | DentaBill implementation/customer behavior inspected                                                                        | Existing test evidence                                                      | External evidence/dependency still needed                                                                                              |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Work an AR queue                    | Claims list/detail, filters, priority score; CSV snapshots in `apps/api/src/lib/csv`; import screen                         | `parser.test.ts`, `ingest.test.ts`, claim route tests                       | Recurring authorized PMS sync, source versions, stable identity under corrections, owners/deadlines; no demonstrated PMS API session   |
+| Eligibility/plan verification       | No contracted eligibility connector found                                                                                   | No eligibility contract test found                                          | Partner sandbox/production enrollment, plan/product/region coverage, permission and source responses                                   |
+| Portal/electronic status first      | Call initiation dominates; no live status/portal/clearinghouse connector found                                              | Call/enqueue fixtures do not validate electronic status                     | Contracted electronic channel, receipt/acknowledgement semantics, authorization, status evidence and escalation rules                  |
+| IVR, hold, representative follow-up | Retell adapter/prompts, IVR maps, hold/navigation helpers, call timeline                                                    | `packages/payer-ivr` tests; synthetic worker + separate-process inbox tests | Authorized controlled telephony, worker-crash recovery, real DTMF/hold/interruption/termination; comparative suite below               |
+| Denial handling and appeal filing   | Summary recommendations and denial-code lookup; `APPEAL`/`SUBMIT_DOCS` actions are recommendations                          | Summarizer fixtures, denial-code tests                                      | Domain-adjudicated codes; exact-plan policy; evidence-backed draft, reviewer approval, actual submission receipt, deadline follow-up   |
+| Corrected claim/COB resubmission    | `RESUBMIT` recommendation and status changes                                                                                | Fixtures do not exercise actual claim submission                            | Procedure/coverage source data; version-bound payload approval; clearinghouse contract, acknowledgements/rejections and reconciliation |
+| Records/attachments                 | No complete evidence request → receipt → authorized attachment submission path found                                        | No end-to-end attachment submission evidence                                | Practice document access, secure storage/retention, attachment partner enrollment and external receipt                                 |
+| Payment and source-system posting   | Unsupported recovered-value fields removed locally; verified payments unavailable; no remittance/allocation/reversal ledger | Reports/stats tests existed but are not cash evidence                       | Remittance ingestion, actual-payment matching, allocations/adjustments/reversals, reviewed PMS posting and reconciliation              |
+| Auditable human review/handoff      | Scoped APIs, audit rows, status editing, transcript/summary views                                                           | Existing tenant and route tests                                             | Review of exact action and source version, owner/deadline queues, stale approval rejection, external receipt and follow-up workflow    |
 
 All rows remain **partial or blocked against the full completion standard**. A working local test and a recommendation enum do not implement the corresponding recovery action.
 

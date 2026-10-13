@@ -82,7 +82,7 @@ NEXT_PUBLIC_API_URL = https://<railway-api-url>
 CLERK_SECRET_KEY = <your-clerk-secret-key>
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = <your-clerk-publishable-key>
 DOB_HASH_SECRET = <generate-32-random-chars>
-RETELL_WEBHOOK_SECRET = <generate-32-random-chars>
+RETELL_WEBHOOK_SECRET = (leave empty for demo; real webhooks require the Retell API key marked for webhooks)
 RETELL_API_KEY = (leave empty for FakeRetell)
 DEMO_IGNORE_PAYER_HOURS = true   # payer lines are closed evenings/weekends; else Call Now 422s
 STRIPE_SECRET_KEY = (leave empty for free pivot)
@@ -294,28 +294,28 @@ Then:
 
 Full matrix from `docs/GOLIVE_PLAN.md` §7:
 
-| Variable                                  | API        | call-worker | summary-worker | web        |
-| ----------------------------------------- | ---------- | ----------- | -------------- | ---------- |
-| `NODE_ENV`                                | production | production  | production     | production |
-| `DATABASE_URL`                            | ✓          | ✓           | ✓              | —          |
-| `REDIS_URL`                               | ✓          | ✓           | ✓              | —          |
-| `NEXT_PUBLIC_APP_URL`                     | ✓          | —           | —              | ✓          |
-| `NEXT_PUBLIC_API_URL`                     | —          | —           | —              | ✓          |
-| `API_CORS_ORIGINS`                        | ✓          | —           | —              | —          |
-| `CLERK_SECRET_KEY`                        | ✓          | —           | —              | —          |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`       | ✓          | —           | —              | ✓          |
-| `DOB_HASH_SECRET`                         | ✓          | —           | —              | —          |
-| `RETELL_WEBHOOK_SECRET`                   | ✓          | —           | —              | —          |
-| `RETELL_API_KEY`                          | —          | empty       | —              | —          |
-| `DEMO_AUTOPILOT`                          | —          | **true**    | —              | —          |
-| `DEMO_IGNORE_PAYER_HOURS`                 | **true**   | —           | —              | —          |
-| `DEMO_SUMMARIZER_FALLBACK`                | —          | —           | **true**       | —          |
-| `ANTHROPIC_API_KEY`                       | —          | —           | if available   | —          |
-| `SUMMARIZER_AUTO_TRANSITION_ENABLED`      | —          | —           | **true**       | —          |
-| `NEXT_PUBLIC_SSE_LIVE_TRANSCRIPT_ENABLED` | —          | —           | —              | **true**   |
-| `STRIPE_SECRET_KEY`                       | empty      | —           | —              | —          |
-| `MAX_CALL_DURATION_MS`                    | —          | 900000      | —              | —          |
-| `MAX_HOLD_MS`                             | —          | 600000      | —              | —          |
+| Variable                                  | API                                                        | call-worker | summary-worker | web        |
+| ----------------------------------------- | ---------------------------------------------------------- | ----------- | -------------- | ---------- |
+| `NODE_ENV`                                | production                                                 | production  | production     | production |
+| `DATABASE_URL`                            | ✓                                                          | ✓           | ✓              | —          |
+| `REDIS_URL`                               | ✓                                                          | ✓           | ✓              | —          |
+| `NEXT_PUBLIC_APP_URL`                     | ✓                                                          | —           | —              | ✓          |
+| `NEXT_PUBLIC_API_URL`                     | —                                                          | —           | —              | ✓          |
+| `API_CORS_ORIGINS`                        | ✓                                                          | —           | —              | —          |
+| `CLERK_SECRET_KEY`                        | ✓                                                          | —           | —              | —          |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`       | ✓                                                          | —           | —              | ✓          |
+| `DOB_HASH_SECRET`                         | ✓                                                          | —           | —              | —          |
+| `RETELL_WEBHOOK_SECRET`                   | empty for demo; webhook-designated API key for real events | —           | —              | —          |
+| `RETELL_API_KEY`                          | —                                                          | empty       | —              | —          |
+| `DEMO_AUTOPILOT`                          | —                                                          | **true**    | —              | —          |
+| `DEMO_IGNORE_PAYER_HOURS`                 | **true**                                                   | —           | —              | —          |
+| `DEMO_SUMMARIZER_FALLBACK`                | —                                                          | —           | **true**       | —          |
+| `ANTHROPIC_API_KEY`                       | —                                                          | —           | if available   | —          |
+| `SUMMARIZER_AUTO_TRANSITION_ENABLED`      | —                                                          | —           | **true**       | —          |
+| `NEXT_PUBLIC_SSE_LIVE_TRANSCRIPT_ENABLED` | —                                                          | —           | —              | **true**   |
+| `STRIPE_SECRET_KEY`                       | empty                                                      | —           | —              | —          |
+| `MAX_CALL_DURATION_MS`                    | —                                                          | 900000      | —              | —          |
+| `MAX_HOLD_MS`                             | —                                                          | 600000      | —              | —          |
 
 ---
 

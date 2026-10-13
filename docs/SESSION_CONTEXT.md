@@ -4,6 +4,59 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
+### Continuation: FW-07/FW-08/FW-28
+
+The preceding turn made progress (committed W0 implementation/audit). This continuation
+implements the actual Retell wire boundary and a first durable event path; goal stays active.
+Implementation commit: `be3a27a`; a follow-up test ensures skipped claim transitions are
+audited as proposals, without claiming a reviewed claim changed.
+
+- Strict SDK timestamped signatures authenticate raw bytes before JSON parsing. Internal
+  fake envelopes and untimestamped signatures no longer pass the HTTP boundary. Supported
+  call-start/end and cumulative-transcript payloads normalize without post-call analysis,
+  arbitrary metadata, tool output, invented timing, or inferred human contact.
+- Additive migration `20261013090000_retell_inbox` stores normalized early events until
+  the real Call establishes tenant identity. Receipt ownership, CallEvent, source timing,
+  terminal status, and audit commit atomically. Unknown calls return 202 with durable pending
+  data; processed payloads clear after tenant-bound evidence is saved. Conflicting lifecycle
+  evidence returns 409. This is not the general intent/outbox framework yet.
+- Worker observes terminal evidence through scoped Postgres polling; a separate producer
+  process can die after accepting an event, and the worker still reconciles it after Call
+  registration. Provider times update even after cancellation/late starts without reopening
+  terminal status. The reverse cancellation race remains FW-32.
+- Summary/UI share canonical transcript selection. Final text stays exact; structured remote
+  speakers are not assumed human. Cumulative updates remain provisional and never concatenate
+  into final evidence. Missing/empty/provisional transcripts return TRANSCRIPT_UNAVAILABLE
+  without inference. UI call/auth changes clear prior content and reject late old responses.
+- LiveRetell requests Stop Call with a 10-second timeout and no SDK retries; it never deletes data
+  as a hangup action. No guessed already-ended success. Env defaults/generated webhook
+  secrets were removed; the API requires the designated key for configured live telephony.
+  AWS may reference an existing Secrets Manager key, with no-key demo still supported.
+
+**Validation:** Final full API **239/25 files**, full summary-worker **51/5 files**,
+payer-ivr **182**, worker handler **19** + BullMQ/Postgres e2e **4** + separate-process
+regression **1**, shared selector **10**, summarizer **78**, web component **5** +
+stream hook **6** passed. All API contract tests now pass normally (no expected failures).
+Affected typechecks/lints passed. Final Lambda packaging passed (API38.4MB/11.2MB zip;
+worker30.5MB/9.8MB zip). Terraform fmt and backend-disabled validate passed, with no
+plan/account mutation. Local migration applied only to dedicated identity/summary/process
+DBs. The process test kills the webhook producer, not the worker: it does not establish
+no-redial recovery or AWS runtime correctness. Independent review identified source-time
+ordering/cancellation defects; fixed with regressions. No remaining introduced blocker
+was found; documented follow-on gaps remain.
+
+**Still blocked/unverified:** actual provider delivery/stop behavior, Fireworks/ElevenLabs
+inference/voice topology, clinic/domain adjudication and contracted connectors. Independent
+work remains available. W2 needs call intent ownership/ambiguous acceptance reconciliation,
+persisted deadlines and outbox dispatch. Pending unknown-event retention/reconciliation is
+FW-33; server SSE pagination/race is FW-31. No production migration/deployment/calls.
+
+**Exact next:** implement FW-25's durable call intent before any further live-path use:
+API enqueue transaction, one externally submitted attempt per intent, ambiguous outcomes
+reconcile instead of redial, SQS retry/deadline recovery, and worker-crash process tests.
+Then durable summary dispatch and generic outbox; keep Fireworks gateway work progressing
+against synthetic contracts while external access/approved releases remain prerequisites.
+
 **Goal remains active:** complete the nine-workstream parity program, not just provider replacement.
 User authorized implementation, local tests, branches/commits/draft PRs; no production cutover,
 real third-party calls, actual claim/payment mutations, or destructive production migrations.
@@ -40,8 +93,8 @@ Lambda bundles were rebuilt successfully after the zero-filled-week correction.
   review. Historical v1 prompt can still omit unfamiliar codes; Fireworks migration
   must remove that limitation. No licensed dictionary or real-domain accuracy claim.
 - FW-06: SDK-signed documented Retell envelopes now have committed synthetic fixtures;
-  two expected-failure tests explicitly show parser rejection. Signature checks pass,
-  but FW-07 live webhook normalization/signing-key provisioning remain unimplemented.
+  initial expected-failure tests exposed parser rejection. The continuation above now
+  implements normalization/signing configuration; real provider validation remains pending.
 
 ### Access and actual infrastructure evidence
 
@@ -74,8 +127,8 @@ retention `everything`, max duration 60 minutes. Clerk instance metadata probe r
 
 No financial ledger/allocations/reversals, version-bound approvals, real electronic/PMS
 connectors, or verified provider replacement yet. SQS delivery exists but the call runtime
-can redial after ambiguous `CALLING` redelivery; process-local completion and unwired
-hard-duration/hold controls remain. Summary notification delivery needs an outbox. The
+can redial after ambiguous `CALLING` redelivery; invocation-owned call execution and unwired
+hard-duration/hold controls remain; DB webhook completion is now implemented locally. Summary notification delivery needs an outbox. The
 usage tally is not an inference billing ledger: failed commits can omit incurred spend,
 and Lambda's process-local cost lock cannot enforce a global cap. Separate-process
 crash/concurrency proof remains required. Existing summary retry deletion needs durable
@@ -84,11 +137,12 @@ ElevenLabs custom-LLM/ZRM entitlement, and intended payer products/regions remai
 
 ### Exact next step
 
-W0 focused checks and independent review are recorded below. Next implement FW-07 provider-path containment and W2 transactional call intents/inbox/outbox
-against SQS, alongside the Fireworks gateway using synthetic inputs once keys are present.
+W0 focused checks and independent review are recorded below. FW-07 continuation above is now implemented locally. Next implement FW-25 durable call
+intents/outbox against SQS, alongside the Fireworks gateway with synthetic contracts and
+approved releases before real inference.
 Do not restart the old Vercel-only runner decision or claim passing fake tests establish parity.
 
-### Verification record
+### Initial W0 verification record (before FW-07 continuation)
 
 - Summary worker: **46 tests passed**, including real Postgres fault injection,
   sequential replay, stale edits/newer calls, active-call rejection, and unknown code

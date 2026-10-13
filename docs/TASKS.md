@@ -23,9 +23,9 @@ Each FW item is a 1–3 hour slice; larger workstreams require further decomposi
 - [ ] **FW-03** Contain model-only financial closure and stale-state transitions. _Implemented locally; atomic commit, stale-state and fault-injection tests._
 - [ ] **FW-04** Correct denial-code semantics; preserve raw/unmapped codes. _Implemented locally/tested; historical v1 prompt omission remains a W1 dependency._
 - [ ] **FW-05** Remove subscriber-ID fallback; block dialing on missing identity. _Implemented locally and verified across BullMQ/inline/AWS SQS; not deployed._
-- [ ] **FW-06** Real-envelope webhook/signature contract fixture. _Reproduced with documented synthetic envelopes, 11 passing assertions/2 expected FW-07 failures; no compatibility claim._
-- [ ] **FW-07** Transitional webhook normalization or explicit live-path disablement (FW-06).
-- [ ] **FW-08** Separate-process call/fault-injection integration harness.
+- [ ] **FW-06** Real-envelope webhook/signature contract fixture. _Eleven SDK-signature/normalization contract checks now pass; no expected failures or captured-live-event claim._
+- [ ] **FW-07** Transitional webhook normalization or explicit live-path disablement (FW-06). _Implemented locally: strict signature/wire normalization, transactional pending inbox, canonical final transcript, DB worker completion; synthetic HTTP/fault tests._
+- [ ] **FW-08** Separate-process call/fault-injection integration harness. _Local producer-SIGKILL/early-delivery/DB-completion/replay regression passes; worker restart/no-redial proof still FW-25._
 - [ ] **FW-09** Fireworks ASR/TTS, license, region, and contractual feasibility record.
 - [ ] **FW-10** Typed model gateway and fake with evidence/model-release contracts.
 - [ ] **FW-11** Synthetic Fireworks adapter with host/model allowlist (FW-10).
@@ -34,7 +34,7 @@ Each FW item is a 1–3 hour slice; larger workstreams require further decomposi
 - [ ] **FW-14** Redacted inference telemetry and PHI/secret log-capture regression.
 - [ ] **FW-15** Annotation schema and first 25 adjudicated synthetic edge cases.
 - [ ] **FW-16** Deterministic evaluation runner and report (FW-15).
-- [ ] **FW-17** Intent/inbox/outbox persistence and scoped uniqueness contracts.
+- [ ] **FW-17** Intent/inbox/outbox persistence and scoped uniqueness contracts. _Retell pending inbox implemented with additive migration; general call intents and outbox remain pending._
 - [ ] **FW-18** Atomic state/audit/outbox commit and crash/replay test (FW-17).
 - [ ] **FW-19** Canonical source identity and non-destructive duplicate report.
 - [ ] **FW-20** Validated uniqueness migration and concurrent import regression (FW-19).
@@ -53,9 +53,12 @@ require durable execution and applicable PHI agreements even for an unpaid pilot
 - [ ] **FW-25** SQS call intent ownership, ambiguous-acceptance reconciliation, and no-redial separate-process proof (AWS already deployed; updates FW-23 assumption).
 - [ ] **FW-26** Durable notification outbox and inference-attempt usage ledger; failed DB commits must not erase incurred provider spend.
 - [ ] **FW-27** Versioned summary replacement/retry; preserve prior evidence and reject nonterminal-call retries.
-- [ ] **FW-28** Reconcile Retell webhook-badged signing key vs generated deployment secret; verify stop-call API vs delete-call/data before any live termination.
+- [ ] **FW-28** Reconcile Retell webhook-badged signing key vs generated deployment secret; verify stop-call API vs delete-call/data before any live termination. _Local config and installed-SDK transport tests pass; stop replaces destructive delete, generated secret removed; deployment/live confirmation pending._
 - [ ] **FW-29** Verify custom API DNS and cold readiness behavior, restore test, and actual deployment settings without relying on Terraform alone.
 - [ ] **FW-30** Investigate API rate-limit hook ordering; authenticated requests may share the pre-auth anon bucket.
+- [ ] **FW-31** Fix SSE stable `(timestamp,id)` pagination, >200-event catch-up, and replay/subscription race; UI scope isolation is locally fixed.
+- [ ] **FW-32** Make cancellation atomic and version-conditional; never overwrite a concurrently committed provider terminal time or reviewed claim state.
+- [ ] **FW-33** Operate the Retell pending inbox: scoped account reconciliation, unmatched-event retention/deletion, age/count alerts, conflicting lifecycle evidence review, and safe replay tooling.
 
 No pilot clinic yet (user confirmed); fake data is authorized. Real connector/clinic evidence
 is visibly blocked pending a test partner and authorized system access. Open Dental is a rollout

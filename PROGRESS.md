@@ -13,8 +13,13 @@ actual account probes, and blocked end-to-end capabilities.
 model-only financial closure blocked; stale summary states protected; atomic summary/state/
 audit commit; missing subscriber/NPI blocks enqueue/dial without fallback or retry across
 BullMQ/inline/AWS SQS. Unknown raw codes are preserved for review and erroneous reference
-annotations corrected. Full API232, summary46, summarizer78 tests passed; two API tests
-explicitly expect the unresolved Retell-envelope failure. No production deploy or real calls ran.
+annotations corrected. Retell wire events now enter a transactional pending inbox;
+canonical final transcripts feed summaries without duplicate cumulative snapshots, and
+missing/empty/provisional transcripts abstain. Producer crash/early-delivery recovery
+passes across separate processes. Stop-call replaces data deletion; signing configuration
+uses the provider-designated API key. All remain local and synthetic; worker no-redial,
+outbox delivery, and authorized real provider tests are still pending. Detailed test
+counts and limits are in the session record. No production deploy or real calls ran.
 
 **User direction:** ElevenLabs speech/orchestration is permitted, business inference stays
 on Fireworks open weights. There is no pilot clinic yet: all development uses fake patient
