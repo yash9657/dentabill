@@ -33,25 +33,32 @@ beforeEach(() => {
 
 describe('<ClaimDetailPage />', () => {
   it('renders the claim summary card from the SDK response', async () => {
-    getMock.mockResolvedValue({
-      data: {
-        id: 'claim_a',
-        organizationId: 'org_a',
-        patientDOBHash: 'h',
-        patientDOBLast4: '1990',
-        claimNumber: 'CL-DETAIL-99',
-        cdtCodes: ['D2740'],
-        claimAmount: '420.00',
-        payerCode: 'CIGNA_DENTAL',
-        serviceDate: '2026-01-15T00:00:00.000Z',
-        submittedDate: null,
-        status: 'IN_QUEUE',
-        priority: 75,
-        retryCount: 0,
-        maxRetries: 3,
-        createdAt: '2026-01-15T00:00:00.000Z',
-        updatedAt: '2026-01-16T00:00:00.000Z',
-      },
+    getMock.mockImplementation(async (path: string) => {
+      if (path === '/v1/claims/{id}/call-recovery')
+        return {
+          data: { intent: null, canCheck: false, canReview: true, availability: 'AVAILABLE' },
+        };
+      if (path === '/v1/calls') return { data: { items: [], total: 0, page: 1, pageSize: 50 } };
+      return {
+        data: {
+          id: 'claim_a',
+          organizationId: 'org_a',
+          patientDOBHash: 'h',
+          patientDOBLast4: '1990',
+          claimNumber: 'CL-DETAIL-99',
+          cdtCodes: ['D2740'],
+          claimAmount: '420.00',
+          payerCode: 'CIGNA_DENTAL',
+          serviceDate: '2026-01-15T00:00:00.000Z',
+          submittedDate: null,
+          status: 'IN_QUEUE',
+          priority: 75,
+          retryCount: 0,
+          maxRetries: 3,
+          createdAt: '2026-01-15T00:00:00.000Z',
+          updatedAt: '2026-01-16T00:00:00.000Z',
+        },
+      };
     });
     render(
       <QueryProvider client={createDentaBillQueryClient()}>

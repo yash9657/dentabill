@@ -2179,6 +2179,300 @@
         }
       }
     },
+    "/v1/claims/{id}/call-recovery": {
+      "get": {
+        "description": "Read the current call submission status without exposing its identity snapshot.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "intent": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "READY",
+                            "SUBMITTING",
+                            "UNKNOWN",
+                            "ACCEPTED",
+                            "TERMINAL",
+                            "CANCELLED"
+                          ]
+                        },
+                        "attemptNumber": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "submittedAt": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "callId": {
+                          "nullable": true,
+                          "type": "string"
+                        },
+                        "lastCheckedAt": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "lastCheckOutcome": {
+                          "nullable": true,
+                          "type": "string",
+                          "enum": [
+                            "RECOVERED",
+                            "ALREADY_BOUND",
+                            "NO_MATCH",
+                            "REVIEW_REQUIRED",
+                            "LOOKUP_FAILED",
+                            "NOT_READY",
+                            "IN_PROGRESS",
+                            "NOT_FOUND"
+                          ]
+                        },
+                        "nextCheckAt": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state",
+                        "attemptNumber",
+                        "createdAt",
+                        "submittedAt",
+                        "callId",
+                        "lastCheckedAt",
+                        "lastCheckOutcome",
+                        "nextCheckAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "canCheck": {
+                      "type": "boolean"
+                    },
+                    "canReview": {
+                      "type": "boolean"
+                    },
+                    "availability": {
+                      "type": "string",
+                      "enum": [
+                        "AVAILABLE",
+                        "NOT_CONFIGURED"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "intent",
+                    "canCheck",
+                    "canReview",
+                    "availability"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/call-intents/{id}/reconcile": {
+      "post": {
+        "description": "OWNER/ADMIN review of an uncertain submission. Looks up the existing call; never starts a call.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "intent": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "READY",
+                            "SUBMITTING",
+                            "UNKNOWN",
+                            "ACCEPTED",
+                            "TERMINAL",
+                            "CANCELLED"
+                          ]
+                        },
+                        "attemptNumber": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "submittedAt": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "callId": {
+                          "nullable": true,
+                          "type": "string"
+                        },
+                        "lastCheckedAt": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "lastCheckOutcome": {
+                          "nullable": true,
+                          "type": "string",
+                          "enum": [
+                            "RECOVERED",
+                            "ALREADY_BOUND",
+                            "NO_MATCH",
+                            "REVIEW_REQUIRED",
+                            "LOOKUP_FAILED",
+                            "NOT_READY",
+                            "IN_PROGRESS",
+                            "NOT_FOUND"
+                          ]
+                        },
+                        "nextCheckAt": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state",
+                        "attemptNumber",
+                        "createdAt",
+                        "submittedAt",
+                        "callId",
+                        "lastCheckedAt",
+                        "lastCheckOutcome",
+                        "nextCheckAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "canCheck": {
+                      "type": "boolean"
+                    },
+                    "canReview": {
+                      "type": "boolean"
+                    },
+                    "availability": {
+                      "type": "string",
+                      "enum": [
+                        "AVAILABLE",
+                        "NOT_CONFIGURED"
+                      ]
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "RECOVERED",
+                        "ALREADY_BOUND",
+                        "NO_MATCH",
+                        "REVIEW_REQUIRED",
+                        "LOOKUP_FAILED",
+                        "NOT_READY",
+                        "IN_PROGRESS",
+                        "NOT_FOUND"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "intent",
+                    "canCheck",
+                    "canReview",
+                    "availability",
+                    "outcome"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/calls/{id}/events/stream": {
       "get": {
         "description": "Live call event stream (Server-Sent Events). Replays all persisted CallEvent rows in bounded pages, then catches up from Postgres with optional Redis wake-up hints. Heartbeat every 15s; closes after terminal call events are drained. See ADR-046.",

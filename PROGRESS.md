@@ -23,9 +23,11 @@ calls remain reserved for reconciliation. SSE catches up across replay/Redis gap
 for actual terminal evidence. Call/summary delivery now commits through a leased transactional
 outbox; separate-process producer/relay crashes recover the same command without a second
 synthetic call. Inline receipts wait for durable disposition. Cancellation remains visibly
-pending until provider confirmation. All remain local and synthetic; automated unknown-ID
-recovery, persisted deadlines, quarantine operations, deployed recovery and authorized real
-provider tests are still pending. Exact tests/limits are in the session record. No production
+pending until provider confirmation. Owner/admin lookup now reconciles uncertain call IDs
+against the saved request and commits verified source evidence plus a distinct durable resume
+command; separate-process crashes and create-response races preserve one synthetic call.
+All remain local and synthetic; account sweeps, persisted observer deadlines, quarantine
+operations, deployed recovery and authorized real-provider tests are still pending. Exact tests/limits are in the session record. No production
 deploy, recovery schedule activation or real calls ran.
 
 **User direction:** ElevenLabs speech/orchestration is permitted, business inference stays

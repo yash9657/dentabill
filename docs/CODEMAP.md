@@ -215,3 +215,14 @@ end-to-end. Fastify-based health probe at `:3010/healthz`.
 - `packages/queue/src/inline.ts`, `apps/api/src/routes/v1/internal-jobs.ts` — verified completion receipt and authenticated fixed-bound recovery endpoint.
 - `apps/api/src/lib/cancel-call.ts` and tests — atomic request marker, conditional claim state, provider-terminal race handling.
 - `apps/web/src/lib/calls/use-cancel-call.ts` — request mutation and pending-cancellation UI in call detail/list.
+
+### FW-34 positive-only call reconciliation (2026-10-13)
+
+- `packages/db/prisma/migrations/20261013130000_call_reconciliation/` — attempt count, cooldown, token-fenced lookup leases and last checked outcome.
+- `packages/payer-ivr/src/retell/reconciliation.ts` and tests — bounded read-only v3 metadata lookup/v2 detail, identity-only candidates and normalized final source.
+- `apps/call-worker/src/call-reconciliation.ts` and tests — exact snapshot matching, no-redial recovery, atomic binding/source/audit/resume obligation.
+- `apps/call-worker/src/call-reconciliation-process.test.ts` and fixture — real adapters against an independent synthetic fsynced provider/broker, two SIGKILL boundaries.
+- `apps/call-worker/src/call-reconciliation-race.test.ts` — original create response versus recovery binding in both orders.
+- `apps/api/src/routes/v1/call-recovery.ts` and tests — scoped safe status projection and Owner/Admin-only existing-call lookup.
+- `apps/web/src/components/dashboard/calls/claim-call-recovery.tsx`, `apps/web/src/lib/calls/use-call-recovery.ts` — review workflow, cooldown/configuration feedback and claim-bound recovery results.
+- `packages/queue/src/types.ts`, worker handler and internal job receipts — exact observation-only resume command with a distinct retained queue ID.

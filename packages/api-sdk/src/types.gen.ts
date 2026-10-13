@@ -967,6 +967,132 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/claims/{id}/call-recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read the current call submission status without exposing its identity snapshot. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            intent: {
+                                id: string;
+                                /** @enum {string} */
+                                state: "READY" | "SUBMITTING" | "UNKNOWN" | "ACCEPTED" | "TERMINAL" | "CANCELLED";
+                                attemptNumber: number;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                submittedAt: string | null;
+                                callId: string | null;
+                                /** Format: date-time */
+                                lastCheckedAt: string | null;
+                                /** @enum {string|null} */
+                                lastCheckOutcome: "RECOVERED" | "ALREADY_BOUND" | "NO_MATCH" | "REVIEW_REQUIRED" | "LOOKUP_FAILED" | "NOT_READY" | "IN_PROGRESS" | "NOT_FOUND" | null;
+                                /** Format: date-time */
+                                nextCheckAt: string | null;
+                            } | null;
+                            canCheck: boolean;
+                            canReview: boolean;
+                            /** @enum {string} */
+                            availability: "AVAILABLE" | "NOT_CONFIGURED";
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/call-intents/{id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description OWNER/ADMIN review of an uncertain submission. Looks up the existing call; never starts a call. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            intent: {
+                                id: string;
+                                /** @enum {string} */
+                                state: "READY" | "SUBMITTING" | "UNKNOWN" | "ACCEPTED" | "TERMINAL" | "CANCELLED";
+                                attemptNumber: number;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                submittedAt: string | null;
+                                callId: string | null;
+                                /** Format: date-time */
+                                lastCheckedAt: string | null;
+                                /** @enum {string|null} */
+                                lastCheckOutcome: "RECOVERED" | "ALREADY_BOUND" | "NO_MATCH" | "REVIEW_REQUIRED" | "LOOKUP_FAILED" | "NOT_READY" | "IN_PROGRESS" | "NOT_FOUND" | null;
+                                /** Format: date-time */
+                                nextCheckAt: string | null;
+                            } | null;
+                            canCheck: boolean;
+                            canReview: boolean;
+                            /** @enum {string} */
+                            availability: "AVAILABLE" | "NOT_CONFIGURED";
+                            /** @enum {string} */
+                            outcome: "RECOVERED" | "ALREADY_BOUND" | "NO_MATCH" | "REVIEW_REQUIRED" | "LOOKUP_FAILED" | "NOT_READY" | "IN_PROGRESS" | "NOT_FOUND";
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/calls/{id}/events/stream": {
         parameters: {
             query?: never;

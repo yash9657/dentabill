@@ -89,6 +89,17 @@ describe('CallNowPill (P3-T22)', () => {
     );
   });
 
+  it.each(['MANUAL_REVIEW', 'APPEALING'] as const)(
+    'links %s table rows to review without dialing',
+    async (claimStatus) => {
+      renderPill({ claimStatus, variant: 'compact' });
+      const link = screen.getByRole('link', { name: 'Review call for claim claim_a' });
+      expect(link).toHaveAttribute('href', '/dashboard/claims/claim_a');
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+      expect(postMock).not.toHaveBeenCalled();
+    },
+  );
+
   it('renders a non-action "Failed" badge for FAILED — the API rejects FAILED → IN_QUEUE, manual status edit is the path back', () => {
     render(
       <QueryProvider client={createDentaBillQueryClient()}>
@@ -193,7 +204,7 @@ describe('CallNowPill (P3-T22)', () => {
       });
     });
     expect(await screen.findByTestId('call-now-pill-success')).toHaveTextContent(
-      /Queued. The call will start shortly\./,
+      /Call request accepted\./,
     );
   });
 

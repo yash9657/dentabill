@@ -255,24 +255,30 @@ model Call {
 // A submission can be attempted only after READY -> SUBMITTING commits.
 // SUBMITTING/UNKNOWN are never made READY again, including after a timeout.
 model CallIntent {
-  id             String          @id @default(cuid())
-  organizationId String
-  claimId        String
-  idempotencyKey String
-  payerCode      PayerCode
-  attemptNumber  Int
-  claimPriority  Int
-  claimVersion   DateTime
-  state          CallIntentState @default(READY)
+  id                      String          @id @default(cuid())
+  organizationId          String
+  claimId                 String
+  idempotencyKey          String
+  payerCode               PayerCode
+  attemptNumber           Int
+  claimPriority           Int
+  claimVersion            DateTime
+  state                   CallIntentState @default(READY)
   // Exact outbound request contains PHI. Never copy into audit/log metadata.
-  requestPayload Json?
-  requestHash    String?
-  callId         String?         @unique
-  submittedAt    DateTime?
-  completedAt    DateTime?
-  lastErrorCode  String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  requestPayload          Json?
+  requestHash             String?
+  callId                  String?         @unique
+  submittedAt             DateTime?
+  completedAt             DateTime?
+  lastErrorCode           String?
+  reconciledAt            DateTime?
+  reconcileOutcome        String?
+  reconcileAvailableAt    DateTime?
+  reconcileLeaseExpiresAt DateTime?
+  reconcileLeaseToken     String?
+  reconcileAttempts       Int             @default(0)
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   claim        Claim        @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Cascade)

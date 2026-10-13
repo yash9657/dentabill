@@ -4,7 +4,88 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: FW-35 durable delivery and FW-32 pending cancellation
+### Latest continuation: FW-34 positive-only existing-call recovery
+
+The goal remains active. This continuation implements and tests the manual recovery
+vertical slice; no overall parity, deployed recovery or real-provider compatibility claim.
+Fresh fetch confirms `origin/main` at `55a1896` and `origin/infra/aws` at `23cdc7b` are
+already ancestors of this work branch. No merge/deploy was needed. A secret-safe name-only
+`.env` check confirmed `RETELL_API_KEY` is set; Fireworks/ElevenLabs keys remain absent/empty.
+User is correct that no Telnyx key was ever required: current telephony is Retell-managed
+Twilio. Existing configured Retell handles the app's voice agent. Development continues with
+fake data; no new provider requests, account changes or production actions occurred.
+
+- Additive migration eleven, `20261013130000_call_reconciliation`, persists attempts,
+  last checked result, cooldown and token-fenced lookup leases. Applied only to isolated
+  localhost identity/runtime/process/summary/receipts databases; Prisma generated.
+- A new read-only Retell port follows current v3 metadata/list and v2 detail contracts.
+  It completes bounded enumeration or fails, checks identities, rejects duplicate/cyclic/
+  incomplete results, caps bodies at 2 MiB, forbids redirects/retries and bounds each whole
+  operation to ten seconds. Defaults: three pages, twenty candidates, ten per page.
+  Provider detail yields normalized final source transcript only, excluding model analysis.
+- Core validates the canonical saved request hash and exact intent/payer/agent/from/to/
+  outbound-phone identity, then rechecks the fetched detail. Combined lookup is bounded to
+  twenty-five seconds. Submission grace, cooldown and lease are sixty seconds. No-match,
+  failure, malformed snapshot or multiple/conflicting matches preserve the submission fence;
+  none authorizes redial, a new intent or a provider switch. Cross-tenant intent access and
+  globally conflicting provider Call IDs cannot bind.
+- A positive match commits Call/ACCEPTED binding, source terminal event when available,
+  audit and resume outbox together. Get Call evidence records `source=retell_get_call` and
+  retrieval time; it never creates a signed-webhook receipt or invents timing. It preserves
+  reviewed Claim state. The resume key `call.resume.<intentId>` differs from the retained
+  original queue key; strict resume intent/call identity and immutable fields permit only
+  ACCEPTED observation or TERMINAL no-op, never provider creation. Inline receipts verify
+  the same binding and require TERMINAL. SQS round-trip preserves the resume payload.
+- Both original-create/recovery race orderings preserve one Call. A late original response
+  reuses the exact recovered provider ID. Conversely, if original binding wins while lookup
+  is running, the current unexpired lookup lease can atomically retain verified source,
+  audit and resume against that exact bound Call. This prevents dropping the only terminal
+  evidence when no webhook arrives. Stale owners cannot write through a newer lease.
+- Scoped GET status projects safe fields only. Owner/Admin POST accepts an empty body and
+  derives provider lookup from saved intent; staff can read status but cannot reconcile.
+  Missing provider configuration returns explicit unavailable/503. SDK was regenerated.
+  Claim detail offers Check existing call/View call and clear failure/cooldown feedback;
+  compact reviewed-claim actions link to detail. Enqueue replay no longer fabricates IN_QUEUE.
+  Mutation results are bound to the originating claim so navigation or late responses cannot
+  show another claim's recovered-call link.
+
+**Verification:** full API **345 tests / 28 files**, database **66/6**, provider package
+**254/13** (including **58** new adapter cases), queue **66/5**, SDK **19/2** passed.
+Core adds **29** real-Postgres cases covering source-to-resume-to-finalization, cooldown,
+missing/conflicting identities, invalid snapshots, never-settling provider, lease races,
+expiry, tenant isolation, provider-ID conflict, audit rollback and forged resume commands.
+Two new process tests use actual create/read-only adapters against independent fsynced
+synthetic provider/broker ledgers: kill submitter after provider acceptance, then recover in
+a fresh process; additionally kill recovery after binding commit and before resume delivery.
+Fresh relay/consumer complete with exactly one provider create and one summary obligation.
+Two direct race tests cover both create-response commit orderings. Final full worker run
+passed **132/17**; the final API recovery/receipt rerun passed **49/2**. Lambda packaging
+passed: API **38.6 MB / 11.2 MB zip**, worker **32.0 MB / 10.0 MB zip**. API/UI agent verified **90** web tests,
+API/web/SDK types/lint, and actual component/Tailwind desktop1280/mobile390 layouts with no
+overflow; this was a synthetic component fixture, not authenticated full-browser end-to-end
+validation. Root affected-package typecheck/lint passed across **28** tasks before the final
+race adjustment; final worker lint and web typecheck/lint also passed after the fixes. Independent reviews found the late-source
+race and cross-claim link risk; both were fixed with regressions.
+
+**Limits:** a recovered nonterminal call can still wait indefinitely after a lost terminal
+webhook. FW-34 starts only from UNKNOWN/SUBMITTING and is manual, not an account-wide sweep.
+Observer/termination ownership, persisted deadlines, accepted-call detail reconciliation,
+quarantine operations and deployed relay remain open. Slow DB queries are not preempted by
+provider deadlines. Outbox DELIVERED remains transport receipt; summary inference/cost
+ownership remains FW-26. General raw Prisma diagnostic logging is a separate PHI gate:
+this core sanitizes its thrown errors, but the shared DB emitter still logs raw diagnostics.
+No live clinical data has been used; audit/request/transcript lifecycle controls remain W8.
+Do not deploy old workers alongside new recovery producers: their older schema can strip
+resume fields and acknowledge without observation. See ADR-060 and DEPLOY_AWS.md rollout order.
+
+**Exact next task:** FW-36 — persisted observer ownership, hard termination/reconciliation
+deadlines and recovery of ACCEPTED calls after missing terminal delivery. Keep provider
+terminal facts distinct from requested cancellation/timeout. Then FW-37 operating visibility
+and audited quarantine review; continue Fireworks gateway work independently of missing keys.
+No clinic exists yet; authorized connector/domain evidence remains blocked, while independent
+implementation continues. Do not reset uncertain intents or remove the preserved safety stash.
+
+### Earlier continuation: FW-35 durable delivery and FW-32 pending cancellation
 
 The goal remains active. Implementation commit: `bd519a8` on `codex/w0-containment`.
 This continuation made tested progress; no production deployment, schedule activation or external calls.

@@ -12,8 +12,10 @@
 > verified existing carrier. User has no clinic yet and requests fake patient data.
 > Local containment fixes, call-intent submission fencing and synthetic worker-crash
 > tests do not establish full production parity. Transactional call/summary delivery and
-> pending cancellation are locally implemented (ADR-059); automated provider reconciliation,
-> persisted deadlines, quarantine operations and deployed recovery remain open.
+> pending cancellation are locally implemented (ADR-059). Owner/admin positive-only Retell
+> reconciliation now saves source evidence and durable resume work (ADR-060), with synthetic
+> crash/race proof. Account sweeps, persisted deadlines, quarantine operations and deployed
+> recovery remain open; no actual-provider compatibility claim follows from fixtures.
 
 ## 1. The blunt assessment
 

@@ -47,8 +47,7 @@ Reconciliation contract warning: current [List Calls](https://docs.retellai.com/
 is v3 with typed metadata predicates, `{items,has_more,pagination_key}` and opaque cursors.
 Installed SDK 5.16.0 `call.list` is v2 with a metadata map, array response and last-ID pagination.
 Do not silently mix these contracts. No negative-lookup consistency guarantee was found;
-empty, incomplete or timed-out lookup cannot prove no external call exists. Metadata recovery
-is still FW-34; SDK create-field passthrough does not establish list compatibility.
+empty, incomplete or timed-out lookup cannot prove no external call exists. FW-34 now implements the read-only v3 contract directly, without installed SDK v2 list behavior; SDK create-field passthrough alone does not establish list compatibility.
 
 FW-35 adds transactional call/summary delivery with bounded leased recovery and immutable
 commands. Two local process tests kill a producer before dispatch and a relay after a
@@ -57,8 +56,26 @@ command, and fresh consumers produce one synthetic provider action. The AWS rela
 and disabled scheduled-rule configuration have local contract tests and Terraform validation;
 no deployed scheduled recovery was measured. FW-32 adds atomic cancellation-request evidence
 and pending UI; it does not claim provider termination until provider evidence arrives.
-Outbox quarantine operations, observer deadlines and ambiguous provider-ID recovery remain
-open. Summary inference cost/duplicate execution is a separate FW-26 limitation.
+Outbox quarantine operations, observer deadlines and deployed recovery remain open. Summary inference cost/duplicate execution is a separate FW-26 limitation.
+
+FW-34 adds a local owner/admin recovery workflow: complete bounded metadata enumeration,
+exact saved-request hash/intent/agent/from/to matching, verified Get Call identity, and
+transactional call binding, source terminal evidence, audit and a distinct resume command.
+The client uses [v3 List Calls](https://docs.retellai.com/api-references/list-calls) and
+[v2 Get Call](https://docs.retellai.com/api-references/get-call). The exact metadata string
+filter `{key,type:'string',op:'eq',value}` is confirmed in the current
+[upstream SDK source](https://raw.githubusercontent.com/RetellAI/retell-typescript-sdk/main/src/resources/call.ts).
+These primary sources were checked 2026-10-13. Fifty-eight synthetic adapter tests cover
+pagination, identity, whole-operation deadlines/body limits, no retry, errors and final
+source normalization. Two independent-process crash tests exercise actual create/read-only
+adapters against a synthetic provider's fsynced acceptance ledger, including recovery crash
+before resume delivery. No authenticated read-only provider lookup was run in this slice.
+A final Get Call transcript is labeled `source=retell_get_call`, never a fabricated signed
+webhook receipt or provider model analysis. No-match/incomplete/failure/conflict stays fenced.
+Original create-response races are covered in both orders. Recovery neither dials nor edits
+reviewed claim state. Nonterminal matches still depend on subsequent observation (FW-36);
+manual lookup is not an account sweep, and deployed scheduling/live compatibility remain
+unverified. No new provider choice, purchase, deployment or live call follows from these tests.
 
 ## Public capability baseline
 

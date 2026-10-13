@@ -129,6 +129,46 @@ describe('POST /v1/internal/jobs/*', () => {
     return data;
   }
 
+  it.each(['exact', 'wrong key', 'wrong call', 'wrong tenant', 'still accepted'] as const)(
+    'acknowledges a recovery receipt only for its exact terminal binding: %s',
+    async (variant) => {
+      const intent = await prisma.callIntent.findFirstOrThrow({
+        where: { organizationId: callJob.organizationId, idempotencyKey: callJob.idempotencyKey },
+      });
+      const call = await prisma.call.create({
+        data: {
+          organizationId: callJob.organizationId,
+          claimId: callJob.claimId,
+          retellCallId: `synthetic_resume_${randomUUID()}`,
+        },
+      });
+      await prisma.callIntent.updateMany({
+        where: { id: intent.id, organizationId: callJob.organizationId },
+        data: { callId: call.id, state: variant === 'still accepted' ? 'ACCEPTED' : 'TERMINAL' },
+      });
+      const data: CallJobData = {
+        ...callJob,
+        organizationId: variant === 'wrong tenant' ? 'different_org' : callJob.organizationId,
+        idempotencyKey:
+          variant === 'wrong key' ? callJob.idempotencyKey : `call.resume.${intent.id}`,
+        resume: {
+          intentId: intent.id,
+          callId: variant === 'wrong call' ? 'different_call' : call.id,
+        },
+      };
+      const response = await server.inject({
+        method: 'POST',
+        url: '/v1/internal/jobs/calls',
+        headers: { [HEADER]: SECRET },
+        payload: data,
+      });
+      expect(response.statusCode).toBe(variant === 'exact' ? 200 : 503);
+      expect(runCall).toHaveBeenCalledWith(data);
+      if (variant === 'exact')
+        expect(response.json()).toEqual({ accepted: true, jobId: data.idempotencyKey });
+    },
+  );
+
   async function seedOutbox(count = 1): Promise<CallJobData[]> {
     const seed = await seedIntent('TERMINAL');
     const data = Array.from({ length: count }, (_, index) => ({

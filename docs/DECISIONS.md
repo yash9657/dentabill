@@ -873,3 +873,48 @@ these crash boundaries, not real AWS/Retell behavior. Persisted observer deadlin
 ambiguous provider-ID reconciliation, quarantine operations/alerts and authorized external
 validation remain required. Keep additive evidence on rollback; never deploy an old worker
 that ignores unresolved intents as a supposed safe recovery.
+
+## ADR-060 — Reconcile positive provider identity; never infer permission to redial
+
+**Date:** 2026-10-13. **Status:** implemented and tested locally; live compatibility and deployment remain release gates.
+
+An Owner/Admin may check an UNKNOWN or sufficiently old SUBMITTING intent from claim
+detail. Read-only Retell discovery is a separate port, with no create/delete/stop operation.
+Use current v3 metadata predicates and opaque pagination; retrieve the one candidate through
+v2 Get Call. Default bounds are three pages, twenty candidates, ten per page, two MiB per
+response and a ten-second whole-operation deadline. Core bounds combined lookup to twenty-five
+seconds; no automatic remote retry occurs. Provider response/error bodies never become API
+errors or audit metadata. General database log/PHI controls remain a broader W8 gate.
+
+Persist lookup attempts with a sixty-second token-fenced lease before reading remotely;
+allow sixty seconds after SUBMITTING and between completed checks. Validate the canonical
+stored request hash, opaque intent nonce, payer, agent, outbound direction and both numbers.
+Recheck identity on detail. Empty, incomplete, failed, conflicting or multiple matches never
+reset the intent, release its active-claim uniqueness, or authorize another provider/action.
+Lease expiry permits another read-only check, not another call. Human review remains explicit.
+
+One verified positive match commits Call/intent binding, normalized final source when present,
+audit and a resume outbox command together. Source evidence is labeled `retell_get_call` with
+retrieval time, never a synthetic signed-webhook receipt. No post-call analysis becomes business
+evidence. Missing provider timing stays null. Reviewed Claim state is left untouched.
+The provider Call ID remains globally unique; composite references preserve tenant/claim scope.
+
+The call queue carries optional strict `resume:{intentId,callId}` with transport key
+`call.resume.<intentId>`. Reusing the original key would be suppressed by retained BullMQ
+jobs. Resume must match the scoped binding and all immutable routing fields; only ACCEPTED
+observation or TERMINAL no-op is permitted, never the READY submission path. Inline receipt
+validation follows that exact binding and requires TERMINAL. Atomic finalization still owns
+one summary obligation even if original and resume observers overlap; observer leases are FW-36.
+
+When the original create response races recovery, either binding order keeps the same Call.
+An in-flight lookup may attach verified terminal evidence to the exact already-bound Call only
+while it still owns the unexpired lookup lease. It also commits the durable resume obligation;
+dropping that source could otherwise strand the original observer when the webhook is missing.
+A newer lease/token is never overwritten. Stale UI results are claim-bound and do not invent
+IN_QUEUE on an accepted-request replay.
+
+Synthetic contract, Postgres, HTTP, UI, separate-process SIGKILL and race checks are evidence
+for these local invariants only. A positive nonterminal match can still stall after a lost
+end webhook. Accepted-call deadlines, account sweeps, quarantine operations, real-provider
+compatibility, authorized clinic tests and production rollout remain open. Upgrade/drain old
+workers before exposing recovery so an older parser cannot discard the resume command.

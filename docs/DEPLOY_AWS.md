@@ -183,8 +183,8 @@ provider stop confirmation, actual AWS worker recovery and summary outbox remain
 
 ## Transactional delivery and cancellation release gate (FW-35 / FW-32)
 
-Local code adds `20261013120000_job_outbox` after the two CallIntent migrations. All ten
-migrations are required for the new API/worker. Only dedicated local synthetic databases
+Local code adds `20261013120000_job_outbox` after the two CallIntent migrations. The subsequent FW-34 release also adds migration eleven (see below); all migrations
+are required for the matching API/worker. Only dedicated local synthetic databases
 have been migrated. Deploy coordinated API, worker and generated SDK/web builds after
 explicit release authorization; the new call response includes nullable `cancelRequestedAt`.
 Cancellation leaves provider status/end time intact until terminal evidence arrives.
@@ -238,3 +238,40 @@ cancellation through the actual API/worker, then enable and observe the schedule
 Do not roll back by dropping outbox/inbox/intent evidence or deploying pre-intent workers
 against unresolved work. Local type/tests/build and backend-disabled Terraform validate
 are not a deployed AWS recovery test.
+
+## Existing-call recovery release gate (FW-34)
+
+`20261013130000_call_reconciliation` is additive migration eleven. Only isolated localhost
+synthetic databases have been migrated. No AWS migration, resource update or read-only Retell
+account lookup ran in this slice. The existing `RETELL_API_KEY` configures the read-only
+recovery client; current Retell-managed Twilio does not require `TELNYX_API_KEY`. Missing
+Retell configuration produces an explicit unavailable state/503 rather than a fake recovery.
+
+Claim detail reads `GET /v1/claims/:id/call-recovery`; an Owner/Admin can invoke
+`POST /v1/call-intents/:id/reconcile` with an empty body. Tenant, provider ID, phone number,
+timeouts and bounds cannot be supplied by the caller. The API derives them from the scoped
+saved intent. Submission grace, per-intent cooldown and lookup lease are sixty seconds each;
+combined provider lookup is bounded to twenty-five seconds (not a hard database query budget).
+Audit records attempts and outcomes using opaque IDs only. Inspect scoped state without
+request snapshots/transcripts; `reconcileOutcome`, `reconciledAt`, `reconcileAttempts` and
+lease/cooldown timestamps explain the latest check. NO_MATCH and LOOKUP_FAILED are unresolved,
+not non-acceptance; REVIEW_REQUIRED needs evidence review. Never reset to READY to force a call.
+
+A positive match saves a `CALL_PLACE` outbox command with optional `resume:{intentId,callId}`
+and distinct key `call.resume.<intentId>`. The new worker validates the exact binding and only
+observes it. Retained original queue IDs cannot suppress this command. Delivery depends on
+the existing outbox relay: an authorized AWS release must verify/enable that prepared schedule.
+No schedule was activated here. On retained inline mode, matching receipts require terminal
+intent state; lost/long receipts can still quarantine and require operating review.
+
+Rollout order matters: apply reviewed additive migrations, deploy the matching worker and
+allow old invocations to drain before exposing the new API/web recovery action. An older
+worker strips the resume field and can acknowledge a command without observing its call.
+Verify source-to-resume-to-terminal-to-summary behavior through the actual staged API, queue
+and worker before authorized live usage. Retain the new worker/evidence semantics on rollback;
+do not discard intents, source events or resume commands. Local two-process crash and both
+create-response-race tests do not substitute for this deployed verification.
+
+A recovered nonterminal call remains subject to the existing observer limitations. FW-36
+must add persisted ownership/deadlines and missing-terminal-event reconciliation before live
+calls; this action does not sweep the account, hard-stop a call, or resolve provider absence.

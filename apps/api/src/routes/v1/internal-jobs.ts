@@ -111,16 +111,21 @@ export function internalJobsRoutes(fastify: FastifyInstance): void {
       logReport(kind, jobId, report);
       if (report.status === 'failed' && !report.dlq) return await unconfirmed(reply);
       if ('claimId' in data) {
+        if (data.resume && data.idempotencyKey !== `call.resume.${data.resume.intentId}`) {
+          return await unconfirmed(reply);
+        }
         // A duplicate worker can short-circuit while another owner is still submitting.
         // Only durable disposition of this exact saved command confirms delivery.
         const intent = await prisma.callIntent.findFirst({
           where: {
             organizationId: data.organizationId,
-            idempotencyKey: data.idempotencyKey,
+            ...(data.resume
+              ? { id: data.resume.intentId, callId: data.resume.callId }
+              : { idempotencyKey: data.idempotencyKey }),
             claimId: data.claimId,
             attemptNumber: data.attemptNumber,
             claimPriority: data.claimPriority,
-            state: { in: ['TERMINAL', 'CANCELLED', 'UNKNOWN'] },
+            state: { in: data.resume ? ['TERMINAL'] : ['TERMINAL', 'CANCELLED', 'UNKNOWN'] },
           },
           select: { payerCode: true },
         });

@@ -55,6 +55,13 @@ export {
 
 export {
   createRetellPort,
+  createRetellReconciliationClient,
+  RetellReconciliationError,
+  type ReadonlyRetellReconciliationPort,
+  type RetellCallCandidate,
+  type RetellReconciliationClient,
+  type RetellReconciliationClientOptions,
+  type RetellReconciliationErrorCode,
   EndCallInputSchema,
   FakeRetell,
   LiveRetell,

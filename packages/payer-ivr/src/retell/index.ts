@@ -54,3 +54,13 @@ export {
   reconcileRetellWebhookInbox,
   RetellWebhookConflictError,
 } from './inbox.js';
+
+export {
+  createRetellReconciliationClient,
+  RetellReconciliationError,
+  type ReadonlyRetellReconciliationPort,
+  type RetellCallCandidate,
+  type RetellReconciliationClient,
+  type RetellReconciliationClientOptions,
+  type RetellReconciliationErrorCode,
+} from './reconciliation.js';

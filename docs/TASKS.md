@@ -60,11 +60,13 @@ require durable execution and applicable PHI agreements even for an unpaid pilot
 - [ ] **FW-32** Make cancellation atomic and version-conditional; never overwrite a concurrently committed provider terminal time or reviewed claim state. _Implemented locally: request-only marker/event/audit, conditional claim update, pending UI and race/rollback tests; live stop confirmation pending._
 - [ ] **FW-33** Operate the Retell pending inbox: scoped account reconciliation, unmatched-event retention/deletion, age/count alerts, conflicting lifecycle evidence review, and safe replay tooling.
 
-- [ ] **FW-34** Reconcile ambiguous call intent IDs using verified provider metadata and exact agent/number identity; quarantine multiple matches and never redial on an empty lookup.
+- [ ] **FW-34** Reconcile ambiguous call intent IDs using verified provider metadata and exact agent/number identity; quarantine multiple matches and never redial on an empty lookup. _Implemented locally: owner/admin workflow, bounded read-only v3 list/v2 get, fenced positive-only binding, source evidence and distinct durable resume command, synthetic contract/API/worker/process/race proof. Real-provider compatibility, deployed relay and operational review remain unverified._
 - [ ] **FW-35** Transactional call/summary outbox and bounded leased relay with crash-after-send replay, including inline acknowledgement and AWS recovery scheduling (FW-18 concrete next slice). _Implemented locally with bounded relay, two crash boundaries, inline completed receipts, BullMQ recurrence and disabled AWS schedule; deployment/schedule activation unverified._
-- [ ] **FW-36** Persist observer leases and hard termination/reconciliation deadlines; stale workers must not lose accepted calls or infer terminal evidence.
+- [ ] **FW-36** Persist observer leases and hard termination/reconciliation deadlines; stale workers must not lose accepted calls or infer terminal evidence. _Exact next slice: accepted/nonterminal calls can still wait indefinitely after a missing end webhook; FW-34 lookup only starts from UNKNOWN/SUBMITTING._
 
 - [ ] **FW-37** Scoped outbox operating visibility, age/quarantine alerts and audited recovery controls; distinguish transport receipt from completion and review legacy missing commands.
+
+- [ ] **FW-38** Allowlist database diagnostic logging and add PHI-bearing error capture regression; `packages/db/src/client.ts` currently forwards raw Prisma diagnostic messages even when service errors are sanitized. _No live patient data used; fix before PHI deployment._
 
 No pilot clinic yet (user confirmed); fake data is authorized. Real connector/clinic evidence
 is visibly blocked pending a test partner and authorized system access. Open Dental is a rollout

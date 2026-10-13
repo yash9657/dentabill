@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 
 import { createLogger, type Logger } from '@dentabill/logger';
+import type { RetellReconciliationClient } from '@dentabill/payer-ivr';
 import { ApiError } from '@dentabill/types';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
@@ -20,6 +21,7 @@ import { registerQueuePlugin } from './plugins/queue.js';
 import { registerRawBodyPlugin } from './plugins/raw-body.js';
 import { auditLogsRoutes } from './routes/v1/audit-logs.js';
 import { billingRoutes } from './routes/v1/billing.js';
+import { callRecoveryRoutes } from './routes/v1/call-recovery.js';
 import { callsSseRoutes } from './routes/v1/calls-sse.js';
 import { callsRoutes } from './routes/v1/calls.js';
 import { claimsRoutes } from './routes/v1/claims.js';
@@ -38,6 +40,8 @@ export interface BuildServerOptions {
    * If not provided, creates a default logger.
    */
   logger?: Logger | false;
+  /** Test seam; null explicitly disables provider lookup. */
+  callRecoveryProvider?: RetellReconciliationClient | null;
 }
 
 /**
@@ -220,6 +224,10 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(onboardingRoutes, { prefix: '/v1' });
   await fastify.register(claimsRoutes, { prefix: '/v1' });
   await fastify.register(callsRoutes, { prefix: '/v1' });
+  await fastify.register(callRecoveryRoutes, {
+    prefix: '/v1',
+    ...(opts.callRecoveryProvider !== undefined && { provider: opts.callRecoveryProvider }),
+  });
   await fastify.register(callsSseRoutes, { prefix: '/v1' });
   await fastify.register(retellWebhookRoutes, { prefix: '/v1' });
   await fastify.register(clerkWebhookRoutes, { prefix: '/v1' });

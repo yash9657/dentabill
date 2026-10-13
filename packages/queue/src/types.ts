@@ -53,6 +53,11 @@ export const CallJobDataSchema = z.object({
     .string()
     .min(1)
     .regex(/^[A-Za-z0-9_.-]+$/, 'idempotencyKey must match /^[A-Za-z0-9_.-]+$/'),
+  /** Resume observation of an already bound call; this command never places a call. */
+  resume: z
+    .object({ intentId: z.string().min(1), callId: z.string().min(1) })
+    .strict()
+    .optional(),
 });
 
 export type CallJobData = z.infer<typeof CallJobDataSchema>;

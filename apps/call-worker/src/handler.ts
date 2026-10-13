@@ -77,7 +77,10 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
     const data = validation.data;
 
     const foundIntent = await deps.prisma.callIntent.findFirst({
-      where: { organizationId: data.organizationId, idempotencyKey: data.idempotencyKey },
+      where: {
+        organizationId: data.organizationId,
+        ...(data.resume ? { id: data.resume.intentId } : { idempotencyKey: data.idempotencyKey }),
+      },
     });
     if (
       foundIntent?.claimId !== data.claimId ||
@@ -86,6 +89,14 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
       foundIntent.claimPriority !== data.claimPriority
     )
       return noCallResult('BLOCKED');
+    if (
+      data.resume &&
+      (data.idempotencyKey !== `call.resume.${foundIntent.id}` ||
+        data.resume.callId !== foundIntent.callId ||
+        !['ACCEPTED', 'TERMINAL'].includes(foundIntent.state))
+    ) {
+      return noCallResult('BLOCKED');
+    }
     let intent = foundIntent;
     if (intent.state === 'SUBMITTING' || intent.state === 'UNKNOWN') {
       return noCallResult('RECONCILIATION_REQUIRED');
@@ -294,7 +305,19 @@ export function createCallJobHandler(deps: CallJobHandlerDeps): CallsProcessor {
           where: { id: intent.id, organizationId: data.organizationId, state: 'SUBMITTING' },
           data: { state: 'ACCEPTED' },
         });
-        if (owned.count !== 1) throw new Error('Call submission ownership changed.');
+        if (owned.count !== 1) {
+          const recovered = await tx.callIntent.findFirst({
+            where: {
+              id: intent.id,
+              organizationId: data.organizationId,
+              state: { in: ['ACCEPTED', 'TERMINAL'] },
+              call: { retellCallId: startResult.retellCallId },
+            },
+            include: { call: true },
+          });
+          if (recovered?.call) return recovered.call;
+          throw new Error('Call submission ownership changed.');
+        }
         const created = await tx.call.create({
           data: {
             organizationId: data.organizationId,

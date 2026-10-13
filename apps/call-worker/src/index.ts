@@ -5,6 +5,13 @@ export {
   type CallWorkerHandle,
 } from './server.js';
 export { loadWorkerEnv, type WorkerEnv } from './env.js';
+export {
+  reconcileCallIntent,
+  getCallIntentReconciliationEligibility,
+  type CallReconciliationResult,
+  type CallReconciliationOutcome,
+  type ReconcileCallIntentOptions,
+} from './call-reconciliation.js';
 export { startHealthServer, type HealthServerHandle, type HealthServerOptions } from './health.js';
 export { createStubProcessor, type CreateStubProcessorOptions } from './processor.js';
 export {
