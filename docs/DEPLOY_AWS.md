@@ -37,7 +37,7 @@ Call submission ownership is a persisted CallIntent, shared by all dispatch mode
 reservation/claim version/audit commit before delivery; the worker commits SUBMITTING before
 create and never redials SUBMITTING/UNKNOWN. ACCEPTED resumes the stored call. Legacy jobs
 without an exact reservation fail closed. Summary jobs skip existing CallSummary records.
-Summary generation1 has a separate persisted reservation/attempt/receipt ledger. A busy owner
+Summary generation 1 has a separate persisted reservation/attempt/receipt ledger. A busy owner
 remains retryable. UNKNOWN/REJECTED is acknowledgeable only after scoped review effects and
 `reviewAppliedAt` commit. A saved response resumes local application without another request.
 No Redis lease governs summary inference ownership.
@@ -77,7 +77,7 @@ isolated localhost databases; this runbook is not deployment authorization.
 The current worker accepts only `synthetic-summary.v1`. Nonempty `ANTHROPIC_API_KEY` makes
 production summarizer creation fail with `SUMMARY_PROVIDER_DISABLED`; there is no silent
 fake or proprietary fallback. Do not enable Fireworks by adding its key: released model
-approval, same-call replacement generations and automatic job routing remain open. Awaited durable per-HTTP-send hooks are
+approval and automatic job routing remain open; explicit reviewed replacement is local only. Awaited durable per-HTTP-send hooks are
 implemented locally in the explicit observation adapter (ADR-065), not selected by job routing.
 `SUMMARIZER_DAILY_TOKEN_BUDGET` is operational admission, not a verified dollar ceiling.
 Unknown usage remains held across UTC days; legacy `summaryTokensUsed` is a display projection,
@@ -94,8 +94,31 @@ fail closed. Only localhost identity/runtime/summary/process databases have this
 The new APIs publish saved results and record biller reviews without requesting inference,
 changing claim status, confirming payments or sending messages. Native inference remains an
 explicit server adapter with unapproved checked-in releases and no production job selector.
-Same-call replacement generation and automatic dispatch remain open. Rollback retains the new tables, source snapshots and reviews; immutable records must
+Automatic dispatch remains open. Rollback retains the new tables, source snapshots and reviews; immutable records must
 not be rewritten or deleted by old application code. No production release was authorized.
+
+### Explicit regeneration release (not executed)
+
+Apply additive `20261013220000_observation_regenerations` and
+`20261013230000_regeneration_release_snapshot` before this API/worker/web version. The first
+permits generation > 1 only through a scoped immutable approval; the second preserves the exact
+serialized release manifest. Existing approvals without a valid snapshot fail closed. All 21
+migrations are applied only to localhost identity/runtime/summary/process databases.
+
+Owner/Admin preview/approve/resume endpoints execute bounded work synchronously, with no new
+SQS/BullMQ job. At a 30-second API timeout or disconnect, a late DB authorization may still commit;
+recover the saved request before any new approval. Every actual send retains the existing
+journal, original deadline and independent token allocation. Unknown acceptance never resends.
+Final/raw saved receipts recover locally; replay-only raw recovery needs the matching current
+implementation artifact but no key or unexpired send authorization.
+
+Optional API configuration: `FIREWORKS_API_KEY`,
+`OBSERVATION_IMPLEMENTATION_ARTIFACT_SHA256` (64 lowercase hex characters), and
+`SUMMARIZER_DAILY_TOKEN_BUDGET`. The checked-in model releases remain CANDIDATE; these variables
+cannot approve a model or activate automatic production routing. An evaluated scoped manifest,
+provider approvals and an explicitly authorized coordinated rollout are still required.
+Rollback preserves approvals, findings, reviews and all known/unknown usage. No production
+migration, deployment or real model request was performed for this slice.
 
 ## Infrastructure expectations
 

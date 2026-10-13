@@ -41,6 +41,9 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/claims/{id}/calls',
   '/v1/claims/{id}/observations',
   '/v1/observations/{id}/review',
+  '/v1/observations/{id}/regeneration-preview',
+  '/v1/observations/{id}/regenerate',
+  '/v1/observation-regenerations/{id}/resume',
   '/v1/calls/{id}/observations/publish',
   '/v1/calls',
   '/v1/calls/stats',
@@ -144,6 +147,48 @@ describe('OpenAPI ↔ generated types contract', () => {
       'staleReason',
     ])
       expect(spec.paths['/v1/claims/{id}/observations']).toHaveProperty([...observation, field]);
+  });
+
+  it('requires an exact reviewed preview for regeneration and exposes only same-authorization resume', () => {
+    const body = ['post', 'requestBody', 'content', 'application/json', 'schema'];
+    expect(spec.paths['/v1/observations/{id}/regenerate']).toHaveProperty(
+      [...body, 'required'],
+      ['expectedPreviewDigest', 'idempotencyKey', 'reason'],
+    );
+    for (const path of [
+      '/v1/observations/{id}/regenerate',
+      '/v1/observation-regenerations/{id}/resume',
+    ])
+      expect(spec.paths[path]).toHaveProperty([...body, 'additionalProperties'], false);
+    expect(spec.paths['/v1/observation-regenerations/{id}/resume']).toHaveProperty(
+      [...body, 'properties'],
+      {},
+    );
+    expect(spec.paths['/v1/observations/{id}/regenerate']).toHaveProperty(
+      [...body, 'properties', 'reason', 'maxLength'],
+      1000,
+    );
+    const preview = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    for (const field of [
+      'canRegenerate',
+      'blockedReason',
+      'previewDigest',
+      'source',
+      'release',
+      'activeAuthorization',
+    ])
+      expect(spec.paths['/v1/observations/{id}/regeneration-preview']).toHaveProperty([
+        ...preview,
+        field,
+      ]);
   });
 
   it.each(REQUIRED_PATHS)(

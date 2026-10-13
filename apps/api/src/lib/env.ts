@@ -58,6 +58,15 @@ const envSchema = z.object({
    * never falls back to it implicitly.
    */
   RETELL_API_KEY: z.string().trim().min(1).optional(),
+  /** Credentials alone never approve a model release or authorize regeneration. */
+  FIREWORKS_API_KEY: z.string().trim().min(1).optional(),
+  /** Deployed artifact binding required by the reviewed model release; never a promotion switch. */
+  OBSERVATION_IMPLEMENTATION_ARTIFACT_SHA256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+  /** Per-organization operational token allowance, including unsettled reservations. */
+  SUMMARIZER_DAILY_TOKEN_BUDGET: z.coerce.number().int().positive().default(1_000_000),
   /**
    * Demo-only: skip the ADR-037 payer business-hours guard at enqueue.
    *

@@ -9,6 +9,14 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
+**Latest local slice:** explicit Owner/Admin same-call regeneration now preserves the original
+finding/review, binds approval to current claim/transcript/release, and reuses a saved authorization
+across interrupted requests. New generations use the existing native journal and retain unknown
+liability. Saved final/raw results recover without another provider send; expired unused work
+requires proven-unsent accounting before another approval. API/SDK/UI and migrations 20/21 are
+implemented locally (ADR-067). Production remains unchanged; automatic native routing, approved
+model evaluation, voice and real connectors remain open. Final verification is in session context.
+
 **Implemented locally:** honest operational reporting with verified payments unavailable;
 model-only financial closure blocked; stale summary states protected; atomic summary/state/
 audit commit; missing subscriber/NPI blocks enqueue/dial without fallback or retry across

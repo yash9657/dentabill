@@ -153,6 +153,8 @@ export function createReleaseRegistry(
   options: {
     readonly releases?: readonly ModelRelease[];
     readonly implementationArtifactSha256?: string;
+    /** Only for validation of saved receipts; never grants permission to send. */
+    readonly replayOnly?: boolean;
   } = {},
 ): ReleaseRegistry {
   const parsed = z
@@ -188,7 +190,7 @@ export function createReleaseRegistry(
       const now = Date.now();
       if (
         Date.parse(approval.reviewedAt) > now ||
-        Date.parse(approval.expiresAt) <= now ||
+        (!options.replayOnly && Date.parse(approval.expiresAt) <= now) ||
         Date.parse(approval.expiresAt) <= Date.parse(approval.reviewedAt)
       ) {
         return { ok: false, code: 'RELEASE_UNAPPROVED' };

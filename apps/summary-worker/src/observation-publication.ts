@@ -68,6 +68,7 @@ export async function generateAndPublishObservation(options: {
   readonly gateway: ModelGateway;
   readonly request: GatewayRequest;
   readonly signal?: AbortSignal;
+  readonly regenerationId?: string;
 }): Promise<ObservationPublication> {
   const request = GatewayRequestSchema.safeParse(options.request);
   if (!request.success || !validateGatewayInput(request.data))
@@ -81,7 +82,7 @@ export async function generateAndPublishObservation(options: {
     where: {
       organizationId: request.data.organizationId,
       callId: options.callId,
-      generation: 1,
+      ...(options.regenerationId ? { regenerationId: options.regenerationId } : { generation: 1 }),
       requestHash: createHash('sha256').update(JSON.stringify(request.data)).digest('hex'),
     },
     select: { id: true },

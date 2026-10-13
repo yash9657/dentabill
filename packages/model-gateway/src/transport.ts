@@ -345,9 +345,12 @@ function attemptOutcome(code: GatewayErrorCode): TransportAttempt['outcome'] {
 
 function validConfiguration(request: FireworksTransportRequest): boolean {
   return (
-    typeof request.apiKey === 'string' &&
-    request.apiKey.trim().length > 0 &&
-    !/[\r\n]/.test(request.apiKey) &&
+    ((request.replay !== undefined &&
+      request.sendDeadlineAt !== undefined &&
+      request.sendDeadlineAt <= performance.now()) ||
+      (typeof request.apiKey === 'string' &&
+        request.apiKey.trim().length > 0 &&
+        !/[\r\n]/.test(request.apiKey))) &&
     typeof request.body === 'string' &&
     Number.isFinite(request.deadlineAt) &&
     Number.isSafeInteger(request.maxResponseBytes) &&

@@ -1051,7 +1051,7 @@ ElevenLabs voice chain require separate implementation and comparative evidence.
 
 ## ADR-064 — Durable inference ownership before summary recovery
 
-**Date:** 2026-10-13. **Status:** implemented locally for synthetic generation1; no live inference or production rollout.
+**Date:** 2026-10-13. **Status:** implemented locally for synthetic generation 1; no live inference or production rollout.
 
 The old summary transaction saved usage only when summary/state/audit writes succeeded.
 Crashes or duplicate transport jobs could also repeat model requests. A Redis lease could not
@@ -1187,3 +1187,46 @@ This completes the local publication/review portion of FW-27. One generation per
 explicit replacement authorization and automatic native job routing require follow-on work. Both model releases remain unapproved; synthetic/local HTTP
 proofs do not establish dental accuracy or external parity. No provider generation, speech,
 real calls, production migrations or deployments ran.
+
+## ADR-067 — Explicit same-call regeneration and recovery without another send
+
+**Date:** 2026-10-13. **Status:** accepted for local implementation; not deployed.
+
+A corrected transcript needs a new observation while preserving the original finding, review,
+and provider liability. Retrying an interrupted HTTP request must not silently authorize a
+second generation or erase an uncertain provider send.
+
+1. Add immutable tenant-scoped `ObservationRegeneration` approvals (migrations 20/21). An
+   Owner/Admin approves the exact claim version, latest final transcript, prior observation/run,
+   next generation, release policy and implementation artifact, with a reason and opaque
+   idempotency key. Approval lasts 15 minutes. Identical actor/key/reason/preview retries return
+   the original authorization before current-source checks; a changed binding conflicts.
+   Store the parsed release as a serialized JSON scalar to preserve policy-hash field order.
+2. Derive generations only from durable approval. Recheck stored role, current claim/source,
+   latest call, supersession, approval expiry and policy/artifact before new reservation and
+   every new attempt. Unknown/active prior work cannot authorize replacement. Completed failed
+   responses retain unknown usage holds. A proven-unsent failure requires zero attempts/usage,
+   exact durable failure evidence and an audit before a separately reviewed generation.
+3. Preserve all observations and reviews; currentness follows original call chronology, then
+   inference generation, then publication version. A newer unexpired unused approval or any
+   newer run prevents reviewing the old finding (`NEWER_GENERATION`). Late older publication
+   cannot displace a newer generation.
+4. Execute explicit regeneration synchronously through the existing native journal. The API
+   bounds response waiting at 30 seconds and aborts send permission on disconnect/timeout;
+   database work may settle later, so callers recover the exact saved authorization. No new
+   background queue is implied. The UI preserves the frozen submission/key after an ambiguous
+   response, checks saved work, and resumes that ID or explicitly retries the identical body.
+5. Final receipts publish locally without credentials. Raw-receipt recovery validates the saved
+   approved manifest and current implementation pin in replay-only mode, even after original
+   approval/deadline expiry. It requires durable evidence, ignores injected transport, forbids
+   new attempt admission and uses a transport that cannot send. A saved503 cannot trigger a
+   fresh retry. Normal sends recheck release validity after awaited admission.
+6. Keep runtime model releases CANDIDATE and automatic jobs synthetic. API keys and the new
+   optional artifact pin do not activate an approved release. Source/request/model/endpoint
+   overrides are never accepted from clients. Every evidence response requires a safe actor
+   access audit. Regeneration changes no claim status, payment, legacy summary or external action.
+
+Real Postgres, native synthetic transports and a separate-process SIGKILL proof verify local
+execution/recovery; browser checks use mocked auth/API. These are not live dental quality,
+provider contract evidence or production parity. AWS remains unchanged. Automatic native job
+routing, release evaluation/approval, voice and supported real connectors remain open.

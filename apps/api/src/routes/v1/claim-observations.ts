@@ -138,7 +138,14 @@ const ObservationSchema = z
     isCurrent: z.boolean(),
     canReview: z.boolean(),
     staleReason: z
-      .enum(['CLAIM_CHANGED', 'SUPERSEDED', 'NEWER_CALL', 'TRANSCRIPT_CHANGED', 'ALREADY_REVIEWED'])
+      .enum([
+        'CLAIM_CHANGED',
+        'SUPERSEDED',
+        'NEWER_CALL',
+        'NEWER_GENERATION',
+        'TRANSCRIPT_CHANGED',
+        'ALREADY_REVIEWED',
+      ])
       .nullable(),
   })
   .strict();

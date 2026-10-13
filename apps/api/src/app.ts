@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 
 import { createLogger, type Logger } from '@dentabill/logger';
 import type { RetellReconciliationClient } from '@dentabill/payer-ivr';
+import type { ObservationRegenerationConfig } from '@dentabill/summary-worker';
 import { ApiError } from '@dentabill/types';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
@@ -31,6 +32,7 @@ import { healthRoutes } from './routes/v1/health.js';
 import { ingestRoutes } from './routes/v1/ingest.js';
 import { internalJobsRoutes } from './routes/v1/internal-jobs.js';
 import { meRoutes } from './routes/v1/me.js';
+import { observationRegenerationRoutes } from './routes/v1/observation-regenerations.js';
 import { onboardingRoutes } from './routes/v1/onboarding.js';
 import { operationsRoutes } from './routes/v1/operations.js';
 import { reportsRoutes } from './routes/v1/reports.js';
@@ -44,6 +46,8 @@ export interface BuildServerOptions {
   logger?: Logger | false;
   /** Test seam; null explicitly disables provider lookup. */
   callRecoveryProvider?: RetellReconciliationClient | null;
+  /** Trusted server-only release/transport configuration. Null keeps regeneration unavailable. */
+  observationRegenerationConfig?: ObservationRegenerationConfig | null;
 }
 
 /**
@@ -227,6 +231,12 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(operationsRoutes, { prefix: '/v1' });
   await fastify.register(claimsRoutes, { prefix: '/v1' });
   await fastify.register(claimObservationRoutes, { prefix: '/v1' });
+  await fastify.register(observationRegenerationRoutes, {
+    prefix: '/v1',
+    ...(opts.observationRegenerationConfig !== undefined
+      ? { config: opts.observationRegenerationConfig }
+      : {}),
+  });
   await fastify.register(callsRoutes, { prefix: '/v1' });
   await fastify.register(callRecoveryRoutes, {
     prefix: '/v1',

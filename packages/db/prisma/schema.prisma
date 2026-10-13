@@ -173,20 +173,21 @@ model Organization {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  users               User[]
-  claims              Claim[]
-  calls               Call[]
-  callIntents         CallIntent[]
-  jobOutbox           JobOutbox[]
-  inferenceBudgets    InferenceBudget[]
-  inferenceRuns       InferenceRun[]
-  inferenceAttempts   InferenceAttempt[]
-  claimObservations   ClaimObservation[]
-  observationReviews  ClaimObservationReview[]
-  callSummaries       CallSummary[]
-  payerConfigs        PayerConfig[]
-  auditLogs           AuditLog[]
-  billingUsageRecords BillingUsageRecord[]
+  users                    User[]
+  claims                   Claim[]
+  calls                    Call[]
+  callIntents              CallIntent[]
+  jobOutbox                JobOutbox[]
+  inferenceBudgets         InferenceBudget[]
+  inferenceRuns            InferenceRun[]
+  inferenceAttempts        InferenceAttempt[]
+  claimObservations        ClaimObservation[]
+  observationReviews       ClaimObservationReview[]
+  observationRegenerations ObservationRegeneration[]
+  callSummaries            CallSummary[]
+  payerConfigs             PayerConfig[]
+  auditLogs                AuditLog[]
+  billingUsageRecords      BillingUsageRecord[]
 }
 
 model User {
@@ -198,9 +199,10 @@ model User {
   name           String?
   createdAt      DateTime @default(now())
 
-  organization       Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  auditLogs          AuditLog[]
-  observationReviews ClaimObservationReview[]
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  auditLogs                AuditLog[]
+  observationReviews       ClaimObservationReview[]
+  observationRegenerations ObservationRegeneration[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -230,10 +232,11 @@ model Claim {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  calls        Call[]
-  callIntents  CallIntent[]
-  observations ClaimObservation[]
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  calls                    Call[]
+  callIntents              CallIntent[]
+  observations             ClaimObservation[]
+  observationRegenerations ObservationRegeneration[]
 
   @@unique([id, organizationId])
   @@index([organizationId, status])
@@ -269,13 +272,14 @@ model Call {
   cancelRequestedBy String?
   createdAt         DateTime       @default(now())
 
-  organization  Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  claim         Claim              @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  summary       CallSummary?
-  events        CallEvent[]
-  intent        CallIntent?
-  inferenceRuns InferenceRun[]
-  observations  ClaimObservation[]
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  claim                    Claim                     @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  summary                  CallSummary?
+  events                   CallEvent[]
+  intent                   CallIntent?
+  inferenceRuns            InferenceRun[]
+  observations             ClaimObservation[]
+  observationRegenerations ObservationRegeneration[]
 
   @@unique([id, claimId, organizationId])
   @@index([organizationId])
@@ -404,6 +408,7 @@ model InferenceRun {
   callId              String
   claimId             String
   generation          Int               @default(1)
+  regenerationId      String?           @unique
   maxAttempts         Int               @default(1)
   executionDeadlineAt DateTime?
   releasePolicyHash   String?           @db.VarChar(64)
@@ -433,15 +438,19 @@ model InferenceRun {
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  call         Call               @relation(fields: [callId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
-  budget       InferenceBudget    @relation(fields: [organizationId, billingDay], references: [organizationId, billingDay], onDelete: Restrict)
-  observation  ClaimObservation?
-  attempts     InferenceAttempt[]
+  organization      Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  call              Call                      @relation(fields: [callId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  budget            InferenceBudget           @relation(fields: [organizationId, billingDay], references: [organizationId, billingDay], onDelete: Restrict)
+  observation       ClaimObservation?
+  regeneration      ObservationRegeneration?  @relation("RegenerationRun", fields: [regenerationId, claimId, callId, organizationId, generation], references: [id, claimId, callId, organizationId, generation], onDelete: Restrict)
+  nextRegenerations ObservationRegeneration[] @relation("PreviousRegenerationRun")
+  attempts          InferenceAttempt[]
 
   @@unique([organizationId, callId, generation])
   @@unique([id, organizationId])
   @@unique([id, claimId, callId, organizationId])
+  @@unique([id, claimId, callId, organizationId, generation])
+  @@unique([regenerationId, claimId, callId, organizationId, generation])
   @@index([organizationId, state, updatedAt])
   @@index([state, leaseExpiresAt])
 }
@@ -509,21 +518,65 @@ model ClaimObservation {
   provenance              Json
   createdAt               DateTime             @default(now())
 
-  organization             Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  claim                    Claim                   @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict)
-  call                     Call                    @relation(fields: [callId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
-  inferenceRun             InferenceRun            @relation(fields: [inferenceRunId, claimId, callId, organizationId], references: [id, claimId, callId, organizationId], onDelete: Restrict)
-  previousObservation      ClaimObservation?       @relation("ObservationHistory", fields: [previousObservationId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
-  nextObservations         ClaimObservation[]      @relation("ObservationHistory")
-  supersedesObservation    ClaimObservation?       @relation("ObservationSupersession", fields: [supersedesObservationId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
-  supersededByObservations ClaimObservation[]      @relation("ObservationSupersession")
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  claim                    Claim                     @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  call                     Call                      @relation(fields: [callId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  inferenceRun             InferenceRun              @relation(fields: [inferenceRunId, claimId, callId, organizationId], references: [id, claimId, callId, organizationId], onDelete: Restrict)
+  previousObservation      ClaimObservation?         @relation("ObservationHistory", fields: [previousObservationId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  nextObservations         ClaimObservation[]        @relation("ObservationHistory")
+  supersedesObservation    ClaimObservation?         @relation("ObservationSupersession", fields: [supersedesObservationId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  supersededByObservations ClaimObservation[]        @relation("ObservationSupersession")
   review                   ClaimObservationReview?
+  regenerations            ObservationRegeneration[]
 
   @@unique([id, claimId, organizationId])
+  @@unique([id, claimId, callId, organizationId])
   @@unique([organizationId, claimId, version])
   @@unique([inferenceRunId, claimId, callId, organizationId])
   @@index([organizationId, claimId, createdAt])
   @@index([organizationId, callId])
+}
+
+// Explicit human authorization to spend on one new native generation. Immutable;
+// its resulting run records execution state without changing the approval snapshot.
+model ObservationRegeneration {
+  id                           String   @id @default(cuid())
+  organizationId               String
+  claimId                      String
+  callId                       String
+  previousObservationId        String
+  previousObservationDigest    String   @db.VarChar(64)
+  previousRunId                String
+  previousGeneration           Int
+  generation                   Int
+  createdByUserId              String
+  createdByRole                UserRole
+  reason                       String   @db.VarChar(1000)
+  idempotencyKey               String
+  claimVersion                 DateTime
+  requestPayload               Json
+  requestHash                  String   @db.VarChar(64)
+  sourceHash                   String   @db.VarChar(64)
+  releaseId                    String
+  releasePolicyHash            String   @db.VarChar(64)
+  implementationArtifactSha256 String   @db.VarChar(64)
+  releaseSnapshot              Json
+  previewDigest                String   @db.VarChar(64)
+  expiresAt                    DateTime
+  createdAt                    DateTime @default(now())
+
+  organization        Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  claim               Claim            @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  call                Call             @relation(fields: [callId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  previousObservation ClaimObservation @relation(fields: [previousObservationId, claimId, callId, organizationId], references: [id, claimId, callId, organizationId], onDelete: Restrict)
+  previousRun         InferenceRun     @relation("PreviousRegenerationRun", fields: [previousRunId, claimId, callId, organizationId, previousGeneration], references: [id, claimId, callId, organizationId, generation], onDelete: Restrict)
+  createdBy           User             @relation(fields: [createdByUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  inferenceRun        InferenceRun?    @relation("RegenerationRun")
+
+  @@unique([id, claimId, callId, organizationId, generation])
+  @@unique([organizationId, callId, generation])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, claimId, createdAt])
 }
 
 // A review records a biller's decision about evidence; it never updates claim/payment state.

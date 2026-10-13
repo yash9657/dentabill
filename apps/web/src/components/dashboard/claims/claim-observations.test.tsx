@@ -111,19 +111,22 @@ describe('Versioned claim observations', () => {
     );
   });
 
-  it.each(['CLAIM_CHANGED', 'SUPERSEDED', 'NEWER_CALL', 'TRANSCRIPT_CHANGED'] as const)(
-    'keeps %s evidence readable without offering review',
-    async (staleReason) => {
-      const data = observationListFixture();
-      data.items[0]!.canReview = false;
-      data.items[0]!.staleReason = staleReason;
-      mocks.get.mockResolvedValue(success(data));
-      mount();
-      expect(await screen.findByText('Payment reported by payer')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Mark reviewed' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Dismiss finding' })).not.toBeInTheDocument();
-    },
-  );
+  it.each([
+    'CLAIM_CHANGED',
+    'SUPERSEDED',
+    'NEWER_CALL',
+    'TRANSCRIPT_CHANGED',
+    'NEWER_GENERATION',
+  ] as const)('keeps %s evidence readable without offering review', async (staleReason) => {
+    const data = observationListFixture();
+    data.items[0]!.canReview = false;
+    data.items[0]!.staleReason = staleReason;
+    mocks.get.mockResolvedValue(success(data));
+    mount();
+    expect(await screen.findByText('Payment reported by payer')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mark reviewed' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dismiss finding' })).not.toBeInTheDocument();
+  });
 
   it.each([
     [
@@ -132,6 +135,7 @@ describe('Versioned claim observations', () => {
     ],
     ['NEWER_CALL', 'A newer call exists. Review its evidence before acting.'],
     ['TRANSCRIPT_CHANGED', 'The source transcript changed. Review fresh evidence before acting.'],
+    ['NEWER_GENERATION', 'A newer analysis was approved. Check its saved request before acting.'],
   ] as const)(
     'keeps the recorded review and later %s warning visible together',
     async (staleReason, warning) => {

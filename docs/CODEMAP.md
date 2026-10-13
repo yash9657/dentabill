@@ -193,7 +193,13 @@ publication, preserving legacy summaries and financial state. `packages/db/src/l
 serializes versions, checks original call-intent chronology and records exact-version reviews.
 API `routes/v1/claim-observations.ts` exposes scoped list/publish/review; web claim-detail
 `claim-observations.tsx` shows source excerpts, synthetic labeling and review freshness.
-Production jobs still do not select native inference; same-call regeneration remains FW-27.
+`observation-regeneration.ts` builds exact server previews, persists Owner/Admin approval and
+executes/resumes the saved generation. `packages/db/src/lib/observation-regenerations.ts` and
+migrations 20/21 enforce immutable approvals and per-send currentness. API
+`observation-regenerations.ts` exposes preview/approve/resume with audited evidence and a 30-second
+response budget; web `observation-regeneration-controls.tsx` preserves submission identity and
+requires explicit recovery. `model-gateway/replay.test.ts` verifies expired/no-key receipt
+recovery cannot send. Production jobs still do not select native inference.
 
 ## Cross-cutting integrations
 

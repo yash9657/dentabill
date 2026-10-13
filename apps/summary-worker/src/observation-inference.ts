@@ -37,6 +37,8 @@ export interface DurableObservationGatewayOptions {
   readonly apiKey: string;
   readonly releases: readonly ModelRelease[];
   readonly implementationArtifactSha256: string;
+  readonly regenerationId?: string;
+  readonly replayOnly?: boolean;
   /** Trusted local fixture seam; never selected through API input or an environment URL. */
   readonly transport?: FireworksTransport;
 }
@@ -91,8 +93,23 @@ export function createDurableObservationGateway(
         include: { claim: true },
       });
       if (!call) return { kind: 'DENIED', code: 'INVALID_REQUEST' };
+      const authorization = options.regenerationId
+        ? await options.prisma.observationRegeneration.findFirst({
+            where: {
+              id: options.regenerationId,
+              organizationId: request.organizationId,
+              callId: call.id,
+            },
+          })
+        : null;
+      if (options.regenerationId && !authorization)
+        return { kind: 'DENIED', code: 'INFERENCE_REVIEW_REQUIRED' };
       const existing = await options.prisma.inferenceRun.findFirst({
-        where: { organizationId: request.organizationId, callId: call.id, generation: 1 },
+        where: {
+          organizationId: request.organizationId,
+          callId: call.id,
+          generation: authorization?.generation ?? 1,
+        },
         select: {
           id: true,
           provider: true,
@@ -100,8 +117,22 @@ export function createDurableObservationGateway(
           requestHash: true,
           releasePolicyHash: true,
           wireRequestHash: true,
+          state: true,
+          attempts: { orderBy: { attemptNumber: 'asc' }, select: { responseRecordedAt: true } },
         },
       });
+      if (
+        options.replayOnly &&
+        (!existing ||
+          (!['RESPONDED', 'APPLIED', 'REJECTED'].includes(existing.state) &&
+            !existing.attempts.at(-1)?.responseRecordedAt &&
+            !(
+              existing.attempts.length === 0 &&
+              existing.executionDeadlineAt &&
+              existing.executionDeadlineAt.getTime() <= Date.now()
+            )))
+      )
+        return { kind: 'DENIED', code: 'INFERENCE_REVIEW_REQUIRED' };
       if (!(await isStoredObservationSource(options.prisma, call.id, request, !existing)))
         return { kind: 'DENIED', code: 'INVALID_REQUEST' };
       if (
@@ -134,9 +165,18 @@ export function createDurableObservationGateway(
         reservationTokens: binding.requestBytes * 2 + binding.limits.outputTokens,
         dailyTokenLimit: options.dailyTokenLimit,
         maxAttempts: binding.limits.maxAttempts,
-        executionDeadlineAt: existing?.executionDeadlineAt ?? new Date(binding.executionDeadlineAt),
+        executionDeadlineAt:
+          existing?.executionDeadlineAt ??
+          new Date(
+            Math.min(
+              Date.parse(binding.executionDeadlineAt),
+              authorization?.expiresAt.getTime() ?? Infinity,
+            ),
+          ),
         releasePolicyHash: binding.releasePolicyHash,
         wireRequestHash: binding.wireRequestHash,
+        ...(authorization ? { regenerationId: authorization.id } : {}),
+        implementationArtifactSha256: options.implementationArtifactSha256,
       });
       if (isAborted(context.signal)) return { kind: 'DENIED', code: 'CANCELLED' };
       if (
@@ -189,13 +229,14 @@ export function createDurableObservationGateway(
             : {}),
           journal: {
             async beforeAttempt(input) {
-              if (isAborted(context.signal)) return 'BLOCKED';
+              if (options.replayOnly || isAborted(context.signal)) return 'BLOCKED';
               if (input.index !== 1 && input.index !== 2) return 'BLOCKED';
               const admission = await write(() =>
                 beginFireworksAttempt(options.prisma, {
                   ...ownership,
                   attemptNumber: input.index as 1 | 2,
                   wireRequestHash: input.wireRequestHash,
+                  implementationArtifactSha256: options.implementationArtifactSha256,
                 }),
               );
               return isAborted(context.signal) ? 'BLOCKED' : admission.kind;
@@ -242,5 +283,6 @@ export function createDurableObservationGateway(
     implementationArtifactSha256: options.implementationArtifactSha256,
     ...(options.transport ? { transport: options.transport } : {}),
     journalFactory,
+    ...(options.replayOnly ? { replayOnly: true } : {}),
   });
 }

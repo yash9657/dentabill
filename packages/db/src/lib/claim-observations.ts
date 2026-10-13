@@ -65,6 +65,7 @@ export interface ClaimObservationEligibility {
     | 'CLAIM_CHANGED'
     | 'NEWER_CALL'
     | 'TRANSCRIPT_CHANGED'
+    | 'NEWER_GENERATION'
     | 'ALREADY_REVIEWED'
     | null;
 }
@@ -124,6 +125,7 @@ interface OrderedObservation {
   id: string;
   callId: string;
   sourceOrderAt: Date;
+  generation: number;
 }
 async function currentObservation(
   db: Db | Tx,
@@ -133,12 +135,13 @@ async function currentObservation(
   // A recovered Call can be inserted long after its actual submission. Its original
   // intent creation time, rather than recovery insertion time, orders its evidence.
   const rows = await db.$queryRaw<OrderedObservation[]>`
-    SELECT o."id", o."callId", COALESCE(i."createdAt", c."createdAt") AS "sourceOrderAt"
+    SELECT o."id", o."callId", r."generation", COALESCE(i."createdAt", c."createdAt") AS "sourceOrderAt"
     FROM "ClaimObservation" o
+    JOIN "InferenceRun" r ON r."id" = o."inferenceRunId" AND r."organizationId" = o."organizationId"
     JOIN "Call" c ON c."id" = o."callId" AND c."claimId" = o."claimId" AND c."organizationId" = o."organizationId"
     LEFT JOIN "CallIntent" i ON i."callId" = c."id" AND i."claimId" = c."claimId" AND i."organizationId" = c."organizationId"
     WHERE o."organizationId" = ${organizationId} AND o."claimId" = ${claimId}
-    ORDER BY COALESCE(i."createdAt", c."createdAt") DESC, c."id" DESC, o."version" DESC
+    ORDER BY COALESCE(i."createdAt", c."createdAt") DESC, c."id" DESC, r."generation" DESC, o."version" DESC
     LIMIT 1`;
   return rows[0] ?? null;
 }
@@ -325,7 +328,8 @@ export async function publishClaimObservation(
     const newerSource =
       !current ||
       sourceOrderAt > current.sourceOrderAt ||
-      (sourceOrderAt.getTime() === current.sourceOrderAt.getTime() && call.id > current.callId);
+      (sourceOrderAt.getTime() === current.sourceOrderAt.getTime() && call.id > current.callId) ||
+      (call.id === current.callId && run.generation > current.generation);
     const data = {
       organizationId: run.organizationId,
       claimId: run.claimId,
@@ -384,7 +388,12 @@ export async function getClaimObservationEligibility(
   if (input.clerkUserId !== undefined) await actor(db, input.organizationId, input.clerkUserId);
   const observation = await db.claimObservation.findFirst({
     where: { organizationId: input.organizationId, id: input.observationId },
-    include: { call: { include: { intent: true } }, review: true, claim: true },
+    include: {
+      call: { include: { intent: true } },
+      review: true,
+      claim: true,
+      inferenceRun: { select: { generation: true } },
+    },
   });
   if (!observation) fail('NOT_FOUND');
   const current = await currentObservation(db, input.organizationId, observation.claimId);
@@ -406,6 +415,27 @@ export async function getClaimObservationEligibility(
     if (newer.length) staleReason = 'NEWER_CALL';
   }
   if (!staleReason && !(await sourceIsCurrent(db, observation))) staleReason = 'TRANSCRIPT_CHANGED';
+  if (!staleReason) {
+    const newerRun = await db.inferenceRun.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        callId: observation.callId,
+        generation: { gt: observation.inferenceRun.generation },
+      },
+      select: { id: true },
+    });
+    const newerAuthorization = await db.observationRegeneration.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        callId: observation.callId,
+        generation: { gt: observation.inferenceRun.generation },
+        expiresAt: { gt: new Date() },
+        inferenceRun: { is: null },
+      },
+      select: { id: true },
+    });
+    if (newerRun || newerAuthorization) staleReason = 'NEWER_GENERATION';
+  }
   if (!staleReason && observation.review) staleReason = 'ALREADY_REVIEWED';
   return {
     isCurrent,

@@ -107,7 +107,10 @@ async function boundedTransport(
   }
 }
 
-function requestBody(request: GatewayRequest, release: ModelRelease): string {
+export function buildObservationRequestBody(
+  request: GatewayRequest,
+  release: ModelRelease,
+): string {
   return JSON.stringify({
     model: release.policy.requestModel,
     messages: [
@@ -203,10 +206,17 @@ export function createFireworksGateway(
     /** A trusted fixture seam, never derived from request data or environment URLs. */
     readonly transport?: FireworksTransport;
     readonly journalFactory?: GatewayJournalFactory;
+    /** Recover durable responses locally, including after the original approval expires. */
+    readonly replayOnly?: boolean;
   } = {},
 ): ModelGateway {
   const registry = createReleaseRegistry(options);
-  const transport = options.transport ?? createFireworksTransport();
+  const replayOnly = options.replayOnly === true;
+  const transport = replayOnly
+    ? createFireworksTransport({
+        fetch: () => Promise.reject(new Error('Replay cannot send.')),
+      })
+    : (options.transport ?? createFireworksTransport());
   const apiKey = options.apiKey;
   const journalFactory = options.journalFactory;
   return {
@@ -225,10 +235,10 @@ export function createFireworksGateway(
       const resolution = registry.resolve(request);
       if (!resolution.ok) return gatewayFailure(resolution.code, startedAt);
       const release = resolution.release;
-      if (!apiKey || !/^[\x21-\x7e]{1,4096}$/.test(apiKey))
+      if (!replayOnly && (!apiKey || !/^[\x21-\x7e]{1,4096}$/.test(apiKey)))
         return gatewayFailure('CONFIGURATION_ERROR', startedAt);
       const deadlineAt = startedAt + release.policy.limits.deadlineMs;
-      const body = requestBody(request, release);
+      const body = buildObservationRequestBody(request, release);
       if (Buffer.byteLength(body, 'utf8') > release.policy.limits.requestBytes)
         return gatewayFailure('REQUEST_TOO_LARGE', startedAt);
       if (options.signal?.aborted) return gatewayFailure('CANCELLED', startedAt);
@@ -273,6 +283,8 @@ export function createFireworksGateway(
           return result;
         }
         session = opened.session;
+        if (replayOnly && !session.replay)
+          return gatewayFailure('INFERENCE_REVIEW_REQUIRED', startedAt);
       } catch (error) {
         return gatewayFailure(
           error instanceof JournalFailure ? error.code : 'JOURNAL_ERROR',
@@ -281,19 +293,33 @@ export function createFireworksGateway(
       }
       const originalDeadline = Date.parse(session.executionDeadlineAt);
       if (!Number.isFinite(originalDeadline)) return gatewayFailure('JOURNAL_ERROR', startedAt);
-      const sendDeadlineAt = performance.now() + (originalDeadline - Date.now());
+      const sendDeadlineAt = replayOnly
+        ? performance.now() - 1
+        : performance.now() +
+          (Math.min(originalDeadline, Date.parse(release.approval?.expiresAt ?? '')) - Date.now());
       const execute = async (): Promise<GatewayResult> => {
         const result = await boundedTransport(
           transport,
           {
-            apiKey,
+            apiKey: apiKey ?? '',
             body,
             expectedResponseModels: release.policy.responseModels,
             maxResponseBytes: release.policy.limits.responseBytes,
             deadlineAt,
             maxAttempts: release.policy.limits.maxAttempts,
             sendDeadlineAt,
-            journal: session.journal,
+            journal: {
+              recordResponse: (receipt) => session.journal.recordResponse(receipt),
+              completeAttempt: (receipt) => session.journal.completeAttempt(receipt),
+              async beforeAttempt(input) {
+                if (replayOnly || !registry.resolve(request).ok || options.signal?.aborted)
+                  return 'BLOCKED';
+                const admission = await session.journal.beforeAttempt(input);
+                return !registry.resolve(request).ok || options.signal?.aborted
+                  ? 'BLOCKED'
+                  : admission;
+              },
+            },
             ...(session.replay ? { replay: session.replay } : {}),
             ...(options.signal ? { signal: options.signal } : {}),
           },

@@ -4,7 +4,60 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
-### Latest continuation: FW-27 immutable findings and biller review
+### Latest continuation: FW-27 reviewed same-call regeneration
+
+The parity goal remains active on `codex/w0-containment`; main `4497459` is incorporated.
+The user asked how much remains: the local feature is one slice; automatic routing, evaluation,
+voice and connectors still require substantial work. No clinic exists; use fake data only.
+Fireworks/ElevenLabs keys were previously authenticated; Retell-managed Twilio needs no Telnyx
+key. No new provider account action, actual generation, speech, call, production migration or
+deployment ran. Preserve both pre-existing stashes.
+
+- Migrations 20/21 add immutable Owner/Admin approvals bound to prior observation/run, current
+  claim/source, next generation, reason/idempotency key and serialized release/artifact pins.
+  Auth lasts 15 minutes. Native reserve and each attempt recheck current permission and evidence.
+  Unknown work stays protected; zero-send recovery requires durable audited proof. Original
+  results, reviews and usage remain intact. Same-call currentness follows generation rather
+  than arrival, and pending newer work blocks stale review with NEWER_GENERATION.
+- `createObservationRegenerationService` implements server previews, durable approval and
+  explicit execution/resume. Exact keys replay their original authorization before checking
+  changed current state. Final results publish without provider configuration. Raw evidence
+  uses no-send replay with saved approved manifest/current artifact pin even after expiry.
+  The gateway rechecks live release expiry after awaited admission. Saved 503s cannot retry
+  in replay-only mode. An expired unused reservation can settle without a key.
+- New scoped API preview/approve/resume routes audit evidence access and enforce a 30-second response
+  budget with cancellation of future send permission. Late database authorization may commit;
+  a real database-lock regression proves it cannot send after response timeout. SDK matches.
+- UI exposes exact source/release/token allowance, requires a reason, retains frozen key/body
+  after ambiguous failure and uses explicit saved-request lookup/resume. A new approval requires
+  another explicit action and fresh preview. Browser 1280/390 checks used actual styles/fonts,
+  mocked auth/API, no external requests, no overflow or page errors. Screenshots remain in
+  `/private/tmp/dentabill-observation-visual-WE4K6l/regeneration-1280.png` and
+  `regeneration-390.png`; temporary server stopped.
+- Automatic native job selection remains disabled, model manifests CANDIDATE, legacy jobs
+  synthetic. Adding credentials/artifact pin cannot activate inference. No legacy summary,
+  financial state or external action is changed. See ADR-067 and DEPLOY_AWS.md.
+
+**Verification:** database **146/11 files**, summary-worker **103/10**, API **456/32**,
+model gateway **302/7**, SDK **27/2** pass. Web full suite passed **417/419**; two unchanged
+5-second tests timed out during local memory exhaustion, then both affected files passed
+**31/31** in an isolated single-worker rerun. New UI tests **18/18** also pass; browser checks
+are component-level with mocked auth/API, not deployed Clerk-to-provider evidence. The full
+worker run includes all nine process crash cases and seven regeneration service regressions.
+Affected Turbo typecheck/lint passes **30/30** with concurrency 2. Final gateway test/type/lint
+checks cover the last journal-method delegation change. Both Lambda packages build: API 35.5 MB / 10.7 MB zip and worker 28.4 MB / 9.3 MB zip.
+
+Initial overlapping broad checks exhausted local memory; stopped the owned Turbo process,
+then serialized/throttled checks. No user apps, containers, global settings or unrelated processes
+were changed. All 21 migrations remain local only. Fresh fetch confirms zero commits behind
+main `4497459`. Existing stashes remain intact. No production deploy or external inference ran.
+
+**Exact next task:** add approved-release native generation 1 job routing with durable job identity
+and failure/resume semantics, then release evaluation/approval. FW-40 notification outbox,
+FW-39 operations/monitoring, provider spend/retention/region evidence, ElevenLabs integration
+and supported connectors remain open. This is local synthetic evidence, not full parity.
+
+### Earlier continuation: FW-27 immutable findings and biller review
 
 The parity goal remains active on `codex/w0-containment` with main `4497459` incorporated.
 The user has no clinic and uses fake data. Existing Fireworks/ElevenLabs keys already passed
@@ -129,7 +182,7 @@ requests, model inference, speech, call, purchase or production action ran in th
 The user has no clinic and uses fake data. Retell-managed Twilio remains the existing carrier;
 no Telnyx credential is needed. Preserve the two pre-existing stashes.
 
-- Additive migrations fourteen/fifteen create org-scoped budgets, immutable generation1 request
+- Additive migrations fourteen/fifteen create org-scoped budgets, immutable generation 1 request
   snapshots, one durable attempt per run and a review-application marker. They were applied
   only to isolated localhost identity/runtime/process/summary databases. No historical provider
   usage or acceptance is fabricated. Same-day legacy usage is imported once as baseline.
@@ -152,7 +205,7 @@ no Telnyx credential is needed. Preserve the two pre-existing stashes.
 - Owner/Admin GET summary/status exposes safe scoped state; strict-empty POST retry preserves
   existing summaries, requires terminal calls and cannot start a replacement/ambiguous run.
   Runtime busy/unconfirmed failures remain SQS retries/redrive or inline503 after exhaustion.
-  UNKNOWN/REJECTED acknowledgement requires the exact generation1 run and committed review
+  UNKNOWN/REJECTED acknowledgement requires the exact generation 1 run and committed review
   marker. General quarantined-summary recovery remains `SUMMARY_RETRY_UNSAFE` pending its
   separate authorization/recovery proof. SDK schemas are regenerated.
 
@@ -161,7 +214,7 @@ no Telnyx credential is needed. Preserve the two pre-existing stashes.
 **19/2** pass: **791 tests** across these affected packages.
 Affected typecheck/lint **24/24** and Lambda packaging pass (API35.0MB/10.6MBzip;
 worker28.3MB/9.3MBzip). Final API typecheck/lint also passes after the lock-order regression.
-A fresh fetch confirms zero commits behind main4497459. Separate-process
+A fresh fetch confirms zero commits behind main `4497459`. Separate-process
 fixtures scrub credentials and use a localhost HTTP provider with fsynced synthetic receipts.
 SIGKILL before send permits one first request; after provider acceptance it never resubmits;
 a saved response survives application failure and applies without another request. No external

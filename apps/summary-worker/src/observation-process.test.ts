@@ -1,21 +1,41 @@
 import { fork, type ChildProcess } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { prisma } from '@dentabill/db';
+import {
+  authorizeObservationRegeneration,
+  previewObservationRegeneration,
+  prisma,
+  type Prisma,
+} from '@dentabill/db';
+import {
+  createFireworksTransport,
+  GatewayRequestSchema,
+  ReleaseSchema,
+  releasePolicyHash,
+} from '@dentabill/model-gateway';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { seedObservation } from './observation-inference.fixtures.js';
+import {
+  OBSERVATION_TEST_ARTIFACT,
+  observationRelease,
+  observationResponse,
+  seedObservation,
+} from './observation-inference.fixtures.js';
+import { createDurableObservationGateway } from './observation-inference.js';
 import type {
   ObservationProcessCommand,
   ObservationProcessReply,
 } from './observation-process.fixture.js';
+import { generateAndPublishObservation } from './observation-publication.js';
 
 const children: ChildProcess[] = [];
 const organizations: string[] = [];
 const directories: string[] = [];
+let immutableRowsCreated = false;
 
 function fixture() {
   const child = fork(fileURLToPath(new URL('./observation-process.fixture.ts', import.meta.url)), {
@@ -108,9 +128,13 @@ async function provider(
   };
 }
 
-async function expire(input: Awaited<ReturnType<typeof seed>>) {
+async function expire(input: Awaited<ReturnType<typeof seed>>, runId?: string) {
   await prisma.inferenceRun.updateMany({
-    where: { organizationId: input.request.organizationId, callId: input.callId },
+    where: {
+      organizationId: input.request.organizationId,
+      callId: input.callId,
+      ...(runId ? { id: runId } : {}),
+    },
     data: { leaseExpiresAt: new Date(0) },
   });
 }
@@ -134,6 +158,13 @@ afterEach(async () => {
     'DROP TRIGGER IF EXISTS observation_pending_admission ON "InferenceAttempt"',
   );
   await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS observation_pending_admission()');
+  if (immutableRowsCreated) {
+    // Dedicated local process-test database. Immutable history requires TRUNCATE cleanup.
+    await prisma.$executeRawUnsafe(
+      'TRUNCATE TABLE "ClaimObservationReview", "ClaimObservation", "ObservationRegeneration" CASCADE',
+    );
+    immutableRowsCreated = false;
+  }
   for (const organizationId of organizations.splice(0)) {
     await prisma.inferenceAttempt.deleteMany({ where: { organizationId } });
     await prisma.inferenceRun.deleteMany({ where: { organizationId } });
@@ -147,6 +178,155 @@ afterAll(async () => {
 });
 
 describe('Native observation inference across fresh processes', () => {
+  it('recovers approved generation two after raw-response SIGKILL and publishes once with one independent HTTP acceptance', async () => {
+    const input = await seed();
+    const organizationId = input.request.organizationId;
+    const clerkUserId = `owner_${randomUUID()}`;
+    await prisma.user.create({
+      data: { organizationId, clerkUserId, email: 'owner@synthetic.invalid', role: 'OWNER' },
+    });
+    const release = observationRelease(organizationId, { deadlineMs: 5000 });
+    immutableRowsCreated = true;
+    // Generation one is a local fixture baseline, with no HTTP or provider process.
+    const original = await generateAndPublishObservation({
+      prisma,
+      ...input,
+      gateway: createDurableObservationGateway({
+        prisma,
+        callId: input.callId,
+        dailyTokenLimit: 1_000_000,
+        apiKey: 'synthetic-local-baseline',
+        releases: [release],
+        implementationArtifactSha256: OBSERVATION_TEST_ARTIFACT,
+        transport: createFireworksTransport({
+          fetch: async () => new Response(observationResponse(input.request), { status: 200 }),
+        }),
+      }),
+    });
+    const request = GatewayRequestSchema.parse({
+      ...input.request,
+      invocationId: `observation.${input.callId}.g2`,
+    });
+    const hash = (value: unknown) =>
+      createHash('sha256').update(JSON.stringify(value)).digest('hex');
+    const previewInput = {
+      organizationId,
+      clerkUserId,
+      observationId: original.observation.id,
+      callId: input.callId,
+      claimVersion: new Date(request.claim.version),
+      requestPayload: JSON.parse(JSON.stringify(request)) as Prisma.InputJsonValue,
+      requestHash: hash(request),
+      sourceHash: hash(request.sources),
+      releaseId: request.releaseId,
+      releasePolicyHash: releasePolicyHash(release.policy),
+      implementationArtifactSha256: OBSERVATION_TEST_ARTIFACT,
+      releaseSnapshot: JSON.stringify(ReleaseSchema.parse(release)),
+    };
+    const preview = await previewObservationRegeneration(prisma, previewInput);
+    expect(preview).toMatchObject({ canAuthorize: true, nextGeneration: 2 });
+    const authorization = (
+      await authorizeObservationRegeneration(prisma, {
+        ...previewInput,
+        expectedPreviewDigest: preview.previewDigest,
+        idempotencyKey: randomUUID(),
+        reason: 'Synthetic process restart proof',
+      })
+    ).authorization;
+    const regenerated = { callId: input.callId, request };
+    const external = await provider(regenerated, 'valid');
+    const first = fixture();
+    first.send({
+      type: 'worker.run',
+      ...regenerated,
+      regenerationId: authorization.id,
+      providerUrl: external.url,
+      pause: 'raw-response',
+      deadlineMs: 5000,
+    });
+    expect(await first.reply('worker.paused')).toMatchObject({ boundary: 'raw-response' });
+    const run = await prisma.inferenceRun.findFirstOrThrow({
+      where: { organizationId, regenerationId: authorization.id },
+      include: { attempts: true },
+    });
+    expect(run).toMatchObject({
+      generation: 2,
+      state: 'SUBMITTING',
+      resultPayload: null,
+      totalTokens: null,
+    });
+    expect(run.attempts).toHaveLength(1);
+    const raw = run.attempts[0]!;
+    expect(raw.responseHash).not.toBeNull();
+    expect(raw.completionHash).toBeNull();
+    expect(await external.ledger()).toEqual([{ ordinal: 1 }]);
+    first.child.kill('SIGKILL');
+    await first.exited();
+    await expire(regenerated, run.id);
+    await vi.waitFor(
+      () => {
+        expect(Date.now()).toBeGreaterThan(run.executionDeadlineAt?.getTime() ?? Infinity);
+      },
+      { timeout: 6000, interval: 20 },
+    );
+    for (let delivery = 0; delivery < 2; delivery++) {
+      const restarted = fixture();
+      restarted.send({
+        type: 'worker.run',
+        ...regenerated,
+        regenerationId: authorization.id,
+        providerUrl: external.url,
+        deadlineMs: 5000,
+      });
+      expect(await restarted.reply('worker.result')).toMatchObject({
+        sends: 0,
+        result: { status: 'VALIDATED' },
+      });
+      await restarted.exited();
+    }
+    expect(await external.ledger()).toEqual([{ ordinal: 1 }]);
+    const final = await prisma.inferenceRun.findFirstOrThrow({
+      where: { id: run.id, organizationId },
+      include: { attempts: true, observation: true },
+    });
+    expect(final).toMatchObject({
+      generation: 2,
+      regenerationId: authorization.id,
+      state: 'APPLIED',
+      requestHash: run.requestHash,
+      sourceHash: run.sourceHash,
+      wireRequestHash: run.wireRequestHash,
+      executionDeadlineAt: run.executionDeadlineAt,
+      totalTokens: 31n,
+      reservedTokens: 0n,
+    });
+    expect(final.attempts).toHaveLength(1);
+    expect(final.attempts[0]).toMatchObject({
+      id: raw.id,
+      responseHash: raw.responseHash,
+      totalTokens: 31n,
+    });
+    expect(final.observation).toMatchObject({
+      version: 2,
+      supersedesObservationId: original.observation.id,
+    });
+    expect(await prisma.claimObservation.count({ where: { organizationId } })).toBe(2);
+    expect(await prisma.inferenceRun.count({ where: { organizationId } })).toBe(2);
+    expect(await prisma.inferenceBudget.findFirst({ where: { organizationId } })).toMatchObject({
+      knownTokens: 62n,
+      reservedTokens: 0n,
+    });
+    expect(
+      await prisma.auditLog.count({
+        where: {
+          organizationId,
+          action: 'claimObservation.published',
+          resourceId: final.observation?.id ?? '',
+        },
+      }),
+    ).toBe(1);
+  }, 25000);
+
   it('refunds a proven unsent reservation after a pre-admission crash and the original deadline expires', async () => {
     const input = await seed();
     const external = await provider(input, 'valid');

@@ -15,6 +15,7 @@ import {
   type ObservationResponseVariant,
 } from './observation-inference.fixtures.js';
 import { createDurableObservationGateway } from './observation-inference.js';
+import { publishStoredObservation } from './observation-publication.js';
 
 export type ObservationProcessCommand =
   | {
@@ -30,6 +31,7 @@ export type ObservationProcessCommand =
       providerUrl: string;
       pause?: 'raw-response' | 'second-admission' | 'before-first-admission';
       deadlineMs?: number;
+      regenerationId?: string;
     }
   | { type: 'worker.cancel' };
 export type ObservationProcessReply =
@@ -118,6 +120,7 @@ async function execute(command: ObservationProcessCommand): Promise<void> {
   const gateway = createDurableObservationGateway({
     prisma,
     callId: command.callId,
+    ...(command.regenerationId ? { regenerationId: command.regenerationId } : {}),
     dailyTokenLimit: 1_000_000,
     apiKey: 'synthetic-local-fixture',
     releases: [
@@ -164,6 +167,20 @@ async function execute(command: ObservationProcessCommand): Promise<void> {
     },
   });
   const result = await gateway.generate(command.request, { signal: cancellation.signal });
+  if (command.regenerationId && result.status !== 'FAILED') {
+    const run = await prisma.inferenceRun.findFirstOrThrow({
+      where: {
+        organizationId: command.request.organizationId,
+        callId: command.callId,
+        regenerationId: command.regenerationId,
+      },
+    });
+    await publishStoredObservation({
+      prisma,
+      organizationId: command.request.organizationId,
+      runId: run.id,
+    });
+  }
   reply({ type: 'worker.result', result, sends });
   await Promise.allSettled(pendingAdmissions);
   await prisma.$disconnect();

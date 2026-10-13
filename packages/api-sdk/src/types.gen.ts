@@ -1031,7 +1031,7 @@ export interface paths {
                                 isCurrent: boolean;
                                 canReview: boolean;
                                 /** @enum {string|null} */
-                                staleReason: "CLAIM_CHANGED" | "SUPERSEDED" | "NEWER_CALL" | "TRANSCRIPT_CHANGED" | "ALREADY_REVIEWED" | null;
+                                staleReason: "CLAIM_CHANGED" | "SUPERSEDED" | "NEWER_CALL" | "NEWER_GENERATION" | "TRANSCRIPT_CHANGED" | "ALREADY_REVIEWED" | null;
                             }[];
                             nextCursor: string | null;
                             hasMore: boolean;
@@ -1202,7 +1202,7 @@ export interface paths {
                             isCurrent: boolean;
                             canReview: boolean;
                             /** @enum {string|null} */
-                            staleReason: "CLAIM_CHANGED" | "SUPERSEDED" | "NEWER_CALL" | "TRANSCRIPT_CHANGED" | "ALREADY_REVIEWED" | null;
+                            staleReason: "CLAIM_CHANGED" | "SUPERSEDED" | "NEWER_CALL" | "NEWER_GENERATION" | "TRANSCRIPT_CHANGED" | "ALREADY_REVIEWED" | null;
                         };
                     };
                 };
@@ -1356,7 +1356,7 @@ export interface paths {
                             isCurrent: boolean;
                             canReview: boolean;
                             /** @enum {string|null} */
-                            staleReason: "CLAIM_CHANGED" | "SUPERSEDED" | "NEWER_CALL" | "TRANSCRIPT_CHANGED" | "ALREADY_REVIEWED" | null;
+                            staleReason: "CLAIM_CHANGED" | "SUPERSEDED" | "NEWER_CALL" | "NEWER_GENERATION" | "TRANSCRIPT_CHANGED" | "ALREADY_REVIEWED" | null;
                         };
                     };
                 };
@@ -1477,7 +1477,196 @@ export interface paths {
                             isCurrent: boolean;
                             canReview: boolean;
                             /** @enum {string|null} */
-                            staleReason: "CLAIM_CHANGED" | "SUPERSEDED" | "NEWER_CALL" | "TRANSCRIPT_CHANGED" | "ALREADY_REVIEWED" | null;
+                            staleReason: "CLAIM_CHANGED" | "SUPERSEDED" | "NEWER_CALL" | "NEWER_GENERATION" | "TRANSCRIPT_CHANGED" | "ALREADY_REVIEWED" | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/observations/{id}/regeneration-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Owner/Admin review of an exact new-generation snapshot and any already saved authorization. Token allowance is an operational bound, not a dollar quote. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            observationId: string;
+                            claimId: string;
+                            callId: string;
+                            canRegenerate: boolean;
+                            /** @enum {string|null} */
+                            blockedReason: "CONFIGURATION_UNAVAILABLE" | "RELEASE_UNAVAILABLE" | "SOURCE_UNAVAILABLE" | "WORK_NOT_READY" | null;
+                            previewDigest: string | null;
+                            /** @enum {string} */
+                            dataClass: "SYNTHETIC" | "PROTECTED";
+                            nextGeneration: number | null;
+                            /** Format: date-time */
+                            claimVersion: string;
+                            source: {
+                                id: string;
+                                version: string;
+                                text: string;
+                            } | null;
+                            release: {
+                                id: string;
+                                model: string;
+                                policyHash: string;
+                                tokenAllowance: number;
+                                maxAttempts: 1 | 2;
+                                deadlineMs: number;
+                            } | null;
+                            activeAuthorization: {
+                                id: string;
+                                /** @enum {string} */
+                                state: "READY" | "RUNNING" | "RESULT_SAVED" | "PUBLISHED" | "REVIEW_REQUIRED" | "PROVEN_UNSENT_FAILED" | "FAILED" | "EXPIRED" | "UNAVAILABLE";
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                expiresAt: string;
+                                canResume: boolean;
+                                observationId: string | null;
+                                /** @enum {string|null} */
+                                reasonCode: "AWAITING_EXECUTION" | "PROCESSING" | "PUBLICATION_REQUIRED" | "APPROVAL_EXPIRED" | "INFERENCE_REVIEW_REQUIRED" | "INFERENCE_FAILED" | "CONFIGURATION_UNAVAILABLE" | "RELEASE_UNAVAILABLE" | "BUDGET_EXCEEDED" | "CLAIM_OR_SOURCE_CHANGED" | "CANCELLED" | null;
+                            } | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/observations/{id}/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Persist explicit Owner/Admin authorization before bounded model work. Identical keys resume that same authorization; no automatic background queue is created. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        expectedPreviewDigest: string;
+                        idempotencyKey: string;
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            /** @enum {string} */
+                            state: "READY" | "RUNNING" | "RESULT_SAVED" | "PUBLISHED" | "REVIEW_REQUIRED" | "PROVEN_UNSENT_FAILED" | "FAILED" | "EXPIRED" | "UNAVAILABLE";
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            expiresAt: string;
+                            canResume: boolean;
+                            observationId: string | null;
+                            /** @enum {string|null} */
+                            reasonCode: "AWAITING_EXECUTION" | "PROCESSING" | "PUBLICATION_REQUIRED" | "APPROVAL_EXPIRED" | "INFERENCE_REVIEW_REQUIRED" | "INFERENCE_FAILED" | "CONFIGURATION_UNAVAILABLE" | "RELEASE_UNAVAILABLE" | "BUDGET_EXCEEDED" | "CLAIM_OR_SOURCE_CHANGED" | "CANCELLED" | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/observation-regenerations/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Resume only an existing saved authorization. Never creates a new inference generation. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            /** @enum {string} */
+                            state: "READY" | "RUNNING" | "RESULT_SAVED" | "PUBLISHED" | "REVIEW_REQUIRED" | "PROVEN_UNSENT_FAILED" | "FAILED" | "EXPIRED" | "UNAVAILABLE";
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            expiresAt: string;
+                            canResume: boolean;
+                            observationId: string | null;
+                            /** @enum {string|null} */
+                            reasonCode: "AWAITING_EXECUTION" | "PROCESSING" | "PUBLICATION_REQUIRED" | "APPROVAL_EXPIRED" | "INFERENCE_REVIEW_REQUIRED" | "INFERENCE_FAILED" | "CONFIGURATION_UNAVAILABLE" | "RELEASE_UNAVAILABLE" | "BUDGET_EXCEEDED" | "CLAIM_OR_SOURCE_CHANGED" | "CANCELLED" | null;
                         };
                     };
                 };

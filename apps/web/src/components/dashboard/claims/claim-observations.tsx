@@ -8,6 +8,8 @@ import * as React from 'react';
 
 import { useDentaBillApi } from '../../../lib/api-client.js';
 
+import { ObservationRegenerationControls } from './observation-regeneration-controls.js';
+
 type ObservationList =
   paths['/v1/claims/{id}/observations']['get']['responses'][200]['content']['application/json'];
 type Observation = ObservationList['items'][number];
@@ -33,6 +35,7 @@ const staleLabels = {
   SUPERSEDED: 'A newer finding is available. This version is preserved for reference.',
   NEWER_CALL: 'A newer call exists. Review its evidence before acting.',
   TRANSCRIPT_CHANGED: 'The source transcript changed. Review fresh evidence before acting.',
+  NEWER_GENERATION: 'A newer analysis was approved. Check its saved request before acting.',
   ALREADY_REVIEWED: 'Review recorded.',
 };
 const buttonClass =
@@ -398,6 +401,9 @@ function ObservationEntry({
             </p>
           ) : null}
         </div>
+      ) : null}
+      {item.isCurrent ? (
+        <ObservationRegenerationControls observationId={item.id} scope={scope} />
       ) : null}
     </article>
   );
