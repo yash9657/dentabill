@@ -78,11 +78,15 @@ export {
 } from './inline.js';
 export {
   createSqsJobDispatcher,
+  createSqsRetryScheduler,
   parseSqsJobMessage,
   SQS_MAX_DELAY_SECONDS,
+  SQS_MAX_VISIBILITY_SECONDS,
   SqsJobMessageSchema,
   toSqsDelaySeconds,
   type CreateSqsJobDispatcherOptions,
+  type CreateSqsRetrySchedulerOptions,
   type SqsJobMessage,
   type SqsSendClient,
+  type SqsVisibilityClient,
 } from './sqs.js';

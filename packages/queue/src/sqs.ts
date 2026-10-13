@@ -1,4 +1,9 @@
-import { SendMessageCommand, SQSClient, type MessageAttributeValue } from '@aws-sdk/client-sqs';
+import {
+  ChangeMessageVisibilityCommand,
+  type MessageAttributeValue,
+  SendMessageCommand,
+  SQSClient,
+} from '@aws-sdk/client-sqs';
 import { z } from 'zod';
 
 import type { JobDispatcher } from './dispatcher.js';
@@ -63,6 +68,43 @@ export function toSqsDelaySeconds(delayMs: number | undefined): number {
 /** The one SQS operation the dispatcher needs — narrowed so tests can fake it. */
 export interface SqsSendClient {
   send(command: SendMessageCommand): Promise<{ MessageId?: string | undefined }>;
+}
+
+/** Hard SQS limit for a message's visibility timeout (12 h). */
+export const SQS_MAX_VISIBILITY_SECONDS = 43_200;
+
+export interface SqsVisibilityClient {
+  send(command: ChangeMessageVisibilityCommand): Promise<unknown>;
+}
+
+export interface CreateSqsRetrySchedulerOptions {
+  readonly queueUrl: string;
+  /** Injected client (tests). Defaults to an `SQSClient` from the standard AWS env. */
+  readonly client?: SqsVisibilityClient;
+}
+
+/**
+ * Consumer-side retry delay. A message the worker reports as failed
+ * becomes visible again when its visibility timeout lapses; shortening (or
+ * lengthening) that timeout to the job's backoff makes SQS redeliver on
+ * the BullMQ schedule instead of after the queue-wide timeout. Clamped to
+ * `[0, 43 200]` s. Needs `sqs:ChangeMessageVisibility` on the queue.
+ */
+export function createSqsRetryScheduler(
+  options: CreateSqsRetrySchedulerOptions,
+): (receiptHandle: string, delaySeconds: number) => Promise<void> {
+  let client: SqsVisibilityClient | undefined = options.client;
+  return async (receiptHandle, delaySeconds) => {
+    client ??= new SQSClient({});
+    const seconds = Math.min(SQS_MAX_VISIBILITY_SECONDS, Math.max(0, Math.ceil(delaySeconds)));
+    await client.send(
+      new ChangeMessageVisibilityCommand({
+        QueueUrl: options.queueUrl,
+        ReceiptHandle: receiptHandle,
+        VisibilityTimeout: seconds,
+      }),
+    );
+  };
 }
 
 export interface CreateSqsJobDispatcherOptions {

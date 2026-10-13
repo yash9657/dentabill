@@ -1,8 +1,9 @@
-import type { SendMessageCommand } from '@aws-sdk/client-sqs';
+import type { ChangeMessageVisibilityCommand, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   createSqsJobDispatcher,
+  createSqsRetryScheduler,
   parseSqsJobMessage,
   SQS_MAX_DELAY_SECONDS,
   toSqsDelaySeconds,
@@ -137,5 +138,22 @@ describe('parseSqsJobMessage', () => {
         JSON.stringify({ type: 'call.place', data: { ...callData, idempotencyKey: 'a:b' } }),
       ),
     ).toThrow();
+  });
+});
+
+describe('createSqsRetryScheduler', () => {
+  it('sets the visibility timeout of the received message, clamped to [0, 12 h]', async () => {
+    const send = vi.fn(async (_command: ChangeMessageVisibilityCommand) => ({}));
+    const schedule = createSqsRetryScheduler({ queueUrl: QUEUE_URL, client: { send } });
+
+    await schedule('rh-1', 30);
+    await schedule('rh-2', 1_000_000);
+    await schedule('rh-3', -1);
+
+    expect(send.mock.calls.map(([c]) => c.input)).toEqual([
+      { QueueUrl: QUEUE_URL, ReceiptHandle: 'rh-1', VisibilityTimeout: 30 },
+      { QueueUrl: QUEUE_URL, ReceiptHandle: 'rh-2', VisibilityTimeout: 43_200 },
+      { QueueUrl: QUEUE_URL, ReceiptHandle: 'rh-3', VisibilityTimeout: 0 },
+    ]);
   });
 });
