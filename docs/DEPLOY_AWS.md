@@ -603,3 +603,20 @@ fields. Root/API imports and reviews serialize on the organization tuple; load-t
 production scale. Roll back application exposure if needed while retaining the immutable tables.
 Never drop financial evidence to roll back UI code. Real connectors, batch reconciliation,
 PMS posting receipts, retention policy and authorized AWS end-to-end verification remain gates.
+
+### Remittance batch evidence expansion (ADR-075; not deployed)
+
+Migration28 `20261014060000_remittance_batch_evidence` follows27. It adds four immutable tables,
+exact composite claim-evidence/review references, batch-only token helpers and organization
+admission/sealing triggers. It leaves prior source data and helper definitions unchanged. Apply
+the existing migration chain and regenerate Prisma before exposing the API/SDK/dashboard route
+`/dashboard/remittance-batches`. No provider credential or external financial instruction is added.
+
+Validate synthetic100+80 claim reports with deduction30 and net150, incomplete/unknown/unbalanced
+blocks, accepted reversal members, duplicate member conflicts, exact retries, stale previews,
+audit rollback and tenant/role isolation. Raw/canonical/JSONB256KiB,100 member/adjustment and
+page2MiB/20-record limits provide bounded envelopes; clients must follow cursor/hasMore.
+Monitor closed error codes, audit health and organization lock latency without logging payloads.
+Retain immutable evidence if rolling back application exposure. One snapshot per source batch
+is supported; batch correction, authenticated sources, reconciliation, posting and production
+retention/restore evidence remain required. This migration has run only on localhost test DBs.

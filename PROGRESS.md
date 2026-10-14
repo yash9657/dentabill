@@ -3,13 +3,29 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-13
-**Current work:** reviewed cash source evidence and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
+**Current work:** reviewed remittance batch evidence and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
 `codex/w0-containment`. The full parity assignment remains incomplete; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice:** FW-44 cash source import/review now has immutable account-level
+**Latest local slice:** FW-44 now preserves explicit remittance batch net, full signed claim
+report membership and provider adjustments with original signs/codes/references (ADR-075).
+Import, fresh preview, immutable review and dashboard support100+80−30=150 without calling150
+verified cash. Incomplete/unknown/unbalanced evidence cannot be accepted; claim report events
+cannot be counted in two accepted batches. Migration28 applied only to localhost. NewDB54 plus
+preservation1, existing financial/tenant regression174, focusedAPI51, fullAPI753 across40 files,
+UI37, SDK43 and lint/types30 pass. API/Lambda/Next production builds pass. Synthetic desktop/mobile
+checks and independent API/UI reviews pass; real auth/source integrations remain unverified.
+Batch revisions/corrections are unsupported. This slice is committed locally on `codex/w0-containment`.
+Full regression/build verification is recorded in
+the [handoff](./docs/HANDOFF_2026-10-13.md).
+
+Next: evidence-bound bank-to-batch reconciliation with revision/staleness and cash-capacity
+checks, then independent PMS posting receipts. Source authenticity, receipt, posting, settlement,
+real connectors and full parity remain open. No production or real financial action ran.
+
+**Previous local slice:** FW-44 cash source import/review now has immutable account-level
 observations, ordered revisions, fresh biller acceptance/rejection, bounded replacement identity
 checks, audit-safe retries and the dashboard workflow (ADR-074). Additive27 fixes direct SQL/API
 Unicode token mismatch without changing applied26 or shared helpers. Cash DB73 plus migration
@@ -19,7 +35,7 @@ is not counted. The coherent cash-source slice is committed on `codex/w0-contain
 Prior unchanged web32, SDK39, Next production build and synthetic desktop/mobile checks pass.
 Migrations26/27 ran only locally; no production deployment or actual financial action occurred.
 
-Next: explicit remittance batch-net/provider-adjustment evidence, then evidence-bound bank
+Follow-on batch-net/provider-adjustment evidence is now implemented locally above; evidence-bound bank
 reconciliation and independent PMS posting receipts. Bank verification and settlement stay
 UNVERIFIED; real connectors, reviewed external posting and full parity remain open. Exact
 verification and continuity are in [the handoff](./docs/HANDOFF_2026-10-13.md).

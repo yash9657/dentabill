@@ -3135,6 +3135,725 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/remittance-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                contentHash: string;
+                                payload: {
+                                    /** @enum {number} */
+                                    schemaVersion: 1;
+                                    /** @enum {string} */
+                                    evidenceBasis: "PAYER_REMITTANCE_BATCH";
+                                    sourceNamespace: string;
+                                    sourceBatchId: string;
+                                    sourceRecordId: string;
+                                    sourceDocumentId: string;
+                                    /** @default null */
+                                    sourceVersion: string | null;
+                                    payerName: string;
+                                    /** @default null */
+                                    payerIdentifier: string | null;
+                                    /** @default null */
+                                    payerIdentifierSystem: string | null;
+                                    /** @default null */
+                                    payeeIdentifier: string | null;
+                                    /** @default null */
+                                    payeeIdentifierSystem: string | null;
+                                    /** @enum {string} */
+                                    currency: "USD";
+                                    /** @default null */
+                                    paymentTrace: string | null;
+                                    /** @default null */
+                                    paymentTraceType: string | null;
+                                    /** @default null */
+                                    paymentTraceIssuer: string | null;
+                                    /** @default null */
+                                    reportedDate: string | null;
+                                    /** @default null */
+                                    sourceStatus: string | null;
+                                    /** @enum {string} */
+                                    detailCompleteness: "COMPLETE" | "PARTIAL" | "ABSENT";
+                                    reportedClaimAmount: string | null;
+                                    reportedAdjustmentAmount: string | null;
+                                    reportedNetAmount: string | null;
+                                    claimRemittances: {
+                                        sourceNamespace: string;
+                                        sourceRecordId: string;
+                                        reportedAmount: string;
+                                    }[];
+                                    providerAdjustments: {
+                                        sourceAdjustmentId: string;
+                                        codeSystem: string;
+                                        reasonCode: string;
+                                        /** @default null */
+                                        sourceReference: string | null;
+                                        /** @default null */
+                                        providerIdentifier: string | null;
+                                        /** @default null */
+                                        fiscalPeriodEnd: string | null;
+                                        amount: string;
+                                        sourceAmount: string;
+                                        /** @enum {string} */
+                                        sourceSignConvention: "REDUCTION_POSITIVE" | "NET_EFFECT_POSITIVE";
+                                    }[];
+                                };
+                                /** @enum {string} */
+                                provenance: "MANUAL_UPLOAD";
+                                /** @enum {string} */
+                                cashReceipt: "UNVERIFIED";
+                                /** @enum {string} */
+                                posting: "UNVERIFIED";
+                                /** @enum {string} */
+                                settlement: "UNVERIFIED";
+                                review: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** @enum {string} */
+                                    decision: "ACCEPT" | "REJECT";
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                    reviewedByUserId: string;
+                                    /** @enum {string} */
+                                    reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                    claimReportedAmount: string | null;
+                                    providerAdjustmentAmount: string | null;
+                                    netAmount: string | null;
+                                    members: {
+                                        sourceIndex: number;
+                                        claimId: string;
+                                        /** Format: uuid */
+                                        remittanceEvidenceId: string;
+                                        /** Format: uuid */
+                                        remittanceReviewId: string;
+                                        amount: string;
+                                    }[];
+                                } | null;
+                            }[];
+                            nextCursor: string | null;
+                            hasMore: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Import one immutable manual batch snapshot. Explicit source members and provider adjustments describe a payer-reported net amount, not bank cash, claim cash allocations, posting or settlement. Batch corrections are not supported yet. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {number} */
+                        schemaVersion: 1;
+                        /** @enum {string} */
+                        evidenceBasis: "PAYER_REMITTANCE_BATCH";
+                        sourceNamespace: string;
+                        sourceBatchId: string;
+                        sourceRecordId: string;
+                        sourceDocumentId: string;
+                        /** @default null */
+                        sourceVersion?: string | null;
+                        payerName: string;
+                        /** @default null */
+                        payerIdentifier?: string | null;
+                        /** @default null */
+                        payerIdentifierSystem?: string | null;
+                        /** @default null */
+                        payeeIdentifier?: string | null;
+                        /** @default null */
+                        payeeIdentifierSystem?: string | null;
+                        /** @enum {string} */
+                        currency: "USD";
+                        /** @default null */
+                        paymentTrace?: string | null;
+                        /** @default null */
+                        paymentTraceType?: string | null;
+                        /** @default null */
+                        paymentTraceIssuer?: string | null;
+                        /** @default null */
+                        reportedDate?: string | null;
+                        /** @default null */
+                        sourceStatus?: string | null;
+                        /** @enum {string} */
+                        detailCompleteness: "COMPLETE" | "PARTIAL" | "ABSENT";
+                        reportedClaimAmount: string | null;
+                        reportedAdjustmentAmount: string | null;
+                        reportedNetAmount: string | null;
+                        claimRemittances: {
+                            sourceNamespace: string;
+                            sourceRecordId: string;
+                            reportedAmount: string;
+                        }[];
+                        providerAdjustments: {
+                            sourceAdjustmentId: string;
+                            codeSystem: string;
+                            reasonCode: string;
+                            /** @default null */
+                            sourceReference?: string | null;
+                            /** @default null */
+                            providerIdentifier?: string | null;
+                            /** @default null */
+                            fiscalPeriodEnd?: string | null;
+                            amount: string;
+                            sourceAmount: string;
+                            /** @enum {string} */
+                            sourceSignConvention: "REDUCTION_POSITIVE" | "NET_EFFECT_POSITIVE";
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            contentHash: string;
+                            payload: {
+                                /** @enum {number} */
+                                schemaVersion: 1;
+                                /** @enum {string} */
+                                evidenceBasis: "PAYER_REMITTANCE_BATCH";
+                                sourceNamespace: string;
+                                sourceBatchId: string;
+                                sourceRecordId: string;
+                                sourceDocumentId: string;
+                                /** @default null */
+                                sourceVersion: string | null;
+                                payerName: string;
+                                /** @default null */
+                                payerIdentifier: string | null;
+                                /** @default null */
+                                payerIdentifierSystem: string | null;
+                                /** @default null */
+                                payeeIdentifier: string | null;
+                                /** @default null */
+                                payeeIdentifierSystem: string | null;
+                                /** @enum {string} */
+                                currency: "USD";
+                                /** @default null */
+                                paymentTrace: string | null;
+                                /** @default null */
+                                paymentTraceType: string | null;
+                                /** @default null */
+                                paymentTraceIssuer: string | null;
+                                /** @default null */
+                                reportedDate: string | null;
+                                /** @default null */
+                                sourceStatus: string | null;
+                                /** @enum {string} */
+                                detailCompleteness: "COMPLETE" | "PARTIAL" | "ABSENT";
+                                reportedClaimAmount: string | null;
+                                reportedAdjustmentAmount: string | null;
+                                reportedNetAmount: string | null;
+                                claimRemittances: {
+                                    sourceNamespace: string;
+                                    sourceRecordId: string;
+                                    reportedAmount: string;
+                                }[];
+                                providerAdjustments: {
+                                    sourceAdjustmentId: string;
+                                    codeSystem: string;
+                                    reasonCode: string;
+                                    /** @default null */
+                                    sourceReference: string | null;
+                                    /** @default null */
+                                    providerIdentifier: string | null;
+                                    /** @default null */
+                                    fiscalPeriodEnd: string | null;
+                                    amount: string;
+                                    sourceAmount: string;
+                                    /** @enum {string} */
+                                    sourceSignConvention: "REDUCTION_POSITIVE" | "NET_EFFECT_POSITIVE";
+                                }[];
+                            };
+                            /** @enum {string} */
+                            provenance: "MANUAL_UPLOAD";
+                            /** @enum {string} */
+                            cashReceipt: "UNVERIFIED";
+                            /** @enum {string} */
+                            posting: "UNVERIFIED";
+                            /** @enum {string} */
+                            settlement: "UNVERIFIED";
+                            review: {
+                                /** Format: uuid */
+                                id: string;
+                                /** @enum {string} */
+                                decision: "ACCEPT" | "REJECT";
+                                /** Format: date-time */
+                                createdAt: string;
+                                reviewedByUserId: string;
+                                /** @enum {string} */
+                                reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                claimReportedAmount: string | null;
+                                providerAdjustmentAmount: string | null;
+                                netAmount: string | null;
+                                members: {
+                                    sourceIndex: number;
+                                    claimId: string;
+                                    /** Format: uuid */
+                                    remittanceEvidenceId: string;
+                                    /** Format: uuid */
+                                    remittanceReviewId: string;
+                                    amount: string;
+                                }[];
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            contentHash: string;
+                            payload: {
+                                /** @enum {number} */
+                                schemaVersion: 1;
+                                /** @enum {string} */
+                                evidenceBasis: "PAYER_REMITTANCE_BATCH";
+                                sourceNamespace: string;
+                                sourceBatchId: string;
+                                sourceRecordId: string;
+                                sourceDocumentId: string;
+                                /** @default null */
+                                sourceVersion: string | null;
+                                payerName: string;
+                                /** @default null */
+                                payerIdentifier: string | null;
+                                /** @default null */
+                                payerIdentifierSystem: string | null;
+                                /** @default null */
+                                payeeIdentifier: string | null;
+                                /** @default null */
+                                payeeIdentifierSystem: string | null;
+                                /** @enum {string} */
+                                currency: "USD";
+                                /** @default null */
+                                paymentTrace: string | null;
+                                /** @default null */
+                                paymentTraceType: string | null;
+                                /** @default null */
+                                paymentTraceIssuer: string | null;
+                                /** @default null */
+                                reportedDate: string | null;
+                                /** @default null */
+                                sourceStatus: string | null;
+                                /** @enum {string} */
+                                detailCompleteness: "COMPLETE" | "PARTIAL" | "ABSENT";
+                                reportedClaimAmount: string | null;
+                                reportedAdjustmentAmount: string | null;
+                                reportedNetAmount: string | null;
+                                claimRemittances: {
+                                    sourceNamespace: string;
+                                    sourceRecordId: string;
+                                    reportedAmount: string;
+                                }[];
+                                providerAdjustments: {
+                                    sourceAdjustmentId: string;
+                                    codeSystem: string;
+                                    reasonCode: string;
+                                    /** @default null */
+                                    sourceReference: string | null;
+                                    /** @default null */
+                                    providerIdentifier: string | null;
+                                    /** @default null */
+                                    fiscalPeriodEnd: string | null;
+                                    amount: string;
+                                    sourceAmount: string;
+                                    /** @enum {string} */
+                                    sourceSignConvention: "REDUCTION_POSITIVE" | "NET_EFFECT_POSITIVE";
+                                }[];
+                            };
+                            /** @enum {string} */
+                            provenance: "MANUAL_UPLOAD";
+                            /** @enum {string} */
+                            cashReceipt: "UNVERIFIED";
+                            /** @enum {string} */
+                            posting: "UNVERIFIED";
+                            /** @enum {string} */
+                            settlement: "UNVERIFIED";
+                            review: {
+                                /** Format: uuid */
+                                id: string;
+                                /** @enum {string} */
+                                decision: "ACCEPT" | "REJECT";
+                                /** Format: date-time */
+                                createdAt: string;
+                                reviewedByUserId: string;
+                                /** @enum {string} */
+                                reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                claimReportedAmount: string | null;
+                                providerAdjustmentAmount: string | null;
+                                netAmount: string | null;
+                                members: {
+                                    sourceIndex: number;
+                                    claimId: string;
+                                    /** Format: uuid */
+                                    remittanceEvidenceId: string;
+                                    /** Format: uuid */
+                                    remittanceReviewId: string;
+                                    amount: string;
+                                }[];
+                            } | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/remittance-batches/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            evidence: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                contentHash: string;
+                                payload: {
+                                    /** @enum {number} */
+                                    schemaVersion: 1;
+                                    /** @enum {string} */
+                                    evidenceBasis: "PAYER_REMITTANCE_BATCH";
+                                    sourceNamespace: string;
+                                    sourceBatchId: string;
+                                    sourceRecordId: string;
+                                    sourceDocumentId: string;
+                                    /** @default null */
+                                    sourceVersion: string | null;
+                                    payerName: string;
+                                    /** @default null */
+                                    payerIdentifier: string | null;
+                                    /** @default null */
+                                    payerIdentifierSystem: string | null;
+                                    /** @default null */
+                                    payeeIdentifier: string | null;
+                                    /** @default null */
+                                    payeeIdentifierSystem: string | null;
+                                    /** @enum {string} */
+                                    currency: "USD";
+                                    /** @default null */
+                                    paymentTrace: string | null;
+                                    /** @default null */
+                                    paymentTraceType: string | null;
+                                    /** @default null */
+                                    paymentTraceIssuer: string | null;
+                                    /** @default null */
+                                    reportedDate: string | null;
+                                    /** @default null */
+                                    sourceStatus: string | null;
+                                    /** @enum {string} */
+                                    detailCompleteness: "COMPLETE" | "PARTIAL" | "ABSENT";
+                                    reportedClaimAmount: string | null;
+                                    reportedAdjustmentAmount: string | null;
+                                    reportedNetAmount: string | null;
+                                    claimRemittances: {
+                                        sourceNamespace: string;
+                                        sourceRecordId: string;
+                                        reportedAmount: string;
+                                    }[];
+                                    providerAdjustments: {
+                                        sourceAdjustmentId: string;
+                                        codeSystem: string;
+                                        reasonCode: string;
+                                        /** @default null */
+                                        sourceReference: string | null;
+                                        /** @default null */
+                                        providerIdentifier: string | null;
+                                        /** @default null */
+                                        fiscalPeriodEnd: string | null;
+                                        amount: string;
+                                        sourceAmount: string;
+                                        /** @enum {string} */
+                                        sourceSignConvention: "REDUCTION_POSITIVE" | "NET_EFFECT_POSITIVE";
+                                    }[];
+                                };
+                                /** @enum {string} */
+                                provenance: "MANUAL_UPLOAD";
+                                /** @enum {string} */
+                                cashReceipt: "UNVERIFIED";
+                                /** @enum {string} */
+                                posting: "UNVERIFIED";
+                                /** @enum {string} */
+                                settlement: "UNVERIFIED";
+                                review: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** @enum {string} */
+                                    decision: "ACCEPT" | "REJECT";
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                    reviewedByUserId: string;
+                                    /** @enum {string} */
+                                    reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                    claimReportedAmount: string | null;
+                                    providerAdjustmentAmount: string | null;
+                                    netAmount: string | null;
+                                    members: {
+                                        sourceIndex: number;
+                                        claimId: string;
+                                        /** Format: uuid */
+                                        remittanceEvidenceId: string;
+                                        /** Format: uuid */
+                                        remittanceReviewId: string;
+                                        amount: string;
+                                    }[];
+                                } | null;
+                            };
+                            reviewToken: string;
+                            ledgerVersion: string;
+                            blockers: ("ALREADY_REVIEWED" | "INCOMPLETE_DETAIL" | "UNKNOWN_TOTALS" | "TOTAL_MISMATCH" | "MEMBER_MISSING" | "MEMBER_NOT_ACCEPTED" | "MEMBER_AMOUNT_MISMATCH" | "MEMBER_ALREADY_BATCHED")[];
+                            members: {
+                                sourceNamespace: string;
+                                sourceRecordId: string;
+                                reportedAmount: string;
+                                /** Format: uuid */
+                                evidenceId: string | null;
+                                claimId: string | null;
+                                /** Format: uuid */
+                                reviewId: string | null;
+                                evidenceHash: string | null;
+                                payerName: string | null;
+                                /** @enum {string} */
+                                status: "MISSING" | "UNREVIEWED" | "REJECTED" | "AMOUNT_MISMATCH" | "ALREADY_BATCHED" | "MATCHED";
+                            }[];
+                            listedClaimAmount: string;
+                            listedAdjustmentAmount: string;
+                            calculatedNetAmount: string;
+                            /** @enum {string} */
+                            cashReceipt: "UNVERIFIED";
+                            /** @enum {string} */
+                            posting: "UNVERIFIED";
+                            /** @enum {string} */
+                            settlement: "UNVERIFIED";
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/remittance-batches/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        decision: "ACCEPT" | "REJECT";
+                        reviewToken: string;
+                        /** Format: uuid */
+                        idempotencyKey: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            contentHash: string;
+                            payload: {
+                                /** @enum {number} */
+                                schemaVersion: 1;
+                                /** @enum {string} */
+                                evidenceBasis: "PAYER_REMITTANCE_BATCH";
+                                sourceNamespace: string;
+                                sourceBatchId: string;
+                                sourceRecordId: string;
+                                sourceDocumentId: string;
+                                /** @default null */
+                                sourceVersion: string | null;
+                                payerName: string;
+                                /** @default null */
+                                payerIdentifier: string | null;
+                                /** @default null */
+                                payerIdentifierSystem: string | null;
+                                /** @default null */
+                                payeeIdentifier: string | null;
+                                /** @default null */
+                                payeeIdentifierSystem: string | null;
+                                /** @enum {string} */
+                                currency: "USD";
+                                /** @default null */
+                                paymentTrace: string | null;
+                                /** @default null */
+                                paymentTraceType: string | null;
+                                /** @default null */
+                                paymentTraceIssuer: string | null;
+                                /** @default null */
+                                reportedDate: string | null;
+                                /** @default null */
+                                sourceStatus: string | null;
+                                /** @enum {string} */
+                                detailCompleteness: "COMPLETE" | "PARTIAL" | "ABSENT";
+                                reportedClaimAmount: string | null;
+                                reportedAdjustmentAmount: string | null;
+                                reportedNetAmount: string | null;
+                                claimRemittances: {
+                                    sourceNamespace: string;
+                                    sourceRecordId: string;
+                                    reportedAmount: string;
+                                }[];
+                                providerAdjustments: {
+                                    sourceAdjustmentId: string;
+                                    codeSystem: string;
+                                    reasonCode: string;
+                                    /** @default null */
+                                    sourceReference: string | null;
+                                    /** @default null */
+                                    providerIdentifier: string | null;
+                                    /** @default null */
+                                    fiscalPeriodEnd: string | null;
+                                    amount: string;
+                                    sourceAmount: string;
+                                    /** @enum {string} */
+                                    sourceSignConvention: "REDUCTION_POSITIVE" | "NET_EFFECT_POSITIVE";
+                                }[];
+                            };
+                            /** @enum {string} */
+                            provenance: "MANUAL_UPLOAD";
+                            /** @enum {string} */
+                            cashReceipt: "UNVERIFIED";
+                            /** @enum {string} */
+                            posting: "UNVERIFIED";
+                            /** @enum {string} */
+                            settlement: "UNVERIFIED";
+                            review: {
+                                /** Format: uuid */
+                                id: string;
+                                /** @enum {string} */
+                                decision: "ACCEPT" | "REJECT";
+                                /** Format: date-time */
+                                createdAt: string;
+                                reviewedByUserId: string;
+                                /** @enum {string} */
+                                reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                claimReportedAmount: string | null;
+                                providerAdjustmentAmount: string | null;
+                                netAmount: string | null;
+                                members: {
+                                    sourceIndex: number;
+                                    claimId: string;
+                                    /** Format: uuid */
+                                    remittanceEvidenceId: string;
+                                    /** Format: uuid */
+                                    remittanceReviewId: string;
+                                    amount: string;
+                                }[];
+                            } | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/observations/{id}/regeneration-preview": {
         parameters: {
             query?: never;

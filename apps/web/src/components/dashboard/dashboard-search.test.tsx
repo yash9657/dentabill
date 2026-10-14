@@ -59,3 +59,14 @@ it('finds the cash evidence inbox by account source task', async () => {
     '/dashboard/cash-evidence',
   );
 });
+
+it('finds the remittance batch workflow by provider adjustment task', async () => {
+  const user = userEvent.setup();
+  render(<DashboardSearch />);
+  await user.click(screen.getByRole('button', { name: /open command palette/i }));
+  await user.type(screen.getByRole('searchbox', { name: 'Find a page' }), 'provider adjustments');
+  expect(screen.getByRole('link', { name: /Remittance batches/ })).toHaveAttribute(
+    'href',
+    '/dashboard/remittance-batches',
+  );
+});

@@ -4,6 +4,60 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
+### Latest continuation: FW-44 remittance batch evidence (ADR-075)
+
+The user said “keep working” after cash milestone `e5f68af`. Added the next local vertical
+slice: custom batch JSON import, source inbox, fresh preview, immutable accept/reject and exact
+reviewed claim-event membership. Signed provider adjustments retain original amount, convention,
+raw codes and references. Claim reports100+80 with provider deduction30 yield reported net150;
+none of these numbers establish cash received or claim cash allocations. Unknown/incomplete/
+unbalanced source remains inspectable/rejectable and cannot be accepted. Provider-only, zero
+and negative batches plus accepted signed reversal events are supported.
+
+Migration28 `20261014060000_remittance_batch_evidence` adds four immutable tenant-scoped tables
+and batch-only admission helpers. One accepted claim event belongs to at most one batch; exact
+member/review/hash bindings, deferred parent sealing and organization serialization apply to
+direct SQL as well as API writes. Evidence/review replays are audited; mutation audit failures
+roll back and read audit failures withhold the response. Fixed MANUAL_UPLOAD provenance and
+UNVERIFIED cash receipt/posting/settlement remain explicit. Batch correction/revision is not
+implemented: changed source identity payloads conflict rather than overwrite retained facts.
+
+Four `/v1/remittance-batches` routes, generated SDK and `/dashboard/remittance-batches` expose
+the workflow. Raw/canonical/PostgreSQL JSONB imports256KiB, arrays100 each, pages20/2MiB. The
+storage-size query handles JSONB whitespace expansion with a closed400 before insertion.
+Browser command/cache scopes include user and optional organization; uncertain retries preserve
+the exact command and409 requires a fresh review.
+
+Final local verification: full API753/753 across40 files (291.63s), new DB54/54 plus migration preservation1/1; focused API51/51; web37/37;
+SDK43/43; existing cash/remittance/tenant regressions174/174; affected Turbo lint/types30/30;
+API TypeScript, both Lambda bundles and Next production build. API36.0MB/worker28.9MB unzip,
+10.8/9.4MB zip. Logs use `/tmp/dentabill-batch-`: `api-focused.log`, `db-regression.log`,
+`sdk-tests.log`, `checks.log`, `api-build.log`, `lambda-build.log`, `web-build.log`, `api-full.log`. Migration28 applied only to
+isolated `dentabill_w0_identity` and shared `dentabill_test` on localhost. Initial isolated SQL
+parser failure rolled back atomically before successful correction/application; prior25–27
+unchanged. Migration proof retains exact prior claim/source/remittance/cash rows and helper
+definitions. DB agent results are in tool outputs, not saved log files.
+
+Actual-component synthetic auth/API browser checks at1280/390 passed download/import/identical
+retry/blocked acceptance/rejection with zero horizontal overflow, page errors or axe violations.
+One bounded screenshot round, independently reviewed with no material findings. Separate
+documenter found no design-system changes. Context/detector launchers failed permission denied;
+neither report is claimed. Authenticated dashboard chrome and live Clerk/AWS/source integrations
+were not browser-tested. Captures/results:
+`/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-batch-visual-qm8nmteu`.
+Independent API review found no actionable issues. Root inspected the mobile capture.
+
+This complete slice is included in `feat(monorepo): add reviewed remittance batch evidence`
+on `codex/w0-containment`; no merge or deployment. Both prior stashes remain intact.
+
+**Exact next task:** evidence-bound bank-to-batch reconciliation
+with current reviewed cash revision checks, stale/replacement handling and bounded capacities.
+Keep gross claim reports, provider net effects, batch net and bank evidence distinct; never clone
+batch150 per claim or allocate180 from150. Then independent PMS posting receipts. Batch source
+corrections, native connectors, reviewed external posting and recovery attribution remain open.
+Use fake data. No deployment, paid inference, external message or real financial action ran.
+Full parity remains incomplete; the optional up-to-$4 Fireworks experiment remains unanswered.
+
 ### Latest continuation: FW-44 cash-source milestone closeout (ADR-074)
 
 Resumed the existing checkout from [HANDOFF_2026-10-13.md](./HANDOFF_2026-10-13.md), preserving

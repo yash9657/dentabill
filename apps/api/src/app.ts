@@ -37,6 +37,7 @@ import { meRoutes } from './routes/v1/me.js';
 import { observationRegenerationRoutes } from './routes/v1/observation-regenerations.js';
 import { onboardingRoutes } from './routes/v1/onboarding.js';
 import { operationsRoutes } from './routes/v1/operations.js';
+import { remittanceBatchRoutes } from './routes/v1/remittance-batches.js';
 import { reportsRoutes } from './routes/v1/reports.js';
 import { retellWebhookRoutes } from './routes/v1/retell-webhook.js';
 
@@ -235,6 +236,7 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(claimObservationRoutes, { prefix: '/v1' });
   await fastify.register(claimRemittanceRoutes, { prefix: '/v1' });
   await fastify.register(cashEvidenceRoutes, { prefix: '/v1' });
+  await fastify.register(remittanceBatchRoutes, { prefix: '/v1' });
   await fastify.register(observationRegenerationRoutes, {
     prefix: '/v1',
     ...(opts.observationRegenerationConfig !== undefined

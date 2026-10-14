@@ -86,3 +86,12 @@ describe('<DashboardSidebar />', () => {
     expect(closeMobileDrawer).toHaveBeenCalled();
   });
 });
+
+it('marks remittance batches as a separate review destination', () => {
+  renderSidebar({ pathname: '/dashboard/remittance-batches' });
+  expect(screen.getByRole('link', { name: 'Remittance batches' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  expect(screen.getByRole('link', { name: 'Cash evidence' })).not.toHaveAttribute('aria-current');
+});

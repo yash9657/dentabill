@@ -5,6 +5,7 @@ import {
   FileText,
   LayoutDashboard,
   Landmark,
+  ReceiptText,
   PhoneCall,
   Search,
   Settings,
@@ -39,6 +40,12 @@ const destinations = [
     description: 'Live calls and call history',
     href: '/dashboard/calls',
     icon: PhoneCall,
+  },
+  {
+    label: 'Remittance batches',
+    description: 'Review payer batch totals and provider adjustments',
+    href: '/dashboard/remittance-batches',
+    icon: ReceiptText,
   },
   {
     label: 'Cash evidence',

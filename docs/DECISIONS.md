@@ -1591,3 +1591,48 @@ with a30 provider deduction yields150 cash, not180. Independent PMS posting rece
 external posting, actual supported connectors, source corrections and outcome attribution remain
 required. No claim status, payment, remittance amount, settlement or recovered revenue changes
 as a side effect of this slice.
+
+## ADR-075 — Explicit remittance batch net and provider adjustments
+
+**Date:** 2026-10-13. **Status:** local synthetic implementation; no external connector,
+production migration, posting or bank verification.
+
+A batch can report multiple claims and provider-level adjustments. Claim reports100+80 and a
+provider deduction30 yield a reported batch net150. Neither the180 claim total nor accepting
+the batch establishes cash received. CMS distinguishes claim and provider adjustments; Open
+Dental exposes batch payment amounts separately from individual claim procedure payments.
+
+1. Migration28 adds immutable batch evidence, review, accepted claim-member and provider-adjustment
+   tables. Identity is organization/namespace/batch plus a unique namespace/source record. Exact
+   replay succeeds; changed evidence conflicts. This slice admits one snapshot per batch. Source
+   revisions/corrections remain unsupported; inventing a new batch identity is not a correction.
+2. Explicit namespace/record references resolve already reviewed claim remittance events. Full
+   signed PAYMENT or REVERSAL amounts are bound to their exact evidence/review/claim IDs. One
+   accepted event belongs to at most one batch. Trace, document, payer name and equal amounts
+   never infer membership or cash allocation.
+3. Provider adjustments retain raw code system/reason/reference/provider/date plus original
+   amount and sign convention. Canonical amount is the signed net effect; REDUCTION_POSITIVE
+   negates the source amount. Unknown codes remain uninterpreted source facts. No provider
+   adjustment becomes a fabricated claim payment, write-off or recovery.
+4. Incomplete, unknown and unbalanced observations remain importable/rejectable. Acceptance
+   requires COMPLETE detail, all three known headers, exact listed claim/adjustment sums and
+   net equality. Provider-only, zero and negative batches are supported. Unknown is never zero.
+5. Fresh preview tokens bind batch hash, organization batch ledger counts and exact member
+   evidence/review/amount/status. Reviews bind actor, stored role, token and idempotency key.
+   Exact retries return the original result. Organization tuple writes serialize admission
+   without changing updatedAt. Restrictive composite FKs, exact mirrors, deferred parent sealing
+   and direct SQL checks retain complete accepted facts and reject stale repeatable-read writers.
+6. Four authenticated routes and the dashboard implement import, paged inbox, preview and
+   accept/reject with scoped generated-SDK transport. Successful reads/replays/mutations require
+   audit. Raw validation/source/Prisma errors stay closed. Raw, canonical and PostgreSQL JSONB
+   representations are bounded to256KiB; arrays to100 each; list pages to20 records and2MiB.
+7. Provenance remains MANUAL_UPLOAD; cash receipt, posting and settlement remain UNVERIFIED.
+   This is a custom JSON contract, not a native835 parser, authenticated payer/bank/PMS source,
+   reconciliation, external posting instruction or recovered-revenue calculation.
+
+Primary sources checked2026-10-13:
+[CMS payment/remittance advice](https://www.cms.gov/medicare/coding-billing/electronic-billing/health-care-payment-remittance-advice),
+[Open Dental ClaimPayments](https://www.opendental.com/site/apiclaimpayments.html).
+Next: reviewed bank-to-batch reconciliation with revision/staleness handling and bounded cash
+capacities, then independent PMS posting receipts. Batch corrections, native connectors and
+defensible recovery attribution remain open.

@@ -1,5 +1,13 @@
 # DentaBill: competitive gaps and the Fireworks implementation plan
 
+Current local progress (2026-10-13, ADR-075): FW-44 now adds immutable manual batch snapshots,
+explicit full signed claim-event membership, provider adjustment source signs/codes and separate
+claim/adjustment/net totals through API/SDK/dashboard review.100+80−30=150 is payer-reported batch
+net, not verified cash. Partial/unknown/unbalanced acceptance and duplicate accepted members
+are blocked. One snapshot per source batch; corrections remain open. Next: evidence-bound
+bank-to-batch reconciliation with revision/staleness and capacity checks, then independent PMS
+posting receipts. No native source integration, deployment, paid inference or financial action ran.
+
 Current local progress (2026-10-13, ADR-074): FW-44 now has a local account-level source
 observation/review slice, immutable ordered revisions, retained replacement identity and exact
 account summaries. Additive27 aligns cash-only database/API Unicode token admission without

@@ -377,3 +377,14 @@ manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
 - `apps/web/src/components/dashboard/cash-evidence`: actual upload/inbox/account/history/preview UI, synthetic fixtures and transport-level regressions.
 - `apps/web/src/lib/cash-evidence/use-cash-evidence.ts`: scoped generated-SDK access, paging and stable uncertain commands.
 - `apps/api/test/fixtures/cash-evidence`: fabricated pending/posted/removed/debit/replacement JSON inputs and explicit limitations.
+
+## Remittance batch evidence (FW-44; ADR-075)
+
+- `apps/api/src/lib/remittance-batches/{contract,service}.ts`: bounded immutable source batches, signed provider effects, exact accepted member bindings, fresh preview and audit-safe review/replay.
+- `apps/api/src/routes/v1/remittance-batches{,.test}.ts`: four authenticated routes and synthetic real-Postgres regressions.
+- `packages/db/prisma/migrations/20261014060000_remittance_batch_evidence/migration.sql`: four immutable tables, scoped restrictive references, batch-only token helpers, admission serialization and complete accepted-member sealing.
+- `packages/db/src/lib/remittance-batch-evidence{,-migration}.test.ts`: direct SQL, tenant/race invariants and exact preexisting-data/helper preservation.
+- `apps/web/src/app/dashboard/remittance-batches/page.tsx`: authenticated dashboard entry.
+- `apps/web/src/components/dashboard/remittance-batches`: source inbox, header/listed totals, original signs, member review and transport-level regressions.
+- `apps/web/src/lib/remittance-batches/use-remittance-batches.ts`: scoped generated-SDK paging, preview and stable retry commands.
+- `apps/api/test/fixtures/remittance-batches` and `apps/web/public/examples/synthetic-remittance-batch.json`: explicitly fabricated custom JSON, not native provider exports.

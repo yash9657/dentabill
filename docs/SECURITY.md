@@ -247,3 +247,15 @@ accounts/connectors. Source/review rows and actor references are immutable/restr
 retention, legal hold, erasure and backups still require a production policy. Acceptance confirms
 review of manual evidence only: bank verification and settlement stay UNVERIFIED. No real banking
 connector, money movement, claim allocation, payment posting or revenue assertion is enabled.
+
+### Manual remittance batches (ADR-075; local only)
+
+Batch records can contain payer/payee identifiers, traces and provider adjustment references.
+Treat all source fields as sensitive. All four routes require scoped stored OWNER/ADMIN/BILLING_STAFF
+roles; read/replay audits are mandatory and mutation audits commit atomically. Strict bounded
+schemas, closed error messages and opaque audit metadata keep source values out of logs.
+Raw/canonical/JSONB256KiB,100 members/adjustments and page2MiB bounds limit processing/response size.
+Organization admission locks, immutable exact member/review bindings and restrictive actor/source
+FKs prevent tenant crossing and repeated accepted claim events. Manual acceptance establishes
+neither source authenticity nor bank receipt, posting or settlement. Production retention,
+erasure, PHI agreements, batch corrections and authenticated connectors remain separate gates.
