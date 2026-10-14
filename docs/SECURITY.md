@@ -233,3 +233,17 @@ payloads or raw errors reach route logs. Raw/canonical input and list-response b
 local processing and AWS payload size. Browser forms and caches bind claim, user and optional
 practice; late auth changes cannot transmit under a new scope. No inference, third-party
 submission, verified cash receipt, posting or settlement is implied by acceptance.
+
+### Manual cash source evidence (ADR-074; local only)
+
+Cash observations may contain account identifiers, traces, counterparty/source descriptions and
+financial data. Treat them as sensitive; the custom manual contract does not certify provider
+identity or establish an external PHI agreement. All five routes require authenticated practice
+scope and stored OWNER/ADMIN/BILLING_STAFF roles. Reads, previews, exact replays and mutations
+require PHI-safe audit; raw validation/Prisma errors are closed before global logging. No raw
+payload or source ID is placed in audit metadata. Raw/canonical import64KiB, page2MiB and bounded
+replacement traversal reduce unbounded resource exposure. Account summaries never combine
+accounts/connectors. Source/review rows and actor references are immutable/restrictive; approved
+retention, legal hold, erasure and backups still require a production policy. Acceptance confirms
+review of manual evidence only: bank verification and settlement stay UNVERIFIED. No real banking
+connector, money movement, claim allocation, payment posting or revenue assertion is enabled.

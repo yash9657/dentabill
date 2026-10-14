@@ -2168,6 +2168,973 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cash-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                latestSourceSequence: number;
+                                latestEvidence: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** Format: uuid */
+                                    transactionId: string;
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                    contentHash: string;
+                                    /** @enum {string} */
+                                    provenance: "MANUAL_UPLOAD";
+                                    /** @enum {string} */
+                                    bankVerification: "UNVERIFIED";
+                                    /** @enum {string} */
+                                    settlement: "UNVERIFIED";
+                                    payload: {
+                                        /** @enum {number} */
+                                        schemaVersion: 1;
+                                        /** @enum {string} */
+                                        evidenceBasis: "BANK_ACCOUNT_TRANSACTION";
+                                        sourceSystem: string;
+                                        sourceProduct: string;
+                                        sourceNamespace: string;
+                                        sourceAccountId: string;
+                                        sourceTransactionId: string;
+                                        sourceRecordId: string;
+                                        sourceSequence: number;
+                                        /** @default null */
+                                        sourceVersion: string | null;
+                                        sourceDocumentId: string;
+                                        /** Format: date-time */
+                                        observedAt: string;
+                                        /** @enum {string} */
+                                        status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                                        /** @enum {string} */
+                                        currency: "USD";
+                                        amount: string | null;
+                                        sourceAmount: string | null;
+                                        /** @enum {string} */
+                                        sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                                        /** @default null */
+                                        transactionDate: string | null;
+                                        /** @default null */
+                                        postingDate: string | null;
+                                        /** @default null */
+                                        counterpartyName: string | null;
+                                        /** @default null */
+                                        paymentTrace: string | null;
+                                        /** @default null */
+                                        sourceStatus: string | null;
+                                        /** @default null */
+                                        sourceDescription: string | null;
+                                        /** @default null */
+                                        pendingSourceTransactionId: string | null;
+                                    };
+                                    review: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        /** @enum {string} */
+                                        decision: "ACCEPT" | "REJECT";
+                                        /** Format: date-time */
+                                        createdAt: string;
+                                        reviewedByUserId: string;
+                                        /** @enum {string} */
+                                        reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                        /** Format: uuid */
+                                        previousAcceptedEvidenceId: string | null;
+                                    } | null;
+                                };
+                                currentAcceptedEvidence: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** Format: uuid */
+                                    transactionId: string;
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                    contentHash: string;
+                                    /** @enum {string} */
+                                    provenance: "MANUAL_UPLOAD";
+                                    /** @enum {string} */
+                                    bankVerification: "UNVERIFIED";
+                                    /** @enum {string} */
+                                    settlement: "UNVERIFIED";
+                                    payload: {
+                                        /** @enum {number} */
+                                        schemaVersion: 1;
+                                        /** @enum {string} */
+                                        evidenceBasis: "BANK_ACCOUNT_TRANSACTION";
+                                        sourceSystem: string;
+                                        sourceProduct: string;
+                                        sourceNamespace: string;
+                                        sourceAccountId: string;
+                                        sourceTransactionId: string;
+                                        sourceRecordId: string;
+                                        sourceSequence: number;
+                                        /** @default null */
+                                        sourceVersion: string | null;
+                                        sourceDocumentId: string;
+                                        /** Format: date-time */
+                                        observedAt: string;
+                                        /** @enum {string} */
+                                        status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                                        /** @enum {string} */
+                                        currency: "USD";
+                                        amount: string | null;
+                                        sourceAmount: string | null;
+                                        /** @enum {string} */
+                                        sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                                        /** @default null */
+                                        transactionDate: string | null;
+                                        /** @default null */
+                                        postingDate: string | null;
+                                        /** @default null */
+                                        counterpartyName: string | null;
+                                        /** @default null */
+                                        paymentTrace: string | null;
+                                        /** @default null */
+                                        sourceStatus: string | null;
+                                        /** @default null */
+                                        sourceDescription: string | null;
+                                        /** @default null */
+                                        pendingSourceTransactionId: string | null;
+                                    };
+                                    review: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        /** @enum {string} */
+                                        decision: "ACCEPT" | "REJECT";
+                                        /** Format: date-time */
+                                        createdAt: string;
+                                        reviewedByUserId: string;
+                                        /** @enum {string} */
+                                        reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                        /** Format: uuid */
+                                        previousAcceptedEvidenceId: string | null;
+                                    } | null;
+                                } | null;
+                                /** @enum {string} */
+                                freshness: "CURRENT" | "STALE" | "UNREVIEWED";
+                            }[];
+                            accounts: {
+                                sourceSystem: string;
+                                sourceProduct: string;
+                                sourceNamespace: string;
+                                sourceAccountId: string;
+                                postedCreditAmount: string;
+                                postedDebitAmount: string;
+                                postedNetAmount: string;
+                                transactionCount: number;
+                                postedCount: number;
+                                pendingCount: number;
+                                removedCount: number;
+                                unknownCount: number;
+                                unreviewedCount: number;
+                                staleCount: number;
+                                reviewNeededCount: number;
+                                /** @enum {string} */
+                                bankVerification: "UNVERIFIED";
+                                /** @enum {string} */
+                                settlement: "UNVERIFIED";
+                            }[];
+                            nextCursor: string | null;
+                            hasMore: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Import one manual version 1 bank-account source observation. Does not verify bank receipt, allocate claims, post payments or establish settlement. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {number} */
+                        schemaVersion: 1;
+                        /** @enum {string} */
+                        evidenceBasis: "BANK_ACCOUNT_TRANSACTION";
+                        sourceSystem: string;
+                        sourceProduct: string;
+                        sourceNamespace: string;
+                        sourceAccountId: string;
+                        sourceTransactionId: string;
+                        sourceRecordId: string;
+                        sourceSequence: number;
+                        /** @default null */
+                        sourceVersion?: string | null;
+                        sourceDocumentId: string;
+                        /** Format: date-time */
+                        observedAt: string;
+                        /** @enum {string} */
+                        status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                        /** @enum {string} */
+                        currency: "USD";
+                        amount: string | null;
+                        sourceAmount: string | null;
+                        /** @enum {string} */
+                        sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                        /** @default null */
+                        transactionDate?: string | null;
+                        /** @default null */
+                        postingDate?: string | null;
+                        /** @default null */
+                        counterpartyName?: string | null;
+                        /** @default null */
+                        paymentTrace?: string | null;
+                        /** @default null */
+                        sourceStatus?: string | null;
+                        /** @default null */
+                        sourceDescription?: string | null;
+                        /** @default null */
+                        pendingSourceTransactionId?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            transactionId: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            contentHash: string;
+                            /** @enum {string} */
+                            provenance: "MANUAL_UPLOAD";
+                            /** @enum {string} */
+                            bankVerification: "UNVERIFIED";
+                            /** @enum {string} */
+                            settlement: "UNVERIFIED";
+                            payload: {
+                                /** @enum {number} */
+                                schemaVersion: 1;
+                                /** @enum {string} */
+                                evidenceBasis: "BANK_ACCOUNT_TRANSACTION";
+                                sourceSystem: string;
+                                sourceProduct: string;
+                                sourceNamespace: string;
+                                sourceAccountId: string;
+                                sourceTransactionId: string;
+                                sourceRecordId: string;
+                                sourceSequence: number;
+                                /** @default null */
+                                sourceVersion: string | null;
+                                sourceDocumentId: string;
+                                /** Format: date-time */
+                                observedAt: string;
+                                /** @enum {string} */
+                                status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                                /** @enum {string} */
+                                currency: "USD";
+                                amount: string | null;
+                                sourceAmount: string | null;
+                                /** @enum {string} */
+                                sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                                /** @default null */
+                                transactionDate: string | null;
+                                /** @default null */
+                                postingDate: string | null;
+                                /** @default null */
+                                counterpartyName: string | null;
+                                /** @default null */
+                                paymentTrace: string | null;
+                                /** @default null */
+                                sourceStatus: string | null;
+                                /** @default null */
+                                sourceDescription: string | null;
+                                /** @default null */
+                                pendingSourceTransactionId: string | null;
+                            };
+                            review: {
+                                /** Format: uuid */
+                                id: string;
+                                /** @enum {string} */
+                                decision: "ACCEPT" | "REJECT";
+                                /** Format: date-time */
+                                createdAt: string;
+                                reviewedByUserId: string;
+                                /** @enum {string} */
+                                reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                /** Format: uuid */
+                                previousAcceptedEvidenceId: string | null;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            transactionId: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            contentHash: string;
+                            /** @enum {string} */
+                            provenance: "MANUAL_UPLOAD";
+                            /** @enum {string} */
+                            bankVerification: "UNVERIFIED";
+                            /** @enum {string} */
+                            settlement: "UNVERIFIED";
+                            payload: {
+                                /** @enum {number} */
+                                schemaVersion: 1;
+                                /** @enum {string} */
+                                evidenceBasis: "BANK_ACCOUNT_TRANSACTION";
+                                sourceSystem: string;
+                                sourceProduct: string;
+                                sourceNamespace: string;
+                                sourceAccountId: string;
+                                sourceTransactionId: string;
+                                sourceRecordId: string;
+                                sourceSequence: number;
+                                /** @default null */
+                                sourceVersion: string | null;
+                                sourceDocumentId: string;
+                                /** Format: date-time */
+                                observedAt: string;
+                                /** @enum {string} */
+                                status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                                /** @enum {string} */
+                                currency: "USD";
+                                amount: string | null;
+                                sourceAmount: string | null;
+                                /** @enum {string} */
+                                sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                                /** @default null */
+                                transactionDate: string | null;
+                                /** @default null */
+                                postingDate: string | null;
+                                /** @default null */
+                                counterpartyName: string | null;
+                                /** @default null */
+                                paymentTrace: string | null;
+                                /** @default null */
+                                sourceStatus: string | null;
+                                /** @default null */
+                                sourceDescription: string | null;
+                                /** @default null */
+                                pendingSourceTransactionId: string | null;
+                            };
+                            review: {
+                                /** Format: uuid */
+                                id: string;
+                                /** @enum {string} */
+                                decision: "ACCEPT" | "REJECT";
+                                /** Format: date-time */
+                                createdAt: string;
+                                reviewedByUserId: string;
+                                /** @enum {string} */
+                                reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                /** Format: uuid */
+                                previousAcceptedEvidenceId: string | null;
+                            } | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cash-evidence/transactions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            transaction: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                latestSourceSequence: number;
+                                latestEvidence: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** Format: uuid */
+                                    transactionId: string;
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                    contentHash: string;
+                                    /** @enum {string} */
+                                    provenance: "MANUAL_UPLOAD";
+                                    /** @enum {string} */
+                                    bankVerification: "UNVERIFIED";
+                                    /** @enum {string} */
+                                    settlement: "UNVERIFIED";
+                                    payload: {
+                                        /** @enum {number} */
+                                        schemaVersion: 1;
+                                        /** @enum {string} */
+                                        evidenceBasis: "BANK_ACCOUNT_TRANSACTION";
+                                        sourceSystem: string;
+                                        sourceProduct: string;
+                                        sourceNamespace: string;
+                                        sourceAccountId: string;
+                                        sourceTransactionId: string;
+                                        sourceRecordId: string;
+                                        sourceSequence: number;
+                                        /** @default null */
+                                        sourceVersion: string | null;
+                                        sourceDocumentId: string;
+                                        /** Format: date-time */
+                                        observedAt: string;
+                                        /** @enum {string} */
+                                        status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                                        /** @enum {string} */
+                                        currency: "USD";
+                                        amount: string | null;
+                                        sourceAmount: string | null;
+                                        /** @enum {string} */
+                                        sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                                        /** @default null */
+                                        transactionDate: string | null;
+                                        /** @default null */
+                                        postingDate: string | null;
+                                        /** @default null */
+                                        counterpartyName: string | null;
+                                        /** @default null */
+                                        paymentTrace: string | null;
+                                        /** @default null */
+                                        sourceStatus: string | null;
+                                        /** @default null */
+                                        sourceDescription: string | null;
+                                        /** @default null */
+                                        pendingSourceTransactionId: string | null;
+                                    };
+                                    review: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        /** @enum {string} */
+                                        decision: "ACCEPT" | "REJECT";
+                                        /** Format: date-time */
+                                        createdAt: string;
+                                        reviewedByUserId: string;
+                                        /** @enum {string} */
+                                        reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                        /** Format: uuid */
+                                        previousAcceptedEvidenceId: string | null;
+                                    } | null;
+                                };
+                                currentAcceptedEvidence: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** Format: uuid */
+                                    transactionId: string;
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                    contentHash: string;
+                                    /** @enum {string} */
+                                    provenance: "MANUAL_UPLOAD";
+                                    /** @enum {string} */
+                                    bankVerification: "UNVERIFIED";
+                                    /** @enum {string} */
+                                    settlement: "UNVERIFIED";
+                                    payload: {
+                                        /** @enum {number} */
+                                        schemaVersion: 1;
+                                        /** @enum {string} */
+                                        evidenceBasis: "BANK_ACCOUNT_TRANSACTION";
+                                        sourceSystem: string;
+                                        sourceProduct: string;
+                                        sourceNamespace: string;
+                                        sourceAccountId: string;
+                                        sourceTransactionId: string;
+                                        sourceRecordId: string;
+                                        sourceSequence: number;
+                                        /** @default null */
+                                        sourceVersion: string | null;
+                                        sourceDocumentId: string;
+                                        /** Format: date-time */
+                                        observedAt: string;
+                                        /** @enum {string} */
+                                        status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                                        /** @enum {string} */
+                                        currency: "USD";
+                                        amount: string | null;
+                                        sourceAmount: string | null;
+                                        /** @enum {string} */
+                                        sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                                        /** @default null */
+                                        transactionDate: string | null;
+                                        /** @default null */
+                                        postingDate: string | null;
+                                        /** @default null */
+                                        counterpartyName: string | null;
+                                        /** @default null */
+                                        paymentTrace: string | null;
+                                        /** @default null */
+                                        sourceStatus: string | null;
+                                        /** @default null */
+                                        sourceDescription: string | null;
+                                        /** @default null */
+                                        pendingSourceTransactionId: string | null;
+                                    };
+                                    review: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        /** @enum {string} */
+                                        decision: "ACCEPT" | "REJECT";
+                                        /** Format: date-time */
+                                        createdAt: string;
+                                        reviewedByUserId: string;
+                                        /** @enum {string} */
+                                        reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                        /** Format: uuid */
+                                        previousAcceptedEvidenceId: string | null;
+                                    } | null;
+                                } | null;
+                                /** @enum {string} */
+                                freshness: "CURRENT" | "STALE" | "UNREVIEWED";
+                            };
+                            items: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                transactionId: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                contentHash: string;
+                                /** @enum {string} */
+                                provenance: "MANUAL_UPLOAD";
+                                /** @enum {string} */
+                                bankVerification: "UNVERIFIED";
+                                /** @enum {string} */
+                                settlement: "UNVERIFIED";
+                                payload: {
+                                    /** @enum {number} */
+                                    schemaVersion: 1;
+                                    /** @enum {string} */
+                                    evidenceBasis: "BANK_ACCOUNT_TRANSACTION";
+                                    sourceSystem: string;
+                                    sourceProduct: string;
+                                    sourceNamespace: string;
+                                    sourceAccountId: string;
+                                    sourceTransactionId: string;
+                                    sourceRecordId: string;
+                                    sourceSequence: number;
+                                    /** @default null */
+                                    sourceVersion: string | null;
+                                    sourceDocumentId: string;
+                                    /** Format: date-time */
+                                    observedAt: string;
+                                    /** @enum {string} */
+                                    status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                                    /** @enum {string} */
+                                    currency: "USD";
+                                    amount: string | null;
+                                    sourceAmount: string | null;
+                                    /** @enum {string} */
+                                    sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                                    /** @default null */
+                                    transactionDate: string | null;
+                                    /** @default null */
+                                    postingDate: string | null;
+                                    /** @default null */
+                                    counterpartyName: string | null;
+                                    /** @default null */
+                                    paymentTrace: string | null;
+                                    /** @default null */
+                                    sourceStatus: string | null;
+                                    /** @default null */
+                                    sourceDescription: string | null;
+                                    /** @default null */
+                                    pendingSourceTransactionId: string | null;
+                                };
+                                review: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** @enum {string} */
+                                    decision: "ACCEPT" | "REJECT";
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                    reviewedByUserId: string;
+                                    /** @enum {string} */
+                                    reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                    /** Format: uuid */
+                                    previousAcceptedEvidenceId: string | null;
+                                } | null;
+                            }[];
+                            nextCursor: string | null;
+                            hasMore: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cash-evidence/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            evidence: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                transactionId: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                contentHash: string;
+                                /** @enum {string} */
+                                provenance: "MANUAL_UPLOAD";
+                                /** @enum {string} */
+                                bankVerification: "UNVERIFIED";
+                                /** @enum {string} */
+                                settlement: "UNVERIFIED";
+                                payload: {
+                                    /** @enum {number} */
+                                    schemaVersion: 1;
+                                    /** @enum {string} */
+                                    evidenceBasis: "BANK_ACCOUNT_TRANSACTION";
+                                    sourceSystem: string;
+                                    sourceProduct: string;
+                                    sourceNamespace: string;
+                                    sourceAccountId: string;
+                                    sourceTransactionId: string;
+                                    sourceRecordId: string;
+                                    sourceSequence: number;
+                                    /** @default null */
+                                    sourceVersion: string | null;
+                                    sourceDocumentId: string;
+                                    /** Format: date-time */
+                                    observedAt: string;
+                                    /** @enum {string} */
+                                    status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                                    /** @enum {string} */
+                                    currency: "USD";
+                                    amount: string | null;
+                                    sourceAmount: string | null;
+                                    /** @enum {string} */
+                                    sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                                    /** @default null */
+                                    transactionDate: string | null;
+                                    /** @default null */
+                                    postingDate: string | null;
+                                    /** @default null */
+                                    counterpartyName: string | null;
+                                    /** @default null */
+                                    paymentTrace: string | null;
+                                    /** @default null */
+                                    sourceStatus: string | null;
+                                    /** @default null */
+                                    sourceDescription: string | null;
+                                    /** @default null */
+                                    pendingSourceTransactionId: string | null;
+                                };
+                                review: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** @enum {string} */
+                                    decision: "ACCEPT" | "REJECT";
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                    reviewedByUserId: string;
+                                    /** @enum {string} */
+                                    reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                    /** Format: uuid */
+                                    previousAcceptedEvidenceId: string | null;
+                                } | null;
+                            };
+                            currentAcceptedEvidence: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                transactionId: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                contentHash: string;
+                                /** @enum {string} */
+                                provenance: "MANUAL_UPLOAD";
+                                /** @enum {string} */
+                                bankVerification: "UNVERIFIED";
+                                /** @enum {string} */
+                                settlement: "UNVERIFIED";
+                                payload: {
+                                    /** @enum {number} */
+                                    schemaVersion: 1;
+                                    /** @enum {string} */
+                                    evidenceBasis: "BANK_ACCOUNT_TRANSACTION";
+                                    sourceSystem: string;
+                                    sourceProduct: string;
+                                    sourceNamespace: string;
+                                    sourceAccountId: string;
+                                    sourceTransactionId: string;
+                                    sourceRecordId: string;
+                                    sourceSequence: number;
+                                    /** @default null */
+                                    sourceVersion: string | null;
+                                    sourceDocumentId: string;
+                                    /** Format: date-time */
+                                    observedAt: string;
+                                    /** @enum {string} */
+                                    status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                                    /** @enum {string} */
+                                    currency: "USD";
+                                    amount: string | null;
+                                    sourceAmount: string | null;
+                                    /** @enum {string} */
+                                    sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                                    /** @default null */
+                                    transactionDate: string | null;
+                                    /** @default null */
+                                    postingDate: string | null;
+                                    /** @default null */
+                                    counterpartyName: string | null;
+                                    /** @default null */
+                                    paymentTrace: string | null;
+                                    /** @default null */
+                                    sourceStatus: string | null;
+                                    /** @default null */
+                                    sourceDescription: string | null;
+                                    /** @default null */
+                                    pendingSourceTransactionId: string | null;
+                                };
+                                review: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** @enum {string} */
+                                    decision: "ACCEPT" | "REJECT";
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                    reviewedByUserId: string;
+                                    /** @enum {string} */
+                                    reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                    /** Format: uuid */
+                                    previousAcceptedEvidenceId: string | null;
+                                } | null;
+                            } | null;
+                            latestSourceSequence: number;
+                            reviewToken: string;
+                            ledgerVersion: string;
+                            blockers: ("ALREADY_REVIEWED" | "NEWER_SOURCE_EVIDENCE" | "POSTED_REPLACEMENT_OVERLAP" | "PENDING_LINK_CHANGED" | "SOURCE_LINK_LIMIT")[];
+                            priorIncludedAmount: string | null;
+                            nextIncludedAmount: string | null;
+                            /** @enum {string} */
+                            bankVerification: "UNVERIFIED";
+                            /** @enum {string} */
+                            settlement: "UNVERIFIED";
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cash-evidence/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        decision: "ACCEPT" | "REJECT";
+                        reviewToken: string;
+                        /** Format: uuid */
+                        idempotencyKey: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            transactionId: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            contentHash: string;
+                            /** @enum {string} */
+                            provenance: "MANUAL_UPLOAD";
+                            /** @enum {string} */
+                            bankVerification: "UNVERIFIED";
+                            /** @enum {string} */
+                            settlement: "UNVERIFIED";
+                            payload: {
+                                /** @enum {number} */
+                                schemaVersion: 1;
+                                /** @enum {string} */
+                                evidenceBasis: "BANK_ACCOUNT_TRANSACTION";
+                                sourceSystem: string;
+                                sourceProduct: string;
+                                sourceNamespace: string;
+                                sourceAccountId: string;
+                                sourceTransactionId: string;
+                                sourceRecordId: string;
+                                sourceSequence: number;
+                                /** @default null */
+                                sourceVersion: string | null;
+                                sourceDocumentId: string;
+                                /** Format: date-time */
+                                observedAt: string;
+                                /** @enum {string} */
+                                status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                                /** @enum {string} */
+                                currency: "USD";
+                                amount: string | null;
+                                sourceAmount: string | null;
+                                /** @enum {string} */
+                                sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                                /** @default null */
+                                transactionDate: string | null;
+                                /** @default null */
+                                postingDate: string | null;
+                                /** @default null */
+                                counterpartyName: string | null;
+                                /** @default null */
+                                paymentTrace: string | null;
+                                /** @default null */
+                                sourceStatus: string | null;
+                                /** @default null */
+                                sourceDescription: string | null;
+                                /** @default null */
+                                pendingSourceTransactionId: string | null;
+                            };
+                            review: {
+                                /** Format: uuid */
+                                id: string;
+                                /** @enum {string} */
+                                decision: "ACCEPT" | "REJECT";
+                                /** Format: date-time */
+                                createdAt: string;
+                                reviewedByUserId: string;
+                                /** @enum {string} */
+                                reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                /** Format: uuid */
+                                previousAcceptedEvidenceId: string | null;
+                            } | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/observations/{id}/regeneration-preview": {
         parameters: {
             query?: never;

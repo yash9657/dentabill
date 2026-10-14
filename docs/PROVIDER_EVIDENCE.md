@@ -13,6 +13,24 @@ Evidence labels:
 
 ## Local implementation evidence added after the baseline
 
+FW-44 now adds manual account-level source transactions, ordered revision history, fresh biller
+review and separate per-account source-posted totals (ADR-074). Current accepted POSTED evidence
+contributes once; pending/unknown/removed/stale data does not. Historical pending replacement
+identity prevents double counting across IDs. Fixed MANUAL_UPLOAD provenance and UNVERIFIED
+bank/settlement states remain explicit. This is **repository/local synthetic evidence**, not a
+bank connector, bank balance, cash-to-claim allocation or PMS posting integration.
+Additive migration27 closes direct-SQL/API Unicode token mismatches; local tests cover exact
+UTF-16 boundaries, malformed tokens, retained cash/review records and migration failure rollback.
+This strengthens local evidence admission only; it adds no external provider verification.
+[Plaid Transactions lifecycle](https://plaid.com/docs/transactions/transactions-data/) documents
+replacements and changes/removals; [API sign convention](https://plaid.com/docs/api/products/transactions/)
+is preserved in original source amounts. Its [Transfer product](https://plaid.com/docs/transfer/reconciling-transfers/)
+has different status semantics. [Open Dental deposits](https://www.opendental.com/site/apideposits.html)
+and [reconciliation](https://www.opendental.com/manual/reconcile.html) distinguish PMS grouping
+from bank evidence. Future contracted adapters need complete sync-window/checkpoint handling,
+real source authentication, batch-net/gross-claim/provider-adjustment reconciliation and actual
+posting receipts. No financial workflow is marked complete from these fixtures.
+
 FW-21 now includes custom remittance JSON import and biller review (ADR-073), immutable
 payer-report amounts, explicit line allocations, independently signed adjustments and partial
 reversals bounded against original components. Cash receipt, posting and settlement stay

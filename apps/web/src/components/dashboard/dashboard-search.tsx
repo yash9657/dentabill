@@ -4,6 +4,7 @@ import {
   ArrowRight,
   FileText,
   LayoutDashboard,
+  Landmark,
   PhoneCall,
   Search,
   Settings,
@@ -38,6 +39,12 @@ const destinations = [
     description: 'Live calls and call history',
     href: '/dashboard/calls',
     icon: PhoneCall,
+  },
+  {
+    label: 'Cash evidence',
+    description: 'Import and review account source records',
+    href: '/dashboard/cash-evidence',
+    icon: Landmark,
   },
   {
     label: 'Reports',

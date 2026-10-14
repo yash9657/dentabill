@@ -57,11 +57,46 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/calls/{id}/summary/retry',
   '/v1/webhooks/retell',
   '/v1/ingest/claims',
+  '/v1/cash-evidence',
+  '/v1/cash-evidence/transactions/{id}',
+  '/v1/cash-evidence/{id}/preview',
+  '/v1/cash-evidence/{id}/review',
 ];
 
 describe('OpenAPI ↔ generated types contract', () => {
   it('declares an OpenAPI 3.x document', () => {
     expect(spec.openapi).toMatch(/^3\./);
+  });
+
+  it('preserves cash source revisions, nullable amounts and manual unverified provenance', () => {
+    const properties = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    const preview = spec.paths['/v1/cash-evidence/{id}/preview'];
+    const evidence = [...properties, 'evidence', 'properties'];
+    const payload = [...evidence, 'payload', 'properties'];
+    for (const field of ['amount', 'sourceAmount', 'sourceVersion', 'pendingSourceTransactionId']) {
+      expect(preview).toHaveProperty([...payload, field, 'type'], 'string');
+      expect(preview).toHaveProperty([...payload, field, 'nullable'], true);
+    }
+    expect(preview).toHaveProperty([...payload, 'sourceSequence', 'type'], 'integer');
+    expect(preview).toHaveProperty(
+      [...payload, 'sourceSignConvention', 'enum'],
+      ['CREDIT_POSITIVE', 'DEBIT_POSITIVE'],
+    );
+    expect(preview).toHaveProperty([...evidence, 'provenance', 'enum'], ['MANUAL_UPLOAD']);
+    for (const field of ['bankVerification', 'settlement'])
+      expect(preview).toHaveProperty([...properties, field, 'enum'], ['UNVERIFIED']);
+    expect(spec.paths['/v1/cash-evidence/{id}/review']).toHaveProperty(
+      ['post', 'requestBody', 'content', 'application/json', 'schema', 'required'],
+      ['decision', 'reviewToken', 'idempotencyKey'],
+    );
   });
 
   it('preserves typed nullable remittance identities and unverified financial states', () => {

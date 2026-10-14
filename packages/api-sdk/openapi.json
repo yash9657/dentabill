@@ -7198,6 +7198,3471 @@
         }
       }
     },
+    "/v1/cash-evidence": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                          },
+                          "latestSourceSequence": {
+                            "type": "integer",
+                            "exclusiveMinimum": true,
+                            "maximum": 9007199254740991
+                          },
+                          "latestEvidence": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "transactionId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              },
+                              "contentHash": {
+                                "type": "string"
+                              },
+                              "provenance": {
+                                "type": "string",
+                                "enum": [
+                                  "MANUAL_UPLOAD"
+                                ]
+                              },
+                              "bankVerification": {
+                                "type": "string",
+                                "enum": [
+                                  "UNVERIFIED"
+                                ]
+                              },
+                              "settlement": {
+                                "type": "string",
+                                "enum": [
+                                  "UNVERIFIED"
+                                ]
+                              },
+                              "payload": {
+                                "type": "object",
+                                "properties": {
+                                  "schemaVersion": {
+                                    "type": "number",
+                                    "enum": [
+                                      1
+                                    ]
+                                  },
+                                  "evidenceBasis": {
+                                    "type": "string",
+                                    "enum": [
+                                      "BANK_ACCOUNT_TRANSACTION"
+                                    ]
+                                  },
+                                  "sourceSystem": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "sourceProduct": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "sourceNamespace": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                                  },
+                                  "sourceAccountId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "sourceTransactionId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "sourceRecordId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "sourceSequence": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 2147483647
+                                  },
+                                  "sourceVersion": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "sourceDocumentId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "observedAt": {
+                                    "type": "string",
+                                    "maxLength": 64,
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "PENDING",
+                                      "POSTED",
+                                      "REMOVED",
+                                      "UNKNOWN"
+                                    ]
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "enum": [
+                                      "USD"
+                                    ]
+                                  },
+                                  "amount": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "maxLength": 13,
+                                    "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                                  },
+                                  "sourceAmount": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "maxLength": 13,
+                                    "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                                  },
+                                  "sourceSignConvention": {
+                                    "type": "string",
+                                    "enum": [
+                                      "CREDIT_POSITIVE",
+                                      "DEBIT_POSITIVE"
+                                    ]
+                                  },
+                                  "transactionDate": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                                  },
+                                  "postingDate": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                                  },
+                                  "counterpartyName": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "paymentTrace": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "sourceStatus": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "sourceDescription": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  },
+                                  "pendingSourceTransactionId": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  }
+                                },
+                                "required": [
+                                  "schemaVersion",
+                                  "evidenceBasis",
+                                  "sourceSystem",
+                                  "sourceProduct",
+                                  "sourceNamespace",
+                                  "sourceAccountId",
+                                  "sourceTransactionId",
+                                  "sourceRecordId",
+                                  "sourceSequence",
+                                  "sourceVersion",
+                                  "sourceDocumentId",
+                                  "observedAt",
+                                  "status",
+                                  "currency",
+                                  "amount",
+                                  "sourceAmount",
+                                  "sourceSignConvention",
+                                  "transactionDate",
+                                  "postingDate",
+                                  "counterpartyName",
+                                  "paymentTrace",
+                                  "sourceStatus",
+                                  "sourceDescription",
+                                  "pendingSourceTransactionId"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "review": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "decision": {
+                                    "type": "string",
+                                    "enum": [
+                                      "ACCEPT",
+                                      "REJECT"
+                                    ]
+                                  },
+                                  "createdAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                  },
+                                  "reviewedByUserId": {
+                                    "type": "string"
+                                  },
+                                  "reviewedByRole": {
+                                    "type": "string",
+                                    "enum": [
+                                      "OWNER",
+                                      "ADMIN",
+                                      "BILLING_STAFF"
+                                    ]
+                                  },
+                                  "previousAcceptedEvidenceId": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "decision",
+                                  "createdAt",
+                                  "reviewedByUserId",
+                                  "reviewedByRole",
+                                  "previousAcceptedEvidenceId"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "transactionId",
+                              "createdAt",
+                              "contentHash",
+                              "provenance",
+                              "bankVerification",
+                              "settlement",
+                              "payload",
+                              "review"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "currentAcceptedEvidence": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "transactionId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              },
+                              "contentHash": {
+                                "type": "string"
+                              },
+                              "provenance": {
+                                "type": "string",
+                                "enum": [
+                                  "MANUAL_UPLOAD"
+                                ]
+                              },
+                              "bankVerification": {
+                                "type": "string",
+                                "enum": [
+                                  "UNVERIFIED"
+                                ]
+                              },
+                              "settlement": {
+                                "type": "string",
+                                "enum": [
+                                  "UNVERIFIED"
+                                ]
+                              },
+                              "payload": {
+                                "type": "object",
+                                "properties": {
+                                  "schemaVersion": {
+                                    "type": "number",
+                                    "enum": [
+                                      1
+                                    ]
+                                  },
+                                  "evidenceBasis": {
+                                    "type": "string",
+                                    "enum": [
+                                      "BANK_ACCOUNT_TRANSACTION"
+                                    ]
+                                  },
+                                  "sourceSystem": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "sourceProduct": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "sourceNamespace": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                                  },
+                                  "sourceAccountId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "sourceTransactionId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "sourceRecordId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "sourceSequence": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 2147483647
+                                  },
+                                  "sourceVersion": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "sourceDocumentId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "observedAt": {
+                                    "type": "string",
+                                    "maxLength": 64,
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "PENDING",
+                                      "POSTED",
+                                      "REMOVED",
+                                      "UNKNOWN"
+                                    ]
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "enum": [
+                                      "USD"
+                                    ]
+                                  },
+                                  "amount": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "maxLength": 13,
+                                    "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                                  },
+                                  "sourceAmount": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "maxLength": 13,
+                                    "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                                  },
+                                  "sourceSignConvention": {
+                                    "type": "string",
+                                    "enum": [
+                                      "CREDIT_POSITIVE",
+                                      "DEBIT_POSITIVE"
+                                    ]
+                                  },
+                                  "transactionDate": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                                  },
+                                  "postingDate": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                                  },
+                                  "counterpartyName": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "paymentTrace": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "sourceStatus": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "sourceDescription": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  },
+                                  "pendingSourceTransactionId": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  }
+                                },
+                                "required": [
+                                  "schemaVersion",
+                                  "evidenceBasis",
+                                  "sourceSystem",
+                                  "sourceProduct",
+                                  "sourceNamespace",
+                                  "sourceAccountId",
+                                  "sourceTransactionId",
+                                  "sourceRecordId",
+                                  "sourceSequence",
+                                  "sourceVersion",
+                                  "sourceDocumentId",
+                                  "observedAt",
+                                  "status",
+                                  "currency",
+                                  "amount",
+                                  "sourceAmount",
+                                  "sourceSignConvention",
+                                  "transactionDate",
+                                  "postingDate",
+                                  "counterpartyName",
+                                  "paymentTrace",
+                                  "sourceStatus",
+                                  "sourceDescription",
+                                  "pendingSourceTransactionId"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "review": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "decision": {
+                                    "type": "string",
+                                    "enum": [
+                                      "ACCEPT",
+                                      "REJECT"
+                                    ]
+                                  },
+                                  "createdAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                  },
+                                  "reviewedByUserId": {
+                                    "type": "string"
+                                  },
+                                  "reviewedByRole": {
+                                    "type": "string",
+                                    "enum": [
+                                      "OWNER",
+                                      "ADMIN",
+                                      "BILLING_STAFF"
+                                    ]
+                                  },
+                                  "previousAcceptedEvidenceId": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "decision",
+                                  "createdAt",
+                                  "reviewedByUserId",
+                                  "reviewedByRole",
+                                  "previousAcceptedEvidenceId"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "transactionId",
+                              "createdAt",
+                              "contentHash",
+                              "provenance",
+                              "bankVerification",
+                              "settlement",
+                              "payload",
+                              "review"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "freshness": {
+                            "type": "string",
+                            "enum": [
+                              "CURRENT",
+                              "STALE",
+                              "UNREVIEWED"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "createdAt",
+                          "latestSourceSequence",
+                          "latestEvidence",
+                          "currentAcceptedEvidence",
+                          "freshness"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "accounts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "sourceSystem": {
+                            "type": "string"
+                          },
+                          "sourceProduct": {
+                            "type": "string"
+                          },
+                          "sourceNamespace": {
+                            "type": "string"
+                          },
+                          "sourceAccountId": {
+                            "type": "string"
+                          },
+                          "postedCreditAmount": {
+                            "type": "string",
+                            "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                          },
+                          "postedDebitAmount": {
+                            "type": "string",
+                            "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                          },
+                          "postedNetAmount": {
+                            "type": "string",
+                            "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                          },
+                          "transactionCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "postedCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "pendingCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "removedCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "unknownCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "unreviewedCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "staleCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "reviewNeededCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "bankVerification": {
+                            "type": "string",
+                            "enum": [
+                              "UNVERIFIED"
+                            ]
+                          },
+                          "settlement": {
+                            "type": "string",
+                            "enum": [
+                              "UNVERIFIED"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "sourceSystem",
+                          "sourceProduct",
+                          "sourceNamespace",
+                          "sourceAccountId",
+                          "postedCreditAmount",
+                          "postedDebitAmount",
+                          "postedNetAmount",
+                          "transactionCount",
+                          "postedCount",
+                          "pendingCount",
+                          "removedCount",
+                          "unknownCount",
+                          "unreviewedCount",
+                          "staleCount",
+                          "reviewNeededCount",
+                          "bankVerification",
+                          "settlement"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "accounts",
+                    "nextCursor",
+                    "hasMore"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "description": "Import one manual version 1 bank-account source observation. Does not verify bank receipt, allocate claims, post payments or establish settlement.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "schemaVersion": {
+                    "type": "number",
+                    "enum": [
+                      1
+                    ]
+                  },
+                  "evidenceBasis": {
+                    "type": "string",
+                    "enum": [
+                      "BANK_ACCOUNT_TRANSACTION"
+                    ]
+                  },
+                  "sourceSystem": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "sourceProduct": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "sourceNamespace": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                  },
+                  "sourceAccountId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "sourceTransactionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "sourceRecordId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "sourceSequence": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483647
+                  },
+                  "sourceVersion": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "sourceDocumentId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "observedAt": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "PENDING",
+                      "POSTED",
+                      "REMOVED",
+                      "UNKNOWN"
+                    ]
+                  },
+                  "currency": {
+                    "type": "string",
+                    "enum": [
+                      "USD"
+                    ]
+                  },
+                  "amount": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 13,
+                    "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                  },
+                  "sourceAmount": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 13,
+                    "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                  },
+                  "sourceSignConvention": {
+                    "type": "string",
+                    "enum": [
+                      "CREDIT_POSITIVE",
+                      "DEBIT_POSITIVE"
+                    ]
+                  },
+                  "transactionDate": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                  },
+                  "postingDate": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                  },
+                  "counterpartyName": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "paymentTrace": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "sourceStatus": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "sourceDescription": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "pendingSourceTransactionId": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "schemaVersion",
+                  "evidenceBasis",
+                  "sourceSystem",
+                  "sourceProduct",
+                  "sourceNamespace",
+                  "sourceAccountId",
+                  "sourceTransactionId",
+                  "sourceRecordId",
+                  "sourceSequence",
+                  "sourceDocumentId",
+                  "observedAt",
+                  "status",
+                  "currency",
+                  "amount",
+                  "sourceAmount",
+                  "sourceSignConvention"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "transactionId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "contentHash": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "string",
+                      "enum": [
+                        "MANUAL_UPLOAD"
+                      ]
+                    },
+                    "bankVerification": {
+                      "type": "string",
+                      "enum": [
+                        "UNVERIFIED"
+                      ]
+                    },
+                    "settlement": {
+                      "type": "string",
+                      "enum": [
+                        "UNVERIFIED"
+                      ]
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "evidenceBasis": {
+                          "type": "string",
+                          "enum": [
+                            "BANK_ACCOUNT_TRANSACTION"
+                          ]
+                        },
+                        "sourceSystem": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "sourceProduct": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "sourceNamespace": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                        },
+                        "sourceAccountId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceTransactionId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceRecordId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceSequence": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 2147483647
+                        },
+                        "sourceVersion": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceDocumentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "observedAt": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "PENDING",
+                            "POSTED",
+                            "REMOVED",
+                            "UNKNOWN"
+                          ]
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD"
+                          ]
+                        },
+                        "amount": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 13,
+                          "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                        },
+                        "sourceAmount": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 13,
+                          "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                        },
+                        "sourceSignConvention": {
+                          "type": "string",
+                          "enum": [
+                            "CREDIT_POSITIVE",
+                            "DEBIT_POSITIVE"
+                          ]
+                        },
+                        "transactionDate": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                        },
+                        "postingDate": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                        },
+                        "counterpartyName": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "paymentTrace": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceStatus": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "sourceDescription": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        },
+                        "pendingSourceTransactionId": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "evidenceBasis",
+                        "sourceSystem",
+                        "sourceProduct",
+                        "sourceNamespace",
+                        "sourceAccountId",
+                        "sourceTransactionId",
+                        "sourceRecordId",
+                        "sourceSequence",
+                        "sourceVersion",
+                        "sourceDocumentId",
+                        "observedAt",
+                        "status",
+                        "currency",
+                        "amount",
+                        "sourceAmount",
+                        "sourceSignConvention",
+                        "transactionDate",
+                        "postingDate",
+                        "counterpartyName",
+                        "paymentTrace",
+                        "sourceStatus",
+                        "sourceDescription",
+                        "pendingSourceTransactionId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "review": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "decision": {
+                          "type": "string",
+                          "enum": [
+                            "ACCEPT",
+                            "REJECT"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "reviewedByUserId": {
+                          "type": "string"
+                        },
+                        "reviewedByRole": {
+                          "type": "string",
+                          "enum": [
+                            "OWNER",
+                            "ADMIN",
+                            "BILLING_STAFF"
+                          ]
+                        },
+                        "previousAcceptedEvidenceId": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "decision",
+                        "createdAt",
+                        "reviewedByUserId",
+                        "reviewedByRole",
+                        "previousAcceptedEvidenceId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "transactionId",
+                    "createdAt",
+                    "contentHash",
+                    "provenance",
+                    "bankVerification",
+                    "settlement",
+                    "payload",
+                    "review"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "transactionId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "contentHash": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "string",
+                      "enum": [
+                        "MANUAL_UPLOAD"
+                      ]
+                    },
+                    "bankVerification": {
+                      "type": "string",
+                      "enum": [
+                        "UNVERIFIED"
+                      ]
+                    },
+                    "settlement": {
+                      "type": "string",
+                      "enum": [
+                        "UNVERIFIED"
+                      ]
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "evidenceBasis": {
+                          "type": "string",
+                          "enum": [
+                            "BANK_ACCOUNT_TRANSACTION"
+                          ]
+                        },
+                        "sourceSystem": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "sourceProduct": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "sourceNamespace": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                        },
+                        "sourceAccountId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceTransactionId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceRecordId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceSequence": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 2147483647
+                        },
+                        "sourceVersion": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceDocumentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "observedAt": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "PENDING",
+                            "POSTED",
+                            "REMOVED",
+                            "UNKNOWN"
+                          ]
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD"
+                          ]
+                        },
+                        "amount": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 13,
+                          "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                        },
+                        "sourceAmount": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 13,
+                          "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                        },
+                        "sourceSignConvention": {
+                          "type": "string",
+                          "enum": [
+                            "CREDIT_POSITIVE",
+                            "DEBIT_POSITIVE"
+                          ]
+                        },
+                        "transactionDate": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                        },
+                        "postingDate": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                        },
+                        "counterpartyName": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "paymentTrace": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceStatus": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "sourceDescription": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        },
+                        "pendingSourceTransactionId": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "evidenceBasis",
+                        "sourceSystem",
+                        "sourceProduct",
+                        "sourceNamespace",
+                        "sourceAccountId",
+                        "sourceTransactionId",
+                        "sourceRecordId",
+                        "sourceSequence",
+                        "sourceVersion",
+                        "sourceDocumentId",
+                        "observedAt",
+                        "status",
+                        "currency",
+                        "amount",
+                        "sourceAmount",
+                        "sourceSignConvention",
+                        "transactionDate",
+                        "postingDate",
+                        "counterpartyName",
+                        "paymentTrace",
+                        "sourceStatus",
+                        "sourceDescription",
+                        "pendingSourceTransactionId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "review": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "decision": {
+                          "type": "string",
+                          "enum": [
+                            "ACCEPT",
+                            "REJECT"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "reviewedByUserId": {
+                          "type": "string"
+                        },
+                        "reviewedByRole": {
+                          "type": "string",
+                          "enum": [
+                            "OWNER",
+                            "ADMIN",
+                            "BILLING_STAFF"
+                          ]
+                        },
+                        "previousAcceptedEvidenceId": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "decision",
+                        "createdAt",
+                        "reviewedByUserId",
+                        "reviewedByRole",
+                        "previousAcceptedEvidenceId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "transactionId",
+                    "createdAt",
+                    "contentHash",
+                    "provenance",
+                    "bankVerification",
+                    "settlement",
+                    "payload",
+                    "review"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cash-evidence/transactions/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transaction": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "latestSourceSequence": {
+                          "type": "integer",
+                          "exclusiveMinimum": true,
+                          "maximum": 9007199254740991
+                        },
+                        "latestEvidence": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "transactionId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "contentHash": {
+                              "type": "string"
+                            },
+                            "provenance": {
+                              "type": "string",
+                              "enum": [
+                                "MANUAL_UPLOAD"
+                              ]
+                            },
+                            "bankVerification": {
+                              "type": "string",
+                              "enum": [
+                                "UNVERIFIED"
+                              ]
+                            },
+                            "settlement": {
+                              "type": "string",
+                              "enum": [
+                                "UNVERIFIED"
+                              ]
+                            },
+                            "payload": {
+                              "type": "object",
+                              "properties": {
+                                "schemaVersion": {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                "evidenceBasis": {
+                                  "type": "string",
+                                  "enum": [
+                                    "BANK_ACCOUNT_TRANSACTION"
+                                  ]
+                                },
+                                "sourceSystem": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 80
+                                },
+                                "sourceProduct": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 80
+                                },
+                                "sourceNamespace": {
+                                  "type": "string",
+                                  "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                                },
+                                "sourceAccountId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "sourceTransactionId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "sourceRecordId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "sourceSequence": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 2147483647
+                                },
+                                "sourceVersion": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "sourceDocumentId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "observedAt": {
+                                  "type": "string",
+                                  "maxLength": 64,
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "PENDING",
+                                    "POSTED",
+                                    "REMOVED",
+                                    "UNKNOWN"
+                                  ]
+                                },
+                                "currency": {
+                                  "type": "string",
+                                  "enum": [
+                                    "USD"
+                                  ]
+                                },
+                                "amount": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "maxLength": 13,
+                                  "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                                },
+                                "sourceAmount": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "maxLength": 13,
+                                  "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                                },
+                                "sourceSignConvention": {
+                                  "type": "string",
+                                  "enum": [
+                                    "CREDIT_POSITIVE",
+                                    "DEBIT_POSITIVE"
+                                  ]
+                                },
+                                "transactionDate": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                                },
+                                "postingDate": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                                },
+                                "counterpartyName": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "paymentTrace": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "sourceStatus": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 80
+                                },
+                                "sourceDescription": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 500
+                                },
+                                "pendingSourceTransactionId": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "schemaVersion",
+                                "evidenceBasis",
+                                "sourceSystem",
+                                "sourceProduct",
+                                "sourceNamespace",
+                                "sourceAccountId",
+                                "sourceTransactionId",
+                                "sourceRecordId",
+                                "sourceSequence",
+                                "sourceVersion",
+                                "sourceDocumentId",
+                                "observedAt",
+                                "status",
+                                "currency",
+                                "amount",
+                                "sourceAmount",
+                                "sourceSignConvention",
+                                "transactionDate",
+                                "postingDate",
+                                "counterpartyName",
+                                "paymentTrace",
+                                "sourceStatus",
+                                "sourceDescription",
+                                "pendingSourceTransactionId"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "review": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "decision": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ACCEPT",
+                                    "REJECT"
+                                  ]
+                                },
+                                "createdAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                },
+                                "reviewedByUserId": {
+                                  "type": "string"
+                                },
+                                "reviewedByRole": {
+                                  "type": "string",
+                                  "enum": [
+                                    "OWNER",
+                                    "ADMIN",
+                                    "BILLING_STAFF"
+                                  ]
+                                },
+                                "previousAcceptedEvidenceId": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "decision",
+                                "createdAt",
+                                "reviewedByUserId",
+                                "reviewedByRole",
+                                "previousAcceptedEvidenceId"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "transactionId",
+                            "createdAt",
+                            "contentHash",
+                            "provenance",
+                            "bankVerification",
+                            "settlement",
+                            "payload",
+                            "review"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "currentAcceptedEvidence": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "transactionId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "contentHash": {
+                              "type": "string"
+                            },
+                            "provenance": {
+                              "type": "string",
+                              "enum": [
+                                "MANUAL_UPLOAD"
+                              ]
+                            },
+                            "bankVerification": {
+                              "type": "string",
+                              "enum": [
+                                "UNVERIFIED"
+                              ]
+                            },
+                            "settlement": {
+                              "type": "string",
+                              "enum": [
+                                "UNVERIFIED"
+                              ]
+                            },
+                            "payload": {
+                              "type": "object",
+                              "properties": {
+                                "schemaVersion": {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                "evidenceBasis": {
+                                  "type": "string",
+                                  "enum": [
+                                    "BANK_ACCOUNT_TRANSACTION"
+                                  ]
+                                },
+                                "sourceSystem": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 80
+                                },
+                                "sourceProduct": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 80
+                                },
+                                "sourceNamespace": {
+                                  "type": "string",
+                                  "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                                },
+                                "sourceAccountId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "sourceTransactionId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "sourceRecordId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "sourceSequence": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 2147483647
+                                },
+                                "sourceVersion": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "sourceDocumentId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "observedAt": {
+                                  "type": "string",
+                                  "maxLength": 64,
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "PENDING",
+                                    "POSTED",
+                                    "REMOVED",
+                                    "UNKNOWN"
+                                  ]
+                                },
+                                "currency": {
+                                  "type": "string",
+                                  "enum": [
+                                    "USD"
+                                  ]
+                                },
+                                "amount": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "maxLength": 13,
+                                  "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                                },
+                                "sourceAmount": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "maxLength": 13,
+                                  "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                                },
+                                "sourceSignConvention": {
+                                  "type": "string",
+                                  "enum": [
+                                    "CREDIT_POSITIVE",
+                                    "DEBIT_POSITIVE"
+                                  ]
+                                },
+                                "transactionDate": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                                },
+                                "postingDate": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                                },
+                                "counterpartyName": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "paymentTrace": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "sourceStatus": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 80
+                                },
+                                "sourceDescription": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 500
+                                },
+                                "pendingSourceTransactionId": {
+                                  "default": null,
+                                  "nullable": true,
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "schemaVersion",
+                                "evidenceBasis",
+                                "sourceSystem",
+                                "sourceProduct",
+                                "sourceNamespace",
+                                "sourceAccountId",
+                                "sourceTransactionId",
+                                "sourceRecordId",
+                                "sourceSequence",
+                                "sourceVersion",
+                                "sourceDocumentId",
+                                "observedAt",
+                                "status",
+                                "currency",
+                                "amount",
+                                "sourceAmount",
+                                "sourceSignConvention",
+                                "transactionDate",
+                                "postingDate",
+                                "counterpartyName",
+                                "paymentTrace",
+                                "sourceStatus",
+                                "sourceDescription",
+                                "pendingSourceTransactionId"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "review": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "decision": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ACCEPT",
+                                    "REJECT"
+                                  ]
+                                },
+                                "createdAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                },
+                                "reviewedByUserId": {
+                                  "type": "string"
+                                },
+                                "reviewedByRole": {
+                                  "type": "string",
+                                  "enum": [
+                                    "OWNER",
+                                    "ADMIN",
+                                    "BILLING_STAFF"
+                                  ]
+                                },
+                                "previousAcceptedEvidenceId": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "decision",
+                                "createdAt",
+                                "reviewedByUserId",
+                                "reviewedByRole",
+                                "previousAcceptedEvidenceId"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "transactionId",
+                            "createdAt",
+                            "contentHash",
+                            "provenance",
+                            "bankVerification",
+                            "settlement",
+                            "payload",
+                            "review"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "freshness": {
+                          "type": "string",
+                          "enum": [
+                            "CURRENT",
+                            "STALE",
+                            "UNREVIEWED"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "createdAt",
+                        "latestSourceSequence",
+                        "latestEvidence",
+                        "currentAcceptedEvidence",
+                        "freshness"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "transactionId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                          },
+                          "contentHash": {
+                            "type": "string"
+                          },
+                          "provenance": {
+                            "type": "string",
+                            "enum": [
+                              "MANUAL_UPLOAD"
+                            ]
+                          },
+                          "bankVerification": {
+                            "type": "string",
+                            "enum": [
+                              "UNVERIFIED"
+                            ]
+                          },
+                          "settlement": {
+                            "type": "string",
+                            "enum": [
+                              "UNVERIFIED"
+                            ]
+                          },
+                          "payload": {
+                            "type": "object",
+                            "properties": {
+                              "schemaVersion": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "evidenceBasis": {
+                                "type": "string",
+                                "enum": [
+                                  "BANK_ACCOUNT_TRANSACTION"
+                                ]
+                              },
+                              "sourceSystem": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "sourceProduct": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "sourceNamespace": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                              },
+                              "sourceAccountId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sourceTransactionId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sourceRecordId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sourceSequence": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2147483647
+                              },
+                              "sourceVersion": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sourceDocumentId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "observedAt": {
+                                "type": "string",
+                                "maxLength": 64,
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "PENDING",
+                                  "POSTED",
+                                  "REMOVED",
+                                  "UNKNOWN"
+                                ]
+                              },
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "USD"
+                                ]
+                              },
+                              "amount": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 13,
+                                "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                              },
+                              "sourceAmount": {
+                                "nullable": true,
+                                "type": "string",
+                                "maxLength": 13,
+                                "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                              },
+                              "sourceSignConvention": {
+                                "type": "string",
+                                "enum": [
+                                  "CREDIT_POSITIVE",
+                                  "DEBIT_POSITIVE"
+                                ]
+                              },
+                              "transactionDate": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                              },
+                              "postingDate": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                              },
+                              "counterpartyName": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "paymentTrace": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sourceStatus": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "sourceDescription": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 500
+                              },
+                              "pendingSourceTransactionId": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              }
+                            },
+                            "required": [
+                              "schemaVersion",
+                              "evidenceBasis",
+                              "sourceSystem",
+                              "sourceProduct",
+                              "sourceNamespace",
+                              "sourceAccountId",
+                              "sourceTransactionId",
+                              "sourceRecordId",
+                              "sourceSequence",
+                              "sourceVersion",
+                              "sourceDocumentId",
+                              "observedAt",
+                              "status",
+                              "currency",
+                              "amount",
+                              "sourceAmount",
+                              "sourceSignConvention",
+                              "transactionDate",
+                              "postingDate",
+                              "counterpartyName",
+                              "paymentTrace",
+                              "sourceStatus",
+                              "sourceDescription",
+                              "pendingSourceTransactionId"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "review": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "decision": {
+                                "type": "string",
+                                "enum": [
+                                  "ACCEPT",
+                                  "REJECT"
+                                ]
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              },
+                              "reviewedByUserId": {
+                                "type": "string"
+                              },
+                              "reviewedByRole": {
+                                "type": "string",
+                                "enum": [
+                                  "OWNER",
+                                  "ADMIN",
+                                  "BILLING_STAFF"
+                                ]
+                              },
+                              "previousAcceptedEvidenceId": {
+                                "nullable": true,
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "decision",
+                              "createdAt",
+                              "reviewedByUserId",
+                              "reviewedByRole",
+                              "previousAcceptedEvidenceId"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "transactionId",
+                          "createdAt",
+                          "contentHash",
+                          "provenance",
+                          "bankVerification",
+                          "settlement",
+                          "payload",
+                          "review"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "transaction",
+                    "items",
+                    "nextCursor",
+                    "hasMore"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cash-evidence/{id}/preview": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "evidence": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "transactionId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "contentHash": {
+                          "type": "string"
+                        },
+                        "provenance": {
+                          "type": "string",
+                          "enum": [
+                            "MANUAL_UPLOAD"
+                          ]
+                        },
+                        "bankVerification": {
+                          "type": "string",
+                          "enum": [
+                            "UNVERIFIED"
+                          ]
+                        },
+                        "settlement": {
+                          "type": "string",
+                          "enum": [
+                            "UNVERIFIED"
+                          ]
+                        },
+                        "payload": {
+                          "type": "object",
+                          "properties": {
+                            "schemaVersion": {
+                              "type": "number",
+                              "enum": [
+                                1
+                              ]
+                            },
+                            "evidenceBasis": {
+                              "type": "string",
+                              "enum": [
+                                "BANK_ACCOUNT_TRANSACTION"
+                              ]
+                            },
+                            "sourceSystem": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "sourceProduct": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "sourceNamespace": {
+                              "type": "string",
+                              "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                            },
+                            "sourceAccountId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceTransactionId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceRecordId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceSequence": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 2147483647
+                            },
+                            "sourceVersion": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceDocumentId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "observedAt": {
+                              "type": "string",
+                              "maxLength": 64,
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "PENDING",
+                                "POSTED",
+                                "REMOVED",
+                                "UNKNOWN"
+                              ]
+                            },
+                            "currency": {
+                              "type": "string",
+                              "enum": [
+                                "USD"
+                              ]
+                            },
+                            "amount": {
+                              "nullable": true,
+                              "type": "string",
+                              "maxLength": 13,
+                              "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                            },
+                            "sourceAmount": {
+                              "nullable": true,
+                              "type": "string",
+                              "maxLength": 13,
+                              "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                            },
+                            "sourceSignConvention": {
+                              "type": "string",
+                              "enum": [
+                                "CREDIT_POSITIVE",
+                                "DEBIT_POSITIVE"
+                              ]
+                            },
+                            "transactionDate": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                            },
+                            "postingDate": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                            },
+                            "counterpartyName": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "paymentTrace": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceStatus": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "sourceDescription": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 500
+                            },
+                            "pendingSourceTransactionId": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            }
+                          },
+                          "required": [
+                            "schemaVersion",
+                            "evidenceBasis",
+                            "sourceSystem",
+                            "sourceProduct",
+                            "sourceNamespace",
+                            "sourceAccountId",
+                            "sourceTransactionId",
+                            "sourceRecordId",
+                            "sourceSequence",
+                            "sourceVersion",
+                            "sourceDocumentId",
+                            "observedAt",
+                            "status",
+                            "currency",
+                            "amount",
+                            "sourceAmount",
+                            "sourceSignConvention",
+                            "transactionDate",
+                            "postingDate",
+                            "counterpartyName",
+                            "paymentTrace",
+                            "sourceStatus",
+                            "sourceDescription",
+                            "pendingSourceTransactionId"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "review": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "decision": {
+                              "type": "string",
+                              "enum": [
+                                "ACCEPT",
+                                "REJECT"
+                              ]
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "reviewedByUserId": {
+                              "type": "string"
+                            },
+                            "reviewedByRole": {
+                              "type": "string",
+                              "enum": [
+                                "OWNER",
+                                "ADMIN",
+                                "BILLING_STAFF"
+                              ]
+                            },
+                            "previousAcceptedEvidenceId": {
+                              "nullable": true,
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "decision",
+                            "createdAt",
+                            "reviewedByUserId",
+                            "reviewedByRole",
+                            "previousAcceptedEvidenceId"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "transactionId",
+                        "createdAt",
+                        "contentHash",
+                        "provenance",
+                        "bankVerification",
+                        "settlement",
+                        "payload",
+                        "review"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "currentAcceptedEvidence": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "transactionId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "contentHash": {
+                          "type": "string"
+                        },
+                        "provenance": {
+                          "type": "string",
+                          "enum": [
+                            "MANUAL_UPLOAD"
+                          ]
+                        },
+                        "bankVerification": {
+                          "type": "string",
+                          "enum": [
+                            "UNVERIFIED"
+                          ]
+                        },
+                        "settlement": {
+                          "type": "string",
+                          "enum": [
+                            "UNVERIFIED"
+                          ]
+                        },
+                        "payload": {
+                          "type": "object",
+                          "properties": {
+                            "schemaVersion": {
+                              "type": "number",
+                              "enum": [
+                                1
+                              ]
+                            },
+                            "evidenceBasis": {
+                              "type": "string",
+                              "enum": [
+                                "BANK_ACCOUNT_TRANSACTION"
+                              ]
+                            },
+                            "sourceSystem": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "sourceProduct": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "sourceNamespace": {
+                              "type": "string",
+                              "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                            },
+                            "sourceAccountId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceTransactionId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceRecordId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceSequence": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 2147483647
+                            },
+                            "sourceVersion": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceDocumentId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "observedAt": {
+                              "type": "string",
+                              "maxLength": 64,
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "PENDING",
+                                "POSTED",
+                                "REMOVED",
+                                "UNKNOWN"
+                              ]
+                            },
+                            "currency": {
+                              "type": "string",
+                              "enum": [
+                                "USD"
+                              ]
+                            },
+                            "amount": {
+                              "nullable": true,
+                              "type": "string",
+                              "maxLength": 13,
+                              "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                            },
+                            "sourceAmount": {
+                              "nullable": true,
+                              "type": "string",
+                              "maxLength": 13,
+                              "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                            },
+                            "sourceSignConvention": {
+                              "type": "string",
+                              "enum": [
+                                "CREDIT_POSITIVE",
+                                "DEBIT_POSITIVE"
+                              ]
+                            },
+                            "transactionDate": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                            },
+                            "postingDate": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                            },
+                            "counterpartyName": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "paymentTrace": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceStatus": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "sourceDescription": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 500
+                            },
+                            "pendingSourceTransactionId": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            }
+                          },
+                          "required": [
+                            "schemaVersion",
+                            "evidenceBasis",
+                            "sourceSystem",
+                            "sourceProduct",
+                            "sourceNamespace",
+                            "sourceAccountId",
+                            "sourceTransactionId",
+                            "sourceRecordId",
+                            "sourceSequence",
+                            "sourceVersion",
+                            "sourceDocumentId",
+                            "observedAt",
+                            "status",
+                            "currency",
+                            "amount",
+                            "sourceAmount",
+                            "sourceSignConvention",
+                            "transactionDate",
+                            "postingDate",
+                            "counterpartyName",
+                            "paymentTrace",
+                            "sourceStatus",
+                            "sourceDescription",
+                            "pendingSourceTransactionId"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "review": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "decision": {
+                              "type": "string",
+                              "enum": [
+                                "ACCEPT",
+                                "REJECT"
+                              ]
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "reviewedByUserId": {
+                              "type": "string"
+                            },
+                            "reviewedByRole": {
+                              "type": "string",
+                              "enum": [
+                                "OWNER",
+                                "ADMIN",
+                                "BILLING_STAFF"
+                              ]
+                            },
+                            "previousAcceptedEvidenceId": {
+                              "nullable": true,
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "decision",
+                            "createdAt",
+                            "reviewedByUserId",
+                            "reviewedByRole",
+                            "previousAcceptedEvidenceId"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "transactionId",
+                        "createdAt",
+                        "contentHash",
+                        "provenance",
+                        "bankVerification",
+                        "settlement",
+                        "payload",
+                        "review"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "latestSourceSequence": {
+                      "type": "integer",
+                      "exclusiveMinimum": true,
+                      "maximum": 9007199254740991
+                    },
+                    "reviewToken": {
+                      "type": "string"
+                    },
+                    "ledgerVersion": {
+                      "type": "string"
+                    },
+                    "blockers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "ALREADY_REVIEWED",
+                          "NEWER_SOURCE_EVIDENCE",
+                          "POSTED_REPLACEMENT_OVERLAP",
+                          "PENDING_LINK_CHANGED",
+                          "SOURCE_LINK_LIMIT"
+                        ]
+                      }
+                    },
+                    "priorIncludedAmount": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                    },
+                    "nextIncludedAmount": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                    },
+                    "bankVerification": {
+                      "type": "string",
+                      "enum": [
+                        "UNVERIFIED"
+                      ]
+                    },
+                    "settlement": {
+                      "type": "string",
+                      "enum": [
+                        "UNVERIFIED"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "evidence",
+                    "currentAcceptedEvidence",
+                    "latestSourceSequence",
+                    "reviewToken",
+                    "ledgerVersion",
+                    "blockers",
+                    "priorIncludedAmount",
+                    "nextIncludedAmount",
+                    "bankVerification",
+                    "settlement"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cash-evidence/{id}/review": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "ACCEPT",
+                      "REJECT"
+                    ]
+                  },
+                  "reviewToken": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "decision",
+                  "reviewToken",
+                  "idempotencyKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "transactionId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "contentHash": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "string",
+                      "enum": [
+                        "MANUAL_UPLOAD"
+                      ]
+                    },
+                    "bankVerification": {
+                      "type": "string",
+                      "enum": [
+                        "UNVERIFIED"
+                      ]
+                    },
+                    "settlement": {
+                      "type": "string",
+                      "enum": [
+                        "UNVERIFIED"
+                      ]
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "evidenceBasis": {
+                          "type": "string",
+                          "enum": [
+                            "BANK_ACCOUNT_TRANSACTION"
+                          ]
+                        },
+                        "sourceSystem": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "sourceProduct": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "sourceNamespace": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                        },
+                        "sourceAccountId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceTransactionId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceRecordId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceSequence": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 2147483647
+                        },
+                        "sourceVersion": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceDocumentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "observedAt": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "PENDING",
+                            "POSTED",
+                            "REMOVED",
+                            "UNKNOWN"
+                          ]
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD"
+                          ]
+                        },
+                        "amount": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 13,
+                          "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                        },
+                        "sourceAmount": {
+                          "nullable": true,
+                          "type": "string",
+                          "maxLength": 13,
+                          "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                        },
+                        "sourceSignConvention": {
+                          "type": "string",
+                          "enum": [
+                            "CREDIT_POSITIVE",
+                            "DEBIT_POSITIVE"
+                          ]
+                        },
+                        "transactionDate": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                        },
+                        "postingDate": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                        },
+                        "counterpartyName": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "paymentTrace": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceStatus": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "sourceDescription": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        },
+                        "pendingSourceTransactionId": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "evidenceBasis",
+                        "sourceSystem",
+                        "sourceProduct",
+                        "sourceNamespace",
+                        "sourceAccountId",
+                        "sourceTransactionId",
+                        "sourceRecordId",
+                        "sourceSequence",
+                        "sourceVersion",
+                        "sourceDocumentId",
+                        "observedAt",
+                        "status",
+                        "currency",
+                        "amount",
+                        "sourceAmount",
+                        "sourceSignConvention",
+                        "transactionDate",
+                        "postingDate",
+                        "counterpartyName",
+                        "paymentTrace",
+                        "sourceStatus",
+                        "sourceDescription",
+                        "pendingSourceTransactionId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "review": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "decision": {
+                          "type": "string",
+                          "enum": [
+                            "ACCEPT",
+                            "REJECT"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "reviewedByUserId": {
+                          "type": "string"
+                        },
+                        "reviewedByRole": {
+                          "type": "string",
+                          "enum": [
+                            "OWNER",
+                            "ADMIN",
+                            "BILLING_STAFF"
+                          ]
+                        },
+                        "previousAcceptedEvidenceId": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "decision",
+                        "createdAt",
+                        "reviewedByUserId",
+                        "reviewedByRole",
+                        "previousAcceptedEvidenceId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "transactionId",
+                    "createdAt",
+                    "contentHash",
+                    "provenance",
+                    "bankVerification",
+                    "settlement",
+                    "payload",
+                    "review"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/observations/{id}/regeneration-preview": {
       "get": {
         "description": "Owner/Admin review of an exact new-generation snapshot and any already saved authorization. Token allowance is an operational bound, not a dollar quote.",

@@ -571,3 +571,35 @@ revocation, practice switching, response-size limits, audit privacy and backup/r
 closed remittance failure codes and transaction latency, never raw source JSON or Prisma errors.
 Rollback disables the new workflow/UI while preserving all evidence and reviews; do not drop
 ledger tables or bypass constraints. Current tests are synthetic local evidence, not AWS end-to-end proof.
+
+### Cash source evidence expansion (ADR-074; not deployed)
+
+Migration27 `20261014050000_cash_source_token_bounds` follows26 and adds cash-only UTF-16,
+ECMAScript trimming and Unicode category admission checks. Both migrations have run only on
+localhost `dentabill_test` and `dentabill_w0_identity`; production rollout remains unapproved.
+Apply27 before exposing the new cash API. It validates existing rows within one transaction;
+incompatible retained tokens fail the migration without rewriting financial evidence. Investigate
+any failure before retrying; do not bypass validation, rewrite applied26 or alter shared helpers.
+Local final verification: cash DB76, tenant32, focusedAPI50, fullAPI702 and affected lint/types30
+pass; API and both Lambda builds pass. See session context for exact logs and the synthetic
+browser/build limitations.
+
+Migration26 `20261014040000_cash_source_evidence` follows25. It creates three immutable cash-source
+tables, scoped restrictive references, canonical/admission checks and a bounded identity-graph
+helper; it does not modify historical claim/remittance amounts. Apply both migrations after the
+existing chain and generate Prisma before building. Deploy API before the new web route. No
+new provider key, bank credential, scheduler, payment action or paid API call is required.
+
+Validate custom synthetic JSON from `apps/api/test/fixtures/cash-evidence`: review pending100,
+posted90 revision, removed record (no synthetic debit), independent debit20 and explicit pending
+replacement. Verify no duplicate on exact retry, stale preview409, audit failure rollback,
+role/tenant separation and graph overlap blocks. Page responses can be shorter than requested;
+follow cursor/hasMore. Accounts shown are those represented by the current transaction page,
+with whole-account summaries.64KiB inputs and2MiB pages leave Lambda response headroom.
+
+The dashboard is `/dashboard/cash-evidence`, with source history and unverified account totals.
+Observe closed failure codes, query/lock latency and audit health without logging bank source
+fields. Root/API imports and reviews serialize on the organization tuple; load-test this before
+production scale. Roll back application exposure if needed while retaining the immutable tables.
+Never drop financial evidence to roll back UI code. Real connectors, batch reconciliation,
+PMS posting receipts, retention policy and authorized AWS end-to-end verification remain gates.

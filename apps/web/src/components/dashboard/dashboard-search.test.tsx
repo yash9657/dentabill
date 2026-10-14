@@ -48,3 +48,14 @@ it('filters actual navigation destinations and closes when one is selected', asy
   await user.click(link);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
+
+it('finds the cash evidence inbox by account source task', async () => {
+  const user = userEvent.setup();
+  render(<DashboardSearch />);
+  await user.click(screen.getByRole('button', { name: /open command palette/i }));
+  await user.type(screen.getByRole('searchbox', { name: 'Find a page' }), 'account');
+  expect(screen.getByRole('link', { name: /Cash evidence/ })).toHaveAttribute(
+    'href',
+    '/dashboard/cash-evidence',
+  );
+});

@@ -1,5 +1,13 @@
 # DentaBill: competitive gaps and the Fireworks implementation plan
 
+Current local progress (2026-10-13, ADR-074): FW-44 now has a local account-level source
+observation/review slice, immutable ordered revisions, retained replacement identity and exact
+account summaries. Additive27 aligns cash-only database/API Unicode token admission without
+changing applied26 or shared helpers. Manual input remains unverified and is not allocated to
+claims. Next financial dependency is explicit remittance batch-net/provider-adjustment evidence,
+then evidence-bound bank reconciliation, distinct gross claim/provider adjustment
+mapping and independent posting receipts. The complete parity scope and external gates remain.
+
 Current local progress (2026-10-13, ADR-073): FW-21 now has custom remittance import, immutable
 reviewed payer reports, explicit procedure allocations/adjustments and bounded partial reversals.
 The biller workflow keeps cash receipt, posting and settlement unverified. Synthetic local

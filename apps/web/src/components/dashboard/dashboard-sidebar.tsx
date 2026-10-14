@@ -6,6 +6,7 @@ import {
   ChevronsRight,
   FileText,
   LayoutDashboard,
+  Landmark,
   PhoneCall,
   Settings,
   TrendingUp,
@@ -21,8 +22,8 @@ import { useDashboardShell } from './dashboard-shell-context.js';
  * `<DashboardSidebar>` — the real navigation list rendered into the
  * shell's sidebar slot.
  *
- * Five top-level destinations match the Phase 2 product surface:
- * Overview, Claims, Calls, Reports, Settings. Active state is
+ * Practice workflows are separate destinations, including account-level
+ * cash evidence and claim follow-up. Active state is
  * derived from `usePathname()`: the current pathname matches the
  * link if it equals the link href OR starts with `${link.href}/`,
  * so `/dashboard/claims/abc123` lights up "Claims" without a
@@ -46,6 +47,7 @@ export const DASHBOARD_NAV_LINKS: readonly {
   { href: '/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
   { href: '/dashboard/claims', label: 'Claims', icon: FileText },
   { href: '/dashboard/calls', label: 'Calls', icon: PhoneCall },
+  { href: '/dashboard/cash-evidence', label: 'Cash evidence', icon: Landmark },
   { href: '/dashboard/reports', label: 'Reports', icon: TrendingUp },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];

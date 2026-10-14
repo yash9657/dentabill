@@ -1513,3 +1513,81 @@ The fabricated files in `apps/api/test/fixtures/remittances` are a custom contra
 PMS export or supported connector. Full financial correctness still requires independent cash,
 posting, provider adjustments, source reconciliation and defensible attribution. No production
 migration, AWS deployment, paid inference, actual call or real financial action ran.
+
+## ADR-074 — Reviewed bank-account source observations before claim reconciliation
+
+**Continuation:** additive migration27 closes the direct SQL/API token admission mismatch.
+Cash-only CHECKs count UTF-16 units, reject ECMAScript edge whitespace and Unicode Cc/Cf/Cs,
+and validate all required/nullable payload tokens. Migration26 and shared source/remittance
+helpers remain unchanged. The migration validates existing rows atomically; incompatible
+retained facts stop the migration without rewriting or deleting evidence. Exact verification
+and the next dependency are recorded in `docs/HANDOFF_2026-10-13.md`.
+
+**Date:** 2026-10-13. **Status:** local implementation; no bank connector, live receipt,
+production migration or deployment approved.
+
+A payer remittance, a PMS deposit and a bank-account transaction are independent evidence.
+A bank credit may cover multiple claims and provider adjustments; multiplying it across claim
+records is incorrect. Bank feeds can also revise or remove a posted transaction. We therefore
+retain source observations at practice/account level before implementing claim reconciliation.
+
+1. Three immutable scoped tables retain source transaction identity, ordered source observations
+   and actor-bound accept/reject decisions. Account identity includes source namespace/account;
+   system/product cannot change within that tuple. Original source amount/sign convention is
+   retained beside the canonical positive-credit/negative-debit amount. Only USD is supported.
+2. Explicit positive sourceSequence orders a transaction's revisions. Opaque sourceVersion,
+   observedAt and arrival time do not order financial state. Exact source-record retries replay;
+   changes to a record/sequence conflict. Newer observations never overwrite earlier evidence.
+3. The highest accepted sequence is the accepted history state. It contributes to account totals
+   only when it is also the latest observed sequence and POSTED. PENDING/REMOVED/UNKNOWN,
+   unreviewed and stale accepted observations are excluded. Rejecting the latest observation
+   does not resolve an earlier accepted version's uncertainty. A removed record is not a debit
+   or refund; actual debits are separate signed observations. Null remains unknown.
+4. Historical accepted pending-transaction links form an account-scoped undirected identity
+   graph, including missing parent IDs, sibling replacements, chains and cycles. Later null
+   links do not erase identity; a changed non-null link blocks acceptance. For every proposed
+   ACCEPT status, the prospective component may contain at most one accepted POSTED transaction.
+   Stale accepted POSTED nodes still fence overlap until a nonposted revision is reviewed.
+   Traversal above100 IDs blocks review explicitly; it never silently returns a partial safe answer.
+5. All cash admission writes the organization tuple without changing updatedAt. This serializes
+   direct SQL and repeatable-read writers as well as the API. Review stores exact evidence hash,
+   sequence, previous accepted ID, current stored role and org-wide evidence:review counts.
+   Composite restrictive references and deferred parent sealing retain complete immutable facts.
+6. Fresh previews bind evidence/current state and the organization ledger version. Immutable
+   decisions bind actor, payload, token and idempotency key; identical retries return the original
+   result even after later imports. Every import/review/read/replay requires a scoped audit;
+   audit failures roll back mutations or withhold reads. Closed errors never log source payloads.
+7. Five API routes and the actual cash-evidence dashboard implement upload, account summaries,
+   transaction/revision paging, previews and review. Fixed provenance is MANUAL_UPLOAD;
+   bank verification and settlement remain UNVERIFIED regardless of provider-like input names.
+   The UI retains uncertain commands, isolates user/practice caches and requires fresh review
+   after409. Custom JSON is not a native bank/PMS export or an authenticated integration.
+8. Raw/canonical imports are limited to64KiB. Pages return at most100 records and2MiB, sometimes
+   fewer than the requested count. Account summaries cover whole accounts represented on the
+   returned transaction page, so the envelope is bounded; there is no cross-account total.
+
+Token admission follows [ECMAScript trim](https://tc39.es/ecma262/multipage/text-processing.html#sec-trimstring)
+and the [Unicode category database](https://www.unicode.org/Public/17.0.0/ucd/extracted/DerivedGeneralCategory.txt).
+The cash-only ranges match Unicode15–17; regressions compare the database rules with the running
+JavaScript engine's categories and trim behavior, including every forbidden scalar and adjacent
+boundaries. Runtime Unicode upgrades must keep these checks green before release.
+
+Primary sources checked2026-10-13:
+[CMS EFT/ERA](https://www.cms.gov/priorities/key-initiatives/burden-reduction/administrative-simplification/transactions/health-care-payment-remittance-advice-electronic-funds-transfer),
+[CMS claim/provider adjustments](https://www.cms.gov/medicare/coding-billing/electronic-billing/health-care-payment-remittance-advice),
+[Open Dental deposits](https://www.opendental.com/site/apideposits.html),
+[Open Dental reconciliation](https://www.opendental.com/manual/reconcile.html),
+[Plaid transaction lifecycle](https://plaid.com/docs/transactions/transactions-data/),
+[Plaid transaction API](https://plaid.com/docs/api/products/transactions/), and
+[Plaid Transfer reconciliation](https://plaid.com/docs/transfer/reconciling-transfers/).
+Plaid Transactions uses positive outflow; its pending-to-posted replacement can change IDs and
+amounts, and posted records can be modified/removed. Plaid Transfer is a different product whose
+posted/settled states cannot be reused as bank Transactions or final settlement proof. A future
+sync adapter must commit an entire consistent pagination window and checkpoint atomically.
+
+Next: reconcile bank transaction net amounts to remittance batches, then preserve gross claim
+allocations and provider adjustments without exceeding cash capacities. A100+80 claim report
+with a30 provider deduction yields150 cash, not180. Independent PMS posting receipts, reviewed
+external posting, actual supported connectors, source corrections and outcome attribution remain
+required. No claim status, payment, remittance amount, settlement or recovered revenue changes
+as a side effect of this slice.

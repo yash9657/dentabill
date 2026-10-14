@@ -365,3 +365,15 @@ manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
 - `apps/web/src/components/dashboard/claims/claim-remittances.tsx`: custom JSON upload, source inspection, review and explicit unverified cash/posting/settlement.
 - `apps/web/src/lib/claims/use-remittances.ts`: scoped paging, fixed errors and exact review retry commands.
 - `apps/api/test/fixtures/remittances`: fabricated compatible payment/reversal inputs and contract notes.
+
+## Cash source observation lifecycle (FW-44 first slice; ADR-074)
+
+- `apps/api/src/lib/cash-evidence/{contract,service}.ts`: bounded custom source observations, account summaries, source revision previews and atomic review/replay.
+- `apps/api/src/routes/v1/cash-evidence{,.test}.ts`: five authenticated routes and real-Postgres lifecycle/failure tests.
+- `packages/db/prisma/migrations/20261014040000_cash_source_evidence/migration.sql`: immutable source identities, evidence, reviews, admission serialization and bounded replacement graph.
+- `packages/db/prisma/migrations/20261014050000_cash_source_token_bounds/migration.sql`: additive cash-only UTF-16/trim/Unicode checks; validated atomically without changing retained facts or shared helpers.
+- `packages/db/src/lib/cash-source-evidence{,-migration}.test.ts`: direct ledger races, canonical validation and preexisting remittance preservation.
+- `apps/web/src/app/dashboard/cash-evidence/page.tsx`: dashboard entry with normal auth/onboarding shell.
+- `apps/web/src/components/dashboard/cash-evidence`: actual upload/inbox/account/history/preview UI, synthetic fixtures and transport-level regressions.
+- `apps/web/src/lib/cash-evidence/use-cash-evidence.ts`: scoped generated-SDK access, paging and stable uncertain commands.
+- `apps/api/test/fixtures/cash-evidence`: fabricated pending/posted/removed/debit/replacement JSON inputs and explicit limitations.

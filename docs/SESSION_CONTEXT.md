@@ -4,6 +4,50 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
+### Latest continuation: FW-44 cash-source milestone closeout (ADR-074)
+
+Resumed the existing checkout from [HANDOFF_2026-10-13.md](./HANDOFF_2026-10-13.md), preserving
+migration26 and both existing stashes. The cash import/review milestone includes immutable
+practice/account observations, explicit source revision order, scoped accept/reject decisions,
+fresh previews, per-account totals, bounded replacement identity graph, API/SDK and dashboard.
+Manual source evidence remains distinct from verified bank receipt, posting and settlement.
+
+Additive migration27 `20261014050000_cash_source_token_bounds` closes direct-SQL/API Unicode
+admission mismatch. Cash-only helpers enforce UTF-16 limits, JS edge trimming and Unicode
+Cc/Cf/Cs exclusion in every required/nullable token. No shared helper or applied26 was changed.
+It validates existing rows atomically; incompatible retained evidence stops the migration
+without a rewrite or partial constraint installation. Applied only to localhost shared
+`dentabill_test` and isolated `dentabill_w0_identity`.
+
+**Final verification:** cash DB73/73, migration preservation/rollback3/3, tenant32/32 and
+focused API50/50 pass. The API additions prove direct database boundary records remain readable
+and reviewable, malformed input is rejected, and read audits identify the correct resource type.
+Affected Turbo lint/types30/30 pass. API TypeScript build and both Lambda bundles pass
+(API35.9MB/worker28.8MB unzip;10.8/9.4MB zip). Full API **702/702 across39 files** passes
+(173.88s); this completed run supersedes the earlier interrupted attempt. Independent read-only review found
+no additional actionable API/DB/tenant/UI issues beyond the Unicode fix.
+
+Prior unchanged web32/32, SDK39/39, Next production build and synthetic actual-component
+browser checks at1280/390px remain passing evidence from the original session. Browser auth/API
+were mocked; this does not establish Clerk/AWS/bank/PMS integration. Current logs use
+`/tmp/dentabill-cash-token-`: `db-tests.log`, `preservation-tests.log`, `tenant-tests.log`,
+`api-focused.log`, `api-full.log`, `checks.log`, `api-build.log`, `lambda-build.log`.
+Original web/SDK/build/browser artifact paths remain in the handoff.
+
+The complete cash-source slice is included in the `feat(monorepo): add reviewed cash source
+evidence` commit on `codex/w0-containment`. It is not merged or deployed.
+
+**Exact next task:** define explicit reviewed remittance batch-net and
+provider-adjustment evidence before cash-to-batch reconciliation. Preserve gross claim/PLB
+mapping and allocation capacities: claim reports100+80 less provider deduction30 yield150 cash;
+never clone150 per claim, allocate180 from150 or infer a batch solely from a trace. Then add
+independent PMS posting receipts. Native ERA, actual bank/PMS/clearinghouse connectors, reviewed
+external posting, recovery attribution and full parity remain open. Use fake data; no clinic
+exists. No deployment, real financial action, paid inference or external message occurred.
+The optional up-to-$4 Fireworks experiment remains unanswered; do not repeat the question or
+infer approval. The previous chat's paused goal is historical; this chat has no separate active
+goal object. The full assignment is incomplete.
+
 ### Latest continuation: remittance import-to-reviewed totals (ADR-073)
 
 The user again asked how much remains. The answer keeps full parity as substantial multi-week

@@ -25,6 +25,7 @@ import { billingRoutes } from './routes/v1/billing.js';
 import { callRecoveryRoutes } from './routes/v1/call-recovery.js';
 import { callsSseRoutes } from './routes/v1/calls-sse.js';
 import { callsRoutes } from './routes/v1/calls.js';
+import { cashEvidenceRoutes } from './routes/v1/cash-evidence.js';
 import { claimObservationRoutes } from './routes/v1/claim-observations.js';
 import { claimRemittanceRoutes } from './routes/v1/claim-remittances.js';
 import { claimsRoutes } from './routes/v1/claims.js';
@@ -233,6 +234,7 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(claimsRoutes, { prefix: '/v1' });
   await fastify.register(claimObservationRoutes, { prefix: '/v1' });
   await fastify.register(claimRemittanceRoutes, { prefix: '/v1' });
+  await fastify.register(cashEvidenceRoutes, { prefix: '/v1' });
   await fastify.register(observationRegenerationRoutes, {
     prefix: '/v1',
     ...(opts.observationRegenerationConfig !== undefined

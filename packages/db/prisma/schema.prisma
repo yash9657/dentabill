@@ -188,6 +188,7 @@ model Organization {
   payerConfigs             PayerConfig[]
   auditLogs                AuditLog[]
   billingUsageRecords      BillingUsageRecord[]
+  cashSourceTransactions   CashSourceTransaction[]
 }
 
 model User {
@@ -204,6 +205,7 @@ model User {
   observationReviews       ClaimObservationReview[]
   observationRegenerations ObservationRegeneration[]
   remittanceReviews        ClaimRemittanceReview[]
+  cashSourceReviews        CashSourceReview[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -425,6 +427,82 @@ model ClaimRemittanceAdjustment {
   @@unique([reviewId, sourceAdjustmentId])
   @@index([organizationId, claimId])
   @@index([lineId, organizationId, claimId])
+}
+
+// Immutable bank-account source observations. Reviewed source state is not
+// bank verification, settlement, a claim allocation, or cash recovery.
+model CashSourceTransaction {
+  id                  String   @id @default(uuid()) @db.Uuid
+  organizationId      String
+  sourceSystem        String   @db.VarChar(80)
+  sourceProduct       String   @db.VarChar(80)
+  sourceNamespace     String   @db.VarChar(80)
+  sourceAccountId     String   @db.VarChar(200)
+  sourceTransactionId String   @db.VarChar(200)
+  createdAt           DateTime @default(now())
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  evidence     CashSourceEvidence[]
+  reviews      CashSourceReview[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, sourceNamespace, sourceAccountId, sourceTransactionId], map: "CashSourceTransaction_source_key")
+  @@index([organizationId, sourceNamespace, sourceAccountId], map: "CashSourceTransaction_account_idx")
+  @@index([organizationId, createdAt, id])
+}
+
+model CashSourceEvidence {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String
+  transactionId    String   @db.Uuid
+  sourceNamespace  String   @db.VarChar(80)
+  sourceAccountId  String   @db.VarChar(200)
+  sourceRecordId   String   @db.VarChar(200)
+  sourceSequence   Int
+  sourceVersion    String?  @db.VarChar(200)
+  sourceDocumentId String   @db.VarChar(200)
+  status           String   @db.VarChar(8)
+  amount           Decimal? @db.Decimal(10, 2)
+  payload          Json
+  contentHash      String   @db.Char(64)
+  createdAt        DateTime @default(now())
+
+  transaction       CashSourceTransaction @relation(fields: [transactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  review            CashSourceReview?     @relation("CashReviewedEvidence")
+  subsequentReviews CashSourceReview[]    @relation("CashPreviousAcceptedEvidence")
+
+  @@unique([id, organizationId, transactionId])
+  @@unique([organizationId, sourceNamespace, sourceAccountId, sourceRecordId], map: "CashSourceEvidence_source_event_key")
+  @@unique([transactionId, sourceSequence])
+  @@index([organizationId, transactionId, sourceSequence])
+}
+
+model CashSourceReview {
+  id                         String   @id @default(uuid()) @db.Uuid
+  organizationId             String
+  transactionId              String   @db.Uuid
+  evidenceId                 String   @unique @db.Uuid
+  decision                   String   @db.VarChar(6)
+  reviewedByUserId           String
+  reviewedByRole             UserRole
+  idempotencyKey             String   @db.Uuid
+  requestHash                String   @db.Char(64)
+  reviewToken                String   @db.Char(64)
+  evidenceHash               String   @db.Char(64)
+  ledgerVersion              String   @db.VarChar(80)
+  previousAcceptedEvidenceId String?  @db.Uuid
+  sourceSequence             Int
+  createdAt                  DateTime @default(now())
+
+  transaction              CashSourceTransaction @relation(fields: [transactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  evidence                 CashSourceEvidence    @relation("CashReviewedEvidence", fields: [evidenceId, organizationId, transactionId], references: [id, organizationId, transactionId], onDelete: Restrict, onUpdate: Restrict)
+  previousAcceptedEvidence CashSourceEvidence?   @relation("CashPreviousAcceptedEvidence", fields: [previousAcceptedEvidenceId, organizationId, transactionId], references: [id, organizationId, transactionId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy               User                  @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([organizationId, idempotencyKey])
+  @@unique([evidenceId, organizationId, transactionId])
+  @@index([organizationId, transactionId, sourceSequence])
+  @@index([previousAcceptedEvidenceId, organizationId, transactionId], map: "CashSourceReview_previous_idx")
 }
 
 model Call {

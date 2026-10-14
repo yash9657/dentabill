@@ -3,13 +3,28 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-13
-**Current work:** reviewed remittance and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
-`codex/w0-containment`. The full parity goal is active; no overall completion claim.
+**Current work:** reviewed cash source evidence and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
+`codex/w0-containment`. The full parity assignment remains incomplete; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice:** FW-21 now imports custom remittance evidence through the claim page,
+**Latest local slice:** FW-44 cash source import/review now has immutable account-level
+observations, ordered revisions, fresh biller acceptance/rejection, bounded replacement identity
+checks, audit-safe retries and the dashboard workflow (ADR-074). Additive27 fixes direct SQL/API
+Unicode token mismatch without changing applied26 or shared helpers. Cash DB73 plus migration
+preservation/rollback3, tenant32, focusedAPI50 and affected lint/types30/30 pass. API and both
+Lambda builds pass. Full API **702/702 across39 files** passes; the original interrupted run
+is not counted. The coherent cash-source slice is committed on `codex/w0-containment`.
+Prior unchanged web32, SDK39, Next production build and synthetic desktop/mobile checks pass.
+Migrations26/27 ran only locally; no production deployment or actual financial action occurred.
+
+Next: explicit remittance batch-net/provider-adjustment evidence, then evidence-bound bank
+reconciliation and independent PMS posting receipts. Bank verification and settlement stay
+UNVERIFIED; real connectors, reviewed external posting and full parity remain open. Exact
+verification and continuity are in [the handoff](./docs/HANDOFF_2026-10-13.md).
+
+**Previous local slice:** FW-21 now imports custom remittance evidence through the claim page,
 requires a fresh biller preview and records immutable accept/reject decisions (ADR-073).
 Exact source-line allocations, signed adjustments and partial reversals remain separate from
 cash, posting and settlement. Tenant isolation, duplicate retries, stale approvals, reversal
