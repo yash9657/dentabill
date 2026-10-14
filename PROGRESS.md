@@ -3,13 +3,25 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-13
-**Current work:** procedure/coverage and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
+**Current work:** reviewed remittance and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
 `codex/w0-containment`. The full parity goal is active; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice:** FW-21 now imports procedure-level source lines and coverage through the
+**Latest local slice:** FW-21 now imports custom remittance evidence through the claim page,
+requires a fresh biller preview and records immutable accept/reject decisions (ADR-073).
+Exact source-line allocations, signed adjustments and partial reversals remain separate from
+cash, posting and settlement. Tenant isolation, duplicate retries, stale approvals, reversal
+limits, audit rollback and retained financial references have local tests. The UI preserves
+uncertain retry commands and pages evidence within AWS response limits. Migration25 ran only
+locally. UI20, SDK34, DB70 plus tenant32, affected typecheck/lint30/30, API build, Lambda
+bundles and Next production build pass. Full API **652/652** passes; exact verification is
+recorded in session context. No full financial-correctness or production-ready claim.
+FW-44 adds independent cash/posting evidence next. Native remittance/provider adjustments,
+real PMS/clearinghouse connectors, recovery actions, live AI/voice and AWS deployment remain open.
+
+**Previous local slice:** FW-21 now imports procedure-level source lines and coverage through the
 real upload/claim-detail workflow (ADR-072). Repeated codes retain distinct line identities;
 explicit totals, coverage sequence/target and missing identities remain accurate. Tenant-scoped,
 immutable snapshots commit with parent/audit and survive exact reimports. The UI separates source

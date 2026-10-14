@@ -40,6 +40,9 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/claims/{id}',
   '/v1/claims/{id}/calls',
   '/v1/claims/{id}/observations',
+  '/v1/claims/{id}/remittances',
+  '/v1/claims/{claimId}/remittances/{id}/preview',
+  '/v1/claims/{claimId}/remittances/{id}/review',
   '/v1/observations/{id}/review',
   '/v1/observations/{id}/regeneration-preview',
   '/v1/observations/{id}/regenerate',
@@ -59,6 +62,39 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
 describe('OpenAPI ↔ generated types contract', () => {
   it('declares an OpenAPI 3.x document', () => {
     expect(spec.openapi).toMatch(/^3\./);
+  });
+
+  it('preserves typed nullable remittance identities and unverified financial states', () => {
+    const properties = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    const list = spec.paths['/v1/claims/{id}/remittances'];
+    const payload = [...properties, 'items', 'items', 'properties', 'payload', 'properties'];
+    for (const field of [
+      'sourceVersion',
+      'payerIdentifier',
+      'sourceCoverageId',
+      'reportedDate',
+      'paymentTrace',
+    ]) {
+      expect(list).toHaveProperty([...payload, field, 'type'], 'string');
+      expect(list).toHaveProperty([...payload, field, 'nullable'], true);
+    }
+    for (const field of ['cashReceipt', 'posting', 'settlement'])
+      expect(list).toHaveProperty(
+        [...properties, 'summary', 'properties', field, 'enum'],
+        ['UNVERIFIED'],
+      );
+    expect(spec.paths['/v1/claims/{claimId}/remittances/{id}/review']).toHaveProperty(
+      ['post', 'requestBody', 'content', 'application/json', 'schema', 'required'],
+      ['decision', 'reviewToken', 'idempotencyKey'],
+    );
   });
 
   it('describes unavailable verified payments without legacy recovered money fields', () => {

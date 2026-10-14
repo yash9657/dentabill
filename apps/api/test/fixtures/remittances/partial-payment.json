@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "sourceNamespace": "synthetic-remittance",
+  "sourceRecordId": "synthetic-payment-1",
+  "sourceDocumentId": "synthetic-document-1",
+  "sourceVersion": "1",
+  "kind": "PAYMENT",
+  "reversesSourceRecordId": null,
+  "currency": "USD",
+  "reportedAmount": "100.00",
+  "payerName": "Synthetic Dental Payer",
+  "payerIdentifier": "synthetic-payer",
+  "payerIdentifierSystem": "synthetic",
+  "payerClaimControlNumber": "synthetic-control",
+  "sourceCoverageId": "coverage-secondary",
+  "paymentTrace": "synthetic-shared-trace",
+  "paymentTraceType": "synthetic-reference",
+  "paymentTraceIssuer": "synthetic-payer",
+  "reportedDate": "2026-10-01",
+  "sourceStatus": "payer-reported-only",
+  "lineDetailCompleteness": "PARTIAL",
+  "allocations": [
+    { "sourceLineId": "line-a", "amount": "60.00", "sourceStatus": null },
+    { "sourceLineId": "line-b", "amount": "20.00", "sourceStatus": null }
+  ],
+  "adjustments": [
+    {
+      "sourceAdjustmentId": "adjustment-positive",
+      "sourceLineId": "line-a",
+      "codeSystem": "SYNTHETIC",
+      "groupCode": null,
+      "reasonCode": "UNKNOWN-POSITIVE",
+      "amount": "12.00",
+      "sourceReference": "synthetic-reference-a"
+    },
+    {
+      "sourceAdjustmentId": "adjustment-negative",
+      "sourceLineId": null,
+      "codeSystem": "SYNTHETIC",
+      "groupCode": null,
+      "reasonCode": "UNKNOWN-NEGATIVE",
+      "amount": "-3.00",
+      "sourceReference": null
+    },
+    {
+      "sourceAdjustmentId": "adjustment-zero",
+      "sourceLineId": "line-b",
+      "codeSystem": "SYNTHETIC",
+      "groupCode": null,
+      "reasonCode": "UNKNOWN-ZERO",
+      "amount": "0.00",
+      "sourceReference": null
+    }
+  ]
+}

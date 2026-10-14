@@ -20,6 +20,7 @@ import { DashboardEmptyState } from '../dashboard-empty-state.js';
 import { SkeletonList } from '../skeleton-list.js';
 
 import { ClaimObservations } from './claim-observations.js';
+import { ClaimRemittances } from './claim-remittances.js';
 import { ClaimSourceDetailsSection } from './claim-source-details.js';
 import { ClaimStatusDialog } from './claim-status-dialog.js';
 
@@ -112,6 +113,7 @@ function DetailLayout({ claim }: { readonly claim: DetailClaim }): React.ReactEl
         details={claim.sourceDetails}
         currentAmount={claim.claimAmount}
       />
+      <ClaimRemittances claimId={claim.id} />
       <ClaimCallRecovery
         claimId={claim.id}
         claimStatus={claim.status}

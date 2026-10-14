@@ -203,6 +203,7 @@ model User {
   auditLogs                AuditLog[]
   observationReviews       ClaimObservationReview[]
   observationRegenerations ObservationRegeneration[]
+  remittanceReviews        ClaimRemittanceReview[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -245,6 +246,8 @@ model Claim {
   observations             ClaimObservation[]
   observationRegenerations ObservationRegeneration[]
   sourceDetails            ClaimSourceDetails?
+  remittanceEvidence       ClaimRemittanceEvidence[]
+  remittanceReviews        ClaimRemittanceReview[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, sourceSystem, sourceNamespace, sourceClaimId], map: "Claim_source_identity_key")
@@ -291,8 +294,11 @@ model ClaimSourceLine {
   toothRange           String?  @db.VarChar(80)
   toothNumberingSystem String?  @db.VarChar(80)
 
-  details ClaimSourceDetails @relation(fields: [claimId, organizationId], references: [claimId, organizationId], onDelete: Cascade)
+  details               ClaimSourceDetails          @relation(fields: [claimId, organizationId], references: [claimId, organizationId], onDelete: Cascade)
+  remittanceAllocations ClaimRemittanceAllocation[]
+  remittanceAdjustments ClaimRemittanceAdjustment[]
 
+  @@unique([id, organizationId, claimId])
   @@unique([organizationId, claimId, sourceLineId])
   @@unique([organizationId, claimId, position])
 }
@@ -320,6 +326,105 @@ model ClaimSourceCoverage {
 
   @@unique([organizationId, claimId, sourceCoverageId])
   @@unique([organizationId, claimId, sequence])
+}
+
+// Immutable reported remittance evidence. These records do not establish cash
+// receipt, recoupment, claim resolution, or financial posting.
+model ClaimRemittanceEvidence {
+  id                     String   @id @default(uuid()) @db.Uuid
+  organizationId         String
+  claimId                String
+  sourceNamespace        String   @db.VarChar(80)
+  sourceRecordId         String   @db.VarChar(200)
+  sourceDocumentId       String   @db.VarChar(200)
+  sourceVersion          String?  @db.VarChar(200)
+  kind                   String   @db.VarChar(8)
+  reversesSourceRecordId String?  @db.VarChar(200)
+  reportedAmount         Decimal  @db.Decimal(10, 2)
+  currency               String   @db.VarChar(3)
+  payload                Json
+  contentHash            String   @db.Char(64)
+  createdAt              DateTime @default(now())
+
+  claim           Claim                   @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  review          ClaimRemittanceReview?  @relation("ReviewedEvidence")
+  reversalReviews ClaimRemittanceReview[] @relation("ReversedEvidence")
+
+  @@unique([id, organizationId, claimId])
+  @@unique([organizationId, sourceNamespace, sourceRecordId], map: "ClaimRemittanceEvidence_source_key")
+  @@index([organizationId, claimId, createdAt, id])
+}
+
+model ClaimRemittanceReview {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organizationId     String
+  claimId            String
+  evidenceId         String   @unique @db.Uuid
+  decision           String   @db.VarChar(6)
+  reviewedByUserId   String
+  idempotencyKey     String   @db.Uuid
+  requestHash        String   @db.Char(64)
+  reviewToken        String   @db.Char(64)
+  evidenceHash       String   @db.Char(64)
+  claimUpdatedAt     DateTime
+  ledgerVersion      String   @db.VarChar(80)
+  reversedEvidenceId String?  @db.Uuid
+  reportedAmount     Decimal  @db.Decimal(10, 2)
+  allocationCount    Int
+  adjustmentCount    Int
+  createdAt          DateTime @default(now())
+
+  claim            Claim                       @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  evidence         ClaimRemittanceEvidence     @relation("ReviewedEvidence", fields: [evidenceId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+  reversedEvidence ClaimRemittanceEvidence?    @relation("ReversedEvidence", fields: [reversedEvidenceId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy       User                        @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  allocations      ClaimRemittanceAllocation[]
+  adjustments      ClaimRemittanceAdjustment[]
+
+  @@unique([id, organizationId, claimId])
+  @@unique([organizationId, idempotencyKey])
+  @@unique([evidenceId, organizationId, claimId])
+  @@index([organizationId, claimId, createdAt, id])
+  @@index([reversedEvidenceId, organizationId, claimId])
+}
+
+model ClaimRemittanceAllocation {
+  id             String  @id @default(uuid()) @db.Uuid
+  reviewId       String  @db.Uuid
+  organizationId String
+  claimId        String
+  sourceIndex    Int
+  lineId         String  @db.Uuid
+  amount         Decimal @db.Decimal(10, 2)
+
+  review ClaimRemittanceReview @relation(fields: [reviewId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+  line   ClaimSourceLine       @relation(fields: [lineId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([reviewId, sourceIndex])
+  @@index([organizationId, claimId])
+  @@index([lineId, organizationId, claimId])
+}
+
+model ClaimRemittanceAdjustment {
+  id                 String  @id @default(uuid()) @db.Uuid
+  reviewId           String  @db.Uuid
+  organizationId     String
+  claimId            String
+  sourceIndex        Int
+  sourceAdjustmentId String  @db.VarChar(200)
+  lineId             String? @db.Uuid
+  codeSystem         String  @db.VarChar(32)
+  groupCode          String? @db.VarChar(32)
+  reasonCode         String  @db.VarChar(32)
+  amount             Decimal @db.Decimal(10, 2)
+
+  review ClaimRemittanceReview @relation(fields: [reviewId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+  line   ClaimSourceLine?      @relation(fields: [lineId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([reviewId, sourceIndex])
+  @@unique([reviewId, sourceAdjustmentId])
+  @@index([organizationId, claimId])
+  @@index([lineId, organizationId, claimId])
 }
 
 model Call {

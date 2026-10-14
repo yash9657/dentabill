@@ -500,7 +500,8 @@ export function claimsRoutes(fastify: FastifyInstance): void {
     {
       preHandler: requireAuth,
       schema: {
-        description: 'Delete a claim. Hard-delete; soft-delete arrives in Phase 4.',
+        description:
+          'Delete a claim without retained remittance evidence. Financial evidence prevents deletion.',
         security,
         params: IdParamSchema,
         response: { 204: z.null() },
@@ -512,16 +513,23 @@ export function claimsRoutes(fastify: FastifyInstance): void {
       const { orgId } = auth;
       const { id } = request.params as z.infer<typeof IdParamSchema>;
 
-      const db = getOrgScopedDb(orgId);
-      const existing = await db.claim.findFirst({ where: { id }, select: { id: true } });
-      if (!existing) {
-        throw new ApiError('NOT_FOUND', 'Claim not found in your organization.');
-      }
-
-      // deleteMany over delete for the same reason update uses updateMany:
-      // the org-scope write middleware requires `organizationId` on every
-      // multi-tenant write, and `delete` only takes a unique-key where.
-      await prisma.claim.deleteMany({ where: { id, organizationId: orgId } });
+      await prisma.$transaction(async (db) => {
+        const existing = await db.$queryRaw<{ id: string }[]>`
+          SELECT id FROM "Claim" WHERE id = ${id} AND "organizationId" = ${orgId} FOR UPDATE
+        `;
+        if (!existing.length)
+          throw new ApiError('NOT_FOUND', 'Claim not found in your organization.');
+        const retained = await db.claimRemittanceEvidence.findFirst({
+          where: { claimId: id, organizationId: orgId },
+          select: { id: true },
+        });
+        if (retained)
+          throw new ApiError(
+            'CONFLICT',
+            'This claim has retained remittance evidence and cannot be deleted.',
+          );
+        await db.claim.deleteMany({ where: { id, organizationId: orgId } });
+      });
       reply.code(204);
       return null;
     },

@@ -546,3 +546,28 @@ changes while imported facts stay fixed. Exact reimports retain child IDs. Curre
 local synthetic data only. No financial posting, source synchronization or production approval
 is implied. Future payment references must revisit the existing parent-claim cascade/retention
 policy before treating line IDs as a permanent financial ledger.
+
+## Remittance evidence and review (ADR-073; not deployed)
+
+Migration25 `20261014030000_remittance_evidence` follows24. It ran only on localhost
+`dentabill_test` and `dentabill_w0_identity`. It preserves legacy data without backfill and adds
+restrictive financial references: claims with evidence, referenced users and source lines cannot
+be deleted. Keep immutable/deferred triggers active. Test migration timing and restore on a
+representative copy; ensure support and retention procedures account for these restrictions.
+This migration does not establish a complete retention/erasure policy.
+
+Deploy API before the new web screen. GET/POST claim remittances and GET preview/POST review
+require stored owner/admin/billing roles. Stable source namespace/record IDs and the existing
+DOB_HASH_SECRET are necessary for exact-replay fingerprints; rotating that secret requires
+reviewed source reconciliation. No new vendor key, provider call, cash transfer or posting runs.
+Request and canonical JSON are limited to1MiB; paged response content is limited to2MiB with
+at most10 records (11 fetched), leaving Lambda proxy-envelope/escaping headroom below the
+[6MiB synchronous response quota](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html).
+Clients must honor actual cursors even when a page is shorter than the requested limit.
+
+Before production approval, test authenticated import/preview/review, concurrent reversals,
+lost responses with the identical idempotency key, stale approvals, deletion retention, role
+revocation, practice switching, response-size limits, audit privacy and backup/restore. Monitor
+closed remittance failure codes and transaction latency, never raw source JSON or Prisma errors.
+Rollback disables the new workflow/UI while preserving all evidence and reviews; do not drop
+ledger tables or bypass constraints. Current tests are synthetic local evidence, not AWS end-to-end proof.

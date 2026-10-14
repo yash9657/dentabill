@@ -216,3 +216,20 @@ the existing cascade. This does not establish a legal retention schedule or prod
 approval. Payment-ledger work must define retention/reversal semantics before introducing
 financial references to source lines. Practice-scoped browser query keys isolate source detail
 caches, including status-update refetch behavior. Local tests do not establish deployed controls.
+
+### Remittance evidence and review (ADR-073; local implementation)
+
+Custom remittance JSON can contain payer claim-control, payment trace, coverage and source
+references. Four immutable tables use tenant/claim composite FKs and restrictive evidence,
+source and actor retention. Scoped stored-role checks restrict access to owner/admin/billing
+staff. Review tokens bind claim/evidence/ledger versions; idempotent request hashes also bind
+actor and decision. Pending/rejected records remain evidence and still prevent claim deletion.
+This safeguard is not a legal retention schedule, PHI authorization or implemented erasure policy.
+
+All successful reads, including exact import/review replays, require aggregate/opaque-ID access
+audit entries. New evidence/review/children and mutation audit commit together. Validation,
+malformed JSON and unexpected database failures have closed messages; no input issue values,
+payloads or raw errors reach route logs. Raw/canonical input and list-response bounds protect
+local processing and AWS payload size. Browser forms and caches bind claim, user and optional
+practice; late auth changes cannot transmit under a new scope. No inference, third-party
+submission, verified cash receipt, posting or settlement is implied by acceptance.

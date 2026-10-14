@@ -6,6 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type { DetailClaim } from '../../../lib/claims/types.js';
 
 import { ClaimDetailPage } from './claim-detail-page.js';
+import { remittanceListFixture } from './claim-remittances.fixtures.js';
 import { detailClaimFixture } from './claim-source-details.fixtures.js';
 
 const getMock = vi.fn();
@@ -50,6 +51,8 @@ beforeEach(() => {
 describe('<ClaimDetailPage />', () => {
   it('renders the claim summary card from the SDK response', async () => {
     getMock.mockImplementation(async (path: string) => {
+      if (path === '/v1/claims/{id}/remittances')
+        return { data: remittanceListFixture(), response: new Response(null, { status: 200 }) };
       if (path === '/v1/claims/{id}/observations')
         return { data: { items: [], publishableCalls: [], nextCursor: null, hasMore: false } };
       if (path === '/v1/claims/{id}/call-recovery')
@@ -121,6 +124,8 @@ describe('<ClaimDetailPage />', () => {
     });
     let detailReads = 0;
     getMock.mockImplementation(async (path: string) => {
+      if (path === '/v1/claims/{id}/remittances')
+        return { data: remittanceListFixture(), response: new Response(null, { status: 200 }) };
       if (path === '/v1/claims/{id}/observations')
         return { data: { items: [], publishableCalls: [], nextCursor: null, hasMore: false } };
       if (path === '/v1/claims/{id}/call-recovery')
@@ -179,6 +184,8 @@ describe('<ClaimDetailPage />', () => {
       finishNewOrganization = resolve;
     });
     getMock.mockImplementation(async (path: string) => {
+      if (path === '/v1/claims/{id}/remittances')
+        return { data: remittanceListFixture(), response: new Response(null, { status: 200 }) };
       if (path === '/v1/claims/{id}') return auth.orgId === 'org_a' ? { data: claim } : denied;
       if (path === '/v1/claims/{id}/observations')
         return { data: { items: [], publishableCalls: [], nextCursor: null, hasMore: false } };
@@ -214,6 +221,8 @@ describe('<ClaimDetailPage />', () => {
       finishOtherUser = resolve;
     });
     getMock.mockImplementation(async (path: string) => {
+      if (path === '/v1/claims/{id}/remittances')
+        return { data: remittanceListFixture(), response: new Response(null, { status: 200 }) };
       if (path === '/v1/claims/{id}') return auth.userId === 'user_a' ? { data: claim } : denied;
       if (path === '/v1/claims/{id}/observations')
         return { data: { items: [], publishableCalls: [], nextCursor: null, hasMore: false } };

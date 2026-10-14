@@ -353,3 +353,15 @@ manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
 - `apps/web/src/components/dashboard/claims/claim-source-details.tsx`: imported totals, procedure pagination and explicit claim coverage.
 - `apps/web/src/lib/claims/use-claim.ts`: practice-scoped detail cache and status mutation preservation.
 - `apps/api/test/fixtures/csv/opendental-source-details-synthetic.csv`: one custom fabricated upload with repeated codes and secondary target coverage.
+
+## Reviewed remittance evidence (FW-21 next slice; ADR-073)
+
+- `apps/api/src/lib/remittances/contract.ts`: custom signed-money/source/line/adjustment contract and wire schemas.
+- `apps/api/src/lib/remittances/service.ts`: atomic import, exact replay, fresh review previews, bounded reversals and paged report summaries.
+- `apps/api/src/routes/v1/claim-remittances.ts`: four authenticated routes with closed validation/error handling.
+- `apps/api/src/routes/v1/claim-remittances.test.ts`: real-Postgres HTTP workflow and fault tests.
+- `packages/db/prisma/migrations/20261014030000_remittance_evidence/migration.sql`: immutable evidence/review/allocation/adjustment tables, tenant FKs and deferred invariants.
+- `packages/db/src/lib/remittance-evidence{,-migration}.test.ts`: direct SQL, concurrent reversal and preservation checks.
+- `apps/web/src/components/dashboard/claims/claim-remittances.tsx`: custom JSON upload, source inspection, review and explicit unverified cash/posting/settlement.
+- `apps/web/src/lib/claims/use-remittances.ts`: scoped paging, fixed errors and exact review retry commands.
+- `apps/api/test/fixtures/remittances`: fabricated compatible payment/reversal inputs and contract notes.

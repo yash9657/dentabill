@@ -2333,7 +2333,7 @@
         }
       },
       "delete": {
-        "description": "Delete a claim. Hard-delete; soft-delete arrives in Phase 4.",
+        "description": "Delete a claim without retained remittance evidence. Financial evidence prevents deletion.",
         "parameters": [
           {
             "schema": {
@@ -4910,6 +4910,2285 @@
                     "isCurrent",
                     "canReview",
                     "staleReason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/claims/{id}/remittances": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "claimId": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                          },
+                          "contentHash": {
+                            "type": "string"
+                          },
+                          "payload": {
+                            "type": "object",
+                            "properties": {
+                              "schemaVersion": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "sourceNamespace": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                              },
+                              "sourceRecordId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sourceDocumentId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sourceVersion": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "PAYMENT",
+                                  "REVERSAL"
+                                ]
+                              },
+                              "reversesSourceRecordId": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "USD"
+                                ]
+                              },
+                              "reportedAmount": {
+                                "type": "string",
+                                "maxLength": 13,
+                                "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                              },
+                              "payerName": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "payerIdentifier": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "payerIdentifierSystem": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "payerClaimControlNumber": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sourceCoverageId": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "paymentTrace": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "paymentTraceType": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "paymentTraceIssuer": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "reportedDate": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                              },
+                              "sourceStatus": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "lineDetailCompleteness": {
+                                "type": "string",
+                                "enum": [
+                                  "COMPLETE",
+                                  "PARTIAL",
+                                  "ABSENT"
+                                ]
+                              },
+                              "allocations": {
+                                "maxItems": 500,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sourceLineId": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 200
+                                    },
+                                    "amount": {
+                                      "type": "string",
+                                      "maxLength": 13,
+                                      "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                                    },
+                                    "sourceStatus": {
+                                      "default": null,
+                                      "nullable": true,
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 80
+                                    }
+                                  },
+                                  "required": [
+                                    "sourceLineId",
+                                    "amount",
+                                    "sourceStatus"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "adjustments": {
+                                "maxItems": 500,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sourceAdjustmentId": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 200
+                                    },
+                                    "sourceLineId": {
+                                      "default": null,
+                                      "nullable": true,
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 200
+                                    },
+                                    "codeSystem": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 32
+                                    },
+                                    "groupCode": {
+                                      "default": null,
+                                      "nullable": true,
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 32
+                                    },
+                                    "reasonCode": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 32
+                                    },
+                                    "amount": {
+                                      "type": "string",
+                                      "maxLength": 13,
+                                      "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                                    },
+                                    "sourceReference": {
+                                      "default": null,
+                                      "nullable": true,
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 200
+                                    }
+                                  },
+                                  "required": [
+                                    "sourceAdjustmentId",
+                                    "sourceLineId",
+                                    "codeSystem",
+                                    "groupCode",
+                                    "reasonCode",
+                                    "amount",
+                                    "sourceReference"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "schemaVersion",
+                              "sourceNamespace",
+                              "sourceRecordId",
+                              "sourceDocumentId",
+                              "sourceVersion",
+                              "kind",
+                              "reversesSourceRecordId",
+                              "currency",
+                              "reportedAmount",
+                              "payerName",
+                              "payerIdentifier",
+                              "payerIdentifierSystem",
+                              "payerClaimControlNumber",
+                              "sourceCoverageId",
+                              "paymentTrace",
+                              "paymentTraceType",
+                              "paymentTraceIssuer",
+                              "reportedDate",
+                              "sourceStatus",
+                              "lineDetailCompleteness",
+                              "allocations",
+                              "adjustments"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "review": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "decision": {
+                                "type": "string",
+                                "enum": [
+                                  "ACCEPT",
+                                  "REJECT"
+                                ]
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              },
+                              "reviewedByUserId": {
+                                "type": "string"
+                              },
+                              "reportedAmount": {
+                                "type": "string",
+                                "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                              },
+                              "reversedEvidenceId": {
+                                "nullable": true,
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "decision",
+                              "createdAt",
+                              "reviewedByUserId",
+                              "reportedAmount",
+                              "reversedEvidenceId"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "claimId",
+                          "createdAt",
+                          "contentHash",
+                          "payload",
+                          "review"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "reviewedReportedAmount": {
+                          "type": "string",
+                          "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                        },
+                        "allocatedAmount": {
+                          "type": "string",
+                          "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                        },
+                        "unallocatedAmount": {
+                          "type": "string",
+                          "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                        },
+                        "pendingCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "acceptedCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "rejectedCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "cashReceipt": {
+                          "type": "string",
+                          "enum": [
+                            "UNVERIFIED"
+                          ]
+                        },
+                        "posting": {
+                          "type": "string",
+                          "enum": [
+                            "UNVERIFIED"
+                          ]
+                        },
+                        "settlement": {
+                          "type": "string",
+                          "enum": [
+                            "UNVERIFIED"
+                          ]
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "lineId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "sourceLineId": {
+                                "type": "string"
+                              },
+                              "procedureCode": {
+                                "type": "string"
+                              },
+                              "tooth": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "string",
+                                "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                              }
+                            },
+                            "required": [
+                              "lineId",
+                              "sourceLineId",
+                              "procedureCode",
+                              "tooth",
+                              "amount"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "reviewedReportedAmount",
+                        "allocatedAmount",
+                        "unallocatedAmount",
+                        "pendingCount",
+                        "acceptedCount",
+                        "rejectedCount",
+                        "cashReceipt",
+                        "posting",
+                        "settlement",
+                        "lines"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor",
+                    "hasMore",
+                    "summary"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "description": "Import a custom version 1 claim-level payer report. Does not establish cash receipt, posting or settlement.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "schemaVersion": {
+                    "type": "number",
+                    "enum": [
+                      1
+                    ]
+                  },
+                  "sourceNamespace": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                  },
+                  "sourceRecordId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "sourceDocumentId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "sourceVersion": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "PAYMENT",
+                      "REVERSAL"
+                    ]
+                  },
+                  "reversesSourceRecordId": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "currency": {
+                    "type": "string",
+                    "enum": [
+                      "USD"
+                    ]
+                  },
+                  "reportedAmount": {
+                    "type": "string",
+                    "maxLength": 13,
+                    "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                  },
+                  "payerName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "payerIdentifier": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "payerIdentifierSystem": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "payerClaimControlNumber": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "sourceCoverageId": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "paymentTrace": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "paymentTraceType": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "paymentTraceIssuer": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "reportedDate": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                  },
+                  "sourceStatus": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "lineDetailCompleteness": {
+                    "type": "string",
+                    "enum": [
+                      "COMPLETE",
+                      "PARTIAL",
+                      "ABSENT"
+                    ]
+                  },
+                  "allocations": {
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "sourceLineId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "amount": {
+                          "type": "string",
+                          "maxLength": 13,
+                          "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                        },
+                        "sourceStatus": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        }
+                      },
+                      "required": [
+                        "sourceLineId",
+                        "amount"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "adjustments": {
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "sourceAdjustmentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceLineId": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "codeSystem": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 32
+                        },
+                        "groupCode": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 32
+                        },
+                        "reasonCode": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 32
+                        },
+                        "amount": {
+                          "type": "string",
+                          "maxLength": 13,
+                          "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                        },
+                        "sourceReference": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        }
+                      },
+                      "required": [
+                        "sourceAdjustmentId",
+                        "codeSystem",
+                        "reasonCode",
+                        "amount"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "schemaVersion",
+                  "sourceNamespace",
+                  "sourceRecordId",
+                  "sourceDocumentId",
+                  "kind",
+                  "currency",
+                  "reportedAmount",
+                  "payerName",
+                  "lineDetailCompleteness",
+                  "allocations",
+                  "adjustments"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "claimId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "contentHash": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "sourceNamespace": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                        },
+                        "sourceRecordId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceDocumentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceVersion": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "PAYMENT",
+                            "REVERSAL"
+                          ]
+                        },
+                        "reversesSourceRecordId": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD"
+                          ]
+                        },
+                        "reportedAmount": {
+                          "type": "string",
+                          "maxLength": 13,
+                          "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                        },
+                        "payerName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "payerIdentifier": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "payerIdentifierSystem": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "payerClaimControlNumber": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceCoverageId": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "paymentTrace": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "paymentTraceType": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "paymentTraceIssuer": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "reportedDate": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                        },
+                        "sourceStatus": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "lineDetailCompleteness": {
+                          "type": "string",
+                          "enum": [
+                            "COMPLETE",
+                            "PARTIAL",
+                            "ABSENT"
+                          ]
+                        },
+                        "allocations": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sourceLineId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "amount": {
+                                "type": "string",
+                                "maxLength": 13,
+                                "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                              },
+                              "sourceStatus": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "sourceLineId",
+                              "amount",
+                              "sourceStatus"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "adjustments": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sourceAdjustmentId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sourceLineId": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "codeSystem": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 32
+                              },
+                              "groupCode": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 32
+                              },
+                              "reasonCode": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 32
+                              },
+                              "amount": {
+                                "type": "string",
+                                "maxLength": 13,
+                                "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                              },
+                              "sourceReference": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              }
+                            },
+                            "required": [
+                              "sourceAdjustmentId",
+                              "sourceLineId",
+                              "codeSystem",
+                              "groupCode",
+                              "reasonCode",
+                              "amount",
+                              "sourceReference"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "sourceNamespace",
+                        "sourceRecordId",
+                        "sourceDocumentId",
+                        "sourceVersion",
+                        "kind",
+                        "reversesSourceRecordId",
+                        "currency",
+                        "reportedAmount",
+                        "payerName",
+                        "payerIdentifier",
+                        "payerIdentifierSystem",
+                        "payerClaimControlNumber",
+                        "sourceCoverageId",
+                        "paymentTrace",
+                        "paymentTraceType",
+                        "paymentTraceIssuer",
+                        "reportedDate",
+                        "sourceStatus",
+                        "lineDetailCompleteness",
+                        "allocations",
+                        "adjustments"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "review": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "decision": {
+                          "type": "string",
+                          "enum": [
+                            "ACCEPT",
+                            "REJECT"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "reviewedByUserId": {
+                          "type": "string"
+                        },
+                        "reportedAmount": {
+                          "type": "string",
+                          "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                        },
+                        "reversedEvidenceId": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "decision",
+                        "createdAt",
+                        "reviewedByUserId",
+                        "reportedAmount",
+                        "reversedEvidenceId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "claimId",
+                    "createdAt",
+                    "contentHash",
+                    "payload",
+                    "review"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "claimId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "contentHash": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "sourceNamespace": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                        },
+                        "sourceRecordId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceDocumentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceVersion": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "PAYMENT",
+                            "REVERSAL"
+                          ]
+                        },
+                        "reversesSourceRecordId": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD"
+                          ]
+                        },
+                        "reportedAmount": {
+                          "type": "string",
+                          "maxLength": 13,
+                          "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                        },
+                        "payerName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "payerIdentifier": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "payerIdentifierSystem": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "payerClaimControlNumber": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceCoverageId": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "paymentTrace": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "paymentTraceType": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "paymentTraceIssuer": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "reportedDate": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                        },
+                        "sourceStatus": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "lineDetailCompleteness": {
+                          "type": "string",
+                          "enum": [
+                            "COMPLETE",
+                            "PARTIAL",
+                            "ABSENT"
+                          ]
+                        },
+                        "allocations": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sourceLineId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "amount": {
+                                "type": "string",
+                                "maxLength": 13,
+                                "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                              },
+                              "sourceStatus": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "sourceLineId",
+                              "amount",
+                              "sourceStatus"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "adjustments": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sourceAdjustmentId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sourceLineId": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "codeSystem": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 32
+                              },
+                              "groupCode": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 32
+                              },
+                              "reasonCode": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 32
+                              },
+                              "amount": {
+                                "type": "string",
+                                "maxLength": 13,
+                                "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                              },
+                              "sourceReference": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              }
+                            },
+                            "required": [
+                              "sourceAdjustmentId",
+                              "sourceLineId",
+                              "codeSystem",
+                              "groupCode",
+                              "reasonCode",
+                              "amount",
+                              "sourceReference"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "sourceNamespace",
+                        "sourceRecordId",
+                        "sourceDocumentId",
+                        "sourceVersion",
+                        "kind",
+                        "reversesSourceRecordId",
+                        "currency",
+                        "reportedAmount",
+                        "payerName",
+                        "payerIdentifier",
+                        "payerIdentifierSystem",
+                        "payerClaimControlNumber",
+                        "sourceCoverageId",
+                        "paymentTrace",
+                        "paymentTraceType",
+                        "paymentTraceIssuer",
+                        "reportedDate",
+                        "sourceStatus",
+                        "lineDetailCompleteness",
+                        "allocations",
+                        "adjustments"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "review": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "decision": {
+                          "type": "string",
+                          "enum": [
+                            "ACCEPT",
+                            "REJECT"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "reviewedByUserId": {
+                          "type": "string"
+                        },
+                        "reportedAmount": {
+                          "type": "string",
+                          "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                        },
+                        "reversedEvidenceId": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "decision",
+                        "createdAt",
+                        "reviewedByUserId",
+                        "reportedAmount",
+                        "reversedEvidenceId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "claimId",
+                    "createdAt",
+                    "contentHash",
+                    "payload",
+                    "review"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/claims/{claimId}/remittances/{id}/preview": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "in": "path",
+            "name": "claimId",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "evidence": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "claimId": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "contentHash": {
+                          "type": "string"
+                        },
+                        "payload": {
+                          "type": "object",
+                          "properties": {
+                            "schemaVersion": {
+                              "type": "number",
+                              "enum": [
+                                1
+                              ]
+                            },
+                            "sourceNamespace": {
+                              "type": "string",
+                              "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                            },
+                            "sourceRecordId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceDocumentId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceVersion": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "PAYMENT",
+                                "REVERSAL"
+                              ]
+                            },
+                            "reversesSourceRecordId": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "currency": {
+                              "type": "string",
+                              "enum": [
+                                "USD"
+                              ]
+                            },
+                            "reportedAmount": {
+                              "type": "string",
+                              "maxLength": 13,
+                              "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                            },
+                            "payerName": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "payerIdentifier": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "payerIdentifierSystem": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "payerClaimControlNumber": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "sourceCoverageId": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "paymentTrace": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "paymentTraceType": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "paymentTraceIssuer": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "reportedDate": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                            },
+                            "sourceStatus": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "lineDetailCompleteness": {
+                              "type": "string",
+                              "enum": [
+                                "COMPLETE",
+                                "PARTIAL",
+                                "ABSENT"
+                              ]
+                            },
+                            "allocations": {
+                              "maxItems": 500,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "sourceLineId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "amount": {
+                                    "type": "string",
+                                    "maxLength": 13,
+                                    "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                                  },
+                                  "sourceStatus": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  }
+                                },
+                                "required": [
+                                  "sourceLineId",
+                                  "amount",
+                                  "sourceStatus"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "adjustments": {
+                              "maxItems": 500,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "sourceAdjustmentId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "sourceLineId": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  "codeSystem": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 32
+                                  },
+                                  "groupCode": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 32
+                                  },
+                                  "reasonCode": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 32
+                                  },
+                                  "amount": {
+                                    "type": "string",
+                                    "maxLength": 13,
+                                    "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                                  },
+                                  "sourceReference": {
+                                    "default": null,
+                                    "nullable": true,
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  }
+                                },
+                                "required": [
+                                  "sourceAdjustmentId",
+                                  "sourceLineId",
+                                  "codeSystem",
+                                  "groupCode",
+                                  "reasonCode",
+                                  "amount",
+                                  "sourceReference"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "schemaVersion",
+                            "sourceNamespace",
+                            "sourceRecordId",
+                            "sourceDocumentId",
+                            "sourceVersion",
+                            "kind",
+                            "reversesSourceRecordId",
+                            "currency",
+                            "reportedAmount",
+                            "payerName",
+                            "payerIdentifier",
+                            "payerIdentifierSystem",
+                            "payerClaimControlNumber",
+                            "sourceCoverageId",
+                            "paymentTrace",
+                            "paymentTraceType",
+                            "paymentTraceIssuer",
+                            "reportedDate",
+                            "sourceStatus",
+                            "lineDetailCompleteness",
+                            "allocations",
+                            "adjustments"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "review": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "decision": {
+                              "type": "string",
+                              "enum": [
+                                "ACCEPT",
+                                "REJECT"
+                              ]
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "reviewedByUserId": {
+                              "type": "string"
+                            },
+                            "reportedAmount": {
+                              "type": "string",
+                              "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                            },
+                            "reversedEvidenceId": {
+                              "nullable": true,
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "decision",
+                            "createdAt",
+                            "reviewedByUserId",
+                            "reportedAmount",
+                            "reversedEvidenceId"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "claimId",
+                        "createdAt",
+                        "contentHash",
+                        "payload",
+                        "review"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "reviewToken": {
+                      "type": "string"
+                    },
+                    "ledgerVersion": {
+                      "type": "string"
+                    },
+                    "claimUpdatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "blockers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "ALREADY_REVIEWED",
+                          "SOURCE_LINE_MISSING",
+                          "SOURCE_COVERAGE_MISSING",
+                          "ORIGINAL_MISSING",
+                          "ORIGINAL_NOT_ACCEPTED",
+                          "REVERSAL_TARGET_MISMATCH",
+                          "REVERSAL_EXCEEDS_REMAINING",
+                          "REVERSAL_ADJUSTMENT_MISMATCH"
+                        ]
+                      }
+                    },
+                    "unallocatedAmount": {
+                      "type": "string",
+                      "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                    },
+                    "originalEvidenceId": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "remainingOriginalAmount": {
+                      "nullable": true,
+                      "type": "string",
+                      "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                    },
+                    "allocations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "sourceLineId": {
+                            "type": "string"
+                          },
+                          "lineId": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "procedureCode": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "tooth": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "string",
+                            "maxLength": 13,
+                            "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                          }
+                        },
+                        "required": [
+                          "sourceLineId",
+                          "lineId",
+                          "procedureCode",
+                          "tooth",
+                          "amount"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "evidence",
+                    "reviewToken",
+                    "ledgerVersion",
+                    "claimUpdatedAt",
+                    "blockers",
+                    "unallocatedAmount",
+                    "originalEvidenceId",
+                    "remainingOriginalAmount",
+                    "allocations"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/claims/{claimId}/remittances/{id}/review": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "ACCEPT",
+                      "REJECT"
+                    ]
+                  },
+                  "reviewToken": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "decision",
+                  "reviewToken",
+                  "idempotencyKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "in": "path",
+            "name": "claimId",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "claimId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "contentHash": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "sourceNamespace": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$"
+                        },
+                        "sourceRecordId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceDocumentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceVersion": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "PAYMENT",
+                            "REVERSAL"
+                          ]
+                        },
+                        "reversesSourceRecordId": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "USD"
+                          ]
+                        },
+                        "reportedAmount": {
+                          "type": "string",
+                          "maxLength": 13,
+                          "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                        },
+                        "payerName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "payerIdentifier": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "payerIdentifierSystem": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "payerClaimControlNumber": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "sourceCoverageId": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "paymentTrace": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "paymentTraceType": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "paymentTraceIssuer": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "reportedDate": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                        },
+                        "sourceStatus": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "lineDetailCompleteness": {
+                          "type": "string",
+                          "enum": [
+                            "COMPLETE",
+                            "PARTIAL",
+                            "ABSENT"
+                          ]
+                        },
+                        "allocations": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sourceLineId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "amount": {
+                                "type": "string",
+                                "maxLength": 13,
+                                "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                              },
+                              "sourceStatus": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "sourceLineId",
+                              "amount",
+                              "sourceStatus"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "adjustments": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sourceAdjustmentId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "sourceLineId": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "codeSystem": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 32
+                              },
+                              "groupCode": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 32
+                              },
+                              "reasonCode": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 32
+                              },
+                              "amount": {
+                                "type": "string",
+                                "maxLength": 13,
+                                "pattern": "^-?(?:0|[1-9][0-9]{0,7})\\.[0-9]{2}$"
+                              },
+                              "sourceReference": {
+                                "default": null,
+                                "nullable": true,
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              }
+                            },
+                            "required": [
+                              "sourceAdjustmentId",
+                              "sourceLineId",
+                              "codeSystem",
+                              "groupCode",
+                              "reasonCode",
+                              "amount",
+                              "sourceReference"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "sourceNamespace",
+                        "sourceRecordId",
+                        "sourceDocumentId",
+                        "sourceVersion",
+                        "kind",
+                        "reversesSourceRecordId",
+                        "currency",
+                        "reportedAmount",
+                        "payerName",
+                        "payerIdentifier",
+                        "payerIdentifierSystem",
+                        "payerClaimControlNumber",
+                        "sourceCoverageId",
+                        "paymentTrace",
+                        "paymentTraceType",
+                        "paymentTraceIssuer",
+                        "reportedDate",
+                        "sourceStatus",
+                        "lineDetailCompleteness",
+                        "allocations",
+                        "adjustments"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "review": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "decision": {
+                          "type": "string",
+                          "enum": [
+                            "ACCEPT",
+                            "REJECT"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "reviewedByUserId": {
+                          "type": "string"
+                        },
+                        "reportedAmount": {
+                          "type": "string",
+                          "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                        },
+                        "reversedEvidenceId": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "decision",
+                        "createdAt",
+                        "reviewedByUserId",
+                        "reportedAmount",
+                        "reversedEvidenceId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "claimId",
+                    "createdAt",
+                    "contentHash",
+                    "payload",
+                    "review"
                   ],
                   "additionalProperties": false
                 }

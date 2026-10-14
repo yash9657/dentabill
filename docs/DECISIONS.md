@@ -1444,3 +1444,72 @@ Public sources: [ClaimProcs](https://www.opendental.com/site/apiclaimprocs.html)
 Stable line identities enable the next FW-21 slice; payment events, allocations, adjustments,
 reversals, reconciliation and source revision approval are not implemented by these snapshots.
 No live connector, migration of AWS, production rollout, real payment or parity claim follows.
+
+## ADR-073 — Reviewed remittance evidence with bounded reversals
+
+**Date:** 2026-10-13. **Status:** local implementation; deployment, real remittance connectors and cash evidence pending.
+
+A payer's remittance reports adjudication; it does not prove receipt, posting, settlement or
+incremental recovery. CMS distinguishes EFT transfer instructions from ERA explanations and
+allows one payment across multiple claims. Its Medicare recoupment example shows a corrected
+claim reversal preceding actual recoupment; that example is Medicare-specific, not a universal
+payer rule. Open Dental likewise separates claim procedure insurance amounts from batch checks,
+estimates and write-offs. We preserve these distinctions rather than treating a reviewed report
+as a bank transaction.
+
+1. A strict custom version1 JSON contract imports one claim-level PAYMENT or REVERSAL event.
+   USD amounts are exact signed decimal strings. Line amounts decompose the claim report;
+   adjustments retain independent signed amounts and raw code/reference fields. The source
+   declares COMPLETE, PARTIAL or ABSENT line detail. Missing line/coverage identities remain
+   unmatched; procedure codes, claim numbers and traces are never identity substitutes.
+   Provider-level adjustments, native835 parsing, cash movements and PMS postings are outside
+   this contract and remain required future work.
+2. Source identity is `(organizationId, sourceNamespace, sourceRecordId)`, unique across claims.
+   Canonical evidence is keyed with the existing hash secret and bound to its claim. Identical
+   retries return the same record; changed evidence conflicts without overwriting history.
+   Traces/document IDs are correlation fields and may repeat across independent claim events.
+   The operator's declaration is not proof that the evidence came from a payer.
+3. A fresh preview binds evidence hash, current claim timestamp and scoped evidence/review
+   counts. Stored OWNER, ADMIN or BILLING_STAFF roles can accept/reject. The review stores the
+   actor, token, exact evidence/version, original reference and idempotency key. Request replay
+   binds the actor and identical decision/token, returning the original result even after later
+   ledger changes. A changed preview requires a fresh review; a timeout retains the same request.
+4. Accepted rows mirror the imported header, line allocations and adjustments exactly. Rejected
+   evidence contributes no amount or children. A reversal can arrive first and remain unresolved;
+   accepting it requires an accepted original PAYMENT with matching tenant, claim, source,
+   payer identity and explicit coverage. Cumulative reversals cannot exceed the original header,
+   each line, unallocated residual or each signed adjustment. None represents actual recoupment.
+5. Migration25 adds four immutable tables, scoped restrictive FKs and deferred exact child/mirror
+   checks. A review-admission tuple write serializes direct SQL writers even under repeatable-read
+   snapshots while preserving claim updatedAt. API transactions lock the claim and commit the
+   complete review/children/audit together. Source admission additionally locks the organization
+   for uniqueness across claims. No workflow status, claim amount or recovered-revenue metric changes.
+6. Financial evidence prevents parent claim deletion; the API returns409 rather than losing
+   evidence or emitting a raw FK error. Actor/source references are also retained. This is an
+   integrity safeguard, not a completed legal retention/deletion program. Approved correction,
+   erasure, legal-hold and backup policies remain production work; immutable evidence must not
+   be dropped as an operational workaround.
+7. The biller screen imports custom JSON, exposes exact source facts and fresh mappings, supports
+   acceptance/rejection and preserves uncertain retry commands. Amount summaries count only
+   accepted claim reports, with line allocations and residual as their components. Cash receipt,
+   posting and settlement remain explicitly UNVERIFIED. User/practice cache scoping prevents late
+   auth resolution or mutation completion from crossing the initiating scope.
+8. Import raw and normalized payloads are bounded to1MiB, with500 allocations/500 adjustments.
+   Pages fetch at most11 records and return at most10, additionally bounded to2MiB including
+   summary/cursor allowance. This leaves room for the Lambda proxy envelope and JSON escaping
+   within the documented6MiB synchronous response limit. Clients follow hasMore/cursor and
+   cannot assume requested limit equals returned count. Validation/DB errors never log source
+   payloads. Read, import, review and exact-replay access have PHI-safe audit entries.
+
+Primary sources checked2026-10-13:
+[CMS EFT/ERA](https://www.cms.gov/priorities/key-initiatives/burden-reduction/administrative-simplification/transactions/health-care-payment-remittance-advice-electronic-funds-transfer),
+[CMS claim/provider adjustments](https://www.cms.gov/medicare/coding-billing/electronic-billing/health-care-payment-remittance-advice),
+[Medicare2012 recoupment example](https://www.cms.gov/regulations-and-guidance/guidance/transmittals/downloads/r1101otn.pdf),
+[Open Dental ClaimPayments](https://www.opendental.com/site/apiclaimpayments.html),
+[Open Dental ClaimProcs](https://www.opendental.com/site/apiclaimprocs.html),
+[AWS Lambda quotas](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html).
+
+The fabricated files in `apps/api/test/fixtures/remittances` are a custom contract, not an ERA,
+PMS export or supported connector. Full financial correctness still requires independent cash,
+posting, provider adjustments, source reconciliation and defensible attribution. No production
+migration, AWS deployment, paid inference, actual call or real financial action ran.

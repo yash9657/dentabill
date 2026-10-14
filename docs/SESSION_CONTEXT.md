@@ -4,6 +4,70 @@ _Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
+### Latest continuation: remittance import-to-reviewed totals (ADR-073)
+
+The user again asked how much remains. The answer keeps full parity as substantial multi-week
+work, not a few final fixes; external clinic/connector/voice/production gates remain open.
+The prior goal turn made progress (`eee520b`); this continuation builds the next FW-21 slice.
+No clinic exists; all data and local test systems are synthetic. No paid inference, speech,
+call, external submission, real claim/payment change, AWS migration or deployment ran.
+The prepared up-to-$4 Fireworks request is still unanswered and does not block independent work.
+
+- Four immutable tables retain custom payer-reported remittance evidence, exact accepted/rejected
+  decisions, source-line allocations and signed adjustments. Composite scoped/restrictive FKs,
+  direct SQL admission, exact child mirrors and cumulative header/line/residual/adjustment caps
+  prevent cross-tenant and duplicate/over-reversal corruption. Review admission preserves claim
+  updatedAt while serializing concurrent repeatable-read snapshots. Existing records are retained.
+- Source identity spans claims within an org/namespace; canonical HMAC content binds its claim.
+  Identical imports replay; changes conflict. Payer traces/document IDs may repeat across claims.
+  Unknown code/reference strings survive without inferred accounting meaning. Orphan reversals
+  may be imported but cannot be accepted until their original PAYMENT is accepted and matched.
+- Four stored-role-gated API routes implement import, paged history/report summaries, fresh
+  preview and atomic review. Tokens bind evidence, claim timestamp and evidence/review counts.
+  Exact decision/token/idempotency retries bind actor and return the original result after a
+  lost response, even if later state changes. Rejections have zero amount/no children. Audit
+  failures roll back mutation; read and replay responses also require PHI-safe access audit.
+- Reported header totals include allocations and an explicit unallocated portion. Adjustments
+  are independent facts, never extra paid money. No cash receipt, recoupment, posting, settlement,
+  workflow resolution or recovered revenue is inferred. Claims with remittance evidence return409
+  on deletion; source/actor references stay retained. This is not a complete legal retention policy.
+- The actual claim screen imports bounded custom JSON, shows raw source/coverage/payment facts,
+  previews mappings and reverse references, accepts/rejects and exposes pending/history totals.
+  It preserves identical commands after uncertain responses, invalidates stale previews and
+  isolates late auth/mutation effects by claim/user/optional practice. Personal accounts work.
+- Raw/canonical input is bounded to1MiB, with500 allocations/adjustments each. Pages fetch at
+  most11 records, return at most10 and stay below2MiB with cursor allowance for Lambda response
+  headroom. The SDK now retains concrete nullable field types: replacing Zod null transforms
+  with nullable defaults fixed initial unknown output types without changing canonical values.
+
+**Verification:** migration25 `20261014030000_remittance_evidence` applied only to
+localhost `dentabill_test` and isolated `dentabill_w0_identity`. Direct ledger69 plus preservation
+migration1 pass, including READ COMMITTED/REPEATABLE READ reversal races; tenant32 pass.
+New remittance API45 pass after fixing two test writes missing org scope and a bounded large
+UTF-8 test timeout. SDK34 pass including nullable-field generation regression. UI20 pass
+(15 actual-hook/SDK transport workflows plus5 claim-detail checks). API TypeScript build and
+both Lambda bundles pass (35.8/28.8MB unzip,10.7/9.4MB zip). Affected Turbo typecheck/lint
+30/30 and full Next production build pass. Full API **652/652 across38 files** pass, including
+all45 new remittance cases. Final API/worker Lambda bundles were rebuilt after the SDK schema fix.
+
+Synthetic actual ClaimDetailPage Chromium at1280/390px passes upload→preview→accept,
+identical review retry after uncertain response and orphan reversal rejection, with no horizontal
+overflow or page errors. This is local mocked auth/API evidence, not deployed Clerk/AWS/PMS e2e.
+Artifacts `/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-remittance-visual-ihyhlr_p`;
+server stopped. Pointer `/tmp/dentabill-remittance-visual-current`; detail log
+`/tmp/dentabill-remittance-visual.log`. Other logs use `/tmp/dentabill-remittance-` prefix:
+`db-tests.log`, `tenant-tests.log`, `web-tests.log`, `sdk-tests.log`, `api-tests.log`,
+`checks.log`, `api-build.log`, `lambda-build.log`, `web-build.log`.
+
+**Exact next task:** continue financial correctness with FW-44 independent source-reported cash
+transactions and posting receipts, then explicit evidence-bound reconciliation without multiplying
+report/cash/posting amounts or assuming settlement. Begin with a small synthetic cash-import/review
+vertical slice; native ERA/PLB, actual banking/PMS receipts, reviewed external posting, correction
+and recovery attribution remain required. FW-43 source revisions/legacy binding/sync and all real
+connectors, appeals/corrections/attachments/receipts, live AI/voice, agreements and AWS end-to-end
+operation retain their full scope. Preserve both existing stashes. No overall complete/blocked
+status is justified by this local milestone or the unanswered optional experiment budget.
+
 ### Latest continuation: procedure and coverage import-to-detail (ADR-072)
 
 The user asked how much remains. The status answer identified a substantial multi-week scope,

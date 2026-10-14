@@ -1,5 +1,12 @@
 # DentaBill: competitive gaps and the Fireworks implementation plan
 
+Current local progress (2026-10-13, ADR-073): FW-21 now has custom remittance import, immutable
+reviewed payer reports, explicit procedure allocations/adjustments and bounded partial reversals.
+The biller workflow keeps cash receipt, posting and settlement unverified. Synthetic local
+contracts do not establish real ERA/PMS integration. FW-44 tracks independent cash/posting
+sources and reconciliation; provider adjustments, recovery attribution and all original parity
+requirements remain open. No AWS deployment or actual financial action ran.
+
 Current local progress (2026-10-13, ADR-072): FW-21 now preserves procedure-level billed lines
 and explicit coverage sequence/claim target from custom synthetic CSV through the claim detail
 screen. Exact totals, nullable identity, tenant-scoped immutable snapshots and atomic child
