@@ -34,7 +34,7 @@ const blockedKeys = new Set([
   'DEBUG',
 ]);
 
-const DemoPreflightCodeSchema = z.enum([
+export const DemoPreflightCodeSchema = z.enum([
   'DEMO_ARGUMENTS_INVALID',
   'DEMO_DATABASE_NOT_ISOLATED',
   'DEMO_EXTERNAL_CONFIGURATION',

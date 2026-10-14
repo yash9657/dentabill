@@ -13,6 +13,20 @@ Evidence labels:
 
 ## Local implementation evidence added after the baseline
 
+FW-45 create-only provisioning (ADR-083) is **repository/local synthetic evidence**. The isolated
+CLI stages checked migration bytes, creates only a fresh admitted localhost database, refuses
+existing/racing targets and checks the exact applied journal. It atomically creates one synthetic
+practice, Owner, payer configuration and audit, then verifies the result read-only. The receipt
+binds the provision UUID, actor/audit IDs, fixture manifest hash and migration digest/count;
+created databases are preserved on failure and uncertain outcomes stay explicit. 15 database cases and
+27 focused cases pass across two runs (42 total), with independent review clear. Actual CLI
+33-migration creation, unchanged existing-target refusal and read-only preflight smoke pass;
+final affected API/dependency checks24/24, both strict CLI types and API production build pass.
+The final 8-case recheck overlaps the 42 distinct cases. This does not verify
+Clerk, launch the app, import financial fixtures or create a recording. ADR-082 is committed as
+`be680d6`; the isolated launcher, authenticated rehearsal, finished asset and all real-provider/
+production gates remain open.
+
 FW-45 synthetic demo preparation (ADR-082) is **repository/local synthetic evidence**. A connected
 manifest and existing-parser contract keep CSV claims, remittance100/80, provider−30/batch150,
 cash150 partial matches, posting header150/entries180 and correction140 in one identity chain.
@@ -30,7 +44,8 @@ nonworking Clerk keys. Current API/dependency checks24/24, strict CLI types and 
 earlier30/30 was a broader pre-fix scope. Installed Node/pnpm/
 tsx are trusted; parent preloads already executed cannot be undone. No authenticated rehearsal
 is claimed. The guide uses actual
-screens but no recording asset or landing-page video is supplied. Guarded setup/launcher,
+screens but no recording asset or landing-page video is supplied. Guarded provisioning is tracked
+in ADR-083 above; the isolated launcher,
 authenticated rehearsal and recording/asset integration follow. ADR-081 is committed as `8dd6f11`;
 FW-43, financial follow-ons and all original real-provider/production gates remain open.
 

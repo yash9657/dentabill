@@ -9,7 +9,29 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice — FW-45 synthetic demo preparation (ADR-082), locally verified:**
+**Latest local slice — FW-45 create-only demo provisioning (ADR-083), locally verified:**
+`demo:provision` reuses the isolated runtime and explicit local demo guard from ADR-082
+(`be680d6`). It stages all checked migration bytes before creating a fresh admitted localhost
+database. Existing databases and competing creation are refused; there is no reset, drop or
+resume path. After exact migration-journal and empty-workflow checks, one transaction creates
+the exact synthetic practice, Owner, payer configuration and `demo.provisioned` audit. A read-only
+postcheck precedes the receipt with actor/audit IDs, provision UUID, manifest hash and migration
+digest/count. Failures preserve created databases; uncertain child/cleanup/report outcomes do
+not claim nothing was created. Authentication, rehearsal and recording remain NOT_VERIFIED.
+15 database tests and 27 focused tests pass across two runs (42 cases); independent review found
+no actionable issue. Actual CLI 33-migration creation, unchanged existing-target refusal and
+read-only preflight smoke pass. Affected API/dependency lint/typecheck passes 24/24, both CLI
+entrypoints pass strict typecheck and the API production build passes. The final 8-case recheck
+passes without adding to the 42 distinct cases. No new schema migration, public API or product
+UI change is introduced.
+
+**Immediate next:** an isolated web/API launcher, including a private Next copy that avoids
+repository dotenv, then actual Clerk authentication and rehearsal. Record and integrate the
+finished landing-page asset afterward; no recording asset or demo-ready claim exists yet. FW-43
+source observations/reviewed legacy binding/additive snapshots, remaining financial correction/
+ownership/allocation work and the full original scope remain open.
+
+**Previous local slice — FW-45 synthetic demo preparation (ADR-082), committed as `be680d6`:**
 A connected public fixture bundle and manifest now describe the actual financial-review workflow:
 claims/remittance100+80, provider adjustment−30/batch150, cash150 matched100 then50, posting
 header150/entries180 and an optional correction140/release chapter. A read-only CLI preflight
@@ -27,12 +49,6 @@ Clerk keys. Current affected API/dependency checks24/24, strict CLI types and AP
 pass; the earlier30/30 was a broader pre-fix scope. Installed Node/pnpm/tsx
 remain trusted; parent preloads already executed cannot be undone. Authentication stays unverified. ADR-081 is committed as
 `8dd6f11`. No schema, public API or product UI change is part of this bounded preparation.
-
-**Immediate next:** ADR-083 create-only guarded local provisioning, then an isolated web/API
-launcher and actual authenticated rehearsal. Do not reintroduce live settings through dotenv symlinks. Record and integrate the
-finished landing-page asset afterward; no recording asset or demo-ready claim exists yet. FW-43
-source observations/reviewed legacy binding/additive snapshots, remaining financial correction/
-ownership/allocation work and the full original scope remain open.
 
 **Previous local slice — FW-44 posting-entry relationships (ADR-081), committed as `8dd6f11`:**
 Reviewed associations now bind a current accepted posting entry to an exact-source imported claim

@@ -43,6 +43,7 @@ export class IsolatedDemoRuntimeError extends Error {
 export interface IsolatedDemoRuntime {
   readonly directory: string;
   readonly entryPath: string;
+  readonly schemaPath: string;
   dispose(): Promise<void>;
 }
 
@@ -248,6 +249,7 @@ export async function prepareIsolatedDemoRuntime(
     return {
       directory: ownedDirectory,
       entryPath,
+      schemaPath,
       dispose: async (): Promise<void> => {
         await rm(ownedDirectory, { recursive: true, force: true });
       },

@@ -2054,3 +2054,76 @@ dotenv symlinks that reintroduce live configuration. An authenticated walkthroug
 recording and integrating the finished asset. FW-43 source observations, reviewed legacy binding,
 additive snapshots/application, claim-remittance corrections, cross-batch ownership transfer,
 claim cash allocation/attribution and the complete remaining plan stay open.
+
+## ADR-083 — Create-only isolated synthetic demo provisioning
+
+**Date:** 2026-10-14. **Status:** implemented and verified locally.
+ADR-082 is committed as `be680d6`. No new schema migration, public API or product UI change is
+introduced. The app launcher, real Clerk rehearsal, recording and landing asset remain open.
+
+The supported walkthrough needs a fresh dedicated database and exact actor binding before the
+read-only preflight can pass. Bootstrap those facts through a separate isolated command without
+reusing the legacy seed/reset/simulator or importing workflow fixtures.
+
+1. `demo-provision.mts` and the existing preflight entrypoint are thin wrappers around
+   `command-cli.ts`. The shared runner validates the explicit localhost/demo-name, local-origin,
+   synthetic-mode and external-configuration rules before importing the private runtime. It
+   generates a provision UUID, executes only the bundled command with the environment allowlist,
+   validates a closed report with a matching process exit status and disposes private artifacts.
+   ADR-082's installed-toolchain trust and inability to undo an already-run parent preload remain.
+2. The provision command admits only the private runtime's schema path, verifies the connected
+   fixture manifest and stages the complete migration chain before starting database work.
+   Bounded regular-file/no-follow reads and SHA-256 comparisons preserve the checked SQL bytes;
+   a versioned digest binds the sorted migration names/checksums. The private tree contains only
+   those migrations and the known PostgreSQL lock file. No new migration is added by this slice.
+3. The maintenance connection must identify the actual writable `postgres` database. CREATE
+   DATABASE runs outside a transaction with a strictly admitted, quoted fresh `dentabill_demo_`
+   identifier and `template0`. Existing targets and concurrent creation are refused. There is no
+   reset, drop, resume or automatic creation retry. The pinned Prisma migration CLI applies the
+   private staged chain with a minimal explicit environment; it does not use repository dotenv.
+4. A read-only transaction verifies the actual target, every exact finished/non-rolled-back
+   migration checksum and empty workflow/bootstrap tables. One transaction then creates exactly
+   the supplied organization/user and Clerk binding, a synthetic Owner, a Delta Dental payer
+   configuration using synthetic NPI `9999999999`, and one mandatory `demo.provisioned` audit.
+   The audit binds the provision UUID, scenario, manifest hash and migration digest/count; failure
+   rolls back all bootstrap facts. No claims, calls, inference, notifications, billing usage or
+   financial evidence are imported or generated.
+5. A second read-only check verifies the exact actor/practice/payer/audit facts, migration journal
+   and absence of workflow data. Only then may stdout report PROVISIONED with provision UUID,
+   database name, actor/audit IDs, manifest hash and migration digest/count. Authentication,
+   authenticated rehearsal and recording remain NOT_VERIFIED. Configured test-key presence does
+   not prove a Clerk session or authorize an external action.
+6. Failures expose a closed code, phase and database state without credentials or raw error output.
+   Acknowledged creations are preserved after migration/seed/postcheck failures. Create ambiguity
+   is CREATE_OUTCOME_UNKNOWN; a child, cleanup or report failure that prevents the parent from
+   knowing the outcome is OUTCOME_UNKNOWN. Such uncertainty must never claim NOT_CREATED. An
+   existing target stays EXISTING_UNCHANGED and must not be modified by a subsequent invocation.
+
+**Local verification:** 15/15 database cases pass in 37.86s, including competing processes, existing
+refusal, migration-failure preservation, atomic audit rollback and postcheck failure. Cleanup
+removed only seven acknowledged test databases (`/tmp/dentabill-demo-provision-database.log`).
+Focused checks pass 27/27 across 5 files in 13.72s: shared CLI 8, contract 2, staging 5, provision CLI 6 and
+preflight CLI 6 (`/tmp/dentabill-demo-provision-focused.log`). These are 42 cases across two runs,
+not a single combined run. Independent bootstrap review found no actionable issue.
+
+The actual CLI smoke created a fresh target with all 33 migrations and a receipt matching the
+stored audit ID/metadata. It held 1 organization/1 Owner/1 payer/1 audit and 0 claims/calls/inference/
+billing. A second actual invocation returned EXISTING_UNCHANGED, read-only preflight passed and
+before/after hashes of organization/user/payer/audit data agreed. Only the newly owned smoke
+database was removed (`/tmp/dentabill-demo-provision-smoke.log`). Nonworking synthetic Clerk keys
+were used; authentication and browser rehearsal were not exercised.
+
+Final affected API/dependency lint/typecheck passes 24/24 (22 cached, 18.531s;
+`/tmp/dentabill-demo-provision-checks-final.log`). Strict types for both CLI entrypoints and API
+production build pass (`/tmp/dentabill-demo-provision-cli-types.log`,
+`/tmp/dentabill-demo-provision-api-build.log`). Initial lint findings in UUID validation, braces
+and the private-path filesystem annotation were fixed; the final contract/actual provision CLI
+recheck passes 8/8 in 4.23s (`/tmp/dentabill-demo-provision-final-recheck.log`). Those cases overlap
+the original 42 distinct cases, not 50. No additional browser, Next or Lambda build is claimed
+for this CLI-only slice.
+
+Next: an isolated API/web launcher, including a private Next copy that avoids repository dotenv,
+then actual Clerk authentication and a complete synthetic walkthrough. Recording and landing-page
+asset integration follow. FW-43 source reconciliation, remaining financial corrections/ownership/
+allocation work and the full original assignment remain open; no production deployment or real
+provider/financial action is claimed.

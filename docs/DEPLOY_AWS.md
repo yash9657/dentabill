@@ -758,9 +758,31 @@ the command with an explicit environment allowlist and closed reports. Private a
 up; installed Node/pnpm/tsx remain trusted and parent preloads already executed cannot be undone.
 Fresh122 tests plus15 separate helper cases and the actual isolated read-only33-migration smoke
 pass, plus current API/dependency checks24/24, strict CLI types and API build (ADR-082). The earlier
-30/30 had a broader pre-fix scope. ADR-083 create-only guarded provisioning and the isolated
-web/API launcher remain the next steps. Guarded setup and an environment-clean launcher must precede
+30/30 had a broader pre-fix scope. ADR-083 create-only guarded provisioning is tracked below; the isolated
+web/API launcher remains the next step. Guarded setup and an environment-clean launcher must precede
 an actual authenticated rehearsal; a completed recording and asset integration follow separately.
 Do not treat test-header HTTP flow, a synthetic-key positive preflight or raw development startup
 as a production/Clerk/browser certification. The full AWS/connector/financial rollout gates and
 FW-43 source reconciliation remain open.
+
+### Create-only local demo provisioning (ADR-083; no deployment change)
+
+`demo:provision` shares preflight's explicit local-demo configuration guard and private generated
+runtime. Before CREATE, it stages all checked migration bytes and their digest beside the private
+schema. It uses a checked local `postgres` maintenance connection, refuses any existing/racing
+target, and applies the staged chain with the pinned Prisma CLI in a minimal environment. It
+has no reset, drop or resume mode. After exact journal and empty-data checks, it atomically creates
+one synthetic practice, Owner, payer configuration and mandatory audit; a read-only postcheck
+gates the success receipt. This is bootstrap only, without claims or financial fixture imports.
+
+15 database tests and 27 focused tests pass across two runs, with independent review clear. Actual CLI
+33-migration creation, unchanged existing-target refusal and read-only preflight smoke pass. Final
+affected API/dependency checks24/24, both strict CLI types and API production build pass; the final
+8-case recheck overlaps the 42 distinct cases. Failed or
+uncertain operations preserve the target and report the observed phase/database state, including
+OUTCOME_UNKNOWN when the parent cannot establish what happened. A failure is not permission to
+reset, drop or resume a target. Success leaves authentication/rehearsal/recording NOT_VERIFIED.
+ADR-082 is committed as `be680d6`; no new schema migration, public endpoint, deployed UI or AWS
+change is introduced. The isolated API/web launcher must also avoid Next's repository dotenv
+loading through a private copy. Actual Clerk rehearsal, recording and landing asset integration
+follow; all production and external-provider gates remain open.

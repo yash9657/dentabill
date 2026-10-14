@@ -378,6 +378,30 @@ checksum/status must agree. Fixture hashes, strict parsers and bounded regular-f
 protect the connected local bundle; these checks do not establish source authenticity or prove
 patient-data provenance. Diagnostics expose closed codes without credentials, database URLs or
 raw fixtures. No reset, migration application, actor provisioning, data import or audit write is
-performed by preflight. Isolated setup, an environment-clean launcher and actual authenticated
+performed by preflight. Create-only setup is tracked below; an environment-clean launcher and actual authenticated
 rehearsal remain required before recording. Legacy seed/simulator and browser test-header bypasses
 are not the verified path; full external and production evidence gates remain open.
+
+### Create-only local demo provisioning (ADR-083)
+
+Provisioning shares the explicit localhost `dentabill_demo_` admission and private runtime above.
+Every migration is checked and staged as exact SQL bytes with a digest before database creation;
+the pinned migration CLI runs beside the private schema with a minimal explicit environment.
+The maintenance connection must identify itself as writable `postgres`. A strictly admitted,
+quoted identifier is used for standalone CREATE DATABASE. Existing targets and creation races
+are refused; there is no reset, drop or resume operation. Failures after acknowledged creation
+preserve the database for inspection. Unknown create, child, cleanup or report outcomes must not
+be represented as NOT_CREATED.
+
+The exact migration journal and empty workflow/bootstrap tables are checked before one transaction
+writes the supplied exact local/Clerk practice/Owner binding, a synthetic payer configuration with
+NPI `9999999999` and one mandatory `demo.provisioned` audit. Audit failure rolls back the entire
+bootstrap. A read-only postcheck verifies the exact metadata, audit, journal and absence of workflow
+data before success. The closed receipt contains the provision UUID, actor/audit IDs, manifest hash
+and migration digest/count, without credentials or raw source facts. It leaves authentication,
+rehearsal and recording NOT_VERIFIED. The inherited installed-toolchain/parent-preload trust limits
+still apply. 15 database tests and 27 focused tests pass separately; independent review is clear. Actual
+CLI 33-migration creation/refusal/read-only preflight smoke passes, along with final affected
+API/dependency checks24/24, both strict CLI types and API production build. The final 8-case recheck
+overlaps the 42 distinct cases. An isolated app launcher and authenticated
+rehearsal remain separate gates; no provider or production authorization is implied.

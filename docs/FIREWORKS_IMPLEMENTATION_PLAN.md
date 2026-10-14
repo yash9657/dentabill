@@ -6,7 +6,22 @@ integration. Demonstrate actual implemented UI workflows and clearly label simul
 behavior; the demo is an additional deliverable, not evidence that real connector, model,
 voice or deployment gates have passed.
 
-Current local progress (2026-10-14, ADR-082): FW-45 preparation adds the connected synthetic
+Current local progress (2026-10-14, ADR-083): create-only demo provisioning reuses ADR-082's
+isolated runtime and explicit local guard. It stages verified migration bytes/digests before
+creating a new admitted localhost database, refuses existing/racing targets and never resets,
+drops or resumes them. Exact journal/empty-workflow checks precede atomic creation of one synthetic
+practice, Owner, payer configuration and audit; a read-only postcheck gates the receipt. Failures
+preserve created databases and report uncertainty honestly. 15 database tests and 27 focused tests pass
+across two runs; independent review is clear. Actual CLI 33-migration creation, unchanged
+existing-target refusal and read-only preflight smoke pass. Final affected API/dependency
+lint/typecheck24/24, both strict CLI types and API production build pass; the final 8-case recheck
+overlaps the 42 distinct cases. ADR-082 is committed as `be680d6`. No new schema migration,
+public API or product UI change is introduced. Next is an isolated web/API launcher, including a
+private Next copy without repository dotenv, followed by actual Clerk authentication/rehearsal,
+recording and landing-page asset integration. Authentication/rehearsal/recording remain NOT_VERIFIED;
+FW-43, financial follow-ons and the complete original scope stay open.
+
+Previous local progress (2026-10-14, ADR-082; committed as `be680d6`): FW-45 preparation adds the connected synthetic
 fixture manifest/parser contract, dedicated localhost read-only preflight and current-screen
 walkthrough. The bundle preserves remittance100+80/provider−30/batch150, cash150 matched100 then50,
 posting header150/entries180 and optional correction140/release facts. Explicit synthetic settings,
@@ -21,8 +36,8 @@ reads, and the actual isolated33-migration CLI smoke retained unchanged data. Cu
 checks24/24, strict CLI types and API build pass; prior30/30 was a broader pre-fix scope. Installed
 Node/pnpm/tsx are trusted and already-executed parent
 preloads cannot be undone. The smoke used nonworking Clerk keys and does not verify authentication. ADR-081 is committed as `8dd6f11`.
-Next: ADR-083 create-only guarded local provisioning, then an isolated web/API launcher without
-live-setting dotenv symlinks, followed by an actual
+The subsequent ADR-083 provisioning slice is tracked above; an isolated web/API launcher without
+live-setting dotenv symlinks remains required, followed by an actual
 authenticated rehearsal before recording and landing-page asset integration. The legacy seed/
 simulator is not the supported path and no demo-ready claim is made. FW-43 source observations,
 reviewed legacy binding/additive snapshots, remaining corrections/ownership/cash attribution and

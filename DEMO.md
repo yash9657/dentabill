@@ -9,34 +9,66 @@ The presenter records the walkthrough after local setup and rehearsal. No video 
 Use a dedicated local database named `dentabill_demo_<run>` and an authenticated synthetic practice with a real Clerk development organization. Keep production data and credentials out of the recording.
 
 - Use the repository’s pinned pnpm version (`pnpm@10.33.0`) and supported Node version (`>=20.19`). Install with `pnpm install --frozen-lockfile` when needed.
-- The local database must have the current migrations, and the pinned workspace dependencies must be installed. Preflight generates its own temporary Prisma client from the checked-in schema. Preparing an empty demo database is a separate setup action; this guide does not reset or replace an existing database.
+- Install the pinned workspace dependencies. The create-only setup command below creates a fresh local database and applies the checked-in migrations. Setup and preflight each generate a temporary private Prisma client; neither resets or replaces an existing database.
 - Configure a real Clerk development session for the browser and corresponding API keys. The API startup output must say `auth mode: clerk`. Browser requests obtain a Clerk bearer token; `x-test-user-id` and `x-test-org-id` are integration-test facilities, **not browser sign-in**.
 - Confirm that the actual Clerk `user_…` and active `org_…` map to the intended local DentaBill user and organization. The preflight requires **OWNER or ADMIN**, one practice and one actor in this isolated database, and an exact real Clerk organization binding; `local_*` bindings are not accepted for this recording setup. Use the top-bar organization switcher to select that practice after sign-in. Sign-in alone does not create or verify the local binding.
 - Configure the local web/API origins consistently, including the web `NEXT_PUBLIC_API_URL`. The usual development URLs are `http://localhost:3000` and `http://localhost:3001`; use the configured ports if different.
 - Keep telephony, paid model, billing and external email delivery disabled. The optional call chapter needs the separately verified synthetic runtime described below; the core financial-review chapter does not need a call.
 
-### Read-only preflight
+### Demo configuration
 
 Supply the configuration explicitly in the command environment. Preflight stages a private Prisma client with no configured dotenv paths and bundles its application code into a temporary runtime; generation, bundling and execution each receive an explicit environment. The temporary runtime is removed afterward. Keep actual secrets in your approved local secret mechanism and out of terminal recordings or this document. Use the trusted installed Node/pnpm toolchain and remove preload, module-path, bundler-binary and debug overrides before invocation; checks inside the command cannot undo code already executed by its launcher.
 
-| Configuration                                                           | Required value or constraint                                                                                                                           |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`                                                          | Local PostgreSQL (`localhost`, `127.0.0.1` or `::1`), database `dentabill_demo_<run>`, current migrations; only the intended practice and actor.       |
-| `NODE_ENV`                                                              | `development`                                                                                                                                          |
-| `NEXT_PUBLIC_APP_URL`                                                   | Local HTTP web origin, typically `http://localhost:3000`.                                                                                              |
-| `NEXT_PUBLIC_API_URL`                                                   | A different local HTTP API origin, typically `http://localhost:3001`.                                                                                  |
-| `INTERNAL_API_BASE_URL`                                                 | Exactly the API origin.                                                                                                                                |
-| `API_CORS_ORIGINS`                                                      | Omit it or set only the web origin.                                                                                                                    |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`                 | Actual matching Clerk development-instance test keys (`pk_test_…` / `sk_test_…`). Optional `CLERK_PUBLISHABLE_KEY` must equal the web publishable key. |
-| `INTERNAL_JOB_SECRET`, `DOB_HASH_SECRET`                                | Nonempty locally supplied secrets of at least 32 / 16 characters respectively.                                                                         |
-| `JOB_DISPATCH_MODE`                                                     | `inline`                                                                                                                                               |
-| `SUMMARY_ANALYSIS_PROVIDER`                                             | `SYNTHETIC`                                                                                                                                            |
-| `SUMMARIZER_AUTO_TRANSITION_ENABLED`                                    | `false`                                                                                                                                                |
-| `DEMO_AUTOPILOT`, `DEMO_IGNORE_PAYER_HOURS`, `DEMO_SUMMARIZER_FALLBACK` | Each exactly `true`.                                                                                                                                   |
+| Configuration                                                           | Required value or constraint                                                                                                                                                                  |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                          | Local PostgreSQL (`localhost`, `127.0.0.1` or `::1`), database `dentabill_demo_<run>`. Setup requires a new name; preflight requires current migrations and only the intended practice/actor. |
+| `NODE_ENV`                                                              | `development`                                                                                                                                                                                 |
+| `NEXT_PUBLIC_APP_URL`                                                   | Local HTTP web origin, typically `http://localhost:3000`.                                                                                                                                     |
+| `NEXT_PUBLIC_API_URL`                                                   | A different local HTTP API origin, typically `http://localhost:3001`.                                                                                                                         |
+| `INTERNAL_API_BASE_URL`                                                 | Exactly the API origin.                                                                                                                                                                       |
+| `API_CORS_ORIGINS`                                                      | Omit it or set only the web origin.                                                                                                                                                           |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`                 | Actual matching Clerk development-instance test keys (`pk_test_…` / `sk_test_…`). Optional `CLERK_PUBLISHABLE_KEY` must equal the web publishable key.                                        |
+| `INTERNAL_JOB_SECRET`, `DOB_HASH_SECRET`                                | Nonempty locally supplied secrets of at least 32 / 16 characters respectively.                                                                                                                |
+| `JOB_DISPATCH_MODE`                                                     | `inline`                                                                                                                                                                                      |
+| `SUMMARY_ANALYSIS_PROVIDER`                                             | `SYNTHETIC`                                                                                                                                                                                   |
+| `SUMMARIZER_AUTO_TRANSITION_ENABLED`                                    | `false`                                                                                                                                                                                       |
+| `DEMO_AUTOPILOT`, `DEMO_IGNORE_PAYER_HOURS`, `DEMO_SUMMARIZER_FALLBACK` | Each exactly `true`.                                                                                                                                                                          |
 
 Remove inherited live-service configuration from this dedicated process environment. Preflight refuses nonempty Retell, Fireworks, Anthropic, OpenAI, Stripe, mail, AWS, Vercel/Railway, Telnyx/Twilio, ElevenLabs, Upstash and Sentry settings; it also refuses Redis/SQS URLs, model-release selectors, the Clerk webhook secret, `NODE_OPTIONS`, `NODE_PATH`, `ESBUILD_BINARY_PATH`, `DOTENV_CONFIG_PATH` and `DEBUG`. Clerk test authentication is the intentional external service. A presence/format check of its keys is not proof that authentication succeeds.
 
-From the repository root, with those explicit variables already supplied, run:
+### Create the local demo practice
+
+Choose a new admitted database name and the actual intended Clerk development organization/user. The local database role must have permission to create a database; the command connects to the same local server's `postgres` maintenance database with those credentials.
+
+From the repository root, with the explicit configuration supplied, run:
+
+```bash
+pnpm --filter @dentabill/api exec tsx scripts/demo-provision.mts \
+  --organization-id '<local-organization-id>' \
+  --user-id '<local-user-id>' \
+  --clerk-organization-id 'org_REPLACE_WITH_ACTUAL_ID' \
+  --clerk-user-id 'user_REPLACE_WITH_ACTUAL_ID'
+```
+
+Replace every placeholder with the intended binding. The command verifies the bundle, stages the exact migration bytes in its private runtime, creates the database, applies those migrations, and atomically adds one synthetic practice, one OWNER, a Delta Dental PPO configuration and one `demo.provisioned` audit. The practice/payer NPI is the synthetic `9999999999`; the owner's local display email is `demo-operator@example.test`. No claims, calls, financial evidence, inference or billing records are seeded. Import the bundle through the app during rehearsal.
+
+Success prints `PROVISIONED` with the provisioning UUID, exact actor binding, audit ID, manifest hash and migration digest/count. Save that JSON receipt with your local setup notes. Authentication, authenticated rehearsal and recording remain `NOT_VERIFIED`; creating local rows does not authenticate the browser or change Clerk membership.
+
+An existing database is always refused, including a repeat with identical actor arguments. There is no reset, resume or rebind option. A failure preserves any created database and reports its phase and state:
+
+| `databaseState`          | Meaning                                                                                 |
+| ------------------------ | --------------------------------------------------------------------------------------- |
+| `NOT_CREATED`            | This run did not create a database, or creation was explicitly rejected.                |
+| `EXISTING_UNCHANGED`     | The target already existed or another creator won; this run did not migrate or seed it. |
+| `CREATED_PRESERVED`      | Creation was acknowledged; the failed run kept the database for inspection.             |
+| `CREATE_OUTCOME_UNKNOWN` | The creation response was uncertain; the target may exist.                              |
+| `OUTCOME_UNKNOWN`        | A child-process or reporting failure obscured the result; work may have completed.      |
+
+Inspect the named database and receipt before further action. Do not treat a lost response as a failed creation or an invitation to reset data. A different fresh database name starts an independent run; the prior database remains preserved. Read-only preflight can verify a completed binding, but cannot repair a partial migration or seed.
+
+### Read-only preflight
+
+With the same explicit configuration and actor identifiers, run:
 
 ```bash
 pnpm --filter @dentabill/api exec tsx scripts/demo-preflight.mts \
@@ -48,7 +80,7 @@ pnpm --filter @dentabill/api exec tsx scripts/demo-preflight.mts \
 
 Replace every placeholder with the intended actor’s actual identifiers. Success prints `PREFLIGHT_PASSED`, `readOnly: true` and the migration count/actor role, while authentication, authenticated rehearsal and recording remain explicitly **not verified**. It checks local configuration, the bundle, migrations and database bindings in a read-only transaction. It does not start servers, create an actor or practice, apply migrations, upload records, contact Clerk to validate membership, or record a video. A failure returns a closed reason code; fix the named prerequisite rather than weakening the guard.
 
-**Launch remains a separate pending step.** Guarded local actor provisioning, isolated database preparation and the environment-clean API/web launcher must be completed and rehearsed before using this guide to record. Do not treat raw `pnpm dev`, inherited `.env` files or dotenv symlinks as the verified launch path. Do not substitute the legacy seed or simulator for a missing prerequisite.
+**Launch remains a separate pending step.** Create-only provisioning is implemented. The isolated API/web launcher and authenticated rehearsal must still be completed before using this guide to record. Do not treat raw `pnpm dev`, inherited `.env` files or dotenv symlinks as the verified launch path. Do not substitute the legacy seed or simulator for a missing prerequisite.
 
 Do **not** run `seed:demo --reset`, the old 40-claim demo seed, or `demo:call` / `simulate-live-call.mts` for this walkthrough. Their old assumptions and unscoped simulation are not this bundle’s authenticated workflow. Do not create test-header browser bypasses.
 
