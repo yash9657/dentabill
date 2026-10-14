@@ -638,3 +638,11 @@ organization lock/query latency without source values. Roll back application exp
 retaining immutable financial history. No bank verification, claim cash allocation, external
 posting or settlement is asserted; authenticated connectors, retention/restore and AWS end-to-end
 operation remain gates.
+
+### Tenant limiter hook correction (ADR-077; not deployed)
+
+No migration or environment change. Call enqueue and practice-settings route overrides must
+run their10/minute organization limiter at `preHandler`, after `requireAuth`. Validate401 for
+anonymous traffic,429 after ten practice requests and independent quota for a second practice.
+The plugin store is process-local; this fix does not establish a fleet-wide spend/call ceiling.
+No real calls were made by the local regression.

@@ -272,3 +272,11 @@ state. Mutation receipts never change on retry.4KiB bodies and20-record/2MiB pag
 Manual review establishes no source authenticity, bank verification, claim allocation, external
 posting or settlement. Cross-connector account identity, production retention/erasure, PHI
 agreements and authorized bank/PMS integration evidence remain unresolved deployment gates.
+
+### Authenticated tenant rate-limit ordering (ADR-077; local only)
+
+Call enqueue and practice-settings writes now apply their10/minute practice limiter after
+`requireAuth`. Four regressions reproduce the earlier shared pre-auth `anon` bucket and verify
+that anonymous requests cannot drain authenticated quota, users/IPs share their practice limit
+and other practices remain isolated. These are process-local plugin limits; no distributed
+quota or production WAF/load evidence is claimed. Production configuration is unchanged.

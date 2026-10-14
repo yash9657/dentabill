@@ -1681,3 +1681,25 @@ Primary sources refreshed2026-10-14: [Open Dental reconciliation](https://www.op
 [CMS payment/remittance advice](https://www.cms.gov/medicare/coding-billing/electronic-billing/health-care-payment-remittance-advice).
 Next: independent PMS posting receipts, explicit source/batch corrections, claim cash allocation
 and defensible attribution. Real connectors and authorized end-to-end evidence remain mandatory.
+
+## ADR-077 — Resolve organization identity before tenant rate limits
+
+**Date:** 2026-10-14. **Status:** local regression reproduced and fixed; not deployed.
+
+The installed `@fastify/rate-limit`10.3 defaults route overrides to `onRequest`, before the
+application's `requireAuth` preHandler populates organization identity. Two overrides—
+PATCH `/v1/me/organization` and POST `/v1/claims/:id/calls`—therefore put every requester into
+the same route-local `anon` bucket. Ten anonymous requests or one practice's traffic could
+block unrelated practices. Existing recovery/operations routes already use the correct hook.
+
+Set these two overrides to `hook: 'preHandler'`. The installed plugin appends its limiter after
+the existing authentication hook, which rejects anonymous requests before the organization
+bucket is consulted. Keep10/minute per practice, shared by its users/IPs, and the current global
+limiter unchanged. Route overrides replace the global limiter; this is not a new distributed
+fleet quota or an anonymous-traffic admission layer. Production infrastructure controls and
+deployed multi-instance behavior remain separate operational validation.
+
+Four real-Postgres route regressions fail before the fix and pass after it, proving authentication
+ordering, shared practice quotas, different-practice isolation and blocked writes. Focused
+rate-limit/me/calls77/77 pass. The test call route uses a nonexistent synthetic claim and cannot
+create a call intent or external call. No schema, provider configuration or external action changed.

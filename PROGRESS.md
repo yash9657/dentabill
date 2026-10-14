@@ -9,6 +9,11 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
+**Additional local fix:** FW-30 tenant rate limits now run after authentication on call enqueue
+and practice settings. Four before/after regressions and focused77/77 pass (ADR-077). This
+removes shared anonymous quotas across practices; deployed/fleet-wide behavior remains unverified.
+Independent PMS posting evidence is now in progress.
+
 **Latest local slice:** FW-44 reviewed cash-to-batch reconciliation (ADR-076) supports signed
 partial many-to-many matches with exact accepted source/review bindings, two-sided capacities,
 retained stale/replacement reservations, immutable retry receipts and explicit full releases.

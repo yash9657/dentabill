@@ -473,6 +473,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       // beyond Retell's per-account concurrency.
       config: {
         rateLimit: {
+          hook: 'preHandler',
           max: 10,
           timeWindow: '1 minute',
           keyGenerator: (req): string => req.dentabillAuth?.orgId ?? 'anon',

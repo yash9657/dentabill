@@ -4,6 +4,23 @@ _Last updated: 2026-10-14 (full-scope goal active; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
+### 2026-10-14: FW-30 tenant rate-limit correction (ADR-077)
+
+Completed after reconciliation commit `a3d1d84`: two route overrides keyed by organization ran
+before authentication and shared an `anon` bucket. Call enqueue and practice-settings limits
+now run in `preHandler` after `requireAuth`. Four focused regressions failed before and pass
+after the two-line fix; combined rate-limit/me/calls77/77 pass. Logs:
+`/tmp/dentabill-fw30-rate-limit-before.log`, `...-focused.log`. Scoped lint/API types pass.
+No schema/provider change, external action or deployment. Process-local quotas do not establish
+a distributed fleet limit. Full-scope goal remains ACTIVE.
+
+Next financial slice is underway: independent PMS posting receipts. Contract preserves source
+header separately from entry totals, ordered revisions and original signs/raw statuses. Accepted
+PARTIAL/ABSENT revisions must retain prior source-entry identity reservations until a COMPLETE
+replacement or REMOVED revision explicitly clears them. Source review leaves claim references
+UNLINKED and source/bank verification/settlement UNVERIFIED. Migration30 and API/UI integration
+are not yet validated. Continue the full handoff after this slice; fake data only.
+
 ### 2026-10-14: full-scope persistent goal and FW-44 reconciliation
 
 The user explicitly requested completion of the entire remaining handoff/main implementation
