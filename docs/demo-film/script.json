@@ -1,0 +1,82 @@
+[
+  {
+    "id": "intro",
+    "title": "Your day belongs to your patients.",
+    "lines": [
+      "Your day belongs to your patients. Insurance admin shouldn't run the practice. Meet Denta Bill."
+    ]
+  },
+  {
+    "id": "claims",
+    "title": "One place to start.",
+    "lines": [
+      "Bring your open claims into one workspace.",
+      "Keep the original claim, procedure, service date, and source identity together. Your team starts with the facts in view, and a clear place to begin the follow-up."
+    ]
+  },
+  {
+    "id": "call",
+    "title": "Follow the conversation.",
+    "lines": [
+      "Here's a simulated follow-up, using synthetic data.",
+      "Watch the claim move from an I V R menu to a representative conversation. Denta Bill supplies the subscriber and service date, then captures the response in one readable timeline.",
+      "This demonstration simulates both the call and its analysis. No payer is contacted."
+    ]
+  },
+  {
+    "id": "summary",
+    "title": "A clearer next step.",
+    "lines": [
+      "Instead of digging through notes, your team sees a reported status, representative, reference number, and suggested next step.",
+      "This claim is pending, and stays in manual review. The evidence is there when a person needs to make the decision."
+    ]
+  },
+  {
+    "id": "remittance",
+    "title": "Make the numbers explain themselves.",
+    "lines": [
+      "Now review separate, imported financial evidence.",
+      "Two remittances total one hundred and eighty dollars. A thirty-dollar provider adjustment brings the batch to one hundred and fifty. Your team can inspect the source before accepting it."
+    ]
+  },
+  {
+    "id": "cash",
+    "title": "Preview. Review. Match.",
+    "lines": [
+      "Review a separate, one-hundred-and-fifty-dollar cash-source record. Bank verification remains unverified in this demo.",
+      "Match one hundred, then the remaining fifty. The preview shows what is reserved and what remains available before each decision."
+    ]
+  },
+  {
+    "id": "posting",
+    "title": "Keep every connection clear.",
+    "lines": [
+      "Keep receipt headers and line items visible, even when they differ. Here, the header is one hundred and fifty, while the entries total one hundred and eighty.",
+      "Link an entry to an exact claim and procedure, or keep the association at claim level."
+    ]
+  },
+  {
+    "id": "correction",
+    "title": "A correction. Without losing the story.",
+    "lines": [
+      "Then the source changes. The corrected batch is one hundred and forty.",
+      "Earlier reservations stay visible, and another match is blocked. Release them explicitly, review the new match, and see the remaining ten dollars in cash-source capacity.",
+      "The original records and released matches are still there. Your team can follow what changed."
+    ]
+  },
+  {
+    "id": "audit",
+    "title": "A history you can follow.",
+    "lines": [
+      "The audit trail keeps recorded actions and available actor details visible, alongside the earlier evidence and released relationships.",
+      "From the first follow-up to the next review, the work stays connected."
+    ]
+  },
+  {
+    "id": "close",
+    "title": "More focus for your practice.",
+    "lines": [
+      "Less piecing together. A clearer next step for your practice. Denta Bill. Explore the workflow, and see how your team could work."
+    ]
+  }
+]

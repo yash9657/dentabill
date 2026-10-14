@@ -226,7 +226,7 @@
 
 **Creative North Star: "The Calm Front Desk"**
 
-DentaBill combines warm ivory, deep pine, and muted sage with editorial Newsreader headlines and practical Inter controls. The public site is open and conversational; the working application is compact, structured, and easy to scan. Both use the same colors, shapes, controls, and dental-outline identity.
+DentaBill combines warm ivory, deep pine, and muted sage with editorial Newsreader headlines and practical Inter controls. The public site is open and conversational; the working application is compact, structured, and easy to scan. Both use the same colors, shapes, controls, and abstract open-D identity.
 
 This document records the implemented redesign. The normative implementation is packages/ui/src/theme.css and its TypeScript mirror, packages/ui/src/tokens.ts; app-specific compositions live in apps/web/src/app/globals.css. The frontmatter records their values, while the sidecar extends them with stateful previews, shadows, motion, and responsive metadata. The descriptive north star names the built system; it is not a record of an approved image-generation concept.
 
@@ -236,7 +236,7 @@ This document records the implemented redesign. The normative implementation is 
 - Deep pine actions, sage selection, and distinct semantic status colors.
 - Newsreader for editorial display; Inter for operations; Geist Mono for identifiers and code.
 - Compact controls, softly rounded panels, fine dividers, and restrained elevation.
-- A hand-authored dental-outline mark and an illustrative claim walkthrough.
+- A hand-authored open-D ribbon mark and a native video walkthrough labeled as a synthetic demo.
 
 ## Colors
 
@@ -300,7 +300,7 @@ The dashboard content has a 1500px maximum width and 16px, 24px, then 32px horiz
 - **`md` (768px):** Standard Tailwind tablet breakpoint; custom `max-width: 767px` rules stack landing/auth layouts and hide the authentication story column.
 - **`lg` / `desktop` (1024px):** Desktop marketing navigation and dashboard sidebar appear; header actions and heading actions can lay out horizontally.
 - **`xl` (1280px):** Reports and overview activity panels use two columns where specified.
-- **Local composition thresholds:** 1100px reduces large marketing gaps and authentication padding; 390px tightens the hero and claim walkthrough. These are page composition rules, not new global scale steps.
+- **Local composition thresholds:** 1100px reduces large marketing gaps and authentication padding; 390px tightens the hero and video panel padding. These are page composition rules, not new global scale steps.
 
 ## Elevation & Depth
 
@@ -318,7 +318,7 @@ Modal backdrops use a dark transparent scrim; the native-dialog base uses `rgb(2
 
 Controls use the standard radius (8px); navigation uses `md` (12px); panels use `card` or `section` (16px). Small radii remain for minor detail. Pill geometry belongs to badges and status dots, not to the default button. The `card-large` and `section` radius names currently alias the same value as `card`, and `warm-button` matches `standard`.
 
-The mark is hand-authored vector geometry: a simple tooth outline with rounded roots. It uses `currentColor` so it can adapt to pine or light contexts. The app icon puts the ivory mark inside a pine rounded square. `apps/web/public/apple-icon.png` is a 180×180 Sharp rasterization of `apps/web/src/app/icon.svg`; it is not generated imagery. Its provenance sidecar records the source.
+The mark is hand-authored vector geometry: an abstract open D with an inset ribbon return, drawn as one solid shape for small sizes. Shared `BrandMark` and `apps/web/public/brand/dentabill-mark.svg` use the same 40×40 path with `currentColor`, adapting to pine or light contexts. The app icon puts the ivory mark inside a pine rounded square. `apps/web/public/apple-icon.png` is a 180×180 Sharp rasterization of `apps/web/src/app/icon.svg`; it is not generated imagery. Its provenance sidecar records the source.
 
 ## Components
 
@@ -352,9 +352,9 @@ Dashboard overview panels are bordered white containers: 18px/24px header paddin
 
 Marketing navigation uses 14px Inter at weight 500; current-page links become pine and underlined. Its mobile navigation replaces the desktop group below 1024px. Dashboard navigation uses 14px captions at weight 500, 18px icons, 12px gaps, and a minimum 44px row height. Active links use pine on sage and expose `aria-current="page"`; inactive hover uses warm-stone at 60% opacity and primary ink. The sidebar's small Workspace label groups navigation rather than introducing a page heading.
 
-### Claim walkthrough and brand mark
+### Video walkthrough and brand mark
 
-The interactive marketing claim panel is the signature product illustration. A pine header, labeled illustrative claim, three selectable workflow stages, a serif result title, and a next-step button explain the flow. Completed stages use sage; the selected circular stage uses pine. Preserve its explicit sample-data label and ordered progression when reusing it. It is authored UI, not a screenshot or raster illustration.
+`ClaimDemo` presents the product walkthrough in a native video player. A pine header pairs the open-D mark with “See DentaBill in action” and a visible “Synthetic demo” label. The player reserves an 8:5 frame, contains the picture without cropping, and uses native controls, inline playback, a poster and `preload="none"`; it does not autoplay. English captions, a text transcript and a video download accompany the explicit simulated-call disclosure. Keep those alternatives and the disclosure beside the player when reusing the composition. The panel retains the white surface, 16px radius and green-tinted shadow; wrapping links have a 44px minimum height, and padding tightens on narrow phones.
 
 ### Focus and motion
 
@@ -368,7 +368,7 @@ All keyboard-interactive elements receive visible focus. Buttons/Pill use pine; 
 - Do use pine for primary actions, sage for selection, and the semantic success, warning, and danger pairings for status.
 - Do keep workspace headings and operational data in Inter, with tabular numerals for comparable values.
 - Do preserve keyboard focus, meaningful labels, reduced-motion behavior, and narrow-screen reading order.
-- Do label sample claim content as illustrative and use authored vectors for the brand.
+- Do label synthetic demonstrations explicitly, preserve captions and transcript alternatives for recorded walkthroughs, and use the authored open-D vector for the brand.
 - Do keep the recovered-value data table available when its trend plot is hidden on small screens, and preserve wrapping labels beside report bars.
 
 ### Don't:

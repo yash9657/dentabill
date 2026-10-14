@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "asset": "apps/web/public/media/dentabill-demo/poster.jpg",
+  "source": "apps/web/public/media/dentabill-demo/walkthrough.mp4",
+  "sourceSha256": "a5021282f15ba8cb2eb5d9a10334240c18c5aababb89ec532680a4074db093bc",
+  "origin": "DentaBill demo poster: unmodified frame at 2.0 seconds of walkthrough.mp4. Original typography and authored vector logo rendered with Chrome; Inter and Newsreader from the application font cache. No image-generation model. Video SHA256 a5021282f15ba8cb2eb5d9a10334240c18c5aababb89ec532680a4074db093bc",
+  "process": {
+    "tool": "FFmpeg",
+    "frameSeconds": 2,
+    "width": 1600,
+    "height": 1000,
+    "metadata": "JPEG COM segment; pixels unchanged"
+  },
+  "assetSha256": "ef8466a26440b4e12374746d5b26432596ad3358e017452f21a5a37670089a5e"
+}

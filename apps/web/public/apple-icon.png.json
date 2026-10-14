@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "asset": "apps/web/public/apple-icon.png",
   "source": "apps/web/src/app/icon.svg",
-  "origin": "180 × 180 rasterization with Sharp of the hand-authored DentaBill dental-outline app icon. No image-generation model was used.",
+  "origin": "180 × 180 rasterization with Sharp of the hand-authored DentaBill open-D app icon. No image-generation model was used.",
   "process": {
     "tool": "Sharp",
     "width": 180,
     "height": 180,
     "format": "png"
   },
-  "sourceSha256": "bb6a5df0a0f64268bc4d5f24235964c9fbc61be5fc9dccb3a78c89651281bbb4",
-  "assetSha256": "668ffbc21e55a012d873d3a19f25a69da71932b440e702d766e4426e4e26ee9e"
+  "sourceSha256": "4fd1ebd9e059a8ba59234c6c447c3e57572dbfd18d187e666a83cae1f9e912c1",
+  "assetSha256": "b02fe5e3af46418c8878c6893fcb767ab07ead70416f46f984a9076331db8d39"
 }

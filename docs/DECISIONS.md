@@ -2278,3 +2278,70 @@ integrate verified user-controlled responsive landing playback. No finished medi
 real payer call, paid inference or external financial action is claimed. FW-43 source observations,
 reviewed legacy binding/additive snapshots and the entire remaining financial/connector plan stay
 open. FW-45 and the full goal are not complete.
+
+## ADR-086 — Narrated synthetic film, native landing playback and open-D identity
+
+**Date:** 2026-10-14. **Status:** local media/landing verification and owned-resource cleanup
+complete; scoped transcript-fix review SHIP. ADR-085 is committed as `de6b1ac`. No publication or
+deployment.
+
+The user requested an engaging edited demonstration with narration through the workflow,
+less administrative burden for dental practitioners as its theme, and a modern replacement for
+the tooth logo. Use the actual authenticated synthetic rehearsal from ADR-085 as the source.
+
+1. Deliver a 171.6-second (about 2:52) film at 1600×1000, 25fps, H.264 with AAC stereo at 48 kHz;
+   the MP4 is 16,827,456 bytes. Ten chapters cover import, simulated claim-information collection,
+   the saved pending/manual-review result, separate remittance/batch/cash evidence, posting
+   associations, correction/full release/rematch and audit history. Narration and visible
+   disclosure preserve synthetic provenance, unverified bank/PMS evidence and the distinction
+   between a saved record and settlement or recovered revenue.
+2. Generate all ten narration chapters locally with Kokoro 0.9.4, voice af_heart. Independent
+   local Whisper base.en transcription found no material omissions. Use original quiet sine-
+   arpeggio music rather than sampled recordings. `docs/demo-film/production.json` records the
+   model/source links, Apache-2.0 model license, model hash, media hashes, chapter timing and
+   technical details. Local media production does not establish a live application/provider
+   inference path or actual payer call.
+3. Keep the finished MP4, poster, English WebVTT and descriptive transcript HTML/CSS under
+   `apps/web/public/media/dentabill-demo/`. The 43 cues use native automatic placement with
+   adjacent overlaps removed; the transcript explains important visual information as well as
+   narration. `ClaimDemo` uses native controls, inline playback, a reserved 8:5 frame,
+   `preload="none"`, no autoplay/loop, and explicit transcript/download links. Avoid loading the
+   video before the viewer chooses to play.
+4. Replace the tooth with one authored, solid open-D ribbon path shared by BrandMark, the
+   standalone SVG, favicon and derived Apple icon. Retain the existing palette, type and
+   interface hierarchy. DESIGN.md and `.impeccable/design.json` document the implemented mark
+   and native player composition.
+5. Preserve public production/edit/script metadata in `docs/demo-film/`. Keep the original raw
+   recording, chapter WAVs, graphics and render recipe in gitignored
+   `.impeccable/review/demo-film-source/`, without authentication metadata or caches. This local
+   archive supports later edits; a fresh clone does not contain those raw sources. Refresh
+   manifest hashes after final formatting or asset edits rather than copying stale digests.
+
+**Verification:** 22 tests across four files pass; 10 affected lint/type checks pass (6 cached,
+about 26 seconds); the isolated Next production build passes. These are ADR-086 checks and are
+not added to ADR-085's 205-case result. Actual Chrome landing and transcript pages at 1440px/390px
+have no overflow, page errors or axe violations. Browser proof confirms zero MP4 requests before
+play, native playback, seeking to 128 seconds, fullscreen, download, HTTP 206 with exactly 1024
+requested bytes and HTTP 200 for the 43-cue VTT. Caption placement was corrected to automatic
+and rechecked. Logs: `/tmp/dentabill-demo-film-tests.log`, `...-checks.log`, `...-build.log`;
+proof: `/tmp/dentabill-authenticated-demo.cdscvk/film/browser-proof.json`.
+
+The fresh finish review requested two transcript fixes: replace system-ui with established
+Inter/Newsreader typography, and remove the decorative eyebrow. Both were applied together;
+self-hosted WOFF2 files and official OFL notices are under the public media `fonts/` directory,
+with no runtime external font request. Updated 1440px/390px captures confirm both fonts loaded,
+no eyebrow, no overflow and zero axe violations (`film/transcript-fix-proof.json`). The reviewer
+returned SHIP for these scored fixes with no visible fix-batch regression. That bounded verdict
+is not independent whole-surface, audio or motion approval. All narration words match captions
+after normalization; the 43 cues are ordered, nonoverlapping and in bounds. Full MP4 decode passes.
+
+Owned review servers on ports 4485 and 4487 are stopped; the original launcher reported
+FILM_SERVER_DISPOSED and removed its private runtime. The Impeccable detector attempt failed with
+permission denied/exit 126 and provides no automated verdict. No publication or deployment is
+claimed.
+
+Next: commit ADR-086, then FW-43 additive canonical source observations, reviewed legacy binding
+and additive snapshots under the existing implementation plan. The eight legacy authenticated actor-write
+repairs remain a separate tested follow-up with no historical rewrite. Real connector, remaining
+financial and production evidence gates are unchanged. This is a local demo milestone; the full
+goal remains ACTIVE.

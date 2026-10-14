@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-13T00:11:29.637753+00:00",
+  "generatedAt": "2026-10-14T23:17:18.069644+00:00",
   "title": "Design System: DentaBill",
   "extensions": {
     "colorMeta": {
@@ -484,7 +484,7 @@
       {
         "name": "claim-demo",
         "value": "0 8px 48px -16px rgb(33 78 64 / 0.22)",
-        "purpose": "Local landing claim walkthrough shadow."
+        "purpose": "Local landing video walkthrough shadow."
       }
     ],
     "motion": [
@@ -630,31 +630,31 @@
       "css": ".ds-navigation{display:flex;flex-direction:column;gap:4px;font-family:var(--font-body, Inter, system-ui, sans-serif);}.ds-nav-link{display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 12px;border-radius:var(--radius-md, 12px);font-size:14px;line-height:1.5;font-weight:500;letter-spacing:.14px;color:var(--color-gray-dark, #4f605a);text-decoration:none;transition:background-color var(--duration-standard, 200ms) var(--ease-calm, cubic-bezier(0.4, 0, 0.2, 1)),color var(--duration-standard, 200ms) var(--ease-calm, cubic-bezier(0.4, 0, 0.2, 1));}.ds-nav-link:hover{background:color-mix(in oklab,var(--color-warm-stone, #f1eee6) 60%,transparent);color:var(--color-black, #202e2b)}.ds-nav-link[aria-current=\"page\"]{background:var(--color-brand-soft, #e5eee7);color:var(--color-brand, #214e40)}.ds-nav-link:focus-visible{outline:2px solid var(--color-ring-blue, #397666);outline-offset:2px}@media(prefers-reduced-motion:reduce){.ds-nav-link{transition-duration:.01ms}}"
     },
     {
-      "name": "D / Check Brand Mark",
+      "name": "Open-D Brand Mark",
       "kind": "custom",
       "refersTo": "brand-mark",
-      "description": "The authored, currentColor brand vector.",
-      "html": "<svg class=\"ds-brand-mark\" width=\"32\" height=\"32\" viewBox=\"0 0 40 40\" fill=\"none\" role=\"img\" aria-label=\"DentaBill\"><path d=\"M12.5 5.5c-4.8 0-7.8 3.3-7.2 8.5l1.8 9.9c.9 5 2.7 10.6 5.8 10.6 2.2 0 2.4-4.8 3.6-8.5.7-2.2 1.6-3.4 3.5-3.4s2.8 1.2 3.5 3.4c1.2 3.7 1.4 8.5 3.6 8.5 3.1 0 4.9-5.6 5.8-10.6l1.8-9.9c.6-5.2-2.4-8.5-7.2-8.5-3 0-4.6 1.5-7.5 1.5S15.5 5.5 12.5 5.5Z\" stroke=\"currentColor\" stroke-width=\"3.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>",
+      "description": "The authored open-D ribbon, drawn as one solid currentColor shape for small sizes.",
+      "html": "<svg class=\"ds-brand-mark\" width=\"32\" height=\"32\" viewBox=\"0 0 40 40\" fill=\"none\" role=\"img\" aria-label=\"DentaBill\"><path d=\"M5 5h14c8.84 0 16 6.72 16 15S27.84 35 19 35H5V17h13a3 3 0 0 1 0 6h-6v5h7c4.97 0 9-3.58 9-8s-4.03-8-9-8H5Z\" fill=\"currentColor\"/></svg>",
       "css": ".ds-brand-mark{display:inline-block;flex-shrink:0;color:var(--color-brand, #214e40)}"
     },
     {
-      "name": "Claim Walkthrough Panel",
+      "name": "Product Video Walkthrough",
       "kind": "custom",
       "refersTo": "claim-demo",
-      "description": "Static result-state excerpt of the implemented illustrative walkthrough; the live component owns stage interaction.",
-      "html": "<section class=\"ds-claim-demo\"><header class=\"ds-demo-topline\"><span>Your follow-up, handled</span><span class=\"ds-demo-label\">Illustrative example</span></header><div class=\"ds-demo-result\"><h2>A clear next step. Finally.</h2><p>Your team gets the answer, with a summary and a complete call history.</p></div><button class=\"ds-demo-next\" type=\"button\">Walk through the follow-up <svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14m-6-6 6 6-6 6\"/></svg></button></section>",
-      "css": ".ds-claim-demo{font-family:var(--font-body, Inter, system-ui, sans-serif);border-radius:var(--radius-card, 16px);background:var(--color-white, #ffffff);box-shadow:0 8px 48px -16px rgb(33 78 64 / .22);overflow:hidden}.ds-demo-topline{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;padding:18px 24px;background:var(--color-brand, #214e40);color:var(--color-ink-inverse, #edf4eb);font-size:12px}.ds-demo-label{font-size:10px;opacity:.85}.ds-demo-result{padding:16px 28px 24px;min-height:263px}.ds-demo-result h2{font-family:var(--font-display, Georgia, serif);font-weight:400;font-size:29px;line-height:1.15;margin:18px 0 8px;color:var(--color-black, #202e2b)}.ds-demo-result p{font-size:13px;line-height:1.65;color:var(--color-gray-dark, #4f605a)}.ds-demo-next{font-family:var(--font-body, Inter, system-ui, sans-serif);display:flex;width:100%;justify-content:space-between;align-items:center;gap:12px;padding:16px 28px;color:var(--color-brand, #214e40);font-size:12px;font-weight:500;border:0;border-top:1px solid var(--color-border-subtle, #e7ebe4);background:transparent;cursor:pointer;transition:background var(--duration-fast,150ms)}.ds-demo-next:hover{background:var(--color-gray-light-alt, #f7f8f5)}.ds-demo-next:focus-visible{outline:2px solid var(--color-ring-blue, #397666);outline-offset:2px}@media(prefers-reduced-motion:reduce){.ds-demo-next{transition-duration:.01ms}}"
+      "description": "Native video composition with an open-D header, synthetic-demo disclosure, captions and transcript/download links. Media URLs resolve against the app public assets.",
+      "html": "<section class=\"ds-claim-demo\" aria-labelledby=\"ds-demo-heading\"><header class=\"ds-demo-topline\"><div class=\"ds-demo-video-title\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 40 40\" aria-hidden=\"true\"><path d=\"M5 5h14c8.84 0 16 6.72 16 15S27.84 35 19 35H5V17h13a3 3 0 0 1 0 6h-6v5h7c4.97 0 9-3.58 9-8s-4.03-8-9-8H5Z\" fill=\"currentColor\"/></svg><h2 id=\"ds-demo-heading\">See DentaBill in action</h2></div><span class=\"ds-demo-label\">Synthetic demo</span></header><video class=\"ds-demo-video\" aria-label=\"DentaBill product walkthrough with synthetic data\" aria-describedby=\"ds-demo-disclosure\" controls playsinline preload=\"none\" width=\"1600\" height=\"1000\" poster=\"/media/dentabill-demo/poster.jpg\"><source src=\"/media/dentabill-demo/walkthrough.mp4\" type=\"video/mp4\"><track kind=\"captions\" src=\"/media/dentabill-demo/captions.en.vtt\" srclang=\"en\" label=\"English\" default><p>Your browser cannot play this video. <a href=\"/media/dentabill-demo/walkthrough.mp4\" download>Download the walkthrough</a> or <a href=\"/media/dentabill-demo/transcript.html\">read the transcript</a>.</p></video><div class=\"ds-demo-video-details\"><p id=\"ds-demo-disclosure\">Synthetic data. Simulated call and analysis; no payer was contacted.</p><span class=\"ds-demo-caption-label\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\"/><path d=\"M7 9h3M7 15h3M14 9h3M14 15h3M7 9v6M14 9v6\"/></svg>English captions</span><div class=\"ds-demo-video-links\"><a href=\"/media/dentabill-demo/transcript.html\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v6h6M10 9H8M16 13H8M16 17H8\"/></svg>Read transcript</a><a href=\"/media/dentabill-demo/walkthrough.mp4\" download><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3\"/></svg>Download video</a></div></div></section>",
+      "css": ".ds-claim-demo{min-width:0;font-family:var(--font-body, Inter, system-ui, sans-serif);border-radius:var(--radius-card, 16px);background:var(--color-white, #ffffff);box-shadow:0 8px 48px -16px rgb(33 78 64 / .22);overflow:hidden}.ds-demo-topline{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;padding:18px 24px;background:var(--color-brand, #214e40);color:var(--color-ink-inverse, #edf4eb);font-size:12px}.ds-demo-label{font-size:11px;color:var(--color-ink-inverse, #edf4eb)}.ds-demo-video-title{display:flex;align-items:center;gap:10px}.ds-demo-video-title svg{flex-shrink:0}.ds-demo-video-title h2{margin:0;font-size:15px;font-weight:500;line-height:1.4}.ds-demo-video{display:block;width:100%;height:auto;aspect-ratio:8/5;object-fit:contain;background:var(--color-black, #202e2b)}.ds-demo-video:focus-visible{outline:3px solid var(--color-brand, #214e40);outline-offset:-3px}.ds-demo-video-details{padding:20px 24px 12px}.ds-demo-video-details>p{margin:0;max-width:60ch;color:var(--color-gray-dark, #4f605a);font-size:13px;line-height:1.6}.ds-demo-caption-label{display:inline-flex;align-items:center;gap:7px;margin-top:12px;color:var(--color-gray-warm, #617068);font-size:12px}.ds-demo-video-links{display:flex;flex-wrap:wrap;align-items:center;gap:4px 24px;margin-top:4px}.ds-demo-video-links a{display:inline-flex;min-height:44px;align-items:center;gap:7px;color:var(--color-brand, #214e40);font-size:12px;font-weight:500;text-decoration:underline;text-underline-offset:4px}.ds-demo-video-links a:hover{color:var(--color-brand-hover, #183c32)}.ds-demo-video-links a:focus-visible{outline:2px solid var(--color-ring-blue, #397666);outline-offset:2px}@media(max-width:767px){.ds-claim-demo{width:100%;max-width:560px;justify-self:center}}@media(max-width:390px){.ds-demo-topline,.ds-demo-video-details{padding-inline:18px}}"
     }
   ],
   "narrative": {
     "northStar": "The Calm Front Desk",
-    "overview": "DentaBill combines warm ivory, deep pine, and muted sage with editorial Newsreader headlines and practical Inter controls. The public site is open and conversational; the working application is compact, structured, and easy to scan. Both use the same colors, shapes, controls, and dental-outline identity.\n\nThis document records the implemented redesign. The normative implementation is packages/ui/src/theme.css and its TypeScript mirror, packages/ui/src/tokens.ts; app-specific compositions live in apps/web/src/app/globals.css. The frontmatter records their values, while the sidecar extends them with stateful previews, shadows, motion, and responsive metadata. The descriptive north star names the built system; it is not a record of an approved image-generation concept.",
+    "overview": "DentaBill combines warm ivory, deep pine, and muted sage with editorial Newsreader headlines and practical Inter controls. The public site is open and conversational; the working application is compact, structured, and easy to scan. Both use the same colors, shapes, controls, and abstract open-D identity.\n\nThis document records the implemented redesign. The normative implementation is packages/ui/src/theme.css and its TypeScript mirror, packages/ui/src/tokens.ts; app-specific compositions live in apps/web/src/app/globals.css. The frontmatter records their values, while the sidecar extends them with stateful previews, shadows, motion, and responsive metadata. The descriptive north star names the built system; it is not a record of an approved image-generation concept.",
     "keyCharacteristics": [
       "Warm ivory marketing canvas and pale green working canvas.",
       "Deep pine actions, sage selection, and distinct semantic status colors.",
       "Newsreader for editorial display; Inter for operations; Geist Mono for identifiers and code.",
       "Compact controls, softly rounded panels, fine dividers, and restrained elevation.",
-      "A hand-authored dental-outline mark and an illustrative claim walkthrough."
+      "A hand-authored open-D ribbon mark and a native video walkthrough labeled as a synthetic demo."
     ],
     "rules": [
       {
@@ -678,7 +678,7 @@
       "Do use pine for primary actions, sage for selection, and the semantic success, warning, and danger pairings for status.",
       "Do keep workspace headings and operational data in Inter, with tabular numerals for comparable values.",
       "Do preserve keyboard focus, meaningful labels, reduced-motion behavior, and narrow-screen reading order.",
-      "Do label sample claim content as illustrative and use authored vectors for the brand.",
+      "Do label synthetic demonstrations explicitly, preserve captions and transcript alternatives for recorded walkthroughs, and use the authored open-D vector for the brand.",
       "Do keep the recovered-value data table available when its trend plot is hidden on small screens, and preserve wrapping labels beside report bars."
     ],
     "donts": [

@@ -4,6 +4,51 @@ _Last updated: 2026-10-14 (full-scope goal active; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
+### 2026-10-14: FW-45 narrated film and landing integration (ADR-086)
+
+ADR-085 is committed as `de6b1ac`. The actual authenticated synthetic rehearsal is now edited into
+`apps/web/public/media/dentabill-demo/walkthrough.mp4`: 171.6 seconds (about 2:52), 1600×1000,
+25fps, H.264/AAC stereo at 48 kHz, 16,827,456 bytes. Companion assets are a poster, 43 English
+WebVTT cues with native automatic placement and no overlapping cues, and a ten-chapter descriptive
+HTML/CSS transcript. Ten narration chapters were generated locally with Kokoro 0.9.4/af_heart;
+independent local Whisper base.en transcription found no material omissions. The background is
+original quiet synthesized arpeggios. `docs/demo-film/production.json` records sources, the
+Apache-2.0 model license, hashes and media details; `script.json`, `edit.json` and README preserve
+the production handoff. Raw footage, chapter WAVs, graphics and render recipe remain in gitignored
+`.impeccable/review/demo-film-source/`, without authentication metadata or caches.
+
+The native landing player has controls, inline playback, captions, transcript/download links,
+`preload="none"` and no autoplay or loop. The shared mark, favicon, Apple icon and standalone SVG
+now use the abstract open-D ribbon; DESIGN.md and its sidecar match. Persistent synthetic labeling
+and narration distinguish the simulated call/analysis from separately imported financial evidence.
+The film does not demonstrate live payer contact, actual DTMF, provider inference, bank/PMS
+verification, settlement, external financial writes or recovered revenue.
+
+ADR-086 verification: 22 tests across four files pass, as do 10 affected lint/type checks
+(6 cached, about 26 seconds) and the isolated Next production build. These are separate from
+ADR-085's 205 cases. Actual Chrome landing and transcript views at 1440px/390px have no overflow,
+page errors or axe violations. Browser proof confirms zero MP4 requests before play, native play,
+seek to 128 seconds, fullscreen, download, a 206 response for a 1024-byte range and a 200 WebVTT
+response with 43 cues. Caption placement was corrected to automatic and rechecked. Logs:
+`/tmp/dentabill-demo-film-tests.log`, `...-checks.log`, `...-build.log`; browser proof:
+`/tmp/dentabill-authenticated-demo.cdscvk/film/browser-proof.json`.
+
+**Closeout complete:** the fresh reviewer requested established Inter/Newsreader typography and
+removal of the transcript's decorative eyebrow. Both were fixed together. Self-hosted WOFF2 fonts
+and official OFL notices are included; no runtime external font request is needed. Updated
+1440px/390px captures confirm loaded fonts, no eyebrow, no overflow and no axe violations.
+The reviewer returned SHIP for those two fixes, with no visible fix-batch regression; this is
+not independent whole-surface, audio or motion approval. Full MP4 decode and normalized narration/
+caption matching pass. The 43 native automatically placed cues were rechecked. Review servers on
+ports 4485 and 4487 are stopped, and the owned private runtime is removed. The detector attempt
+exited 126 (permission denied), so there is no automated verdict. No publication or deployment.
+
+**Immediate next:** commit ADR-086, then implement FW-43 additive canonical source
+observations, reviewed legacy binding and additive snapshots under the existing plan. Keep the
+eight older authenticated actor-write repairs listed below open, with persisted-actor fixtures
+and no historical rewrite. The local demo is one bounded milestone; the full goal remains ACTIVE,
+and remaining financial, connector and production evidence gates are unchanged.
+
 ### 2026-10-14: FW-45 authenticated synthetic rehearsal verified (ADR-085)
 
 ADR-084 is committed as `19f4b9b`. Read-only Clerk CLI discovery verified the existing development
@@ -57,7 +102,7 @@ callSummary.read/retry; `claims.ts` claim.list/read; `reports.ts` report.read. R
 with persisted-actor fixtures. This milestone fixes future auditLog.list attribution only;
 current financial actions are attributed. Preserve historical null actors as Actor not recorded.
 
-**Immediate next:** commit ADR-085, then edit the actual recording, produce poster/captions/
+**Next task at the ADR-085 checkpoint (superseded by ADR-086 above):** edit the actual recording, produce poster/captions/
 descriptive transcript, integrate user-controlled responsive landing playback and verify the
 finished asset. Continue FW-43 source observations/reviewed legacy binding/additive snapshots
 and all remaining financial, connector and full-plan work. FW-45 and the overall goal remain open.

@@ -3,13 +3,40 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-14
-**Current work:** synthetic demo preparation and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
+**Current work:** narrated synthetic demo delivery and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
 `codex/w0-containment`. The full parity assignment remains incomplete; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice — FW-45 authenticated synthetic rehearsal (ADR-085), locally verified:**
+**Latest local slice — FW-45 narrated film and landing integration (ADR-086):**
+The actual authenticated synthetic recording is now a 171.6-second (about 2:52), 1600×1000 film
+with local Kokoro af_heart narration, original quiet instrumental music, a poster, 43 English
+captions and a ten-chapter descriptive transcript. Independent local Whisper transcription
+checked all ten narration chapters without material omissions. Native landing playback is
+user-controlled, with no autoplay/loop and no MP4 fetch before play. The shared brand now uses
+the open-D ribbon across the mark, favicon and Apple icon.
+
+22 tests across four files, 10 affected lint/type checks and the isolated Next production build
+pass. Actual Chrome landing/transcript desktop and mobile QA has no overflow, page errors or axe
+violations; play, seek, fullscreen, captions, download and byte-range delivery are verified.
+These checks are separate from ADR-085's 205 cases. The finish review requested established
+Inter/Newsreader fonts and removal of a decorative transcript eyebrow. Both fixes pass updated
+desktop/mobile QA; self-hosted fonts include their OFL notices. The reviewer returned SHIP for
+those fixes, without claiming independent whole-film/audio/motion approval. Owned review servers
+and runtime are stopped/removed. The detector could not run (permission denied, exit 126), so it
+supplies no verdict. No production publication or deployment occurred.
+
+The film labels synthetic data and simulated call/analysis, distinguishes imported financial
+evidence and does not claim live payer/bank/PMS integration, settlement or recovered revenue.
+Production notes and hashes are in `docs/demo-film/`; local editable sources are gitignored.
+ADR-085 is committed as `de6b1ac`.
+
+**Immediate next:** commit ADR-086, then FW-43 additive canonical source
+observations, reviewed legacy binding and additive snapshots. The eight legacy actor-write
+repairs and the full financial/connector plan remain open; the full goal is ACTIVE.
+
+**Previous local slice — FW-45 authenticated synthetic rehearsal (ADR-085), committed as `de6b1ac`:**
 Real Clerk development sign-in succeeded through an official short-lived ticket. Bearer-token
 `/v1/me` returned 200 for the exact local OWNER without test headers. The actual UI imported two
 claims, completed a 39-second synthetic payer-matched call, and displayed readable conversation
@@ -33,7 +60,7 @@ Raw capture is complete at 1440×900, 25fps and 1242.24s, with 11 extra review s
 captioned video, poster/transcript package, landing integration and deployment remain open.
 ADR-084 is committed as `19f4b9b`.
 
-**Immediate next:** commit ADR-085, then edit the actual recording and integrate its finished
+**Next task at the ADR-085 checkpoint (superseded above):** edit the actual recording and integrate its finished
 poster/captions/transcript with user-controlled responsive playback. FW-43 source observations,
 reviewed legacy binding/additive snapshots and the remaining financial/connector/full-plan work
 stay open. FW-45 and the full goal are not complete.

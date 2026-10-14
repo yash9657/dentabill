@@ -1,103 +1,62 @@
-'use client';
-
-import { Badge, BrandMark } from '@dentabill/ui';
-import { ArrowRight, Check, CheckCheck, FileText, PhoneCall } from 'lucide-react';
+import { BrandMark } from '@dentabill/ui';
+import { Captions, Download, FileText } from 'lucide-react';
 import * as React from 'react';
 
-const steps = [
-  {
-    label: 'Claim imported',
-    icon: FileText,
-    title: 'One less claim to chase.',
-    description: 'A pending claim from your CSV is ready for follow-up.',
-    status: 'Queued',
-    detail: 'Claim #DEMO-1042',
-    note: 'Delta Dental · $840.00 · 32 days outstanding',
-  },
-  {
-    label: 'Payer called',
-    icon: PhoneCall,
-    title: 'The hold music is our job.',
-    description: 'DentaBill navigates the phone tree and speaks with a payer representative.',
-    status: 'In progress',
-    detail: 'Connected to a representative',
-    note: 'Claim status, payment details, and next steps requested.',
-  },
-  {
-    label: 'Answer ready',
-    icon: CheckCheck,
-    title: 'A clear next step. Finally.',
-    description: 'Your team gets the answer, with a summary and a complete call history.',
-    status: 'Follow-up complete',
-    detail: 'Payment is being processed',
-    note: 'Check for payment in 7–10 business days. Reference: DEMO-58291.',
-  },
-] as const;
+const mediaPath = '/media/dentabill-demo';
 
 export function ClaimDemo(): React.ReactElement {
-  const [step, setStep] = React.useState(2);
-  const current = steps[step] ?? steps[2];
   return (
-    <section className="claim-demo" aria-label="Interactive claim follow-up example">
-      <div className="demo-topline">
-        <span className="inline-flex items-center gap-2 font-medium">
-          <BrandMark size={21} /> Your follow-up, handled
-        </span>
-        <span className="demo-label">Illustrative example</span>
-      </div>
-      <div className="demo-claim">
-        <div>
-          <p className="text-caption text-gray-warm">Delta Dental PPO</p>
-          <p className="mt-1 font-semibold">Claim #DEMO-1042</p>
+    <section className="claim-demo" aria-labelledby="demo-video-heading">
+      <header className="demo-topline">
+        <div className="demo-video-title">
+          <BrandMark size={22} />
+          <h2 id="demo-video-heading">See DentaBill in action</h2>
         </div>
-        <span className="text-2xl font-medium tabular-nums">
-          $840<span className="text-gray-warm text-base">.00</span>
-        </span>
-      </div>
-      <ol className="demo-steps" aria-label="Follow-up stages">
-        {steps.map((item, index) => (
-          <li key={item.label}>
-            <button
-              type="button"
-              aria-pressed={step === index}
-              onClick={() => {
-                setStep(index);
-              }}
-              className="demo-step"
-            >
-              <span className={`demo-step-icon ${index <= step ? 'is-complete' : ''}`}>
-                {index < step ? <Check size={16} /> : <item.icon size={16} />}
-              </span>
-              <span>{item.label}</span>
-            </button>
-          </li>
-        ))}
-      </ol>
-      <div className="demo-result" aria-live="polite" aria-atomic="true">
-        <Badge variant={step === 2 ? 'success' : step === 1 ? 'active' : 'muted'}>
-          <span className="h-1.5 w-1.5 rounded-full bg-current" />
-          {current.status}
-        </Badge>
-        <h2>{current.title}</h2>
-        <p>{current.description}</p>
-        <div className="demo-note">
-          <CheckCheck size={19} className="text-brand shrink-0" />
-          <div>
-            <strong>{current.detail}</strong>
-            <p>{current.note}</p>
-          </div>
-        </div>
-      </div>
-      <button
-        type="button"
-        className="demo-next"
-        onClick={() => {
-          setStep((step + 1) % steps.length);
-        }}
+        <span className="demo-label">Synthetic demo</span>
+      </header>
+      <video
+        className="demo-video"
+        aria-label="DentaBill product walkthrough with synthetic data"
+        aria-describedby="demo-video-disclosure"
+        controls
+        playsInline
+        preload="none"
+        width={1600}
+        height={1000}
+        poster={`${mediaPath}/poster.jpg`}
       >
-        {step === 2 ? 'Walk through the follow-up' : 'See the next step'}
-        <ArrowRight size={16} />
-      </button>
+        <source src={`${mediaPath}/walkthrough.mp4`} type="video/mp4" />
+        <track
+          kind="captions"
+          src={`${mediaPath}/captions.en.vtt`}
+          srcLang="en"
+          label="English"
+          default
+        />
+        <p>
+          Your browser cannot play this video.{' '}
+          <a href={`${mediaPath}/walkthrough.mp4`} download>
+            Download the walkthrough
+          </a>{' '}
+          or <a href={`${mediaPath}/transcript.html`}>read the transcript</a>.
+        </p>
+      </video>
+      <div className="demo-video-details">
+        <p id="demo-video-disclosure">
+          Synthetic data. Simulated call and analysis; no payer was contacted.
+        </p>
+        <span className="demo-caption-label">
+          <Captions size={16} aria-hidden /> English captions
+        </span>
+        <div className="demo-video-links">
+          <a href={`${mediaPath}/transcript.html`}>
+            <FileText size={16} aria-hidden /> Read transcript
+          </a>
+          <a href={`${mediaPath}/walkthrough.mp4`} download>
+            <Download size={16} aria-hidden /> Download video
+          </a>
+        </div>
+      </div>
     </section>
   );
 }

@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
 import HomePage from './page.js';
@@ -14,20 +13,48 @@ describe('HomePage', () => {
       expect(link).toHaveAttribute('href', '/sign-up');
     expect(screen.getByRole('link', { name: 'Book a demo' })).toHaveAttribute('href', '/contact');
   });
-  it('labels demo data and lets users walk through the entire follow-up', async () => {
-    const user = userEvent.setup();
+  it('presents the captioned synthetic walkthrough with native playback controls', () => {
     render(<HomePage />);
-    expect(screen.getByText('Illustrative example')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Claim imported' }));
-    expect(screen.getByRole('button', { name: 'Claim imported' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
+    expect(screen.getByRole('region', { name: 'See DentaBill in action' })).toBeVisible();
+    expect(screen.getByText('Synthetic demo')).toBeVisible();
+    expect(screen.getByText('English captions')).toBeVisible();
+    const video = screen.getByLabelText('DentaBill product walkthrough with synthetic data');
+    expect(video.tagName).toBe('VIDEO');
+    expect(video).toHaveAttribute('controls');
+    expect(video).toHaveAttribute('playsinline');
+    expect(video).toHaveAttribute('preload', 'none');
+    expect(video).toHaveAttribute('poster', '/media/dentabill-demo/poster.jpg');
+    expect(video).not.toHaveAttribute('autoplay');
+    expect(video).not.toHaveAttribute('loop');
+    expect(video).not.toHaveAttribute('muted');
+    expect(video).toHaveAccessibleDescription(
+      'Synthetic data. Simulated call and analysis; no payer was contacted.',
     );
-    expect(screen.getByText('One less claim to chase.')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'See the next step' }));
-    expect(screen.getByText('The hold music is our job.')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'See the next step' }));
-    expect(screen.getByText('Payment is being processed')).toBeInTheDocument();
+    const source = video.querySelector('source');
+    expect(source).toHaveAttribute('src', '/media/dentabill-demo/walkthrough.mp4');
+    expect(source).toHaveAttribute('type', 'video/mp4');
+    const captions = video.querySelector('track');
+    expect(captions).toHaveAttribute('src', '/media/dentabill-demo/captions.en.vtt');
+    expect(captions).toHaveAttribute('kind', 'captions');
+    expect(captions).toHaveAttribute('srclang', 'en');
+    expect(captions).toHaveAttribute('label', 'English');
+    expect(captions).toHaveAttribute('default');
+  });
+  it('offers a transcript and downloadable video without requiring a custom player', () => {
+    render(<HomePage />);
+    expect(screen.getByRole('link', { name: 'Read transcript' })).toHaveAttribute(
+      'href',
+      '/media/dentabill-demo/transcript.html',
+    );
+    const download = screen.getByRole('link', { name: 'Download video' });
+    expect(download).toHaveAttribute('href', '/media/dentabill-demo/walkthrough.mp4');
+    expect(download).toHaveAttribute('download');
+    const video = screen.getByLabelText('DentaBill product walkthrough with synthetic data');
+    expect(video).toHaveTextContent('Your browser cannot play this video.');
+    expect(video.querySelector('a[download]')).toHaveAttribute(
+      'href',
+      '/media/dentabill-demo/walkthrough.mp4',
+    );
   });
   it('shows import, call, and review as three concrete steps', () => {
     render(<HomePage />);
