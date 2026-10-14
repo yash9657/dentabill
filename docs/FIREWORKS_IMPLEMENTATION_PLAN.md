@@ -1,6 +1,23 @@
 # DentaBill: competitive gaps and the Fireworks implementation plan
 
-Current local progress (2026-10-14, ADR-079): FW-40 has a transactional review-notification
+Current local progress (2026-10-14, ADR-080): FW-44 adds stable batch source corrections through
+three immutable identity/revision/member-ownership sidecars. Existing v1 evidence remains unchanged
+and unsequenced; v2 uses a new source record and positive explicit sequence under the original
+batch identity. Only latest observed revisions can be accepted; newer rejected evidence stales
+prior acceptance. Same-batch members may recur, omission cannot transfer ownership, and historical
+cash reservations remain until explicit full release. Review replay retains the original review
+object with refreshed currentness metadata. History, membership-change previews and a v2 download
+extend the existing dashboard. Zero net does not mean withdrawal.
+Migration 32 applied only to localhost isolated/shared databases. DB 27 plus expanded preservation
+1, prior financial regressions 344, SDK 57, batch API 71/71, cash API 66/66 and UI 70 plus web/API types/scoped lint pass. Full API909/909 across43 files and API/Lambda builds pass. Final coherent synthetic1280/390px
+captures have no overflow/errors/axe violations, with independent review ship and no durable design
+documentation delta. Next production build and affected lint/typecheck 30/30 pass. The preceding FW-40 slice is committed as `4af99ec`, with external delivery disabled.
+Continue reviewed posting relationships and claim cash allocation/
+attribution. Cross-batch ownership transfer, claim-remittance correction chains, real connectors
+and every remaining parity gate stay open. No real financial/provider action, merge or deployment
+ran; the full assignment remains active.
+
+Previous local progress (2026-10-14, ADR-079; committed as `4af99ec`): FW-40 has a transactional review-notification
 outbox and read-only Owner/Admin Operations list/history/filter. Intent/domain/audit commit
 atomically; source/generation/actor, deterministic recipient, generic content/hash and permanent
 delivery key are frozen. Synthetic-only dispatch uses one-minute leases, at most five attempts
@@ -16,11 +33,9 @@ Independent API/dispatcher review found no actionable issues. SDK 56, notifier 2
 types/lint pass, plus synthetic
 1280/390px component checks and separate visual/documentation review. Detector 126 is no verdict.
 No real message/provider request, paid inference, call, merge or deployment ran. The full original
-assignment remains active. The next concrete dependency is additive batch identity/revision/
-ownership sidecars with version 2 explicit sequences, preserving existing version 1 evidence as
-unsequenced. Revisions may repeat same-batch members while cross-batch ownership stays permanent;
-latest-observed acceptance/freshness and stable-identity cash reservations remain until explicit
-release. Reviewed posting relationships and claim cash allocation/attribution follow. Real
+assignment remains active. That checkpoint's batch identity/revision/ownership dependency is implemented locally in ADR-080
+above, with local verification complete. Reviewed posting relationships and claim cash allocation/
+attribution follow. Real
 connectors, external notification delivery and all remaining parity gates remain in scope.
 
 Current local progress (2026-10-14, ADR-078): FW-44 adds independent manual PMS posting receipt

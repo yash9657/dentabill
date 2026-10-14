@@ -619,8 +619,8 @@ audit rollback and tenant/role isolation. Raw/canonical/JSONB256KiB,100 member/a
 page2MiB/20-record limits provide bounded envelopes; clients must follow cursor/hasMore.
 Monitor closed error codes, audit health and organization lock latency without logging payloads.
 Retain immutable evidence if rolling back application exposure. One snapshot per source batch
-is supported; batch correction, authenticated sources, reconciliation, posting and production
-retention/restore evidence remain required. This migration has run only on localhost test DBs.
+was supported at this checkpoint; ADR-080 adds correction support below. Authenticated sources,
+posting and production retention/restore evidence remain required. This migration has run only on localhost test DBs.
 
 ### Cash-to-batch reconciliation expansion (ADR-076; not deployed)
 
@@ -699,3 +699,23 @@ closed status/reason/count fields; never log addresses, bodies, keys or hashes. 
 release requires verified domain/account configuration, explicit authorization, current provider
 idempotency/rate-limit contracts, transport and receipt reconciliation, retention/restore and any
 applicable PHI/vendor agreements. No production change or real message occurred in this slice.
+
+### Stable remittance batch revisions (ADR-080; not deployed)
+
+Migration 32 `20261014200000_remittance_batch_revisions` follows migration 31 and is frozen/applied
+only to localhost isolated/shared databases. It adds immutable batch/revision/member-ownership
+sidecars and backfills structural links while retaining existing payload/hash/review/member/match/
+release bytes and prior helper definitions. Apply the complete migration chain and regenerate
+Prisma before exposing version 2 imports and history through the coordinated API/SDK/dashboard.
+Existing version 1 payloads remain unsequenced; never rewrite them with an invented sequence.
+
+Validate explicit source-order/currentness, new-record and duplicate-sequence conflicts, repeated
+same-batch membership, permanent ownership after omission, newer rejected revision staleness,
+immutable review replay with refreshed metadata, and reservation preservation across corrected
+nets. Replacement matches must remain blocked until prior revision matches are fully released.
+Monitor closed conflicts, audit health and lock/query latency without logging source values.
+Rollback application exposure while retaining every sidecar and historical receipt; do not delete
+ownership or release reservations as an application rollback shortcut. These are local synthetic
+contracts, without connector authentication or any financial action. Local DB/API/SDK/UI checks,
+API/Lambda/Next builds and affected lint/typecheck 30/30 pass as recorded in ADR-080; production
+deployment, restoration/retention and external integration gates remain open. The preceding FW-40 commit is `4af99ec`; external notification delivery stays disabled.

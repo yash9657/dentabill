@@ -190,6 +190,7 @@ model Organization {
   billingUsageRecords      BillingUsageRecord[]
   cashSourceTransactions   CashSourceTransaction[]
   remittanceBatchEvidence  RemittanceBatchEvidence[]
+  remittanceBatches        RemittanceBatch[]
   postingSourceReceipts    PostingSourceReceipt[]
   reviewNotifications      ReviewNotificationIntent[]
 }
@@ -459,13 +460,13 @@ model RemittanceBatchEvidence {
   contentHash              String   @db.Char(64)
   createdAt                DateTime @default(now())
 
-  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   review       RemittanceBatchReview?
   members      RemittanceBatchClaim[]
   cashMatches  CashBatchMatch[]
+  revision     RemittanceBatchRevision?
 
   @@unique([id, organizationId])
-  @@unique([organizationId, sourceNamespace, sourceBatchId], map: "RemittanceBatchEvidence_batch_key")
   @@unique([organizationId, sourceNamespace, sourceRecordId], map: "RemittanceBatchEvidence_source_key")
   @@index([organizationId, createdAt, id])
 }
@@ -513,14 +514,16 @@ model RemittanceBatchClaim {
   remittanceReviewId   String  @db.Uuid
   amount               Decimal @db.Decimal(10, 2)
 
-  review             RemittanceBatchReview   @relation(fields: [reviewId, organizationId, batchEvidenceId], references: [id, organizationId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
-  batchEvidence      RemittanceBatchEvidence @relation(fields: [batchEvidenceId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
-  claim              Claim                   @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
-  remittanceEvidence ClaimRemittanceEvidence @relation(fields: [remittanceEvidenceId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
-  remittanceReview   ClaimRemittanceReview   @relation(fields: [remittanceReviewId, organizationId, claimId, remittanceEvidenceId], references: [id, organizationId, claimId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+  review             RemittanceBatchReview           @relation(fields: [reviewId, organizationId, batchEvidenceId], references: [id, organizationId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+  batchEvidence      RemittanceBatchEvidence         @relation(fields: [batchEvidenceId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  claim              Claim                           @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  remittanceEvidence ClaimRemittanceEvidence         @relation(fields: [remittanceEvidenceId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+  remittanceReview   ClaimRemittanceReview           @relation(fields: [remittanceReviewId, organizationId, claimId, remittanceEvidenceId], references: [id, organizationId, claimId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+  ownership          RemittanceBatchMemberOwnership?
 
   @@unique([reviewId, sourceIndex])
-  @@unique([organizationId, remittanceEvidenceId], map: "RemittanceBatchClaim_member_key")
+  @@unique([id, organizationId, remittanceEvidenceId], map: "RemittanceBatchClaim_ownership_binding_key")
+  @@unique([reviewId, remittanceEvidenceId])
   @@index([organizationId, claimId])
 }
 
@@ -544,6 +547,51 @@ model RemittanceBatchAdjustment {
   @@unique([reviewId, sourceIndex])
   @@unique([reviewId, sourceAdjustmentId])
   @@index([organizationId])
+}
+
+// Stable source identity and immutable ordering metadata; legacy payloads remain byte-for-byte intact.
+model RemittanceBatch {
+  id               String                           @id @default(uuid()) @db.Uuid
+  organizationId   String
+  sourceNamespace  String                           @db.VarChar(80)
+  sourceBatchId    String                           @db.VarChar(200)
+  createdAt        DateTime                         @default(now())
+  organization     Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revisions        RemittanceBatchRevision[]
+  memberOwnerships RemittanceBatchMemberOwnership[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, sourceNamespace, sourceBatchId], map: "RemittanceBatch_source_key")
+  @@index([organizationId, createdAt, id])
+}
+
+model RemittanceBatchRevision {
+  evidenceId     String                  @id @db.Uuid
+  organizationId String
+  batchId        String                  @db.Uuid
+  schemaVersion  Int
+  sourceSequence Int?
+  evidence       RemittanceBatchEvidence @relation(fields: [evidenceId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  batch          RemittanceBatch         @relation(fields: [batchId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([evidenceId, organizationId])
+  @@unique([batchId, sourceSequence])
+  @@index([organizationId, batchId, sourceSequence])
+}
+
+// Accepted source-event ownership never transfers merely because a correction omits a member.
+model RemittanceBatchMemberOwnership {
+  id                   String               @id @default(uuid()) @db.Uuid
+  organizationId       String
+  remittanceEvidenceId String               @db.Uuid
+  batchId              String               @db.Uuid
+  firstMemberId        String               @unique @db.Uuid
+  batch                RemittanceBatch      @relation(fields: [batchId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  firstMember          RemittanceBatchClaim @relation(fields: [firstMemberId, organizationId, remittanceEvidenceId], references: [id, organizationId, remittanceEvidenceId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([organizationId, remittanceEvidenceId], map: "RemittanceBatchMemberOwnership_event_key")
+  @@unique([firstMemberId, organizationId, remittanceEvidenceId])
+  @@index([organizationId, batchId])
 }
 
 // Immutable bank-account source observations. Reviewed source state is not

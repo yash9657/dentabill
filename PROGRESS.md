@@ -3,13 +3,35 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-14
-**Current work:** transactional review notifications and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
+**Current work:** remittance batch source corrections and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
 `codex/w0-containment`. The full parity assignment remains incomplete; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice — FW-40 (ADR-079), locally verified:** review alerts now commit
+**Latest local slice — FW-44 batch source corrections (ADR-080), locally verified:**
+Migration 32 adds immutable stable batch identity, source revision and permanent member ownership
+sidecars. Existing version 1 evidence remains unchanged and explicitly unsequenced; version 2
+uses a new source record and positive sequence under the original batch identity. Review/history
+and cash reconciliation use the latest observed revision, even when a newer revision is rejected.
+Members can repeat within that batch; omission cannot transfer ownership. Prior cash matches keep
+their reservations until explicit full release. Exact review retries retain the immutable review
+object while refreshing currentness metadata. The dashboard exposes source history, membership
+changes and a version 2 example; zero net is not withdrawal.
+Migration 32 is frozen and applied only to localhost isolated/shared databases. DB 27 plus expanded
+preservation 1, prior financial regressions 344, SDK 57, focused batch API 71/71, cash API 66/66 and UI 70 pass, with web/API types and scoped lint.
+Full API 909/909 across 43 files and API/Lambda builds pass. The final combined 1280/390px
+synthetic component captures report no overflow, page errors or axe violations; independent review
+returned ship and the documentation pass found no durable system change. Next production build and affected lint/typecheck 30/30 pass. No real source connector, financial action, merge or
+deployment ran. FW-40 is the previous committed slice (`4af99ec`); external delivery stays disabled.
+
+**Immediate next:** continue reviewed posting relationships and
+claim cash allocation/attribution. Cross-batch ownership transfer, claim-remittance correction
+chains, real connectors, recovery, AI/voice and the remaining operational gates remain in scope.
+The full assignment remains active; local source correction support does not establish source
+authenticity, receipt, posting or settlement.
+
+**Previous local slice — FW-40 (ADR-079), committed as `4af99ec`:** review alerts now commit
 atomically with source/domain/audit changes. Frozen intent identity, recipient, generic payload
 and delivery key feed a synthetic-only dispatcher with one-minute leases, at most five attempts,
 a fixed 23-hour retry deadline and immutable receipts. Native human review suppresses alerts
@@ -28,14 +50,6 @@ synthetic component capture batch has no overflow, page errors or axe violations
 review returned ship and documentation review required no system change. Detector exit 126 gives
 no verdict; the full authenticated shell was not exercised. No real messages, paid inference,
 provider calls, merge or deployment ran.
-
-**Immediate next:** implement additive batch identity/revision/ownership sidecars with explicit
-version 2 source sequences, preserving existing version 1 evidence as unsequenced. Revisions may
-repeat members within the same batch while cross-batch ownership remains permanent. Acceptance
-and freshness use the latest observed revision; cash reservations remain bound to stable batch
-identity until explicit release. Then continue reviewed posting relationships, claim cash
-allocation/attribution and the full remaining connector, recovery, AI/voice and operational plan.
-External notification delivery/rollout remains open.
 
 **Previous local slice:** independent PMS posting receipt observations (ADR-078): immutable revisions,
 separate header/entry facts, unknowns, fresh reviews and historical entry-identity protection across
@@ -70,7 +84,7 @@ cannot be counted in two accepted batches. Migration28 applied only to localhost
 preservation1, existing financial/tenant regression174, focusedAPI51, fullAPI753 across40 files,
 UI37, SDK43 and lint/types30 pass. API/Lambda/Next production builds pass. Synthetic desktop/mobile
 checks and independent API/UI reviews pass; real auth/source integrations remain unverified.
-Batch revisions/corrections are unsupported. This slice is committed locally on `codex/w0-containment`.
+Batch revisions/corrections were unsupported at this checkpoint; ADR-080 adds them above. This slice is committed locally on `codex/w0-containment`.
 Full regression/build verification is recorded in
 the [handoff](./docs/HANDOFF_2026-10-13.md).
 

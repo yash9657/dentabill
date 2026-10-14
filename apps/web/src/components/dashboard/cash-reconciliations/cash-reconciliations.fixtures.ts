@@ -73,6 +73,12 @@ export function matchPreviewFixture(overrides: Partial<MatchPreview> = {}): Matc
       pendingSourceTransactionId: null,
     },
     batch: {
+      batchId: batch.revision.batchId,
+      schemaVersion: batch.revision.schemaVersion,
+      sourceSequence: batch.revision.sourceSequence,
+      latestEvidenceId: batch.revision.latestEvidenceId,
+      latestSourceSequence: batch.revision.latestSourceSequence,
+      latestAcceptedEvidenceId: batch.revision.latestAcceptedEvidenceId,
       evidenceId: batch.id,
       reviewId: fixtureValue(batch.review).id,
       reviewDecision: 'ACCEPT',

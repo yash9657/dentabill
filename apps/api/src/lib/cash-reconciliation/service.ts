@@ -178,19 +178,32 @@ async function sourceContext(
   });
   const batchRow = await db.remittanceBatchEvidence.findFirst({
     where: { id: candidate.batchEvidenceId, organizationId: scope.organizationId },
-    include: { review: true },
+    include: { review: true, revision: true },
   });
   if (!cashRow || !batchRow)
     throw new ApiError('NOT_FOUND', 'Source evidence not found in your practice.');
+  if (!batchRow.revision)
+    throw new ApiError('INTERNAL_ERROR', 'Batch source history is unavailable.');
   const where = { organizationId: scope.organizationId, transactionId: cashRow.transactionId };
-  const [latest, accepted] = await Promise.all([
+  const batchWhere = {
+    organizationId: scope.organizationId,
+    batchId: batchRow.revision.batchId,
+  };
+  const batchOrder = { sourceSequence: { sort: 'desc', nulls: 'last' } } as const;
+  const [latest, accepted, latestBatch, acceptedBatch] = await Promise.all([
     db.cashSourceEvidence.findFirst({ where, orderBy: { sourceSequence: 'desc' } }),
     db.cashSourceEvidence.findFirst({
       where: { ...where, review: { decision: 'ACCEPT' } },
       orderBy: { sourceSequence: 'desc' },
     }),
+    db.remittanceBatchRevision.findFirst({ where: batchWhere, orderBy: batchOrder }),
+    db.remittanceBatchRevision.findFirst({
+      where: { ...batchWhere, evidence: { review: { decision: 'ACCEPT' } } },
+      orderBy: batchOrder,
+    }),
   ]);
   if (!latest) throw new ApiError('INTERNAL_ERROR', 'Cash source history is unavailable.');
+  if (!latestBatch) throw new ApiError('INTERNAL_ERROR', 'Batch source history is unavailable.');
   const cashPayload = CashInputSchema.parse(cashRow.payload);
   const batchPayload = BatchInputSchema.parse(batchRow.payload);
   const cash: CashBinding = {
@@ -220,7 +233,10 @@ async function sourceContext(
     pendingSourceTransactionId: cashPayload.pendingSourceTransactionId,
   };
   const batch: BatchBinding = {
+    batchId: batchRow.revision.batchId,
     evidenceId: batchRow.id,
+    schemaVersion: batchPayload.schemaVersion,
+    sourceSequence: batchRow.revision.sourceSequence,
     reviewId: batchRow.review?.id ?? null,
     reviewDecision: (batchRow.review?.decision as 'ACCEPT' | 'REJECT' | undefined) ?? null,
     contentHash: batchRow.contentHash,
@@ -228,6 +244,9 @@ async function sourceContext(
     sourceBatchId: batchRow.sourceBatchId,
     sourceRecordId: batchRow.sourceRecordId,
     sourceDocumentId: batchRow.sourceDocumentId,
+    latestEvidenceId: latestBatch.evidenceId,
+    latestSourceSequence: latestBatch.sourceSequence,
+    latestAcceptedEvidenceId: acceptedBatch?.evidenceId ?? null,
     payerName: batchPayload.payerName,
     claimReportedAmount: batchPayload.reportedClaimAmount,
     providerAdjustmentAmount: batchPayload.reportedAdjustmentAmount,
@@ -242,6 +261,8 @@ async function sourceContext(
   if (cash.amount === '0.00') blockers.push('CASH_ZERO_AMOUNT');
   if (batchRow.review?.decision !== 'ACCEPT' || batch.netAmount === null)
     blockers.push('BATCH_NOT_ACCEPTED');
+  if (latestBatch.evidenceId !== batchRow.id || acceptedBatch?.evidenceId !== batchRow.id)
+    blockers.push('BATCH_NOT_CURRENT');
   if (batch.netAmount === '0.00') blockers.push('BATCH_ZERO_NET');
   const component = await db.$queryRaw<
     { transaction_id: string | null; source_id: string | null; overflow: boolean }[]
@@ -270,18 +291,27 @@ async function sourceContext(
         ? 'STALE_CASH_RESERVATION'
         : 'CASH_IDENTITY_CONFLICT',
     );
-  const [reserved] = await db.$queryRaw<{ cash: Prisma.Decimal; batch: Prisma.Decimal }[]>`
+  const [reserved] = await db.$queryRaw<
+    { cash: Prisma.Decimal; batch: Prisma.Decimal; staleBatch: boolean }[]
+  >`
     SELECT
       COALESCE((SELECT sum(abs(m.amount)) FROM "CashBatchMatch" m
         WHERE m."organizationId"=${scope.organizationId} AND m."cashTransactionId"=${cashRow.transactionId}::uuid
         AND (${excludeMatchId ?? null}::uuid IS NULL OR m.id<>${excludeMatchId ?? null}::uuid)
         AND NOT EXISTS (SELECT 1 FROM "CashBatchRelease" r WHERE r."organizationId"=m."organizationId" AND r."matchId"=m.id)),0)::numeric AS cash,
       COALESCE((SELECT sum(abs(m.amount)) FROM "CashBatchMatch" m
-        WHERE m."organizationId"=${scope.organizationId} AND m."batchEvidenceId"=${batchRow.id}::uuid
+        JOIN "RemittanceBatchRevision" v ON v."evidenceId"=m."batchEvidenceId" AND v."organizationId"=m."organizationId"
+        WHERE m."organizationId"=${scope.organizationId} AND v."batchId"=${batchRow.revision.batchId}::uuid
         AND (${excludeMatchId ?? null}::uuid IS NULL OR m.id<>${excludeMatchId ?? null}::uuid)
-        AND NOT EXISTS (SELECT 1 FROM "CashBatchRelease" r WHERE r."organizationId"=m."organizationId" AND r."matchId"=m.id)),0)::numeric AS batch
+        AND NOT EXISTS (SELECT 1 FROM "CashBatchRelease" r WHERE r."organizationId"=m."organizationId" AND r."matchId"=m.id)),0)::numeric AS batch,
+      EXISTS (SELECT 1 FROM "CashBatchMatch" m
+        JOIN "RemittanceBatchRevision" v ON v."evidenceId"=m."batchEvidenceId" AND v."organizationId"=m."organizationId"
+        WHERE m."organizationId"=${scope.organizationId} AND v."batchId"=${batchRow.revision.batchId}::uuid
+        AND m."batchEvidenceId"<>${batchRow.id}::uuid
+        AND NOT EXISTS (SELECT 1 FROM "CashBatchRelease" r WHERE r."organizationId"=m."organizationId" AND r."matchId"=m.id)) AS "staleBatch"
   `;
   if (!reserved) throw new ApiError('INTERNAL_ERROR', 'Source capacities are unavailable.');
+  if (reserved.staleBatch) blockers.push('STALE_BATCH_RESERVATION');
   const cashReserved = moneyCents(reserved.cash.toFixed(2));
   const batchReserved = moneyCents(reserved.batch.toFixed(2));
   const cashAmount = cash.amount === null ? null : moneyCents(cash.amount);
@@ -307,7 +337,10 @@ async function sourceContext(
       ? remaining(cashAmount, cashReserved)
       : null;
   const batchAvailable =
-    batchAmount !== null && batchRow.review?.decision === 'ACCEPT'
+    batchAmount !== null &&
+    !blockers.some((blocker) =>
+      ['BATCH_NOT_ACCEPTED', 'BATCH_NOT_CURRENT', 'STALE_BATCH_RESERVATION'].includes(blocker),
+    )
       ? remaining(batchAmount, batchReserved)
       : null;
   if (cashAvailable !== null && magnitude(proposed) > cashAvailable)
@@ -342,7 +375,7 @@ async function buildMatchPreview(
     capacity: context.capacity,
     blockers: context.blockers,
     ledgerVersion: version,
-    reviewToken: digest(['cash-batch-match-v1', scope.organizationId, candidate, context, version]),
+    reviewToken: digest(['cash-batch-match-v2', scope.organizationId, candidate, context, version]),
     ...financialState,
   });
 }

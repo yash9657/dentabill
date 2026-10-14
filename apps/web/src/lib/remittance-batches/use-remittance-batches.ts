@@ -14,6 +14,8 @@ import { useDentaBillApi } from '../api-client.js';
 export type BatchList =
   paths['/v1/remittance-batches']['get']['responses'][200]['content']['application/json'];
 export type BatchEvidence = BatchList['items'][number];
+export type BatchHistory =
+  paths['/v1/remittance-batches/{id}/history']['get']['responses'][200]['content']['application/json'];
 export type BatchPreview =
   paths['/v1/remittance-batches/{id}/preview']['get']['responses'][200]['content']['application/json'];
 export type BatchInput =
@@ -36,8 +38,12 @@ function failure(status: number): BatchResult<never> {
   return { kind: 'UNCERTAIN' };
 }
 
-export function useRemittanceBatches(scope: BatchScope): {
+export function useRemittanceBatches(
+  scope: BatchScope,
+  historyId: string | null,
+): {
   list: UseInfiniteQueryResult<InfiniteData<BatchList>>;
+  history: UseInfiniteQueryResult<InfiniteData<BatchHistory>>;
   preview: (id: string) => Promise<BatchResult<BatchPreview>>;
   importEvidence: (body: unknown) => Promise<BatchResult<BatchEvidence>>;
   review: (command: BatchReviewCommand) => Promise<BatchResult<BatchEvidence>>;
@@ -78,6 +84,30 @@ export function useRemittanceBatches(scope: BatchScope): {
   const refresh = async (): Promise<void> => {
     await queryClient.invalidateQueries({ queryKey: scopeKey });
   };
+  const history = useInfiniteQuery({
+    queryKey: [...scopeKey, 'history', historyId],
+    enabled: historyId !== null,
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam, signal }): Promise<BatchHistory> => {
+      const isCancelled = (): boolean => !isActive() || signal.aborted;
+      const headers = await withAuthHeaders();
+      if (!historyId || isCancelled()) throw new Error('Batch history view changed.');
+      const result = await client.GET('/v1/remittance-batches/{id}/history', {
+        headers,
+        signal,
+        params: {
+          path: { id: historyId },
+          query: { limit: 10, ...(pageParam ? { cursor: pageParam } : {}) },
+        },
+      });
+      if (isCancelled() || !result.response.ok || !result.data)
+        throw new Error('Batch revision history could not be loaded.');
+      return result.data;
+    },
+    getNextPageParam: (page) => (page.hasMore ? page.nextCursor : undefined),
+    retry: false,
+    throwOnError: false,
+  });
   const preview = async (id: string): Promise<BatchResult<BatchPreview>> => {
     try {
       const headers = await withAuthHeaders();
@@ -129,7 +159,7 @@ export function useRemittanceBatches(scope: BatchScope): {
       return { kind: isActive() ? 'UNCERTAIN' : 'INACTIVE' };
     }
   };
-  return { list, preview, importEvidence, review, refresh, isActive };
+  return { list, history, preview, importEvidence, review, refresh, isActive };
 }
 
 export async function readBatchFile(file: File): Promise<unknown> {
@@ -144,7 +174,7 @@ export async function readBatchFile(file: File): Promise<unknown> {
       typeof body !== 'object' ||
       Array.isArray(body) ||
       !('schemaVersion' in body) ||
-      body.schemaVersion !== 1 ||
+      (body.schemaVersion !== 1 && body.schemaVersion !== 2) ||
       !('evidenceBasis' in body) ||
       body.evidenceBasis !== 'PAYER_REMITTANCE_BATCH'
     )
@@ -152,7 +182,7 @@ export async function readBatchFile(file: File): Promise<unknown> {
     return body;
   } catch {
     throw new Error(
-      'This is not a valid version 1 payer remittance batch JSON object. Check the export and choose it again.',
+      'This is not a valid version 1 or 2 payer remittance batch JSON object. Check the export and choose it again.',
     );
   }
 }

@@ -14,6 +14,10 @@ import type {
   ReleasePreview,
 } from '../../../lib/cash-reconciliations/use-cash-reconciliations.js';
 import type { BatchList } from '../../../lib/remittance-batches/use-remittance-batches.js';
+import {
+  batchReviewedFixture,
+  batchV2Fixture,
+} from '../remittance-batches/remittance-batches.fixtures.js';
 
 import { CashReconciliationsPage } from './cash-reconciliations-page.js';
 import {
@@ -240,11 +244,13 @@ describe('cash reconciliation with the actual hook and generated SDK transport',
     'CASH_NOT_POSTED',
     'CASH_ZERO_AMOUNT',
     'BATCH_NOT_ACCEPTED',
+    'BATCH_NOT_CURRENT',
     'BATCH_ZERO_NET',
     'DIRECTION_MISMATCH',
     'CASH_CAPACITY_EXCEEDED',
     'BATCH_CAPACITY_EXCEEDED',
     'STALE_CASH_RESERVATION',
+    'STALE_BATCH_RESERVATION',
     'SOURCE_LINK_LIMIT',
     'CASH_IDENTITY_CONFLICT',
   ] as const)('blocks a new match for%s', async (blocker) => {
@@ -254,6 +260,121 @@ describe('cash reconciliation with the actual hook and generated SDK transport',
     expect(screen.getByRole('list', { name: 'Match blockers' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Record reviewed match' })).toBeDisabled();
     expect(matchRequests()).toHaveLength(0);
+  });
+
+  it.each(['UNREVIEWED', 'REJECTED'] as const)(
+    'keeps an older accepted batch unavailable when the latest observation is %s',
+    async (decision) => {
+      const older = batches.items[0]!;
+      const newer =
+        decision === 'REJECTED'
+          ? batchReviewedFixture(batchV2Fixture(), 'REJECT')
+          : batchV2Fixture();
+      older.revision = {
+        ...older.revision,
+        isLatest: false,
+        isCurrentAccepted: false,
+        latestEvidenceId: newer.id,
+        latestSourceSequence: 1,
+      };
+      newer.revision.latestAcceptedEvidenceId = older.id;
+      batches.items = [newer, older];
+      renderView();
+      const options = await screen.findAllByRole('option', { name: /synthetic-batch-a/ });
+      expect(options).toHaveLength(2);
+      expect(options[0]).toHaveTextContent('Source sequence 1 (v2)');
+      expect(options[1]).toHaveTextContent('Stale accepted revision');
+      expect(options[0]).toBeDisabled();
+      expect(options[1]).toBeDisabled();
+      expect(matchRequests()).toHaveLength(0);
+    },
+  );
+
+  it('keeps the old150 reservation until explicit release before matching the corrected140 net', async () => {
+    const olderMatch = cashMatchFixture();
+    const corrected = batchReviewedFixture(batchV2Fixture());
+    batches.items = [corrected];
+    olderMatch.status = 'STALE';
+    olderMatch.blockers = ['BATCH_NOT_CURRENT'];
+    olderMatch.batch = {
+      ...olderMatch.batch,
+      latestEvidenceId: corrected.id,
+      latestSourceSequence: 1,
+      latestAcceptedEvidenceId: corrected.id,
+    };
+    matches = matchListFixture([olderMatch]);
+    preview.batch = {
+      ...preview.batch,
+      evidenceId: corrected.id,
+      contentHash: corrected.contentHash,
+      schemaVersion: 2,
+      sourceSequence: 1,
+      sourceRecordId: corrected.payload.sourceRecordId,
+      latestEvidenceId: corrected.id,
+      latestSourceSequence: 1,
+      latestAcceptedEvidenceId: corrected.id,
+      providerAdjustmentAmount: '-40.00',
+      netAmount: '140.00',
+    };
+    preview.capacity = {
+      cashReservedMagnitude: '150.00',
+      cashAvailableMagnitude: '0.00',
+      batchReservedMagnitude: '150.00',
+      batchAvailableMagnitude: null,
+    };
+    preview.blockers = ['STALE_BATCH_RESERVATION'];
+    postHandler = async (r) => {
+      if (r.path.endsWith('/release/preview'))
+        return json({ ...releasePreview, reason: (r.body as ReleaseCandidate).reason });
+      if (r.path.endsWith('/release')) {
+        const release = releaseReceiptFixture('SOURCE_CHANGED');
+        matches = matchListFixture([{ ...olderMatch, status: 'RELEASED', release }]);
+        preview.blockers = [];
+        preview.capacity = {
+          cashReservedMagnitude: '0.00',
+          cashAvailableMagnitude: '150.00',
+          batchReservedMagnitude: '0.00',
+          batchAvailableMagnitude: '140.00',
+        };
+        return json(release, 201);
+      }
+      if (r.path.endsWith('/preview')) return json({ ...preview, candidate: r.body });
+      return json(matchReceiptFixture(r.body as MatchCandidate), 201);
+    };
+    const { user } = renderView();
+    await openPreview(user, '140.00');
+    expect(screen.getByText('Batch already reserved').nextElementSibling).toHaveTextContent(
+      '$150.00',
+    );
+    expect(
+      screen.getByText('Batch available before this match').nextElementSibling,
+    ).toHaveTextContent('Unknown');
+    expect(screen.getByRole('button', { name: 'Record reviewed match' })).toBeDisabled();
+    expect(
+      screen.getByText(/Revising a batch does not free its reserved amount/),
+    ).toBeInTheDocument();
+    await openRelease(user);
+    expect(screen.getByText('Signed match being released').nextElementSibling).toHaveTextContent(
+      '+$150.00',
+    );
+    expect(screen.getByText('Matched batch revision').nextElementSibling).toHaveTextContent(
+      'Unsequenced baseline',
+    );
+    await user.click(screen.getByRole('button', { name: 'Release full match' }));
+    await screen.findByText(/Full match released/);
+    expect(matchRequests()).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: 'Open fresh match preview' }));
+    await screen.findByRole('heading', { name: 'Review proposed source match' });
+    expect(
+      screen.getByText('Batch available before this match').nextElementSibling,
+    ).toHaveTextContent('$140.00');
+    await user.click(screen.getByRole('button', { name: 'Record reviewed match' }));
+    await screen.findByText(/Match recorded/);
+    expect(matchRequests()[0]?.body).toMatchObject({
+      batchEvidenceId: corrected.id,
+      amount: '140.00',
+    });
+    expect(releaseRequests()[0]?.path).toContain(olderMatch.id);
   });
 
   it('preserves unknown capacity separately from known zero reserved magnitude', async () => {

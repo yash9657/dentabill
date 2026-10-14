@@ -1,14 +1,16 @@
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-import { prisma, type UserRole } from '@dentabill/db';
+import { prisma, type Prisma, type UserRole } from '@dentabill/db';
 import { createLogger } from '@dentabill/logger';
 import type { FastifyInstance, InjectOptions } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { buildServer } from '../../app.js';
+import { getEnv } from '../../lib/env.js';
 import {
   BatchEvidenceSchema,
+  BatchHistorySchema,
   BatchInputSchema,
   BatchListSchema,
   BatchPreviewSchema,
@@ -27,7 +29,8 @@ type FixtureName =
   | '03-zero-net.json'
   | '04-negative-net.json'
   | '05-provider-only-credit.json'
-  | '06-signed-reversal.json';
+  | '06-signed-reversal.json'
+  | '07-corrected-net-140.json';
 function fixture(name: FixtureName): BatchInput {
   // The finite filename union references checked-in fabricated inputs only.
   // eslint-disable-next-line security/detect-non-literal-fs-filename
@@ -39,10 +42,10 @@ function fixture(name: FixtureName): BatchInput {
   return BatchInputSchema.parse(value);
 }
 function batch(overrides: Partial<BatchInput> = {}): BatchInput {
-  return { ...fixture('01-balanced-180-minus-30.json'), ...overrides };
+  return BatchInputSchema.parse({ ...fixture('01-balanced-180-minus-30.json'), ...overrides });
 }
 function providerOnly(overrides: Partial<BatchInput> = {}): BatchInput {
-  return { ...fixture('05-provider-only-credit.json'), ...overrides };
+  return BatchInputSchema.parse({ ...fixture('05-provider-only-credit.json'), ...overrides });
 }
 function fresh(overrides: Partial<BatchInput> = {}): BatchInput {
   return providerOnly({ sourceBatchId: randomUUID(), sourceRecordId: randomUUID(), ...overrides });
@@ -267,6 +270,390 @@ describe('remittance batch evidence API (synthetic, real Postgres)', () => {
       'CREATE TRIGGER reject_batch_test_audit BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION reject_batch_test_audit()',
     );
   }
+
+  function correction(
+    base: BatchInput,
+    sequence: number,
+    overrides: Record<string, unknown> = {},
+  ): BatchInput {
+    return BatchInputSchema.parse({
+      ...base,
+      schemaVersion: 2,
+      sourceSequence: sequence,
+      sourceRecordId: `revision-${String(sequence)}-${randomUUID()}`,
+      ...overrides,
+    });
+  }
+  async function history(s: Seed, id: string, suffix = '') {
+    const result = await inject({
+      method: 'GET',
+      url: `${BASE}/${id}/history${suffix}`,
+      headers: s.headers,
+    });
+    expect(result.statusCode, result.body).toBe(200);
+    expect(Buffer.byteLength(result.body)).toBeLessThanOrEqual(2 * 1024 * 1024);
+    return BatchHistorySchema.parse(result.json());
+  }
+
+  it('replays a pre-revision v1 canonical payload and hash after a later correction', async () => {
+    const s = await seed();
+    await members(s);
+    // This unchanged v1 fixture has the original parser's complete field order.
+    // Construct the retained hash before calling any current input schema.
+    const legacyPayload = JSON.parse(
+      // Fixed checked-in synthetic fixture, never a caller-controlled path.
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      readFileSync(
+        new URL(
+          '../../../test/fixtures/remittance-batches/01-balanced-180-minus-30.json',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    ) as Prisma.InputJsonObject;
+    const legacyHash = createHmac('sha256', getEnv().DOB_HASH_SECRET)
+      .update(JSON.stringify(['remittance-batch-v1', s.organizationId, legacyPayload]))
+      .digest('hex');
+    const columns = batch();
+    const legacy = await prisma.remittanceBatchEvidence.create({
+      data: {
+        organizationId: s.organizationId,
+        sourceNamespace: columns.sourceNamespace,
+        sourceBatchId: columns.sourceBatchId,
+        sourceRecordId: columns.sourceRecordId,
+        sourceDocumentId: columns.sourceDocumentId,
+        sourceVersion: columns.sourceVersion,
+        detailCompleteness: columns.detailCompleteness,
+        reportedClaimAmount: columns.reportedClaimAmount,
+        reportedAdjustmentAmount: columns.reportedAdjustmentAmount,
+        reportedNetAmount: columns.reportedNetAmount,
+        payload: legacyPayload,
+        contentHash: legacyHash,
+      },
+    });
+    await accepted(s, legacy.id);
+    await imported(s, fixture('07-corrected-net-140.json'));
+    const replay = await inject({
+      method: 'POST',
+      url: BASE,
+      headers: s.headers,
+      payload: legacyPayload,
+    });
+    expect(replay.statusCode, replay.body).toBe(200);
+    expect(BatchEvidenceSchema.parse(replay.json())).toMatchObject({
+      id: legacy.id,
+      contentHash: legacyHash,
+      payload: legacyPayload,
+      revision: { schemaVersion: 1, sourceSequence: null, isLatest: false },
+    });
+  });
+
+  it('preserves the unsequenced baseline and reviews the copyable net140 correction under one batch identity', async () => {
+    const s = await seed();
+    await members(s);
+    const baseline = await imported(s);
+    const before = await accepted(s, baseline.id);
+    const retained = await prisma.remittanceBatchEvidence.findFirstOrThrow({
+      where: { organizationId: s.organizationId, id: baseline.id },
+    });
+    const corrected = await imported(s, fixture('07-corrected-net-140.json'));
+    expect(corrected.revision).toMatchObject({
+      batchId: before.revision.batchId,
+      schemaVersion: 2,
+      sourceSequence: 1,
+      latestEvidenceId: corrected.id,
+      latestAcceptedEvidenceId: baseline.id,
+      isLatest: true,
+      isCurrentAccepted: false,
+    });
+    const p = await preview(s, corrected.id);
+    expect(p.blockers).toEqual([]);
+    expect(p.membershipChanges).toMatchObject({
+      previousAcceptedEvidenceId: baseline.id,
+      added: [],
+      omitted: [],
+      ownershipPolicy: 'RETAINED_ACROSS_REVISIONS',
+    });
+    expect(p.membershipChanges.retained).toHaveLength(2);
+    expect((await accepted(s, corrected.id)).review?.netAmount).toBe('140.00');
+    const rows = (await history(s, baseline.id)).items;
+    expect(rows.map((row) => row.id)).toEqual([corrected.id, baseline.id]);
+    expect(rows[1]).toMatchObject({
+      payload: before.payload,
+      contentHash: before.contentHash,
+      review: before.review,
+      revision: { sourceSequence: null, isLatest: false, isCurrentAccepted: false },
+    });
+    expect(
+      await prisma.remittanceBatchEvidence.findFirstOrThrow({
+        where: { organizationId: s.organizationId, id: baseline.id },
+      }),
+    ).toEqual(retained);
+    expect(
+      await prisma.remittanceBatchMemberOwnership.count({
+        where: { organizationId: s.organizationId },
+      }),
+    ).toBe(2);
+  });
+
+  it('shows added, retained and omitted members while preserving omitted ownership and allowing same-batch reuse', async () => {
+    const s = await seed();
+    const reports = await members(s);
+    const extra = await member(s, 'new-report-20', '20.00');
+    const baseline = await imported(s);
+    await accepted(s, baseline.id);
+    const payload = correction(batch(), 1, {
+      claimRemittances: [
+        batch().claimRemittances[0],
+        {
+          sourceNamespace: 'synthetic-remittance',
+          sourceRecordId: 'new-report-20',
+          reportedAmount: '20.00',
+        },
+      ],
+      reportedClaimAmount: '120.00',
+      reportedNetAmount: '90.00',
+    });
+    const revised = await imported(s, payload);
+    const p = await preview(s, revised.id);
+    expect(p.membershipChanges.added.map((item) => item.evidenceId)).toEqual([extra.id]);
+    expect(p.membershipChanges.retained.map((item) => item.evidenceId)).toEqual([reports[0]?.id]);
+    expect(p.membershipChanges.omitted.map((item) => item.evidenceId)).toEqual([reports[1]?.id]);
+    await accepted(s, revised.id);
+    const competitor = await imported(
+      s,
+      batch({
+        sourceBatchId: 'competing-batch',
+        sourceRecordId: 'competing-record',
+        claimRemittances: batch().claimRemittances.slice(1, 2),
+        reportedClaimAmount: '80.00',
+        reportedNetAmount: '50.00',
+      }),
+    );
+    expect((await preview(s, competitor.id)).blockers).toContain('MEMBER_ALREADY_BATCHED');
+    const restored = await imported(s, correction(batch(), 2));
+    expect((await preview(s, restored.id)).blockers).toEqual([]);
+    await accepted(s, restored.id);
+    expect(
+      await prisma.remittanceBatchMemberOwnership.count({
+        where: { organizationId: s.organizationId },
+      }),
+    ).toBe(3);
+  });
+
+  it('orders explicit source sequences ahead of the baseline and permits rejection of late older observations', async () => {
+    const s = await seed();
+    const base = providerOnly();
+    const baseline = await imported(s, base);
+    const newest = await imported(s, correction(base, 20, { sourceVersion: 'a' }));
+    const late = await imported(s, correction(base, 3, { sourceVersion: 'zzz' }));
+    expect((await preview(s, late.id)).blockers).toContain('BATCH_NOT_CURRENT');
+    expect((await review(s, late.id, await reviewBody(s, late.id))).statusCode).toBe(409);
+    expect((await review(s, late.id, await reviewBody(s, late.id, 'REJECT'))).statusCode).toBe(200);
+    await accepted(s, newest.id);
+    expect((await history(s, baseline.id)).items.map((row) => row.revision.sourceSequence)).toEqual(
+      [20, 3, null],
+    );
+    expect((await preview(s, baseline.id)).blockers).toContain('BATCH_NOT_CURRENT');
+  });
+
+  it.each([false, true])(
+    'keeps an older acceptance stale after newer observation, rejected=%s',
+    async (reject) => {
+      const s = await seed();
+      const base = providerOnly();
+      const baseline = await imported(s, base);
+      await accepted(s, baseline.id);
+      const newer = await imported(s, correction(base, 1));
+      if (reject)
+        expect(
+          (await review(s, newer.id, await reviewBody(s, newer.id, 'REJECT'))).statusCode,
+        ).toBe(200);
+      const prior = (await preview(s, baseline.id)).evidence;
+      expect(prior.revision).toMatchObject({
+        latestEvidenceId: newer.id,
+        latestAcceptedEvidenceId: baseline.id,
+        isCurrentAccepted: false,
+      });
+      expect(prior.review?.decision).toBe('ACCEPT');
+    },
+  );
+
+  it('starts with an explicit sequence without inventing a baseline and refuses a later unsequenced import', async () => {
+    const s = await seed();
+    const base = providerOnly();
+    const first = await imported(s, correction(base, 100));
+    await accepted(s, first.id);
+    expect((await history(s, first.id)).items.map((row) => row.revision.sourceSequence)).toEqual([
+      100,
+    ]);
+    expect(
+      (await inject({ method: 'POST', url: BASE, headers: s.headers, payload: base })).statusCode,
+    ).toBe(409);
+  });
+
+  it.each([
+    { sourceSequence: 0 },
+    { sourceSequence: -1 },
+    { sourceSequence: 1.5 },
+    { sourceSequence: 2147483648 },
+    { sourceSequence: null },
+    { sourceSequence: '1' },
+    { sourceSequence: undefined },
+    { schemaVersion: 1, sourceSequence: 1 },
+  ])('rejects invalid or fabricated revision sequence %j', async (overrides) => {
+    const s = await seed();
+    const result = await inject({
+      method: 'POST',
+      url: BASE,
+      headers: s.headers,
+      payload: { ...providerOnly(), schemaVersion: 2, ...overrides },
+    });
+    expect(result.statusCode).toBe(400);
+    expect(
+      await prisma.remittanceBatch.count({ where: { organizationId: s.organizationId } }),
+    ).toBe(0);
+  });
+
+  it('retains exact source-record and source-sequence identities across replay and concurrent revision imports', async () => {
+    const s = await seed();
+    const payload = correction(providerOnly(), 1);
+    const results = await Promise.all(
+      [1, 2].map(() => inject({ method: 'POST', url: BASE, headers: s.headers, payload })),
+    );
+    expect(results.map((row) => row.statusCode).sort()).toEqual([200, 201]);
+    const original = BatchEvidenceSchema.parse(results[0]?.json());
+    for (const changed of [
+      { ...payload, sourceRecordId: 'another-record' },
+      { ...payload, sourceSequence: 2 },
+      { ...payload, sourceBatchId: 'another-batch' },
+      { ...payload, sourceVersion: 'changed' },
+    ])
+      expect(
+        (await inject({ method: 'POST', url: BASE, headers: s.headers, payload: changed }))
+          .statusCode,
+      ).toBe(409);
+    expect((await history(s, original.id)).items).toHaveLength(1);
+    expect(
+      await prisma.remittanceBatch.count({ where: { organizationId: s.organizationId } }),
+    ).toBe(1);
+  });
+
+  it('invalidates a review preview on a newer source observation and replays an older immutable review receipt', async () => {
+    const s = await seed();
+    const base = providerOnly();
+    const baseline = await imported(s, base);
+    const command = await reviewBody(s, baseline.id);
+    const first = await review(s, baseline.id, command);
+    expect(first.statusCode).toBe(200);
+    const receipt = BatchEvidenceSchema.parse(first.json()).review;
+    const revision = await imported(s, correction(base, 1));
+    const stale = await reviewBody(s, revision.id);
+    await imported(s, correction(base, 2));
+    expect((await review(s, revision.id, stale)).statusCode).toBe(409);
+    const replay = await review(s, baseline.id, command);
+    expect(replay.statusCode).toBe(200);
+    expect(BatchEvidenceSchema.parse(replay.json()).review).toEqual(receipt);
+    const sourceReplay = await inject({
+      method: 'POST',
+      url: BASE,
+      headers: s.headers,
+      payload: base,
+    });
+    expect(sourceReplay.statusCode).toBe(200);
+    expect(BatchEvidenceSchema.parse(sourceReplay.json()).id).toBe(baseline.id);
+  });
+
+  it('rolls back correction lineage on import-audit failure without making the prior acceptance stale', async () => {
+    const s = await seed();
+    const base = providerOnly();
+    const baseline = await imported(s, base);
+    await accepted(s, baseline.id);
+    await failAudit('batch.import');
+    const result = await inject({
+      method: 'POST',
+      url: BASE,
+      headers: s.headers,
+      payload: correction(base, 1),
+    });
+    expect(result.statusCode).toBe(500);
+    await removeAuditFailure();
+    expect((await history(s, baseline.id)).items).toHaveLength(1);
+    expect((await preview(s, baseline.id)).evidence.revision.isCurrentAccepted).toBe(true);
+  });
+
+  it('rolls back newly acquired correction member ownership when review audit fails', async () => {
+    const s = await seed();
+    await members(s);
+    const baseline = await imported(
+      s,
+      providerOnly({
+        sourceBatchId: batch().sourceBatchId,
+        sourceRecordId: 'initial-provider-only',
+      }),
+    );
+    await accepted(s, baseline.id);
+    const revised = await imported(s, correction(batch(), 1));
+    const command = await reviewBody(s, revised.id);
+    await failAudit('batch.review');
+    expect((await review(s, revised.id, command)).statusCode).toBe(500);
+    expect(
+      await prisma.remittanceBatchMemberOwnership.count({
+        where: { organizationId: s.organizationId },
+      }),
+    ).toBe(0);
+    await removeAuditFailure();
+    expect((await review(s, revised.id, command)).statusCode).toBe(200);
+    expect(
+      await prisma.remittanceBatchMemberOwnership.count({
+        where: { organizationId: s.organizationId },
+      }),
+    ).toBe(2);
+  });
+
+  it('paginates source-ordered history under the same identity and rejects foreign history/cursors', async () => {
+    const s = await seed();
+    const other = await seed();
+    const base = providerOnly();
+    const baseline = await imported(s, base);
+    const late = await imported(s, correction(base, 2));
+    const newest = await imported(s, correction(base, 9));
+    const unrelated = await imported(s, fresh());
+    const foreign = await imported(other, base);
+    const page1 = await history(s, baseline.id, '?limit=1');
+    expect(page1.items.map((row) => row.id)).toEqual([newest.id]);
+    const page2 = await history(s, newest.id, `?limit=1&cursor=${page1.nextCursor ?? ''}`);
+    expect(page2.items.map((row) => row.id)).toEqual([late.id]);
+    const page3 = await history(s, late.id, `?limit=1&cursor=${page2.nextCursor ?? ''}`);
+    expect(page3.items.map((row) => row.id)).toEqual([baseline.id]);
+    expect(page3.hasMore).toBe(false);
+    for (const [owner, id, cursor, expected] of [
+      [other, baseline.id, '', 404],
+      [s, unrelated.id, page1.nextCursor, 400],
+      [other, foreign.id, page1.nextCursor, 400],
+    ] as const)
+      expect(
+        (
+          await inject({
+            method: 'GET',
+            url: `${BASE}/${id}/history${cursor ? `?cursor=${cursor}` : ''}`,
+            headers: owner.headers,
+          })
+        ).statusCode,
+      ).toBe(expected);
+    expect(
+      (await inject({ method: 'GET', url: `${BASE}/${baseline.id}/history` })).statusCode,
+    ).toBe(401);
+    await failAudit('batch.read');
+    const denied = await inject({
+      method: 'GET',
+      url: `${BASE}/${baseline.id}/history`,
+      headers: s.headers,
+    });
+    expect(denied.statusCode).toBe(500);
+    expect(denied.body).not.toContain(base.sourceBatchId);
+    expect(logs.join('')).not.toContain(PRIVATE_MARKER);
+  });
 
   it('requires authentication on list, import, preview and review', async () => {
     const s = await seed();

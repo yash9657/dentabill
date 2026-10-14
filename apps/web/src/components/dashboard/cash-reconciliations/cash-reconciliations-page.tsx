@@ -17,6 +17,11 @@ import {
   type ReleaseCommand,
   type ReleasePreview,
 } from '../../../lib/cash-reconciliations/use-cash-reconciliations.js';
+import {
+  batchCurrentnessLabel,
+  batchRevisionLabel,
+  batchSequenceLabel,
+} from '../../../lib/remittance-batches/labels.js';
 
 const BLOCKERS: Record<MatchPreview['blockers'][number], string> = {
   CASH_NOT_ACCEPTED: 'The cash source revision has not been accepted.',
@@ -24,12 +29,16 @@ const BLOCKERS: Record<MatchPreview['blockers'][number], string> = {
   CASH_NOT_POSTED: 'Only source-posted cash records can be matched.',
   CASH_ZERO_AMOUNT: 'A zero cash source amount cannot be matched.',
   BATCH_NOT_ACCEPTED: 'The remittance batch has not been accepted.',
+  BATCH_NOT_CURRENT:
+    'A newer batch observation exists. Review and accept the latest batch revision before creating a new match.',
   BATCH_ZERO_NET: 'A zero-net batch cannot be matched to cash.',
   DIRECTION_MISMATCH: 'The cash source, batch net and proposed match must have the same sign.',
   CASH_CAPACITY_EXCEEDED: 'This match exceeds the cash source amount still available.',
   BATCH_CAPACITY_EXCEEDED: 'This match exceeds the batch net amount still available.',
   STALE_CASH_RESERVATION:
     'A related cash source revision still has an active reservation. Review and release that match before using a replacement.',
+  STALE_BATCH_RESERVATION:
+    'An older revision of this batch still has an active reservation. Review and explicitly release the old match before matching the replacement revision. Revising a batch does not free its reserved amount.',
   SOURCE_LINK_LIMIT:
     'The related source history is too large for a new match. Existing matches can still be released.',
   CASH_IDENTITY_CONFLICT:
@@ -351,13 +360,22 @@ function ReconciliationWorkspace({
             >
               <option value="">Choose a remittance batch</option>
               {batchSources.map((item) => (
-                <option key={item.id} value={item.id} disabled={item.review?.decision !== 'ACCEPT'}>
+                <option
+                  key={item.id}
+                  value={item.id}
+                  disabled={item.review?.decision !== 'ACCEPT' || !item.revision.isCurrentAccepted}
+                >
                   {item.payload.sourceBatchId} · {item.payload.sourceNamespace} ·{' '}
                   {item.payload.payerName} · Net {money(item.payload.reportedNetAmount)} ·{' '}
-                  {item.review?.decision ?? 'UNREVIEWED'}
+                  {batchRevisionLabel(item)} · {batchCurrentnessLabel(item)}
                 </option>
               ))}
             </select>
+            <p className="text-gray-dark mt-2 text-sm">
+              Only the latest accepted batch revision is selectable. An unreviewed or rejected newer
+              observation makes earlier accepted revisions stale. Reservations across all revisions
+              remain until their matches are explicitly released.
+            </p>
             {api.batches.isPending ? (
               <p role="status" className="mt-2 text-sm">
                 Loading batch sources…
@@ -410,6 +428,12 @@ function ReconciliationWorkspace({
                 <Value
                   label="Selected batch source ID"
                   value={selectedBatch.payload.sourceBatchId}
+                />
+                <Value label="Selected batch revision" value={batchRevisionLabel(selectedBatch)} />
+                <Value label="Batch currentness" value={batchCurrentnessLabel(selectedBatch)} />
+                <Value
+                  label="Selected batch record ID"
+                  value={selectedBatch.payload.sourceRecordId}
                 />
                 <Value
                   label="Claim-reported header amount"
@@ -503,8 +527,9 @@ function ReconciliationWorkspace({
             <h3 className="font-medium">Reservations and available amounts</h3>
             <p className="text-gray-dark mt-2 max-w-prose text-sm">
               These values are positive magnitudes before the proposed match. An active reservation
-              survives a newer cash revision or a pending-to-posted replacement until explicitly
-              released. The batch capacity uses its net after provider adjustments.
+              survives a newer cash or batch revision, or a pending-to-posted replacement, until
+              explicitly released. Batch reservations include all revisions of the original batch;
+              its capacity uses the net after provider adjustments.
             </p>
             <dl className="mt-4 grid gap-4 sm:grid-cols-2">
               <Value
@@ -596,7 +621,12 @@ function ReconciliationWorkspace({
               </div>
               <p className="mt-2 text-sm tabular-nums">
                 Matched {money(item.amount)} · Cash source sequence {item.cash.sourceSequence} ·
-                Latest sequence {item.cash.latestSourceSequence}
+                Latest cash sequence {item.cash.latestSourceSequence}
+              </p>
+              <p className="text-gray-dark mt-1 text-sm">
+                Matched batch: {batchSequenceLabel(item.batch.sourceSequence)} (v
+                {item.batch.schemaVersion}) · Latest batch:{' '}
+                {batchSequenceLabel(item.batch.latestSourceSequence)}
               </p>
               <p className="text-gray-dark mt-2 break-words text-sm [overflow-wrap:anywhere]">
                 Account {item.cash.sourceAccountId} · {item.cash.sourceSystem} /{' '}
@@ -713,6 +743,11 @@ function ReconciliationWorkspace({
                 <Value label="Reviewed release reason" value={REASONS[releasePreview.reason]} />
                 <Value label="Cash source account" value={releaseTarget.cash.sourceAccountId} />
                 <Value label="Batch source ID" value={releaseTarget.batch.sourceBatchId} />
+                <Value
+                  label="Matched batch revision"
+                  value={batchSequenceLabel(releaseTarget.batch.sourceSequence)}
+                />
+                <Value label="Matched batch record ID" value={releaseTarget.batch.sourceRecordId} />
               </dl>
               <FinancialState />
               {releasePreview.canRelease ? (
@@ -803,6 +838,22 @@ function Bindings({
           <Value label="Batch source namespace" value={batch.sourceNamespace} />
           <Value label="Batch source record ID" value={batch.sourceRecordId} />
           <Value label="Batch source document ID" value={batch.sourceDocumentId} />
+          <Value label="Batch schema version" value={String(batch.schemaVersion)} />
+          <Value label="Bound batch revision" value={batchSequenceLabel(batch.sourceSequence)} />
+          <Value
+            label="Latest observed batch revision"
+            value={batchSequenceLabel(batch.latestSourceSequence)}
+          />
+          <Value
+            label="Bound batch currentness"
+            value={
+              batch.evidenceId === batch.latestEvidenceId &&
+              batch.evidenceId === batch.latestAcceptedEvidenceId &&
+              batch.reviewDecision === 'ACCEPT'
+                ? 'Current accepted revision'
+                : 'Not current accepted revision'
+            }
+          />
           <Value label="Payer as supplied" value={batch.payerName} />
           <Value label="Claim-reported amount" value={money(batch.claimReportedAmount)} />
           <Value

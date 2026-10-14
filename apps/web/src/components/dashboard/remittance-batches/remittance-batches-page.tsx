@@ -6,6 +6,11 @@ import Link from 'next/link';
 import * as React from 'react';
 
 import {
+  batchCurrentnessLabel,
+  batchRevisionLabel,
+  batchSequenceLabel,
+} from '../../../lib/remittance-batches/labels.js';
+import {
   readBatchFile,
   useRemittanceBatches,
   type BatchEvidence,
@@ -16,6 +21,8 @@ import {
 
 const BLOCKERS: Record<BatchPreview['blockers'][number], string> = {
   ALREADY_REVIEWED: 'This batch already has a recorded review.',
+  BATCH_NOT_CURRENT:
+    'A newer batch observation exists. Only the latest observed revision can be accepted; this older observation can still be rejected if it has no review.',
   INCOMPLETE_DETAIL:
     'The source detail is incomplete. Listed amounts do not establish the full batch total.',
   UNKNOWN_TOTALS:
@@ -25,7 +32,7 @@ const BLOCKERS: Record<BatchPreview['blockers'][number], string> = {
   MEMBER_NOT_ACCEPTED: 'A referenced claim remittance has not been accepted.',
   MEMBER_AMOUNT_MISMATCH: 'A listed claim amount differs from its accepted remittance evidence.',
   MEMBER_ALREADY_BATCHED:
-    'A referenced claim remittance is already included in another accepted batch.',
+    'A referenced claim remittance belongs to another batch. Historical ownership remains even when a later revision omits that member; do not change source IDs to bypass it.',
 };
 const MEMBER_STATUS: Record<BatchPreview['members'][number]['status'], string> = {
   MISSING: 'Not imported',
@@ -45,7 +52,8 @@ export function RemittanceBatchesPage(): React.ReactElement {
 }
 
 function BatchWorkspace({ scope }: { readonly scope: BatchScope }): React.ReactElement {
-  const api = useRemittanceBatches(scope);
+  const [historyId, setHistoryId] = React.useState<string | null>(null);
+  const api = useRemittanceBatches(scope, historyId);
   const [selected, setSelected] = React.useState<BatchEvidence | null>(null);
   const [preview, setPreview] = React.useState<BatchPreview | null>(null);
   const [command, setCommand] = React.useState<BatchReviewCommand | null>(null);
@@ -57,11 +65,15 @@ function BatchWorkspace({ scope }: { readonly scope: BatchScope }): React.ReactE
   const lock = React.useRef(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
   const previewRef = React.useRef<HTMLHeadingElement>(null);
+  const historyRef = React.useRef<HTMLHeadingElement>(null);
   const fileId = React.useId();
   const uncertain = importUncertain || command !== null;
   React.useEffect(() => {
     if (preview) previewRef.current?.focus();
   }, [preview]);
+  React.useEffect(() => {
+    if (historyId) historyRef.current?.focus();
+  }, [historyId]);
   const begin = (): boolean => {
     if (lock.current) return false;
     lock.current = true;
@@ -98,6 +110,7 @@ function BatchWorkspace({ scope }: { readonly scope: BatchScope }): React.ReactE
         setFile(null);
         if (fileRef.current) fileRef.current.value = '';
         setSelected(result.data);
+        setHistoryId(result.data.id);
         setPreview(null);
         setNotice(
           'Batch source saved. Open a fresh preview to resolve its claim remittances before reviewing.',
@@ -111,10 +124,10 @@ function BatchWorkspace({ scope }: { readonly scope: BatchScope }): React.ReactE
         setImportUncertain(false);
         setMessage(
           result.kind === 'STALE'
-            ? 'This batch source identity conflicts with saved evidence. Nothing was overwritten. Corrections and revised batch uploads are not implemented yet; keep the original source identity.'
+            ? 'This observation conflicts with saved evidence. Nothing was overwritten. Keep the original sourceBatchId; a version 2 correction needs its own sourceRecordId and a new explicit sourceSequence. Do not reuse a saved observation identity for changed content.'
             : result.kind === 'DENIED'
               ? 'This account cannot import the batch. Check your access.'
-              : 'The batch did not meet the import contract. Check source references, decimal-string amounts and adjustment signs, then choose a valid file. Corrections to saved batches are not implemented yet.',
+              : 'The batch did not meet the import contract. Check source references, decimal-string amounts, adjustment signs and version 2 sourceSequence (integer 1–2147483647), then choose a valid file.',
         );
       }
     } finally {
@@ -123,6 +136,7 @@ function BatchWorkspace({ scope }: { readonly scope: BatchScope }): React.ReactE
   };
   const openPreview = async (evidence: BatchEvidence): Promise<void> => {
     if (uncertain || !begin()) return;
+    setHistoryId(evidence.id);
     setSelected(evidence);
     setPreview(null);
     try {
@@ -206,10 +220,11 @@ function BatchWorkspace({ scope }: { readonly scope: BatchScope }): React.ReactE
           Import a batch source
         </h2>
         <p id={`${fileId}-help`} className="text-gray-dark mt-2 max-w-prose text-sm">
-          Choose one custom version 1 JSON file up to 256 KiB. Reference claim remittances by their
-          exact source namespace and record ID. This import does not parse an 835. Corrections and
-          revised uploads for saved batches are not implemented yet; keep the original source
-          identity.
+          Choose one custom manual JSON file up to 256 KiB. Version 1 is an unsequenced baseline.
+          For a correction, use schemaVersion 2, keep the original sourceBatchId, and supply a
+          unique sourceRecordId and explicit sourceSequence (integer 1–2147483647). Reference claim
+          remittances by their exact source namespace and record ID. This is not a native connector
+          or an 835 parser.
         </p>
         <a
           href="/examples/synthetic-remittance-batch.json"
@@ -221,6 +236,18 @@ function BatchWorkspace({ scope }: { readonly scope: BatchScope }): React.ReactE
         <p className="text-gray-dark mb-3 text-xs">
           Fake source IDs only. The example lists $100.00 + $80.00 in claim reports and a −$30.00
           adjustment, for a $150.00 net.
+        </p>
+        <a
+          href="/examples/synthetic-remittance-batch-v2.json"
+          download
+          className="text-brand inline-flex min-h-11 items-center text-sm font-medium underline"
+        >
+          Download synthetic v2 correction JSON
+        </a>
+        <p className="text-gray-dark mb-3 max-w-prose text-xs">
+          The correction keeps the original batch and claim references, uses source sequence 1, and
+          changes the provider adjustment to −$40.00 for a $140.00 net. A zero net is not a removal
+          instruction. Imported observations and reviews remain in history.
         </p>
         <Label htmlFor={fileId}>Payer remittance batch JSON</Label>
         <input
@@ -311,16 +338,34 @@ function BatchWorkspace({ scope }: { readonly scope: BatchScope }): React.ReactE
                   {item.payload.detailCompleteness} detail
                 </p>
                 <p className="text-gray-dark mt-1 text-sm">{reviewLabel(item)}</p>
+                <p className="text-gray-dark mt-1 text-sm">
+                  {batchRevisionLabel(item)} · {batchCurrentnessLabel(item)}
+                </p>
+                <p className="text-gray-warm mt-1 break-words text-xs [overflow-wrap:anywhere]">
+                  Source record: {item.payload.sourceRecordId}
+                </p>
               </div>
               <Button
                 variant="ghost"
                 disabled={busy || uncertain}
-                aria-label={`Preview batch ${item.payload.sourceBatchId}`}
+                aria-label={`Preview batch ${item.payload.sourceBatchId} · ${batchRevisionLabel(item)}`}
                 onClick={() => {
                   void openPreview(item);
                 }}
               >
                 Open preview
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={busy || uncertain}
+                aria-label={`View history for batch ${item.payload.sourceBatchId} · ${batchRevisionLabel(item)}`}
+                onClick={() => {
+                  setHistoryId(item.id);
+                  setSelected(null);
+                  setPreview(null);
+                }}
+              >
+                View revision history
               </Button>
             </li>
           ))}
@@ -337,6 +382,88 @@ function BatchWorkspace({ scope }: { readonly scope: BatchScope }): React.ReactE
           </Button>
         ) : null}
       </section>
+      {historyId ? (
+        <section
+          aria-labelledby="batch-history-heading"
+          className="border-border-subtle border-t pt-5"
+        >
+          <h2
+            id="batch-history-heading"
+            ref={historyRef}
+            tabIndex={-1}
+            className="text-xl font-medium"
+          >
+            Batch revision history
+          </h2>
+          <p className="text-gray-dark mt-2 max-w-prose text-sm">
+            Revisions share the original batch identity. The newest observation makes an older
+            accepted revision stale even while the newest is unreviewed or rejected. History is
+            ordered by source sequence, followed by the unsequenced baseline.
+          </p>
+          {api.history.isPending ? (
+            <p role="status" className="mt-3 text-sm">
+              Loading batch revision history…
+            </p>
+          ) : null}
+          {api.history.isError ? (
+            <p role="alert" className="text-danger mt-3 text-sm">
+              Batch revision history could not be loaded. Loaded observations are preserved.
+            </p>
+          ) : null}
+          <ol aria-label="Batch revisions" className="divide-border-subtle mt-3 divide-y">
+            {api.history.data?.pages
+              .flatMap((page) => page.items)
+              .map((item) => (
+                <li
+                  key={item.id}
+                  className="flex min-w-0 flex-wrap items-start justify-between gap-3 py-4"
+                >
+                  <div className="min-w-0 flex-1 basis-64">
+                    <p className="font-medium">{batchRevisionLabel(item)}</p>
+                    <p className="text-gray-dark mt-1 text-sm">
+                      {batchCurrentnessLabel(item)} · Net {money(item.payload.reportedNetAmount)}
+                    </p>
+                    <p className="text-gray-dark mt-1 break-words text-sm [overflow-wrap:anywhere]">
+                      Batch {item.payload.sourceBatchId} · Record {item.payload.sourceRecordId}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    disabled={busy || uncertain}
+                    aria-label={`Preview history ${item.payload.sourceBatchId} · ${batchRevisionLabel(item)}`}
+                    onClick={() => {
+                      void openPreview(item);
+                    }}
+                  >
+                    Preview revision
+                  </Button>
+                </li>
+              ))}
+          </ol>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Button
+              variant="ghost"
+              disabled={busy || uncertain || api.history.isFetching}
+              onClick={() => {
+                void api.history.refetch();
+              }}
+            >
+              Reload revision history
+            </Button>
+            {api.history.hasNextPage ? (
+              <Button
+                variant="ghost"
+                disabled={busy || uncertain || api.history.isFetching}
+                onClick={() => {
+                  void api.history.fetchNextPage();
+                }}
+              >
+                Load more revisions
+              </Button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
       {selected ? (
         <article
           aria-labelledby="batch-evidence-heading"
@@ -353,6 +480,13 @@ function BatchWorkspace({ scope }: { readonly scope: BatchScope }): React.ReactE
           <Badge className="mt-3" variant="outline">
             {reviewLabel(selected)}
           </Badge>
+          <p className="mt-3 text-sm">
+            {batchRevisionLabel(selected)} · {batchCurrentnessLabel(selected)}
+          </p>
+          <p className="text-gray-dark mt-2 text-sm">
+            Latest observed: {batchSequenceLabel(selected.revision.latestSourceSequence)}. Existing
+            cash reservations remain until their matches are explicitly released.
+          </p>
           <p className="text-gray-dark mt-3 text-sm">
             Manual upload · Bank cash receipt: unverified · Posting: unverified · Settlement:
             unverified.
@@ -360,6 +494,7 @@ function BatchWorkspace({ scope }: { readonly scope: BatchScope }): React.ReactE
           <BatchAmounts evidence={selected} preview={preview} />
           <SourceDetails evidence={selected} />
           <ClaimMembers evidence={selected} preview={preview} />
+          {preview ? <MembershipChanges preview={preview} /> : null}
           <ProviderAdjustments evidence={selected} />
           {selected.review ? (
             <p className="text-gray-dark mt-5 text-sm">
@@ -492,6 +627,8 @@ function BatchAmounts({
 function SourceDetails({ evidence }: { readonly evidence: BatchEvidence }): React.ReactElement {
   const p = evidence.payload;
   const fields: readonly (readonly [string, string | null])[] = [
+    ['Schema version', String(evidence.revision.schemaVersion)],
+    ['Source sequence', batchSequenceLabel(evidence.revision.sourceSequence)],
     ['Source namespace', p.sourceNamespace],
     ['Source batch ID', p.sourceBatchId],
     ['Source record ID', p.sourceRecordId],
@@ -524,6 +661,67 @@ function SourceDetails({ evidence }: { readonly evidence: BatchEvidence }): Reac
         ))}
       </dl>
     </details>
+  );
+}
+function MembershipChanges({ preview }: { readonly preview: BatchPreview }): React.ReactElement {
+  const changes = preview.membershipChanges;
+  const groups = [
+    ['Added in this revision', changes.added],
+    ['Retained from prior accepted revision', changes.retained],
+    ['Omitted from prior accepted revision', changes.omitted],
+  ] as const;
+  return (
+    <section
+      aria-label="Claim membership changes"
+      className="border-border-subtle mt-5 border-t pt-5"
+    >
+      <h3 className="font-medium">Claim membership changes</h3>
+      <p className="text-gray-dark mt-2 max-w-prose text-sm">
+        {changes.previousAcceptedEvidenceId
+          ? 'Compared with the prior accepted revision. '
+          : 'There is no prior accepted revision. '}
+        A claim remittance may recur across revisions of this batch. Omitted members remain owned by
+        this batch historically and cannot be used by another batch. Omission does not release
+        ownership or a cash reservation.
+      </p>
+      {groups.map(([label, members]) => (
+        <details key={label} className="mt-3">
+          <summary className="text-brand min-h-11 cursor-pointer text-sm font-medium">
+            {label} ({members.length})
+          </summary>
+          {members.length === 0 ? (
+            <p className="text-gray-dark text-sm">None.</p>
+          ) : (
+            <ul className="divide-border-subtle divide-y">
+              {members.map((member) => (
+                <li
+                  key={JSON.stringify([member.sourceNamespace, member.sourceRecordId])}
+                  className="min-w-0 py-3 text-sm"
+                >
+                  <p className="break-words [overflow-wrap:anywhere]">
+                    {member.sourceNamespace} / {member.sourceRecordId}
+                  </p>
+                  <p className="text-gray-dark mt-1 tabular-nums">
+                    {label.startsWith('Omitted') ? 'Prior reported amount' : 'Reported amount'}:{' '}
+                    {money(member.reportedAmount)}
+                  </p>
+                  {member.claimId ? (
+                    <Link
+                      className="text-brand mt-1 inline-flex min-h-11 items-center break-all underline"
+                      href={`/dashboard/claims/${encodeURIComponent(member.claimId)}`}
+                    >
+                      View linked claim {member.claimId}
+                    </Link>
+                  ) : (
+                    <p className="text-gray-warm mt-1">No resolved claim link.</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
+      ))}
+    </section>
   );
 }
 function ClaimMembers({

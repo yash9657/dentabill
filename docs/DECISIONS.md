@@ -1822,3 +1822,69 @@ the focused recheck passed 3/3 in 5.32s (`/tmp/dentabill-notification-inference-
 All 145 worker cases have passing evidence across those runs; this is not a single clean full
 145-case rerun. Focused suites overlap and are not summed. No full authenticated-shell or
 deployment evidence is claimed.
+
+## ADR-080 — Stable remittance batch revisions and retained reservations
+
+**Date:** 2026-10-14. **Status:** implemented and verified locally. Migration 32
+is frozen and applied only to localhost isolated/shared databases. Not merged or deployed.
+The preceding FW-40 slice is committed as `4af99ec`; its external delivery remains disabled.
+
+A corrected batch must preserve its source identity, accepted member history and existing cash
+reservations. Uploading a replacement under a new batch ID could otherwise bypass ownership or
+reuse capacity. Source revision ordering must also remain independent of arrival and review time.
+
+1. Migration 32 `20261014200000_remittance_batch_revisions` adds immutable RemittanceBatch,
+   RemittanceBatchRevision and RemittanceBatchMemberOwnership sidecars. It backfills structural
+   links only: existing version 1 payloads, hashes, review receipts, member bindings, cash matches,
+   releases and timestamps remain unchanged. Existing helper definitions remain intact; new
+   versioned admission/link/seal triggers extend the contract. Organization-scoped restrictive
+   references and deferred seals prevent missing or forged sidecar bindings, including direct SQL.
+2. Version 1 remains an explicitly unsequenced baseline (`sourceSequence: null` in the response
+   sidecar, absent from its original payload). Version 2 requires a positive integer sequence and
+   a new immutable source record under the original namespace/batch ID. Sequence uniqueness and
+   source order govern history; no timestamp, sourceVersion string or arrival order invents a
+   sequence. An exact source retry retains the original evidence and hash.
+3. Only the latest observed revision can be accepted. A newer unreviewed or rejected observation
+   makes prior acceptance stale rather than silently falling back to it. Preview tokens bind
+   source/currentness, member bindings, membership changes and ledger state. Review objects stay
+   immutable on exact retry, while their response envelope refreshes currentness metadata; the
+   entire response is not byte-immutable. History is audited, tenant/batch cursor-bound and paged
+   within the existing 20-record/2MiB bounds.
+4. Exact accepted claim-remittance events may recur across revisions of the same stable batch.
+   Each event's first accepted membership establishes permanent ownership by that batch. Preview
+   distinguishes added, retained and omitted members against the prior accepted source revision.
+   Omission never releases ownership or permits another batch to claim the event. No cross-batch
+   ownership transfer or claim-remittance correction chain is introduced.
+5. Cash reservations aggregate by stable batch identity across all source revisions. Existing
+   matches become stale when their exact source binding changes, but retain their reservations.
+   New matches require the latest accepted observed revision and are blocked while another
+   revision has an unreleased match. Only a separately reviewed full release frees a reservation;
+   prior match/release receipts stay immutable. Lower, higher, negative or zero corrected nets do
+   not silently resize or release existing matches. Zero net is not a withdrawal operation.
+6. Five batch API handlers and the generated SDK expose import, list, source history, preview
+   and review. The existing batch and cash dashboards show sequence/currentness, membership
+   changes and retained reservations. The version 2 download and fixture 07 are fabricated manual
+   examples, each preserving its respective original batch identity while changing net 150 to 140. The public v2 download derives from the public v1 example; public and API fixture bytes
+   are not identical. Neither rewrites the original evidence.
+
+**Local verification:** DB 27 plus expanded migration preservation 1,
+prior financial regressions 344 across 5 files in 131s, SDK 57, focused batch API 71/71 in 39.21s, cash API 66/66 in 33.04s, UI 70, web/API typechecks
+and scoped lint pass. Version 1 raw/canonical fixture hashes and review HMAC compatibility remain
+verified after revision support. Expanded preservation covers accepted/rejected/unreviewed v1,
+active/released cash matches and earlier posting/inference/notification rows and helper definitions.
+Independent cash admission/service and batch API reviews found no actionable issues. Migration 32
+is applied only to localhost isolated/shared databases; its SQL remains unchanged since freezing.
+Full API passes 909/909 across 43 files in 216.61s; API/Lambda builds pass. UI 70 includes the
+public v1/v2 download-pair regression. The final coherent 1280/390px actual-component capture
+batch reports zero overflow, page errors and axe violations; earlier mismatched batch captures
+are excluded. Root nonauthor review returned ship, and the separate documenter found no durable
+PRODUCT/DESIGN/sidecar delta. This is synthetic auth/API evidence, not the authenticated full app
+or a detector verdict. Next production build passes; batch route is 8.55kB/184kB first load and
+cash reconciliation 8.38kB/184kB. Affected workspace lint/typecheck passes 30/30 in 31.268s
+(19 cached), after two test-only lint corrections. Counts from overlapping suites are not summed.
+
+This slice does not authenticate source evidence, receive or allocate cash, post a payment or
+settle a claim. Reviewed posting relationships, claim cash allocation/attribution, explicit
+cross-batch ownership transfer, claim-remittance correction chains and real bank/PMS connectors
+remain open, alongside the full original parity plan. No real financial/provider action,
+external notification, merge or deployment is authorized by this local implementation.

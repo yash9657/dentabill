@@ -1,0 +1,251 @@
+/* eslint-disable security/detect-non-literal-fs-filename -- Paths are repository migration fixtures and a private generated test directory. */
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { promisify } from 'node:util';
+
+import { describe, expect, it } from 'vitest';
+
+const execFileAsync = promisify(execFile);
+const require = createRequire(import.meta.url);
+
+describe('batch revision sidecar migration', () => {
+  it('preserves all financial, posting, inference and notification rows and every prior helper while deriving exact stable batch metadata', async () => {
+    const databaseUrl = process.env.DATABASE_URL;
+    const url = new URL(databaseUrl ?? '');
+    if (
+      !['localhost', '127.0.0.1'].includes(url.hostname) ||
+      !url.pathname.startsWith('/dentabill_')
+    )
+      throw new Error('LOCAL_TEST_DATABASE_REQUIRED');
+    const directory = await mkdtemp(join(tmpdir(), 'dentabill-batch-revision-migration-'));
+    const schema = `batch_revision_proof_${randomUUID().replaceAll('-', '')}`;
+    const migrations = resolve(import.meta.dirname, '../../prisma/migrations');
+    const target = '20261014200000_remittance_batch_revisions';
+    const prior = (await readdir(migrations))
+      .filter((name) => name < target && /^\d/.test(name))
+      .sort();
+    const priorSql = await Promise.all(
+      prior.map((name) => readFile(join(migrations, name, 'migration.sql'), 'utf8')),
+    );
+    const targetSql = await readFile(join(migrations, target, 'migration.sql'), 'utf8');
+    const script = `BEGIN;
+CREATE SCHEMA "${schema}";
+SET LOCAL search_path TO "${schema}";
+${priorSql.map((sql) => sql.replace(/^BEGIN;\r?$/gm, '').replace(/^COMMIT;\r?$/gm, '')).join('\n')}
+INSERT INTO "Organization" (id, "clerkOrgId", name, "updatedAt") VALUES ('org', 'clerk', 'Synthetic', NOW());
+INSERT INTO "Claim" (id, "organizationId", "patientDOBHash", "claimNumber", "claimAmount", "payerCode", "serviceDate", status, "updatedAt")
+VALUES ('legacy', 'org', 'synthetic1', 'same-display', 100, 'UNKNOWN', '2026-01-01', 'APPEALING', '2026-01-02');
+INSERT INTO "Claim" (id, "organizationId", "patientDOBHash", "claimNumber", "claimAmount", "payerCode", "serviceDate", status, "updatedAt", "sourceSystem", "sourceNamespace", "sourceClaimId", "sourceContentHash")
+VALUES ('imported', 'org', 'synthetic2', 'same-display', 200, 'UNKNOWN', '2026-01-01', 'RESOLVED', '2026-01-03', 'OPEN_DENTAL', 'synthetic', '0001', repeat('a', 64));
+INSERT INTO "ClaimSourceDetails" ("claimId", "organizationId", "importedClaimAmount", "lineCount", "coverageCount") VALUES ('imported', 'org', 200, 1, 0);
+INSERT INTO "ClaimSourceLine" (id, "claimId", "organizationId", "sourceLineId", position, "procedureCode", "serviceDate", "billedAmount") VALUES ('00000000-0000-0000-0000-000000000001', 'imported', 'org', '000-line', 0, 'D2740', DATE '2026-01-01', 200);
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+INSERT INTO "User" (id, "organizationId", "clerkUserId", email, role) VALUES ('reviewer', 'org', 'reviewer-clerk', 'synthetic@example.invalid', 'BILLING_STAFF');
+INSERT INTO "ClaimRemittanceEvidence" (id, "organizationId", "claimId", "sourceNamespace", "sourceRecordId", "sourceDocumentId", kind, "reportedAmount", currency, payload, "contentHash")
+VALUES ('00000000-0000-0000-0000-000000000010','org','imported','synthetic','remit-1','document-1','PAYMENT',100,'USD',
+'{"schemaVersion":1,"sourceNamespace":"synthetic","sourceRecordId":"remit-1","sourceDocumentId":"document-1","sourceVersion":null,"kind":"PAYMENT","reversesSourceRecordId":null,"currency":"USD","reportedAmount":"100.00","payerName":"Synthetic payer","payerIdentifier":null,"payerIdentifierSystem":null,"payerClaimControlNumber":null,"sourceCoverageId":null,"paymentTrace":null,"paymentTraceType":null,"paymentTraceIssuer":null,"reportedDate":null,"sourceStatus":null,"lineDetailCompleteness":"ABSENT","allocations":[],"adjustments":[]}',repeat('a',64));
+INSERT INTO "ClaimRemittanceReview" (id,"organizationId","claimId","evidenceId",decision,"reviewedByUserId","idempotencyKey","requestHash","reviewToken","evidenceHash","claimUpdatedAt","ledgerVersion","reportedAmount","allocationCount","adjustmentCount")
+VALUES ('00000000-0000-0000-0000-000000000011','org','imported','00000000-0000-0000-0000-000000000010','ACCEPT','reviewer','00000000-0000-0000-0000-000000000012',repeat('b',64),repeat('c',64),repeat('a',64),'2026-01-03','1:0',100,0,0);
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+INSERT INTO "CashSourceTransaction"
+  (id,"organizationId","sourceSystem","sourceProduct","sourceNamespace","sourceAccountId","sourceTransactionId")
+VALUES ('00000000-0000-4000-8000-000000000001','org',repeat(chr(128512),40),
+  'Synthetic ordered export','synthetic-bank','000-account','000-transaction');
+INSERT INTO "CashSourceEvidence"
+  (id,"organizationId","transactionId","sourceNamespace","sourceAccountId","sourceRecordId",
+   "sourceSequence","sourceVersion","sourceDocumentId",status,amount,payload,"contentHash")
+VALUES ('00000000-0000-4000-8000-000000000002','org','00000000-0000-4000-8000-000000000001',
+  'synthetic-bank','000-account','000-record',1,NULL,'synthetic-document','POSTED',100,
+  jsonb_build_object(
+    'schemaVersion',1,'evidenceBasis','BANK_ACCOUNT_TRANSACTION',
+    'sourceSystem',repeat(chr(128512),40),'sourceProduct','Synthetic ordered export',
+    'sourceNamespace','synthetic-bank','sourceAccountId','000-account','sourceTransactionId','000-transaction',
+    'sourceRecordId','000-record','sourceSequence',1,'sourceVersion',NULL,'sourceDocumentId','synthetic-document',
+    'observedAt','2026-01-02T12:00:00.000Z','status','POSTED','currency','USD',
+    'amount','100.00','sourceAmount','100.00','sourceSignConvention','CREDIT_POSITIVE',
+    'transactionDate','2026-01-01','postingDate','2026-01-02','counterpartyName',NULL,
+    'paymentTrace',NULL,'sourceStatus',NULL,'sourceDescription',repeat(chr(128512),250),
+    'pendingSourceTransactionId',NULL
+  ),repeat('a',64));
+INSERT INTO "CashSourceReview"
+  (id,"organizationId","transactionId","evidenceId",decision,"reviewedByUserId","reviewedByRole",
+   "idempotencyKey","requestHash","reviewToken","evidenceHash","ledgerVersion","previousAcceptedEvidenceId","sourceSequence")
+VALUES ('00000000-0000-4000-8000-000000000003','org','00000000-0000-4000-8000-000000000001',
+  '00000000-0000-4000-8000-000000000002','ACCEPT','reviewer','BILLING_STAFF',
+  '00000000-0000-4000-8000-000000000004',repeat('b',64),repeat('c',64),repeat('a',64),'1:0',NULL,1);
+
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+INSERT INTO "RemittanceBatchEvidence" (id,"organizationId","sourceNamespace","sourceBatchId","sourceRecordId","sourceDocumentId","detailCompleteness","reportedClaimAmount","reportedAdjustmentAmount","reportedNetAmount",payload,"contentHash")
+VALUES ('00000000-0000-4000-8000-000000000020','org','synthetic','batch-1','batch-record-1','batch-document-1','COMPLETE',100,-30,70,
+'{"schemaVersion":1,"evidenceBasis":"PAYER_REMITTANCE_BATCH","sourceNamespace":"synthetic","sourceBatchId":"batch-1","sourceRecordId":"batch-record-1","sourceDocumentId":"batch-document-1","sourceVersion":null,"payerName":"Synthetic payer","payerIdentifier":null,"payerIdentifierSystem":null,"payeeIdentifier":null,"payeeIdentifierSystem":null,"currency":"USD","paymentTrace":null,"paymentTraceType":null,"paymentTraceIssuer":null,"reportedDate":null,"sourceStatus":null,"detailCompleteness":"COMPLETE","reportedClaimAmount":"100.00","reportedAdjustmentAmount":"-30.00","reportedNetAmount":"70.00","claimRemittances":[{"sourceNamespace":"synthetic","sourceRecordId":"remit-1","reportedAmount":"100.00"}],"providerAdjustments":[{"sourceAdjustmentId":"adj-1","codeSystem":"RAW-SYNTHETIC","reasonCode":"ZZ","sourceReference":"ref-1","providerIdentifier":null,"fiscalPeriodEnd":null,"amount":"-30.00","sourceAmount":"30.00","sourceSignConvention":"REDUCTION_POSITIVE"}]}',repeat('d',64));
+INSERT INTO "RemittanceBatchReview" (id,"organizationId","evidenceId",decision,"reviewedByUserId","reviewedByRole","idempotencyKey","requestHash","reviewToken","evidenceHash","ledgerVersion","claimReportedAmount","providerAdjustmentAmount","netAmount","claimCount","adjustmentCount")
+VALUES ('00000000-0000-4000-8000-000000000021','org','00000000-0000-4000-8000-000000000020','ACCEPT','reviewer','BILLING_STAFF','00000000-0000-4000-8000-000000000022',repeat('b',64),repeat('c',64),repeat('d',64),'1:0',100,-30,70,1,1);
+INSERT INTO "RemittanceBatchClaim" (id,"reviewId","organizationId","batchEvidenceId","sourceIndex","claimId","remittanceEvidenceId","remittanceReviewId",amount)
+VALUES ('00000000-0000-4000-8000-000000000023','00000000-0000-4000-8000-000000000021','org','00000000-0000-4000-8000-000000000020',0,'imported','00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-000000000011',100);
+INSERT INTO "RemittanceBatchAdjustment" (id,"reviewId","organizationId","sourceIndex","sourceAdjustmentId","codeSystem","reasonCode","sourceReference",amount,"sourceAmount","sourceSignConvention")
+VALUES ('00000000-0000-4000-8000-000000000024','00000000-0000-4000-8000-000000000021','org',0,'adj-1','RAW-SYNTHETIC','ZZ','ref-1',-30,30,'REDUCTION_POSITIVE');
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+INSERT INTO "CashBatchMatch" (id,"organizationId","cashTransactionId","cashEvidenceId","cashReviewId","batchEvidenceId","batchReviewId",amount,"reviewedByUserId","reviewedByRole","idempotencyKey","requestHash","reviewToken","ledgerVersion","cashEvidenceHash","batchEvidenceHash")
+VALUES ('00000000-0000-4000-8000-000000000030','org','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000020','00000000-0000-4000-8000-000000000021',50,'reviewer','BILLING_STAFF','00000000-0000-4000-8000-000000000031',repeat('e',64),repeat('f',64),'1:1:1:1:0:0',repeat('a',64),repeat('d',64));
+INSERT INTO "CashBatchRelease" (id,"organizationId","matchId","reviewedByUserId","reviewedByRole",reason,"idempotencyKey","requestHash","reviewToken","ledgerVersion","matchRequestHash")
+VALUES ('00000000-0000-4000-8000-000000000032','org','00000000-0000-4000-8000-000000000030','reviewer','BILLING_STAFF','WRONG_MATCH','00000000-0000-4000-8000-000000000033',repeat('e',64),repeat('f',64),'1:1:1:1:1:0',repeat('e',64));
+INSERT INTO "PostingSourceReceipt" (id,"organizationId","sourceSystem","sourceProduct","sourceNamespace","sourceReceiptId") VALUES ('00000000-0000-4000-8000-000000000040','org','OPEN_DENTAL','Synthetic','synthetic','receipt-original');
+INSERT INTO "PostingSourceEvidence" (id,"organizationId","receiptId","sourceSystem","sourceNamespace","sourceRecordId","sourceSequence","sourceDocumentId",status,"detailCompleteness",amount,payload,"contentHash") VALUES ('00000000-0000-4000-8000-000000000041','org','00000000-0000-4000-8000-000000000040','OPEN_DENTAL','synthetic','posting-original',1,'document','PARTIAL','PARTIAL',100,'{"schemaVersion":1,"evidenceBasis":"PMS_PAYMENT_RECEIPT","sourceSystem":"OPEN_DENTAL","sourceProduct":"Synthetic","sourceNamespace":"synthetic","sourceReceiptId":"receipt-original","sourceRecordId":"posting-original","sourceSequence":1,"sourceVersion":null,"sourceDocumentId":"document","observedAt":"2026-01-02T12:00:00.000Z","status":"PARTIAL","sourceStatus":null,"sourceIsPartial":true,"currency":"USD","amount":"100.00","sourceAmount":"100.00","sourceSignConvention":"CREDIT_POSITIVE","sourceEntryDate":"2026-01-02","sourceIssuedDate":null,"paymentTrace":null,"sourceDepositId":null,"detailCompleteness":"PARTIAL","entries":[{"sourceEntryId":"entry-original","sourceClaimId":"source-claim","sourceLineId":null,"sourceProcedureId":"source-proc","sourceVersion":null,"sourceIsTransfer":null,"entryKind":"PAYMENT","sourceStatus":"Received","amount":"80.00","sourceAmount":"80.00","sourceSignConvention":"CREDIT_POSITIVE"}]}',repeat('a',64));
+INSERT INTO "PostingSourceReview" (id,"organizationId","receiptId","evidenceId",decision,"reviewedByUserId","reviewedByRole","idempotencyKey","requestHash","reviewToken","evidenceHash","ledgerVersion","sourceSequence") VALUES ('00000000-0000-4000-8000-000000000042','org','00000000-0000-4000-8000-000000000040','00000000-0000-4000-8000-000000000041','ACCEPT','reviewer','BILLING_STAFF','00000000-0000-4000-8000-000000000043',repeat('b',64),repeat('c',64),repeat('a',64),'1:0',1);
+INSERT INTO "PostingSourceEntry" (id,"organizationId","receiptId","evidenceId","reviewId","sourceIndex","sourceEntryId","sourceClaimId","sourceProcedureId","entryKind","sourceStatus",amount,"sourceAmount","sourceSignConvention") VALUES ('00000000-0000-4000-8000-000000000044','org','00000000-0000-4000-8000-000000000040','00000000-0000-4000-8000-000000000041','00000000-0000-4000-8000-000000000042',0,'entry-original','source-claim','source-proc','PAYMENT','Received',80,80,'CREDIT_POSITIVE');
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+INSERT INTO "Call" (id,"organizationId","claimId","retellCallId",status) VALUES ('call-original','org','legacy','synthetic-call-original','COMPLETED');
+INSERT INTO "CallSummary" (id,"organizationId","callId","claimStatus","nextAction","rawTranscript","claudeSummary") VALUES ('summary-original','org','call-original','pending','MANUAL_REVIEW','Synthetic source','Synthetic summary');
+INSERT INTO "InferenceBudget" (id,"organizationId","billingDay","tokenLimit","updatedAt") VALUES ('budget-original','org','2026-01-02',1000,'2026-01-02');
+INSERT INTO "InferenceRun" (id,"organizationId","callId","claimId","claimVersion","sourceHash","requestHash",provider,"releaseId","promptVersion","billingDay","tokenAllowance","reservedTokens",state,"requestPayload","updatedAt","summaryId","appliedAt") VALUES ('run-original','org','call-original','legacy','2026-01-02',repeat('a',64),repeat('b',64),'SYNTHETIC','synthetic','v1','2026-01-02',100,0,'APPLIED','{"synthetic":true}','2026-01-02','summary-original','2026-01-02');
+CREATE TEMP TABLE original_posting AS SELECT 'receipt' AS kind,to_jsonb(t) AS payload FROM "PostingSourceReceipt" t UNION ALL SELECT 'evidence',to_jsonb(t) FROM "PostingSourceEvidence" t UNION ALL SELECT 'review',to_jsonb(t) FROM "PostingSourceReview" t UNION ALL SELECT 'entry',to_jsonb(t) FROM "PostingSourceEntry" t;
+CREATE TEMP TABLE original_inference AS SELECT 'run' AS kind,to_jsonb(t) AS payload FROM "InferenceRun" t UNION ALL SELECT 'budget',to_jsonb(t) FROM "InferenceBudget" t UNION ALL SELECT 'summary',to_jsonb(t) FROM "CallSummary" t UNION ALL SELECT 'call',to_jsonb(t) FROM "Call" t;
+INSERT INTO "AuditLog" (id,"organizationId",action,"resourceType","resourceId",metadata) VALUES ('audit-original','org','claim.transition','Claim','legacy','{"summaryId":"summary-original"}');
+INSERT INTO "ReviewNotificationIntent" (id,"organizationId","inferenceRunId","claimId","callId",generation,"sourceHash","requestHash","claimVersion","resultingClaimVersion","sourceMarkerAt",purpose,"summaryId","actorKind","recipientSelectionVersion","templateVersion","deliveryKey","createdAt")
+ VALUES ('00000000-0000-4000-8000-000000000060','org','run-original','legacy','call-original',1,repeat('a',64),repeat('b',64),'2026-01-02','2026-01-02','2026-01-02','REVIEW_AVAILABLE','summary-original','SYSTEM','oldest-owner-admin.v1','review-available.v1','00000000-0000-4000-8000-000000000061','2026-01-02');
+INSERT INTO "ReviewNotificationDelivery" ("notificationId","organizationId",state,reason,"availableAt","updatedAt") VALUES ('00000000-0000-4000-8000-000000000060','org','BLOCKED','MISSING_RECIPIENT','2026-01-02','2026-01-02');
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+INSERT INTO "CashBatchMatch" (id,"organizationId","cashTransactionId","cashEvidenceId","cashReviewId","batchEvidenceId","batchReviewId",amount,"reviewedByUserId","reviewedByRole","idempotencyKey","requestHash","reviewToken","ledgerVersion","cashEvidenceHash","batchEvidenceHash")
+VALUES ('00000000-0000-4000-8000-000000000034','org','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000020','00000000-0000-4000-8000-000000000021',30,'reviewer','BILLING_STAFF','00000000-0000-4000-8000-000000000035',repeat('e',64),repeat('f',64),'1:1:1:1:1:1',repeat('a',64),repeat('d',64));
+INSERT INTO "RemittanceBatchEvidence" (id,"organizationId","sourceNamespace","sourceBatchId","sourceRecordId","sourceDocumentId","sourceVersion","detailCompleteness","reportedClaimAmount","reportedAdjustmentAmount","reportedNetAmount",payload,"contentHash","createdAt")
+SELECT '00000000-0000-4000-8000-000000000071',"organizationId","sourceNamespace",'batch-unreviewed','record-unreviewed',"sourceDocumentId","sourceVersion","detailCompleteness","reportedClaimAmount","reportedAdjustmentAmount","reportedNetAmount",jsonb_set(jsonb_set(payload,'{sourceBatchId}','"batch-unreviewed"'),'{sourceRecordId}','"record-unreviewed"'),"contentHash","createdAt" FROM "RemittanceBatchEvidence" WHERE id='00000000-0000-4000-8000-000000000020';
+INSERT INTO "RemittanceBatchEvidence" (id,"organizationId","sourceNamespace","sourceBatchId","sourceRecordId","sourceDocumentId","sourceVersion","detailCompleteness","reportedClaimAmount","reportedAdjustmentAmount","reportedNetAmount",payload,"contentHash","createdAt")
+SELECT '00000000-0000-4000-8000-000000000072',"organizationId","sourceNamespace",'batch-rejected','record-rejected',"sourceDocumentId","sourceVersion","detailCompleteness","reportedClaimAmount","reportedAdjustmentAmount","reportedNetAmount",jsonb_set(jsonb_set(payload,'{sourceBatchId}','"batch-rejected"'),'{sourceRecordId}','"record-rejected"'),"contentHash","createdAt" FROM "RemittanceBatchEvidence" WHERE id='00000000-0000-4000-8000-000000000020';
+INSERT INTO "RemittanceBatchReview" (id,"organizationId","evidenceId",decision,"reviewedByUserId","reviewedByRole","idempotencyKey","requestHash","reviewToken","evidenceHash","ledgerVersion","claimReportedAmount","providerAdjustmentAmount","netAmount","claimCount","adjustmentCount")
+VALUES ('00000000-0000-4000-8000-000000000073','org','00000000-0000-4000-8000-000000000072','REJECT','reviewer','BILLING_STAFF','00000000-0000-4000-8000-000000000074',repeat('b',64),repeat('c',64),repeat('d',64),'3:1',NULL,NULL,NULL,0,0);
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+CREATE TEMP TABLE original_notifications AS SELECT 'intent' AS kind,to_jsonb(t) AS payload FROM "ReviewNotificationIntent" t UNION ALL SELECT 'delivery',to_jsonb(t) FROM "ReviewNotificationDelivery" t UNION ALL SELECT 'audit',to_jsonb(t) FROM "AuditLog" t;
+CREATE TEMP TABLE original_reconciliation AS SELECT 'match' AS kind,to_jsonb(c) AS payload FROM "CashBatchMatch" c
+  UNION ALL SELECT 'release',to_jsonb(c) FROM "CashBatchRelease" c;
+CREATE TEMP TABLE original_batches AS SELECT 'evidence' AS kind,to_jsonb(c) AS payload FROM "RemittanceBatchEvidence" c
+  UNION ALL SELECT 'review',to_jsonb(c) FROM "RemittanceBatchReview" c
+  UNION ALL SELECT 'claim',to_jsonb(c) FROM "RemittanceBatchClaim" c
+  UNION ALL SELECT 'adjustment',to_jsonb(c) FROM "RemittanceBatchAdjustment" c;
+CREATE TEMP TABLE original_cash AS SELECT to_jsonb(c) AS payload FROM "CashSourceEvidence" c;
+CREATE TEMP TABLE original_cash_transactions AS SELECT to_jsonb(c) AS payload FROM "CashSourceTransaction" c;
+CREATE TEMP TABLE original_cash_reviews AS SELECT to_jsonb(c) AS payload FROM "CashSourceReview" c;
+CREATE TEMP TABLE original_org AS SELECT to_jsonb(c) AS payload FROM "Organization" c;
+CREATE TEMP TABLE original_helpers AS SELECT proname, pg_get_functiondef(oid) AS definition FROM pg_proc WHERE pronamespace = current_schema()::regnamespace;
+CREATE TEMP TABLE original_evidence AS SELECT to_jsonb(c) AS payload FROM "ClaimRemittanceEvidence" c;
+CREATE TEMP TABLE original_reviews AS SELECT to_jsonb(c) AS payload FROM "ClaimRemittanceReview" c;
+CREATE TEMP TABLE original_claims AS SELECT to_jsonb(c) AS payload FROM "Claim" c;
+CREATE TEMP TABLE original_details AS SELECT to_jsonb(c) AS payload FROM "ClaimSourceDetails" c;
+CREATE TEMP TABLE original_lines AS SELECT to_jsonb(c) AS payload FROM "ClaimSourceLine" c;
+${targetSql.replace(/^BEGIN;\r?$/gm, '').replace(/^COMMIT;\r?$/gm, '')}
+DO $$ BEGIN
+  IF (SELECT count(*) FROM "Claim") <> 2
+    OR (SELECT count(*) FROM "CashSourceTransaction") <> 1
+    OR (SELECT count(*) FROM "CashSourceEvidence") <> 1
+    OR (SELECT count(*) FROM "CashSourceReview") <> 1
+    OR (SELECT count(*) FROM "RemittanceBatchEvidence") <> 3
+    OR (SELECT count(*) FROM "RemittanceBatchReview") <> 2
+    OR (SELECT count(*) FROM "RemittanceBatchClaim") <> 1
+    OR (SELECT count(*) FROM "RemittanceBatchAdjustment") <> 1
+  OR (SELECT count(*) FROM "CashBatchMatch") <> 2 OR (SELECT count(*) FROM "CashBatchRelease") <> 1
+    OR (SELECT count(*) FROM "PostingSourceReceipt") <> 1 OR (SELECT count(*) FROM "PostingSourceEvidence") <> 1
+    OR (SELECT count(*) FROM "PostingSourceReview") <> 1 OR (SELECT count(*) FROM "PostingSourceEntry") <> 1
+ OR (SELECT count(*) FROM "ReviewNotificationIntent") <> 1 OR (SELECT count(*) FROM "ReviewNotificationDelivery") <> 1 OR (SELECT count(*) FROM "ReviewNotificationAttempt") <> 0 OR (SELECT count(*) FROM "ReviewNotificationReceipt") <> 0
+  OR (SELECT count(*) FROM "RemittanceBatch") <> 3 OR (SELECT count(*) FROM "RemittanceBatchRevision") <> 3 OR (SELECT count(*) FROM "RemittanceBatchMemberOwnership") <> 1
+  THEN RAISE EXCEPTION 'Unexpected sidecar backfill' ; END IF;
+  IF EXISTS (
+    (SELECT payload FROM original_claims EXCEPT SELECT to_jsonb(c) FROM "Claim" c)
+    UNION ALL
+    (SELECT to_jsonb(c) FROM "Claim" c EXCEPT SELECT payload FROM original_claims)
+  ) THEN RAISE EXCEPTION 'Existing claim payload changed'; END IF;
+  IF EXISTS (
+    (SELECT payload FROM original_details EXCEPT SELECT to_jsonb(c) FROM "ClaimSourceDetails" c)
+    UNION ALL
+    (SELECT to_jsonb(c) FROM "ClaimSourceDetails" c EXCEPT SELECT payload FROM original_details)
+    UNION ALL
+    (SELECT payload FROM original_lines EXCEPT SELECT to_jsonb(c) FROM "ClaimSourceLine" c)
+    UNION ALL
+    (SELECT to_jsonb(c) FROM "ClaimSourceLine" c EXCEPT SELECT payload FROM original_lines)
+  ) THEN RAISE EXCEPTION 'Existing source snapshot changed'; END IF;
+  IF EXISTS (
+    (SELECT payload FROM original_evidence EXCEPT SELECT to_jsonb(c) FROM "ClaimRemittanceEvidence" c)
+    UNION ALL
+    (SELECT to_jsonb(c) FROM "ClaimRemittanceEvidence" c EXCEPT SELECT payload FROM original_evidence)
+    UNION ALL
+    (SELECT payload FROM original_reviews EXCEPT SELECT to_jsonb(c) FROM "ClaimRemittanceReview" c)
+    UNION ALL
+    (SELECT to_jsonb(c) FROM "ClaimRemittanceReview" c EXCEPT SELECT payload FROM original_reviews)
+  ) THEN RAISE EXCEPTION 'Existing reviewed remittance changed'; END IF;
+  IF EXISTS (
+    (SELECT payload FROM original_cash EXCEPT SELECT to_jsonb(c) FROM "CashSourceEvidence" c)
+    UNION ALL (SELECT to_jsonb(c) FROM "CashSourceEvidence" c EXCEPT SELECT payload FROM original_cash)
+    UNION ALL (SELECT payload FROM original_cash_transactions EXCEPT SELECT to_jsonb(c) FROM "CashSourceTransaction" c)
+    UNION ALL (SELECT to_jsonb(c) FROM "CashSourceTransaction" c EXCEPT SELECT payload FROM original_cash_transactions)
+    UNION ALL (SELECT payload FROM original_cash_reviews EXCEPT SELECT to_jsonb(c) FROM "CashSourceReview" c)
+    UNION ALL (SELECT to_jsonb(c) FROM "CashSourceReview" c EXCEPT SELECT payload FROM original_cash_reviews)
+    UNION ALL (SELECT payload FROM original_org EXCEPT SELECT to_jsonb(c) FROM "Organization" c)
+    UNION ALL (SELECT to_jsonb(c) FROM "Organization" c EXCEPT SELECT payload FROM original_org)
+  ) THEN RAISE EXCEPTION 'Cash evidence or organization facts changed'; END IF;
+  IF EXISTS (SELECT 1 FROM original_helpers h LEFT JOIN pg_proc p ON p.proname = h.proname
+    AND p.pronamespace = current_schema()::regnamespace WHERE p.oid IS NULL OR pg_get_functiondef(p.oid) <> h.definition)
+  THEN RAISE EXCEPTION 'Existing helper definition changed'; END IF;
+  IF EXISTS (
+    (SELECT * FROM original_batches EXCEPT ALL SELECT * FROM (
+      SELECT 'evidence' AS kind,to_jsonb(c) AS payload FROM "RemittanceBatchEvidence" c
+      UNION ALL SELECT 'review',to_jsonb(c) FROM "RemittanceBatchReview" c
+      UNION ALL SELECT 'claim',to_jsonb(c) FROM "RemittanceBatchClaim" c
+      UNION ALL SELECT 'adjustment',to_jsonb(c) FROM "RemittanceBatchAdjustment" c) current_batch)
+    UNION ALL
+    (SELECT * FROM (
+      SELECT 'evidence' AS kind,to_jsonb(c) AS payload FROM "RemittanceBatchEvidence" c
+      UNION ALL SELECT 'review',to_jsonb(c) FROM "RemittanceBatchReview" c
+      UNION ALL SELECT 'claim',to_jsonb(c) FROM "RemittanceBatchClaim" c
+      UNION ALL SELECT 'adjustment',to_jsonb(c) FROM "RemittanceBatchAdjustment" c) current_batch EXCEPT ALL SELECT * FROM original_batches)
+  ) THEN RAISE EXCEPTION 'Batch financial evidence changed'; END IF;
+  IF EXISTS (
+    (SELECT * FROM original_reconciliation EXCEPT ALL SELECT * FROM (
+      SELECT 'match' AS kind,to_jsonb(c) AS payload FROM "CashBatchMatch" c
+      UNION ALL SELECT 'release',to_jsonb(c) FROM "CashBatchRelease" c) current_rows)
+    UNION ALL
+    (SELECT * FROM (SELECT 'match' AS kind,to_jsonb(c) AS payload FROM "CashBatchMatch" c
+      UNION ALL SELECT 'release',to_jsonb(c) FROM "CashBatchRelease" c) current_rows EXCEPT ALL SELECT * FROM original_reconciliation)
+  ) THEN RAISE EXCEPTION 'Existing reconciliation changed'; END IF;
+IF EXISTS ((SELECT * FROM original_posting EXCEPT ALL SELECT * FROM (SELECT 'receipt' AS kind,to_jsonb(t) AS payload FROM "PostingSourceReceipt" t UNION ALL SELECT 'evidence' AS kind,to_jsonb(t) AS payload FROM "PostingSourceEvidence" t UNION ALL SELECT 'review' AS kind,to_jsonb(t) AS payload FROM "PostingSourceReview" t UNION ALL SELECT 'entry' AS kind,to_jsonb(t) AS payload FROM "PostingSourceEntry" t) current_rows) UNION ALL (SELECT * FROM (SELECT 'receipt' AS kind,to_jsonb(t) AS payload FROM "PostingSourceReceipt" t UNION ALL SELECT 'evidence' AS kind,to_jsonb(t) AS payload FROM "PostingSourceEvidence" t UNION ALL SELECT 'review' AS kind,to_jsonb(t) AS payload FROM "PostingSourceReview" t UNION ALL SELECT 'entry' AS kind,to_jsonb(t) AS payload FROM "PostingSourceEntry" t) current_rows EXCEPT ALL SELECT * FROM original_posting)) THEN RAISE EXCEPTION 'Existing posting facts changed'; END IF;
+IF EXISTS ((SELECT * FROM original_inference EXCEPT ALL SELECT * FROM (SELECT 'run' AS kind,to_jsonb(t) AS payload FROM "InferenceRun" t UNION ALL SELECT 'budget' AS kind,to_jsonb(t) AS payload FROM "InferenceBudget" t UNION ALL SELECT 'summary' AS kind,to_jsonb(t) AS payload FROM "CallSummary" t UNION ALL SELECT 'call' AS kind,to_jsonb(t) AS payload FROM "Call" t) current_rows) UNION ALL (SELECT * FROM (SELECT 'run' AS kind,to_jsonb(t) AS payload FROM "InferenceRun" t UNION ALL SELECT 'budget' AS kind,to_jsonb(t) AS payload FROM "InferenceBudget" t UNION ALL SELECT 'summary' AS kind,to_jsonb(t) AS payload FROM "CallSummary" t UNION ALL SELECT 'call' AS kind,to_jsonb(t) AS payload FROM "Call" t) current_rows EXCEPT ALL SELECT * FROM original_inference)) THEN RAISE EXCEPTION 'Existing inference facts changed'; END IF;
+IF EXISTS ((SELECT * FROM original_notifications EXCEPT ALL SELECT * FROM (SELECT 'intent' AS kind,to_jsonb(t) AS payload FROM "ReviewNotificationIntent" t UNION ALL SELECT 'delivery',to_jsonb(t) FROM "ReviewNotificationDelivery" t UNION ALL SELECT 'audit',to_jsonb(t) FROM "AuditLog" t) current_rows) UNION ALL (SELECT * FROM (SELECT 'intent' AS kind,to_jsonb(t) AS payload FROM "ReviewNotificationIntent" t UNION ALL SELECT 'delivery',to_jsonb(t) FROM "ReviewNotificationDelivery" t UNION ALL SELECT 'audit',to_jsonb(t) FROM "AuditLog" t) current_rows EXCEPT ALL SELECT * FROM original_notifications)) THEN RAISE EXCEPTION 'Existing notification or audit changed'; END IF;
+IF NOT EXISTS(SELECT 1 FROM "RemittanceBatchRevision" r JOIN "RemittanceBatch" b ON b.id=r."batchId" AND b."organizationId"=r."organizationId" JOIN "RemittanceBatchEvidence" e ON e.id=r."evidenceId" AND e."organizationId"=r."organizationId" WHERE r."schemaVersion"=1 AND r."sourceSequence" IS NULL AND b."sourceNamespace"=e."sourceNamespace" AND b."sourceBatchId"=e."sourceBatchId" AND b."createdAt"=e."createdAt") THEN RAISE EXCEPTION 'Legacy baseline changed'; END IF;
+IF NOT EXISTS(SELECT 1 FROM "RemittanceBatchMemberOwnership" o JOIN "RemittanceBatchClaim" m ON m.id=o."firstMemberId" AND m."organizationId"=o."organizationId" AND m."remittanceEvidenceId"=o."remittanceEvidenceId" JOIN "RemittanceBatchRevision" r ON r."evidenceId"=m."batchEvidenceId" AND r."organizationId"=m."organizationId" AND r."batchId"=o."batchId") THEN RAISE EXCEPTION 'Historical ownership changed'; END IF;
+END $$;
+ROLLBACK;`;
+    const path = join(directory, 'proof.sql');
+    try {
+      await writeFile(path, script, { mode: 0o600 });
+      const result = await execFileAsync(
+        process.execPath,
+        [
+          require.resolve('prisma/build/index.js'),
+          'db',
+          'execute',
+          '--schema',
+          resolve(import.meta.dirname, '../../prisma/schema.prisma'),
+          '--file',
+          path,
+        ],
+        {
+          env: { PATH: process.env.PATH, DATABASE_URL: databaseUrl, NODE_ENV: 'test' },
+          maxBuffer: 1024 * 1024,
+        },
+      );
+      expect(result.stdout).toContain('Script executed successfully');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
+});

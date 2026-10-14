@@ -63,6 +63,7 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/cash-evidence/{id}/review',
   '/v1/remittance-batches',
   '/v1/remittance-batches/{id}/preview',
+  '/v1/remittance-batches/{id}/history',
   '/v1/remittance-batches/{id}/review',
   '/v1/cash-reconciliations',
   '/v1/cash-reconciliations/preview',
@@ -241,16 +242,38 @@ describe('OpenAPI ↔ generated types contract', () => {
     ];
     const preview = spec.paths['/v1/remittance-batches/{id}/preview'];
     const evidence = [...properties, 'evidence', 'properties'];
-    const payload = [...evidence, 'payload', 'properties'];
-    for (const field of ['reportedClaimAmount', 'reportedAdjustmentAmount', 'reportedNetAmount']) {
-      expect(preview).toHaveProperty([...payload, field, 'type'], 'string');
-      expect(preview).toHaveProperty([...payload, field, 'nullable'], true);
+    for (const version of [0, 1]) {
+      const payload = [...evidence, 'payload', 'oneOf', version, 'properties'];
+      for (const field of [
+        'reportedClaimAmount',
+        'reportedAdjustmentAmount',
+        'reportedNetAmount',
+      ]) {
+        expect(preview).toHaveProperty([...payload, field, 'type'], 'string');
+        expect(preview).toHaveProperty([...payload, field, 'nullable'], true);
+      }
+      const adjustment = [...payload, 'providerAdjustments', 'items', 'properties'];
+      expect(preview).toHaveProperty([...adjustment, 'sourceAmount', 'type'], 'string');
+      expect(preview).toHaveProperty(
+        [...adjustment, 'sourceSignConvention', 'enum'],
+        ['REDUCTION_POSITIVE', 'NET_EFFECT_POSITIVE'],
+      );
     }
-    const adjustment = [...payload, 'providerAdjustments', 'items', 'properties'];
-    expect(preview).toHaveProperty([...adjustment, 'sourceAmount', 'type'], 'string');
     expect(preview).toHaveProperty(
-      [...adjustment, 'sourceSignConvention', 'enum'],
-      ['REDUCTION_POSITIVE', 'NET_EFFECT_POSITIVE'],
+      [...evidence, 'payload', 'oneOf', 1, 'properties', 'sourceSequence', 'maximum'],
+      2147483647,
+    );
+    expect(preview).toHaveProperty(
+      [...evidence, 'revision', 'properties', 'sourceSequence', 'nullable'],
+      true,
+    );
+    expect(preview).toHaveProperty(
+      [...evidence, 'revision', 'properties', 'isCurrentAccepted', 'type'],
+      'boolean',
+    );
+    expect(preview).toHaveProperty(
+      [...properties, 'membershipChanges', 'properties', 'ownershipPolicy', 'enum'],
+      ['RETAINED_ACROSS_REVISIONS'],
     );
     expect(preview).toHaveProperty([...evidence, 'provenance', 'enum'], ['MANUAL_UPLOAD']);
     for (const field of ['cashReceipt', 'posting', 'settlement'])

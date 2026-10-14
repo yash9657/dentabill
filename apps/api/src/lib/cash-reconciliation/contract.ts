@@ -32,11 +32,13 @@ export const MatchBlockerSchema = z.enum([
   'CASH_NOT_POSTED',
   'CASH_ZERO_AMOUNT',
   'BATCH_NOT_ACCEPTED',
+  'BATCH_NOT_CURRENT',
   'BATCH_ZERO_NET',
   'DIRECTION_MISMATCH',
   'CASH_CAPACITY_EXCEEDED',
   'BATCH_CAPACITY_EXCEEDED',
   'STALE_CASH_RESERVATION',
+  'STALE_BATCH_RESERVATION',
   'SOURCE_LINK_LIMIT',
   'CASH_IDENTITY_CONFLICT',
 ]);
@@ -69,7 +71,10 @@ export const CashBindingSchema = z.strictObject({
 });
 export type CashBinding = z.infer<typeof CashBindingSchema>;
 export const BatchBindingSchema = z.strictObject({
+  batchId: z.uuid(),
   evidenceId: z.uuid(),
+  schemaVersion: z.union([z.literal(1), z.literal(2)]),
+  sourceSequence: z.number().int().positive().nullable(),
   reviewId: z.uuid().nullable(),
   reviewDecision: z.enum(['ACCEPT', 'REJECT']).nullable(),
   contentHash: hash,
@@ -77,6 +82,9 @@ export const BatchBindingSchema = z.strictObject({
   sourceBatchId: z.string(),
   sourceRecordId: z.string(),
   sourceDocumentId: z.string(),
+  latestEvidenceId: z.uuid(),
+  latestSourceSequence: z.number().int().positive().nullable(),
+  latestAcceptedEvidenceId: z.uuid().nullable(),
   payerName: z.string(),
   claimReportedAmount: SignedMoneySchema.nullable(),
   providerAdjustmentAmount: SignedMoneySchema.nullable(),

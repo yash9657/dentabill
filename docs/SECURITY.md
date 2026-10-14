@@ -251,14 +251,14 @@ connector, money movement, claim allocation, payment posting or revenue assertio
 ### Manual remittance batches (ADR-075; local only)
 
 Batch records can contain payer/payee identifiers, traces and provider adjustment references.
-Treat all source fields as sensitive. All four routes require scoped stored OWNER/ADMIN/BILLING_STAFF
+Treat all source fields as sensitive. All batch routes require scoped stored OWNER/ADMIN/BILLING_STAFF
 roles; read/replay audits are mandatory and mutation audits commit atomically. Strict bounded
 schemas, closed error messages and opaque audit metadata keep source values out of logs.
 Raw/canonical/JSONB256KiB,100 members/adjustments and page2MiB bounds limit processing/response size.
 Organization admission locks, immutable exact member/review bindings and restrictive actor/source
 FKs prevent tenant crossing and repeated accepted claim events. Manual acceptance establishes
 neither source authenticity nor bank receipt, posting or settlement. Production retention,
-erasure, PHI agreements, batch corrections and authenticated connectors remain separate gates.
+erasure, PHI agreements and authenticated connectors remain separate gates. ADR-080 adds local batch corrections below.
 
 ### Manual cash reconciliation (ADR-076; local only)
 
@@ -319,3 +319,19 @@ or UI exists. Migration 31 applied only to localhost isolated/shared databases w
 backfill. Local verification is recorded in ADR-079; authorized rollout, provider/domain
 configuration, recipient/PHI agreements, retention/erasure and external receipt reconciliation
 remain separate gates.
+
+### Stable batch source corrections (ADR-080; local only)
+
+Immutable organization-scoped batch/revision/ownership sidecars preserve existing evidence and
+review bytes. Automatic SQL links, restrictive references and deferred seals enforce complete
+bindings; positive explicit v2 source sequences cannot be inferred from arrival times. The latest
+observed revision governs acceptance/currentness even after rejection. Audited history uses a
+tenant/batch-bound cursor and the existing bounded page envelope; source identifiers stay sensitive.
+
+First accepted membership permanently binds a claim-remittance event to its stable batch. Later
+same-batch revisions may repeat it, but omission cannot transfer it to another batch. Source
+corrections retain all old cash reservations and block replacement matches until explicit full
+release; accepted zero net cannot act as withdrawal. Immutable review records are distinct from
+refreshed response currentness. These controls extend manual evidence admission, not bank/PMS
+verification, payment execution or claim settlement. Local verification is tracked in ADR-080;
+production retention/erasure, external connectors and rollout remain open.

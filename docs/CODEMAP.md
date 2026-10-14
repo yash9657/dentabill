@@ -381,7 +381,7 @@ manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
 ## Remittance batch evidence (FW-44; ADR-075)
 
 - `apps/api/src/lib/remittance-batches/{contract,service}.ts`: bounded immutable source batches, signed provider effects, exact accepted member bindings, fresh preview and audit-safe review/replay.
-- `apps/api/src/routes/v1/remittance-batches{,.test}.ts`: four authenticated routes and synthetic real-Postgres regressions.
+- `apps/api/src/routes/v1/remittance-batches{,.test}.ts`: five authenticated routes including source-ordered history (ADR-080) and synthetic real-Postgres regressions.
 - `packages/db/prisma/migrations/20261014060000_remittance_batch_evidence/migration.sql`: four immutable tables, scoped restrictive references, batch-only token helpers, admission serialization and complete accepted-member sealing.
 - `packages/db/src/lib/remittance-batch-evidence{,-migration}.test.ts`: direct SQL, tenant/race invariants and exact preexisting-data/helper preservation.
 - `apps/web/src/app/dashboard/remittance-batches/page.tsx`: authenticated dashboard entry.
@@ -419,3 +419,13 @@ manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
 - `apps/api/src/routes/v1/notification-operations{,.test}.ts`: two audited OWNER/ADMIN GETs for filtered scoped lists/counts and attempt history; delivery mode is DISABLED.
 - `apps/web/src/components/dashboard/settings/operations/review-notifications.tsx`: read-only list/filter/history and scoped claim/call links within Operations.
 - `apps/web/src/lib/operations/{use-notifications,notification-labels}.ts`: user/practice-scoped generated-SDK reads, cancellation, closed diagnostic labels and recipient-binding state. No send/retry/rebind mutation.
+
+## Remittance batch source revisions (FW-44; ADR-080, local only)
+
+- `packages/db/prisma/migrations/20261014200000_remittance_batch_revisions/migration.sql`: three immutable identity/revision/ownership sidecars, structural backfill, automatic SQL linkage, deferred seals, latest-observed acceptance and stable-batch cash reservation guards; migration 32 applied only to localhost isolated/shared databases.
+- `packages/db/src/lib/remittance-batch-revisions{,-migration}.test.ts`: direct SQL/tenant/race invariants and preservation of earlier evidence, receipts, member bindings, matches, releases and helpers.
+- `apps/api/src/lib/remittance-batches/{contract,service}.ts`: unchanged v1 payloads, explicit v2 sequences, source-ordered history, added/retained/omitted preview and immutable review replay with refreshed currentness.
+- `apps/api/src/routes/v1/remittance-batches{,.test}.ts`: five scoped handlers including audited history; generated contract in `packages/api-sdk`.
+- `apps/api/src/lib/cash-reconciliation/{contract,service}.ts`: latest observed batch bindings and retained stable-batch reservations, with lifecycle regressions in the cash reconciliation route tests.
+- `apps/web/src/components/dashboard/{remittance-batches,cash-reconciliations}` and `apps/web/src/lib/remittance-batches`: existing dashboard extensions for source history, membership changes, shared sequence labels and stale reservation explanation.
+- `apps/api/test/fixtures/remittance-batches/07-corrected-net-140.json` and `apps/web/public/examples/synthetic-remittance-batch-v2.json`: fabricated correction/download examples, without a real connector or financial instruction.

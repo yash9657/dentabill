@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { getEnv } from '../../lib/env.js';
 import {
   BatchEvidenceSchema,
+  BatchHistorySchema,
   BatchInputSchema,
   BatchListSchema,
   BatchPreviewSchema,
@@ -13,6 +14,7 @@ import {
 } from '../../lib/remittance-batches/contract.js';
 import {
   importBatchEvidence,
+  listBatchHistory,
   listBatchEvidence,
   previewBatchEvidence,
   reviewBatchEvidence,
@@ -91,7 +93,7 @@ export async function remittanceBatchRoutes(fastify: FastifyInstance): Promise<v
         body: BatchInputSchema,
         response: { 200: BatchEvidenceSchema, 201: BatchEvidenceSchema },
         description:
-          'Import one immutable manual batch snapshot. Explicit source members and provider adjustments describe a payer-reported net amount, not bank cash, claim cash allocations, posting or settlement. Batch corrections are not supported yet.',
+          'Import an immutable manual batch observation. Version 2 corrections retain the original source batch identity and use a new source record with an explicit sequence. Source member ownership and existing cash reservations remain retained across revisions. Payer-reported net is separate from bank cash, allocation, posting and settlement.',
       },
     },
     async (request, reply): Promise<z.infer<typeof BatchEvidenceSchema>> => {
@@ -119,6 +121,31 @@ export async function remittanceBatchRoutes(fastify: FastifyInstance): Promise<v
         return await previewBatchEvidence(
           scope(request),
           (request.params as z.infer<typeof IdParams>).id,
+        );
+      } catch (error) {
+        return safeBatchError(error);
+      }
+    },
+  );
+  fastify.withTypeProvider().get(
+    '/remittance-batches/:id/history',
+    {
+      preHandler: fastify.auth.requireAuth,
+      schema: {
+        security,
+        params: IdParams,
+        querystring: ListQuery,
+        response: { 200: BatchHistorySchema },
+      },
+    },
+    async (request): Promise<z.infer<typeof BatchHistorySchema>> => {
+      try {
+        const query = request.query as z.infer<typeof ListQuery>;
+        return await listBatchHistory(
+          scope(request),
+          (request.params as z.infer<typeof IdParams>).id,
+          query.limit,
+          query.cursor,
         );
       } catch (error) {
         return safeBatchError(error);

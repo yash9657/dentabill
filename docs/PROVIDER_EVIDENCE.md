@@ -13,6 +13,22 @@ Evidence labels:
 
 ## Local implementation evidence added after the baseline
 
+FW-44 batch source corrections (ADR-080) are **repository/local synthetic evidence**: immutable
+stable batch/revision/ownership sidecars preserve v1 payloads and receipts, while v2 adds explicit
+positive source sequences under the original batch ID. Latest observed evidence governs review
+and cash currentness; newer rejected evidence stales older acceptance. Omitted members retain
+ownership and prior-revision cash reservations persist until explicit full release. The fixture
+changes net 150 to 140, without changing the original record or implying a withdrawal at zero.
+Migration 32 applied only to localhost isolated/shared databases. DB 27 plus expanded preservation
+1, prior financial regressions 344, SDK 57, batch API 71/71, cash API 66/66 and UI 70 plus web/API types/scoped lint pass. Full API909/909 across43 files and API/Lambda builds pass. Final coherent synthetic1280/390px captures
+have no overflow/errors/axe violations; independent review returned ship and the documenter found
+no durable design delta. Next production build and affected lint/typecheck 30/30 pass. This does not verify the
+authenticated full application or provide a detector verdict. No source
+connector was exercised; actual receipt, posting, allocation and settlement remain unverified.
+Reviewed posting relationships, claim cash attribution, cross-batch transfers, claim-remittance
+correction chains and all original external gates stay open. FW-40 is the preceding local commit
+`4af99ec`; no notification delivery or other external action ran.
+
 FW-40 now adds a transactional generic review-notification outbox (ADR-079): frozen source/run/
 purpose/generation/actor/recipient/payload/key, one-minute leases, at most five attempts inside a
 fixed 23-hour deadline, immutable receipts and read-only Owner/Admin Operations. Source outcomes
@@ -47,7 +63,7 @@ The synthetic100+80−30=150 case retains gross reports and original adjustment 
 does not verify150 cash, allocate funds or post payments. Complete balanced source and exact
 accepted member bindings are required for acceptance; unknown/partial evidence stays blocked.
 Migration28, API/SDK and dashboard are **repository/local synthetic evidence** only. One
-snapshot per batch is supported; revisions/corrections remain open. Primary sources checked:
+snapshot per batch was supported at that checkpoint; ADR-080 adds local source revisions above. Primary sources checked:
 [CMS claim/provider adjustments](https://www.cms.gov/medicare/coding-billing/electronic-billing/health-care-payment-remittance-advice)
 and [Open Dental batch payments](https://www.opendental.com/site/apiclaimpayments.html).
 Native835 ingestion, authenticated source connectors, bank reconciliation, independent posting

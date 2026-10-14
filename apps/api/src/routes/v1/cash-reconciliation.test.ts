@@ -68,7 +68,7 @@ function batchFixture(
 }
 function batchInput(net = '100.00', overrides: Partial<BatchInput> = {}): BatchInput {
   const base = batchFixture('01-balanced-180-minus-30.json');
-  return {
+  return BatchInputSchema.parse({
     ...base,
     sourceBatchId: randomUUID(),
     sourceRecordId: randomUUID(),
@@ -85,7 +85,16 @@ function batchInput(net = '100.00', overrides: Partial<BatchInput> = {}): BatchI
       },
     ],
     ...overrides,
-  };
+  });
+}
+function batchRevision(payload: BatchInput, overrides: Partial<BatchInput> = {}): BatchInput {
+  return BatchInputSchema.parse({
+    ...payload,
+    schemaVersion: 2,
+    sourceSequence: payload.schemaVersion === 2 ? payload.sourceSequence + 1 : 1,
+    sourceRecordId: randomUUID(),
+    ...overrides,
+  });
 }
 async function seed(role: UserRole = 'BILLING_STAFF', existingOrganizationId?: string) {
   const organizationId =
@@ -754,6 +763,341 @@ describe('cash-to-batch reconciliation API (synthetic, real Postgres)', () => {
       await match(s, p.candidate);
     },
   );
+
+  it('retains the original100 reservation when gross180 minus30 is corrected to net140, then permits explicit release and fresh partial matches', async () => {
+    const s = await seed();
+    await member(s, 'synthetic-claim-report-100', '100.00');
+    await member(s, 'synthetic-claim-report-80', '80.00');
+    const original = await batch(s, batchFixture('01-balanced-180-minus-30.json'));
+    const c = await cash(s, cashInput({ amount: '150.00', sourceAmount: '150.00' }));
+    const spare = await cash(s);
+    const initial = await preview(s, candidate(c, original));
+    expect(initial.batch).toMatchObject({
+      schemaVersion: 1,
+      sourceSequence: null,
+      latestEvidenceId: original.id,
+      latestSourceSequence: null,
+      latestAcceptedEvidenceId: original.id,
+    });
+    const command = await matchBody(s, candidate(c, original));
+    const saved = await submit(s, command);
+    expect(saved.statusCode, saved.body).toBe(201);
+    const receipt = CashMatchReceiptSchema.parse(saved.json());
+    const retained = await sourceSnapshot(s);
+    const corrected = await batch(
+      s,
+      batchRevision(original.payload, {
+        reportedAdjustmentAmount: '-40.00',
+        reportedNetAmount: '140.00',
+        providerAdjustments: [
+          { ...original.payload.providerAdjustments[0]!, amount: '-40.00', sourceAmount: '40.00' },
+        ],
+      }),
+    );
+    const proposed = candidate(spare, corrected, '40.00');
+    const blocked = await preview(s, proposed);
+    expect(blocked.batch).toMatchObject({
+      batchId: initial.batch.batchId,
+      schemaVersion: 2,
+      sourceSequence: 1,
+      latestEvidenceId: corrected.id,
+      latestSourceSequence: 1,
+      latestAcceptedEvidenceId: corrected.id,
+      claimReportedAmount: '180.00',
+      providerAdjustmentAmount: '-40.00',
+      netAmount: '140.00',
+    });
+    expect(blocked.blockers).toContain('STALE_BATCH_RESERVATION');
+    expect(blocked.capacity).toMatchObject({
+      batchReservedMagnitude: '100.00',
+      batchAvailableMagnitude: null,
+    });
+    expect((await submit(s, await matchBody(s, proposed))).statusCode).toBe(409);
+    expect((await list(s)).items[0]).toMatchObject({
+      id: receipt.id,
+      status: 'STALE',
+      amount: '100.00',
+      blockers: expect.arrayContaining(['BATCH_NOT_CURRENT']),
+      batch: { evidenceId: original.id, latestEvidenceId: corrected.id, netAmount: '150.00' },
+      ...UNVERIFIED,
+    });
+    const releasing = await releaseBody(s, receipt.id);
+    const released = await submitRelease(s, receipt.id, releasing);
+    expect(released.statusCode, released.body).toBe(201);
+    const releaseReceipt = ReleaseReceiptSchema.parse(released.json());
+    expect((await preview(s, candidate(c, corrected, '80.00'))).capacity).toMatchObject({
+      cashReservedMagnitude: '0.00',
+      batchReservedMagnitude: '0.00',
+      batchAvailableMagnitude: '140.00',
+    });
+    await match(s, candidate(c, corrected, '80.00'));
+    await match(s, candidate(spare, corrected, '60.00'));
+    expect((await preview(s, candidate(spare, corrected, '0.01'))).blockers).toContain(
+      'BATCH_CAPACITY_EXCEEDED',
+    );
+    const replay = await submit(s, command);
+    expect(replay.statusCode, replay.body).toBe(200);
+    expect(CashMatchReceiptSchema.parse(replay.json())).toEqual(receipt);
+    const replayRelease = await submitRelease(s, receipt.id, releasing);
+    expect(replayRelease.statusCode, replayRelease.body).toBe(200);
+    expect(ReleaseReceiptSchema.parse(replayRelease.json())).toEqual(releaseReceipt);
+    const after = await sourceSnapshot(s);
+    expect(after.batches.filter((row) => row.id === original.id)).toEqual(retained.batches);
+    expect(after.batchReviews.filter((row) => row.evidenceId === original.id)).toEqual(
+      retained.batchReviews,
+    );
+    expect(after.batchMembers.filter((row) => row.batchEvidenceId === original.id)).toEqual(
+      retained.batchMembers,
+    );
+    expect(after.claims).toEqual(retained.claims);
+    expect(after.remittances).toEqual(retained.remittances);
+    expect(after.claimAllocations).toEqual(retained.claimAllocations);
+    expect(await counts(s)).toEqual({ matches: 3, releases: 1 });
+  });
+
+  it.each([null, 'REJECT'] as const)(
+    'makes accepted batch matches stale for a newer %s observation without freeing reservations',
+    async (decision) => {
+      const s = await seed();
+      const c = await cash(s);
+      const original = await batch(s);
+      const command = await matchBody(s, candidate(c, original, '60.00'));
+      const saved = await submit(s, command);
+      expect(saved.statusCode, saved.body).toBe(201);
+      const receipt = CashMatchReceiptSchema.parse(saved.json());
+      const newer = await batch(s, batchRevision(original.payload), decision);
+      const oldPreview = await preview(s, candidate(c, original, '10.00'));
+      expect(oldPreview.batch).toMatchObject({
+        latestEvidenceId: newer.id,
+        latestAcceptedEvidenceId: original.id,
+      });
+      expect(oldPreview.blockers).toContain('BATCH_NOT_CURRENT');
+      expect(oldPreview.capacity.batchAvailableMagnitude).toBeNull();
+      const newPreview = await preview(s, candidate(c, newer, '10.00'));
+      expect(newPreview.blockers).toEqual(
+        expect.arrayContaining([
+          'BATCH_NOT_ACCEPTED',
+          'BATCH_NOT_CURRENT',
+          'STALE_BATCH_RESERVATION',
+        ]),
+      );
+      expect(newPreview.capacity.batchReservedMagnitude).toBe('60.00');
+      expect((await list(s)).items[0]?.status).toBe('STALE');
+      expect((await submit(s, await matchBody(s, oldPreview.candidate))).statusCode).toBe(409);
+      expect((await submit(s, await matchBody(s, newPreview.candidate))).statusCode).toBe(409);
+      const replay = await submit(s, command);
+      expect(replay.statusCode).toBe(200);
+      expect(CashMatchReceiptSchema.parse(replay.json())).toEqual(receipt);
+      expect((await releasePreview(s, receipt.id)).canRelease).toBe(true);
+      await release(s, receipt.id);
+      expect((await preview(s, newPreview.candidate)).capacity.batchReservedMagnitude).toBe('0.00');
+      expect((await preview(s, oldPreview.candidate)).blockers).toContain('BATCH_NOT_CURRENT');
+    },
+  );
+
+  it.each(['0.00', '-25.00'])(
+    'retains positive reservations across a batch correction to%s until explicit release',
+    async (net) => {
+      const s = await seed();
+      const c = await cash(s);
+      const original = await batch(s, batchInput('150.00'));
+      const saved = await match(s, candidate(c, original));
+      const corrected = await batch(
+        s,
+        batchRevision(batchInput(net, { sourceBatchId: original.payload.sourceBatchId })),
+      );
+      const signedCash = await cash(s, cashInput({ amount: '-25.00', sourceAmount: '-25.00' }));
+      const proposed = candidate(signedCash, corrected, '-25.00');
+      const blocked = await preview(s, proposed);
+      expect(blocked.capacity.batchReservedMagnitude).toBe('100.00');
+      expect(blocked.capacity.batchAvailableMagnitude).toBeNull();
+      expect(blocked.blockers).toContain('STALE_BATCH_RESERVATION');
+      expect((await submit(s, await matchBody(s, proposed))).statusCode).toBe(409);
+      expect((await list(s)).items[0]).toMatchObject({
+        id: saved.id,
+        status: 'STALE',
+        amount: '100.00',
+      });
+      await release(s, saved.id);
+      const fresh = await preview(s, proposed);
+      expect(fresh.capacity.batchReservedMagnitude).toBe('0.00');
+      expect(fresh.blockers).not.toContain('STALE_BATCH_RESERVATION');
+      if (net === '0.00') {
+        expect(fresh.blockers).toContain('BATCH_ZERO_NET');
+        expect((await submit(s, await matchBody(s, proposed))).statusCode).toBe(409);
+      } else {
+        expect(fresh.blockers).toEqual([]);
+        await match(s, proposed);
+      }
+      expect((await preview(s, candidate(c, original, '1.00'))).blockers).toContain(
+        'BATCH_NOT_CURRENT',
+      );
+    },
+  );
+
+  it('requires release of every older batch binding before exposing corrected capacity', async () => {
+    const s = await seed();
+    const c = await cash(s);
+    const d = await cash(s);
+    const original = await batch(s, batchInput('150.00'));
+    const first = await match(s, candidate(c, original, '60.00'));
+    const second = await match(s, candidate(d, original, '40.00'));
+    const corrected = await batch(s, batchRevision(original.payload));
+    await release(s, first.id);
+    const proposed = candidate(c, corrected, '10.00');
+    const partial = await preview(s, proposed);
+    expect(partial.capacity).toMatchObject({
+      batchReservedMagnitude: '40.00',
+      batchAvailableMagnitude: null,
+    });
+    expect(partial.blockers).toContain('STALE_BATCH_RESERVATION');
+    expect((await submit(s, await matchBody(s, proposed))).statusCode).toBe(409);
+    await release(s, second.id);
+    expect((await preview(s, proposed)).capacity.batchAvailableMagnitude).toBe('150.00');
+    await match(s, proposed);
+  });
+
+  it('orders batch revisions by explicit sequence ahead of the legacy baseline and ignores late lower observations', async () => {
+    const s = await seed();
+    const c = await cash(s);
+    const original = await batch(s);
+    const highest = await batch(s, batchRevision(original.payload, { sourceSequence: 7 }));
+    const saved = await match(s, candidate(c, highest, '25.00'));
+    await batch(s, batchRevision(original.payload, { sourceSequence: 2 }), 'REJECT');
+    const current = (await list(s)).items[0]!;
+    expect(current).toMatchObject({
+      id: saved.id,
+      status: 'CURRENT',
+      batch: {
+        sourceSequence: 7,
+        latestEvidenceId: highest.id,
+        latestSourceSequence: 7,
+        latestAcceptedEvidenceId: highest.id,
+      },
+    });
+    expect((await preview(s, candidate(c, original, '1.00'))).blockers).toContain(
+      'BATCH_NOT_CURRENT',
+    );
+  });
+
+  it('invalidates match approval after a batch revision arrives and again after its acceptance', async () => {
+    const s = await seed();
+    const c = await cash(s);
+    const original = await batch(s);
+    const beforeImport = await matchBody(s, candidate(c, original));
+    const newer = await batch(s, batchRevision(original.payload), null);
+    expect((await submit(s, beforeImport)).statusCode).toBe(409);
+    const beforeReview = await matchBody(s, candidate(c, newer));
+    await batchReview(s, newer.id);
+    expect((await submit(s, beforeReview)).statusCode).toBe(409);
+    expect(await counts(s)).toEqual({ matches: 0, releases: 0 });
+    await match(s, candidate(c, newer));
+  });
+
+  it('serializes a batch correction racing an old-source match without freeing any committed reservation', async () => {
+    const s = await seed();
+    const c = await cash(s);
+    const original = await batch(s);
+    const command = await matchBody(s, candidate(c, original, '60.00'));
+    const [matching, importing] = await Promise.all([
+      submit(s, command),
+      inject({
+        method: 'POST',
+        url: '/v1/remittance-batches',
+        headers: s.headers,
+        payload: batchRevision(original.payload),
+      }),
+    ]);
+    expect(importing.statusCode, importing.body).toBe(201);
+    expect([201, 409]).toContain(matching.statusCode);
+    const newer = BatchEvidenceSchema.parse(importing.json());
+    await batchReview(s, newer.id);
+    const next = candidate(c, newer, '60.00');
+    const p = await preview(s, next);
+    if (matching.statusCode === 201) {
+      const receipt = CashMatchReceiptSchema.parse(matching.json());
+      expect(p.blockers).toContain('STALE_BATCH_RESERVATION');
+      expect(p.capacity.batchReservedMagnitude).toBe('60.00');
+      expect((await list(s)).items[0]).toMatchObject({ id: receipt.id, status: 'STALE' });
+      expect((await submit(s, await matchBody(s, next))).statusCode).toBe(409);
+      await release(s, receipt.id);
+    } else {
+      expect(p.blockers).toEqual([]);
+      expect(p.capacity.batchReservedMagnitude).toBe('0.00');
+    }
+    await match(s, next);
+    expect((await submit(s, { ...command, idempotencyKey: randomUUID() })).statusCode).toBe(409);
+  });
+
+  it('keeps same-named batch revision histories and reservations isolated across tenants', async () => {
+    const a = await seed();
+    const b = await seed();
+    const payload = batchInput('150.00');
+    const ac = await cash(a);
+    const bc = await cash(b);
+    const ab = await batch(a, payload);
+    const bb = await batch(b, payload);
+    const am = await match(a, candidate(ac, ab));
+    const bm = await match(b, candidate(bc, bb));
+    const revisedPayload = batchRevision(payload);
+    const ar = await batch(a, revisedPayload);
+    expect((await list(a)).items[0]).toMatchObject({ id: am.id, status: 'STALE' });
+    expect((await list(b)).items[0]).toMatchObject({ id: bm.id, status: 'CURRENT' });
+    const br = await batch(b, revisedPayload);
+    const ap = await preview(a, candidate(ac, ar, '1.00'));
+    const bp = await preview(b, candidate(bc, br, '1.00'));
+    expect(ap.batch.batchId).not.toBe(bp.batch.batchId);
+    expect(ap.capacity.batchReservedMagnitude).toBe('100.00');
+    expect(bp.capacity.batchReservedMagnitude).toBe('100.00');
+    await release(a, am.id);
+    expect((await preview(b, candidate(bc, br, '1.00'))).blockers).toContain(
+      'STALE_BATCH_RESERVATION',
+    );
+    expect(
+      (
+        await inject({
+          method: 'POST',
+          url: `${BASE}/preview`,
+          headers: a.headers,
+          payload: candidate(ac, br),
+        })
+      ).statusCode,
+    ).toBe(404);
+  });
+
+  it('preserves stale batch reservations when release audit fails and withholds revised source views when read audit fails', async () => {
+    const s = await seed();
+    const c = await cash(s);
+    const original = await batch(s);
+    const saved = await match(s, candidate(c, original));
+    const corrected = await batch(s, batchRevision(original.payload));
+    const command = await releaseBody(s, saved.id);
+    await failAudit('reconciliation.release');
+    const failed = await submitRelease(s, saved.id, command);
+    expect(failed.statusCode).toBe(500);
+    expect(failed.body).not.toContain(PRIVATE_MARKER);
+    await removeAuditFailure();
+    const retained = await preview(s, candidate(c, corrected, '1.00'));
+    expect(retained.capacity.batchReservedMagnitude).toBe('100.00');
+    expect(retained.blockers).toContain('STALE_BATCH_RESERVATION');
+    await failAudit('reconciliation.read');
+    const views = await Promise.all([
+      inject({ method: 'GET', url: BASE, headers: s.headers }),
+      inject({
+        method: 'POST',
+        url: `${BASE}/preview`,
+        headers: s.headers,
+        payload: retained.candidate,
+      }),
+    ]);
+    expect(views.map((response) => response.statusCode)).toEqual([500, 500]);
+    for (const response of views) {
+      expect(response.body).not.toContain(corrected.payload.sourceBatchId);
+      expect(response.body).not.toContain(PRIVATE_MARKER);
+    }
+    expect(logs.join('')).not.toContain(PRIVATE_MARKER);
+    expect(await counts(s)).toEqual({ matches: 1, releases: 0 });
+  });
 
   it('retains removal history without a refund and requires release before moving capacity to a replacement transaction', async () => {
     const s = await seed();

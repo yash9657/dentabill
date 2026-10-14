@@ -4,6 +4,49 @@ _Last updated: 2026-10-14 (full-scope goal active; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
+### 2026-10-14: remittance batch source corrections (ADR-080)
+
+FW-40 is committed as `4af99ec`. The current independent financial slice adds immutable stable
+batch identity, source revision and permanent member-ownership sidecars. Migration32
+`20261014200000_remittance_batch_revisions` is frozen and applied only to localhost isolated
+`dentabill_w0_identity` and shared `dentabill_test`. Existing v1 payloads/hashes/reviews remain
+unchanged and explicitly unsequenced; v2 requires a new source record and positive source sequence
+under the original namespace/batch ID. Latest-observed-only acceptance, source-ordered history,
+added/retained/omitted member previews and stable-batch cash reservation guards are implemented.
+Omitted members stay owned; old revision cash matches stay reserved until explicit release.
+Exact retries return the original immutable review object with refreshed currentness metadata.
+Zero net is not withdrawal. Cross-batch ownership transfer, claim-remittance correction chains,
+reviewed posting relationships and claim cash attribution remain follow-on work.
+
+Local verification: DB27 plus expanded migration preservation1, prior financial344, focused
+batchAPI71, cashAPI66, fullAPI909/909 across43 files (216.61s), SDK57 and UI70 all pass.
+Affected Turbo lint/types30/30 pass after fixing two test-only lint findings. API TypeScript
+and Lambda builds pass; Next production build passes (batch8.55kB/184kB first load; cash
+reconciliation8.38kB/184kB). Migration32 remains frozen.
+Logs use `/tmp/dentabill-batch-revisions-`: `api-full.log`, `batch-api-focused.log`,
+`cash-api-focused.log`, `db-final-tests.log`, `preservation-final.log`, `prior-financial.log`,
+`sdk-tests.log`, `ui-tests.log`, `checks-verified.log`, `api-build.log`, `lambda-build.log`,
+`web-build.log`.
+
+The combined synthetic actual-component browser cycle at1280/390 has zero overflow, page errors
+or axe violations. A public-example identity mismatch was caught and fixed; a regression now
+proves the baseline/correction share namespace, batch and member identities. Only corrected
+batch captures count as evidence. Root fresh nonauthor review found no material issue; the
+separate documenter found no durable design delta. PRODUCT/DESIGN/sidecar are unchanged.
+Captures/results: `/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-batch-revisions-visual-zv_xnuu_/`.
+Harness stopped. Detector permission126 yields no verdict. Full authenticated shell and real
+Clerk/AWS/PMS/bank integration remain unverified. No external action, merge or deployment ran.
+
+**Immediate next task:** reviewed posting-entry relationships to existing exact-source imported
+claims and optional immutable source lines, with source/claim-version-bound previews, retained
+stale identity reservations and explicit full release. This adds identity association only;
+cash allocation, source verification, settlement and recovered revenue remain separate. Then
+implement FW-43 canonical source observations, reviewed legacy binding and additive source
+snapshots/application; claim-remittance correction chains; explicit cross-batch ownership
+transfer; claim cash allocation/attribution. Real connectors, recovery actions, models/voice,
+security and authorized end-to-end evidence remain in the full ACTIVE goal. Continue independent
+implementation without treating this local milestone as full completion.
+
 ### 2026-10-14: durable review-notification outbox (ADR-079)
 
 FW-40 now stores generic review-notification intent with the summary/observation/review domain
@@ -1493,6 +1536,11 @@ Four further defects were invisible to any static check and are recorded as **AD
 - Token drift closed: `rounded-[20px]` 12 files → 0, `border-black/*` 22 → 0, zero `dark:` variants, no user-facing "Phase N".
 
 ## Next task
+
+Follow the latest ADR-080 checkpoint at the top of this file and
+`docs/HANDOFF_2026-10-13.md`. Implement reviewed posting-entry relationships next. Continue the entire active gap-closure goal.
+
+## Historical next task — superseded by the current handoff
 
 > **Start at `docs/HANDOFF.md`.** It supersedes this section: it records what is
 > actually deployed on Railway, the five verified gaps blocking real telephony,

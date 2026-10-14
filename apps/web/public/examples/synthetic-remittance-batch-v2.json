@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 2,
+  "evidenceBasis": "PAYER_REMITTANCE_BATCH",
+  "sourceNamespace": "synthetic-payer",
+  "sourceBatchId": "synthetic-batch-a",
+  "sourceRecordId": "synthetic-batch-record-corrected-140",
+  "sourceDocumentId": "synthetic-document",
+  "sourceVersion": "2",
+  "payerName": "Synthetic Payer",
+  "payerIdentifier": "fake-payer",
+  "payerIdentifierSystem": "synthetic",
+  "payeeIdentifier": "fake-practice",
+  "payeeIdentifierSystem": "synthetic",
+  "currency": "USD",
+  "paymentTrace": "fake-trace",
+  "paymentTraceType": "synthetic-trace",
+  "paymentTraceIssuer": "Synthetic Payer",
+  "reportedDate": "2026-10-13",
+  "sourceStatus": "source-status-as-supplied",
+  "detailCompleteness": "COMPLETE",
+  "reportedClaimAmount": "180.00",
+  "reportedAdjustmentAmount": "-40.00",
+  "reportedNetAmount": "140.00",
+  "claimRemittances": [
+    {
+      "sourceNamespace": "synthetic-payer",
+      "sourceRecordId": "synthetic-claim-remittance-a",
+      "reportedAmount": "100.00"
+    },
+    {
+      "sourceNamespace": "synthetic-payer",
+      "sourceRecordId": "synthetic-claim-remittance-b",
+      "reportedAmount": "80.00"
+    }
+  ],
+  "providerAdjustments": [
+    {
+      "sourceAdjustmentId": "synthetic-adjustment",
+      "codeSystem": "RAW-SYNTHETIC",
+      "reasonCode": "RAW-30",
+      "sourceReference": "fake-adjustment-reference",
+      "providerIdentifier": "fake-provider",
+      "fiscalPeriodEnd": "2026-09-30",
+      "amount": "-40.00",
+      "sourceAmount": "40.00",
+      "sourceSignConvention": "REDUCTION_POSITIVE"
+    }
+  ],
+  "sourceSequence": 1
+}

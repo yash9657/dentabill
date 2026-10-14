@@ -1,6 +1,6 @@
 # Synthetic remittance batch evidence
 
-These files are fabricated custom version 1 contracts for local development. They
+These files are fabricated custom version 1 and 2 contracts for local development. They
 are not native 835 files, payer exports, PMS receipts, bank records, or proof that
 an external integration works. No real patient, provider, or account data appears
 in them. Source names and unknown adjustment codes are retained as supplied; no
@@ -16,7 +16,10 @@ unverified after acceptance; no money moves and no claim amount changes.
 The source identity is the explicit namespace/batch ID. The independent record ID
 also cannot be reused with changed content. A shared document or payment trace
 does not establish batch membership. Importing the exact same record is a replay;
-corrections and source revisions are not supported by this slice.
+version 2 corrections retain the original batch ID, use a new record ID and supply an explicit
+positive source sequence. Version 1 remains an unsequenced baseline. History is available at
+`GET /v1/remittance-batches/:id/history`. The latest observed revision alone may be accepted;
+rejecting it does not make a prior accepted snapshot current again.
 
 | Fixture                         | Required accepted claim reports                                      | Source arithmetic                                 | Expected review                                                |
 | ------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------- |
@@ -27,6 +30,8 @@ corrections and source revisions are not supported by this slice.
 | `05-provider-only-credit.json`  | None                                                                 | 0 + 15 = 15                                       | Acceptable without invented claim members                      |
 | `06-signed-reversal.json`       | The 100 report and its accepted `synthetic-claim-reversal-35` = -35  | 100 - 35 - 5 = 60                                 | Acceptable with both signed source members                     |
 
+| `07-corrected-net-140.json` | Same 100 and 80 reports as fixture 01 | 180 + (-40) = 140 | Review as sequence 1 under the original batch; prior member ownership is retained |
+
 All member references use namespace `synthetic-remittance`. Seed those claim
 remittances through the existing claim-remittance API and explicitly accept them
 first. The reversal must refer to the accepted 100 report on the same claim.
@@ -34,7 +39,11 @@ The API tests create these prerequisites with absent procedure detail; the test
 does not pretend to establish procedure allocation or native remittance parsing.
 
 Run these examples in separate synthetic ledgers or use fresh member identities:
-an accepted claim remittance is permanently bound to one accepted batch. The
+an accepted claim remittance is permanently bound to one stable batch identity. Fixture 07
+is the deliberate exception to separate ledgers: import it after fixture 01 to review the
+correction. Repeated members are allowed across revisions of that same batch; omission never
+releases them for a different batch. Existing cash matches become stale but keep their
+reservations until explicit review and release. Zero net does not mean source withdrawal. The
 100 + 80 reports remain 180 in gross claim evidence while the batch net is 150.
 Do not allocate 180 from 150, copy 150 onto each claim, or describe the reported
 150 as verified cash. Provider adjustments are independent source facts, with

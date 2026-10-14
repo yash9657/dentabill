@@ -7,6 +7,7 @@ import { z } from 'zod';
 import {
   BatchEvidenceSchema,
   BatchInputSchema,
+  BatchHistorySchema,
   BatchListSchema,
   BatchPreviewSchema,
   BatchReviewInputSchema,
@@ -16,6 +17,7 @@ import {
   type BatchMemberMatch,
   type BatchPreviewResponse,
   type BatchReviewInput,
+  type BatchRevisionContext,
 } from './contract.js';
 
 export interface BatchScope {
@@ -24,6 +26,7 @@ export interface BatchScope {
 }
 type Db = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 const evidenceInclude = {
+  revision: true,
   review: { include: { members: { orderBy: { sourceIndex: 'asc' as const } } } },
 } as const;
 type Evidence = Prisma.RemittanceBatchEvidenceGetPayload<{ include: typeof evidenceInclude }>;
@@ -91,12 +94,44 @@ async function findEvidence(db: Db, scope: BatchScope, id: string): Promise<Evid
   if (!row) throw new ApiError('NOT_FOUND', 'Remittance batch not found in your practice.');
   return row;
 }
-function response(row: Evidence): BatchEvidenceResponse {
+const revisionOrder = { sourceSequence: { sort: 'desc', nulls: 'last' } } as const;
+function requireRevision(row: Evidence): NonNullable<Evidence['revision']> {
+  if (!row.revision) throw new ApiError('INTERNAL_ERROR', 'Batch source history is unavailable.');
+  return row.revision;
+}
+async function revisionContext(
+  db: Db,
+  scope: BatchScope,
+  row: Evidence,
+): Promise<BatchRevisionContext> {
+  const revision = requireRevision(row);
+  const where = { organizationId: scope.organizationId, batchId: revision.batchId };
+  const [latest, accepted] = await Promise.all([
+    db.remittanceBatchRevision.findFirst({ where, orderBy: revisionOrder }),
+    db.remittanceBatchRevision.findFirst({
+      where: { ...where, evidence: { review: { decision: 'ACCEPT' } } },
+      orderBy: revisionOrder,
+    }),
+  ]);
+  if (!latest) throw new ApiError('INTERNAL_ERROR', 'Batch source history is unavailable.');
+  return {
+    batchId: revision.batchId,
+    schemaVersion: revision.schemaVersion === 1 ? 1 : 2,
+    sourceSequence: revision.sourceSequence,
+    latestEvidenceId: latest.evidenceId,
+    latestSourceSequence: latest.sourceSequence,
+    latestAcceptedEvidenceId: accepted?.evidenceId ?? null,
+    isLatest: latest.evidenceId === row.id,
+    isCurrentAccepted: latest.evidenceId === row.id && accepted?.evidenceId === row.id,
+  };
+}
+async function response(db: Db, scope: BatchScope, row: Evidence): Promise<BatchEvidenceResponse> {
   return BatchEvidenceSchema.parse({
     id: row.id,
     createdAt: row.createdAt.toISOString(),
     contentHash: row.contentHash,
     payload: row.payload,
+    revision: await revisionContext(db, scope, row),
     provenance: 'MANUAL_UPLOAD',
     cashReceipt: 'UNVERIFIED',
     posting: 'UNVERIFIED',
@@ -138,7 +173,13 @@ export async function importBatchEvidence(
   if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 256 * 1024)
     throw new ApiError('VALIDATION_ERROR', 'The normalized batch record must fit within 256 KiB.');
   const contentHash = createHmac('sha256', secret)
-    .update(JSON.stringify(['remittance-batch-v1', scope.organizationId, payload]))
+    .update(
+      JSON.stringify([
+        `remittance-batch-v${String(payload.schemaVersion)}`,
+        scope.organizationId,
+        payload,
+      ]),
+    )
     .digest('hex');
   return prisma.$transaction(async (db) => {
     await lockOrganization(db, scope);
@@ -154,17 +195,41 @@ export async function importBatchEvidence(
       where: {
         organizationId: scope.organizationId,
         sourceNamespace: payload.sourceNamespace,
-        OR: [{ sourceBatchId: payload.sourceBatchId }, { sourceRecordId: payload.sourceRecordId }],
+        sourceRecordId: payload.sourceRecordId,
       },
       include: evidenceInclude,
     });
     if (existing) {
       if (existing.contentHash !== contentHash)
         conflict(
-          'This batch or source record already has different evidence. Batch corrections are not supported yet; retained evidence was not changed.',
+          'This source record already has different evidence. Use a new source record and explicit sequence under the original batch identity for a correction.',
         );
       await recordAccess(db, scope, existing.id, 'IMPORT_REPLAY');
-      return { created: false, evidence: response(existing) };
+      return { created: false, evidence: await response(db, scope, existing) };
+    }
+    const batch = await db.remittanceBatch.findFirst({
+      where: {
+        organizationId: scope.organizationId,
+        sourceNamespace: payload.sourceNamespace,
+        sourceBatchId: payload.sourceBatchId,
+      },
+    });
+    if (batch) {
+      if (payload.schemaVersion === 1)
+        conflict(
+          'This batch already has source history. Corrections require version 2 with a new source record and explicit sequence.',
+        );
+      const duplicateSequence = await db.remittanceBatchRevision.findFirst({
+        where: {
+          organizationId: scope.organizationId,
+          batchId: batch.id,
+          sourceSequence: payload.sourceSequence,
+        },
+      });
+      if (duplicateSequence)
+        conflict(
+          'This source sequence already belongs to another batch observation. Retained evidence was not changed.',
+        );
     }
     const row = await db.remittanceBatchEvidence.create({
       data: {
@@ -197,7 +262,10 @@ export async function importBatchEvidence(
       },
       db,
     );
-    return { created: true, evidence: response(row) };
+    return {
+      created: true,
+      evidence: await response(db, scope, await findEvidence(db, scope, row.id)),
+    };
   }, transactionOptions);
 }
 
@@ -209,7 +277,9 @@ async function buildPreview(
   const payload = BatchInputSchema.parse(row.payload);
   const totals = batchTotals(payload);
   const blockers: BatchBlocker[] = [...totals.blockers];
+  const evidence = await response(db, scope, row);
   if (row.review) blockers.unshift('ALREADY_REVIEWED');
+  if (!evidence.revision.isLatest) blockers.push('BATCH_NOT_CURRENT');
   const sources = payload.claimRemittances.length
     ? await db.claimRemittanceEvidence.findMany({
         where: {
@@ -223,12 +293,12 @@ async function buildPreview(
       })
     : [];
   const used = sources.length
-    ? await db.remittanceBatchClaim.findMany({
+    ? await db.remittanceBatchMemberOwnership.findMany({
         where: {
           organizationId: scope.organizationId,
           remittanceEvidenceId: { in: sources.map((source) => source.id) },
         },
-        select: { remittanceEvidenceId: true, batchEvidenceId: true },
+        select: { remittanceEvidenceId: true, batchId: true },
       })
     : [];
   const members: BatchMemberMatch[] = payload.claimRemittances.map((member) => {
@@ -244,7 +314,8 @@ async function buildPreview(
     else if (source.reportedAmount.toFixed(2) !== member.reportedAmount) status = 'AMOUNT_MISMATCH';
     else if (
       used.some(
-        (link) => link.remittanceEvidenceId === source.id && link.batchEvidenceId !== row.id,
+        (link) =>
+          link.remittanceEvidenceId === source.id && link.batchId !== evidence.revision.batchId,
       )
     )
       status = 'ALREADY_BATCHED';
@@ -270,21 +341,65 @@ async function buildPreview(
       status,
     };
   });
+  const revision = requireRevision(row);
+  const previous =
+    revision.sourceSequence === null
+      ? null
+      : await db.remittanceBatchRevision.findFirst({
+          where: {
+            organizationId: scope.organizationId,
+            batchId: revision.batchId,
+            OR: [{ sourceSequence: null }, { sourceSequence: { lt: revision.sourceSequence } }],
+            evidence: { review: { decision: 'ACCEPT' } },
+          },
+          orderBy: revisionOrder,
+          include: { evidence: { include: evidenceInclude } },
+        });
+  const prior = previous ? BatchInputSchema.parse(previous.evidence.payload).claimRemittances : [];
+  const sourceKey = (member: { sourceNamespace: string; sourceRecordId: string }): string =>
+    JSON.stringify([member.sourceNamespace, member.sourceRecordId]);
+  const priorKeys = new Set(prior.map(sourceKey));
+  const currentKeys = new Set(members.map(sourceKey));
+  const projectMember = (member: BatchMemberMatch) => ({
+    sourceNamespace: member.sourceNamespace,
+    sourceRecordId: member.sourceRecordId,
+    reportedAmount: member.reportedAmount,
+    evidenceId: member.evidenceId,
+    claimId: member.claimId,
+  });
+  const membershipChanges = {
+    previousAcceptedEvidenceId: previous?.evidenceId ?? null,
+    added: members.filter((member) => !priorKeys.has(sourceKey(member))).map(projectMember),
+    retained: members.filter((member) => priorKeys.has(sourceKey(member))).map(projectMember),
+    omitted: prior.flatMap((member, sourceIndex) => {
+      if (currentKeys.has(sourceKey(member))) return [];
+      const binding = previous?.evidence.review?.members.find(
+        (item) => item.sourceIndex === sourceIndex,
+      );
+      if (!binding)
+        throw new ApiError('INTERNAL_ERROR', 'Batch membership history is unavailable.');
+      return [{ ...member, evidenceId: binding.remittanceEvidenceId, claimId: binding.claimId }];
+    }),
+    ownershipPolicy: 'RETAINED_ACROSS_REVISIONS' as const,
+  };
   const where = { organizationId: scope.organizationId };
   const ledgerVersion = `${String(await db.remittanceBatchEvidence.count({ where }))}:${String(await db.remittanceBatchReview.count({ where }))}`;
   return BatchPreviewSchema.parse({
-    evidence: response(row),
+    evidence,
     reviewToken: digest([
-      'remittance-batch-review-v1',
+      'remittance-batch-review-v2',
       scope.organizationId,
       row.id,
       row.contentHash,
+      evidence.revision,
+      membershipChanges,
       ledgerVersion,
       members,
     ]),
     ledgerVersion,
     blockers: [...new Set(blockers)],
     members,
+    membershipChanges,
     listedClaimAmount: totals.listedClaimAmount,
     listedAdjustmentAmount: totals.listedAdjustmentAmount,
     calculatedNetAmount: totals.calculatedNetAmount,
@@ -327,7 +442,7 @@ export async function reviewBatchEvidence(
       if (replay.requestHash !== requestHash)
         conflict('This idempotency key was used for a different batch review.');
       await recordAccess(db, scope, id, 'REVIEW_REPLAY');
-      return response(row);
+      return response(db, scope, row);
     }
     const preview = await buildPreview(db, scope, row);
     if (row.review || preview.reviewToken !== body.reviewToken)
@@ -400,7 +515,7 @@ export async function reviewBatchEvidence(
       },
       db,
     );
-    return response(await findEvidence(db, scope, id));
+    return response(db, scope, await findEvidence(db, scope, id));
   }, transactionOptions);
 }
 
@@ -446,7 +561,7 @@ export async function listBatchEvidence(
       const items: BatchEvidenceResponse[] = [];
       let bytes = 4096;
       for (const row of rows.slice(0, Math.min(limit, 20))) {
-        const item = response(row);
+        const item = await response(db, scope, row);
         const size = Buffer.byteLength(JSON.stringify(item), 'utf8') + 1;
         if (bytes + size > 2 * 1024 * 1024) break;
         items.push(item);
@@ -471,6 +586,89 @@ export async function listBatchEvidence(
             : null,
       });
       await recordAccess(db, scope, scope.organizationId, 'LIST', items.length);
+      return result;
+    },
+    { ...transactionOptions, isolationLevel: 'RepeatableRead' },
+  );
+}
+
+const HistoryCursorSchema = z.strictObject({
+  organizationId: z.string(),
+  batchId: z.uuid(),
+  sourceSequence: z.number().int().min(1).max(2147483647).nullable(),
+  evidenceId: z.uuid(),
+});
+export async function listBatchHistory(
+  scope: BatchScope,
+  evidenceId: string,
+  limit: number,
+  cursor?: string,
+): Promise<z.infer<typeof BatchHistorySchema>> {
+  let page: z.infer<typeof HistoryCursorSchema> | undefined;
+  if (cursor) {
+    try {
+      page = HistoryCursorSchema.parse(
+        JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')),
+      );
+    } catch {
+      throw new ApiError('VALIDATION_ERROR', 'Invalid batch history cursor.');
+    }
+    if (page.organizationId !== scope.organizationId)
+      throw new ApiError('VALIDATION_ERROR', 'Invalid batch history cursor.');
+  }
+  return prisma.$transaction(
+    async (db) => {
+      await authorize(db, scope);
+      const batchId = requireRevision(await findEvidence(db, scope, evidenceId)).batchId;
+      if (page && page.batchId !== batchId)
+        throw new ApiError('VALIDATION_ERROR', 'Invalid batch history cursor.');
+      const rows = await db.remittanceBatchRevision.findMany({
+        where: {
+          organizationId: scope.organizationId,
+          batchId,
+          ...(page
+            ? {
+                OR:
+                  page.sourceSequence === null
+                    ? [{ sourceSequence: { lt: 0 } }]
+                    : [{ sourceSequence: { lt: page.sourceSequence } }, { sourceSequence: null }],
+              }
+            : {}),
+        },
+        orderBy: revisionOrder,
+        take: Math.min(limit, 20) + 1,
+        include: { evidence: { include: evidenceInclude } },
+      });
+      const items: BatchEvidenceResponse[] = [];
+      let bytes = 4096;
+      for (const row of rows.slice(0, Math.min(limit, 20))) {
+        const item = await response(db, scope, row.evidence);
+        const size = Buffer.byteLength(JSON.stringify(item), 'utf8') + 1;
+        if (bytes + size > 2 * 1024 * 1024) break;
+        items.push(item);
+        bytes += size;
+      }
+      if (rows.length && !items.length)
+        throw new ApiError('INTERNAL_ERROR', 'This batch exceeds the supported page size.');
+      const last = items.at(-1);
+      const hasMore = rows.length > items.length;
+      const result = BatchHistorySchema.parse({
+        batchId,
+        items,
+        hasMore,
+        nextCursor:
+          hasMore && last
+            ? Buffer.from(
+                JSON.stringify({
+                  organizationId: scope.organizationId,
+                  batchId,
+                  sourceSequence: last.revision.sourceSequence,
+                  evidenceId: last.id,
+                }),
+              ).toString('base64url')
+            : null,
+      });
+      await recordAccess(db, scope, evidenceId, 'HISTORY', items.length);
       return result;
     },
     { ...transactionOptions, isolationLevel: 'RepeatableRead' },

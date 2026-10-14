@@ -47,72 +47,83 @@ const ProviderAdjustmentSchema = z.strictObject({
 });
 
 /** Manual source snapshots, not an 835 parser or an external payment instruction. */
-export const BatchInputSchema = z
-  .strictObject({
-    schemaVersion: z.literal(1),
-    evidenceBasis: z.literal('PAYER_REMITTANCE_BATCH'),
-    sourceNamespace: namespace,
-    sourceBatchId: token(200),
-    sourceRecordId: token(200),
-    sourceDocumentId: token(200),
-    sourceVersion: optionalToken(200),
-    payerName: token(200),
-    payerIdentifier: optionalToken(200),
-    payerIdentifierSystem: optionalToken(80),
-    payeeIdentifier: optionalToken(200),
-    payeeIdentifierSystem: optionalToken(80),
-    currency: z.literal('USD'),
-    paymentTrace: optionalToken(200),
-    paymentTraceType: optionalToken(80),
-    paymentTraceIssuer: optionalToken(200),
-    reportedDate: sourceDate,
-    sourceStatus: optionalToken(80),
-    detailCompleteness: z.enum(['COMPLETE', 'PARTIAL', 'ABSENT']),
-    reportedClaimAmount: SignedMoneySchema.nullable(),
-    reportedAdjustmentAmount: SignedMoneySchema.nullable(),
-    reportedNetAmount: SignedMoneySchema.nullable(),
-    claimRemittances: z.array(ClaimMemberSchema).max(100),
-    providerAdjustments: z.array(ProviderAdjustmentSchema).max(100),
-  })
-  .superRefine((value, context) => {
-    const invalid = (): void => {
-      context.addIssue({
-        code: 'custom',
-        message: 'Check unique source references, detail presence and adjustment signs.',
-      });
-    };
+const BatchInputObject = z.strictObject({
+  schemaVersion: z.literal(1),
+  evidenceBasis: z.literal('PAYER_REMITTANCE_BATCH'),
+  sourceNamespace: namespace,
+  sourceBatchId: token(200),
+  sourceRecordId: token(200),
+  sourceDocumentId: token(200),
+  sourceVersion: optionalToken(200),
+  payerName: token(200),
+  payerIdentifier: optionalToken(200),
+  payerIdentifierSystem: optionalToken(80),
+  payeeIdentifier: optionalToken(200),
+  payeeIdentifierSystem: optionalToken(80),
+  currency: z.literal('USD'),
+  paymentTrace: optionalToken(200),
+  paymentTraceType: optionalToken(80),
+  paymentTraceIssuer: optionalToken(200),
+  reportedDate: sourceDate,
+  sourceStatus: optionalToken(80),
+  detailCompleteness: z.enum(['COMPLETE', 'PARTIAL', 'ABSENT']),
+  reportedClaimAmount: SignedMoneySchema.nullable(),
+  reportedAdjustmentAmount: SignedMoneySchema.nullable(),
+  reportedNetAmount: SignedMoneySchema.nullable(),
+  claimRemittances: z.array(ClaimMemberSchema).max(100),
+  providerAdjustments: z.array(ProviderAdjustmentSchema).max(100),
+});
+function validateBatch(
+  value: Omit<z.infer<typeof BatchInputObject>, 'schemaVersion'>,
+  context: z.RefinementCtx,
+): void {
+  const invalid = (): void => {
+    context.addIssue({
+      code: 'custom',
+      message: 'Check unique source references, detail presence and adjustment signs.',
+    });
+  };
+  if (
+    new Set(
+      value.claimRemittances.map((item) =>
+        JSON.stringify([item.sourceNamespace, item.sourceRecordId]),
+      ),
+    ).size !== value.claimRemittances.length
+  )
+    invalid();
+  if (
+    new Set(value.providerAdjustments.map((item) => item.sourceAdjustmentId)).size !==
+    value.providerAdjustments.length
+  )
+    invalid();
+  if (
+    value.detailCompleteness === 'ABSENT' &&
+    (value.claimRemittances.length || value.providerAdjustments.length)
+  )
+    invalid();
+  for (const adjustment of value.providerAdjustments) {
     if (
-      new Set(
-        value.claimRemittances.map((item) =>
-          JSON.stringify([item.sourceNamespace, item.sourceRecordId]),
-        ),
-      ).size !== value.claimRemittances.length
+      !SignedMoneySchema.safeParse(adjustment.amount).success ||
+      !SignedMoneySchema.safeParse(adjustment.sourceAmount).success
+    )
+      continue;
+    const source = moneyCents(adjustment.sourceAmount);
+    if (
+      moneyCents(adjustment.amount) !==
+      (adjustment.sourceSignConvention === 'REDUCTION_POSITIVE' ? -source : source)
     )
       invalid();
-    if (
-      new Set(value.providerAdjustments.map((item) => item.sourceAdjustmentId)).size !==
-      value.providerAdjustments.length
-    )
-      invalid();
-    if (
-      value.detailCompleteness === 'ABSENT' &&
-      (value.claimRemittances.length || value.providerAdjustments.length)
-    )
-      invalid();
-    for (const adjustment of value.providerAdjustments) {
-      if (
-        !SignedMoneySchema.safeParse(adjustment.amount).success ||
-        !SignedMoneySchema.safeParse(adjustment.sourceAmount).success
-      )
-        continue;
-      const source = moneyCents(adjustment.sourceAmount);
-      if (
-        moneyCents(adjustment.amount) !==
-        (adjustment.sourceSignConvention === 'REDUCTION_POSITIVE' ? -source : source)
-      )
-        invalid();
-    }
-  });
+  }
+}
+export const BatchInputV1Schema = BatchInputObject.superRefine(validateBatch);
+export const BatchInputV2Schema = BatchInputObject.extend({
+  schemaVersion: z.literal(2),
+  sourceSequence: z.number().int().min(1).max(2147483647),
+}).superRefine(validateBatch);
+export const BatchInputSchema = z.discriminatedUnion('schemaVersion', [
+  BatchInputV1Schema,
+  BatchInputV2Schema,
+]);
 export type BatchInput = z.infer<typeof BatchInputSchema>;
 export const BatchReviewInputSchema = z.strictObject({
   decision: z.enum(['ACCEPT', 'REJECT']),
@@ -122,6 +133,7 @@ export const BatchReviewInputSchema = z.strictObject({
 export type BatchReviewInput = z.infer<typeof BatchReviewInputSchema>;
 export const BatchBlockerSchema = z.enum([
   'ALREADY_REVIEWED',
+  'BATCH_NOT_CURRENT',
   'INCOMPLETE_DETAIL',
   'UNKNOWN_TOTALS',
   'TOTAL_MISMATCH',
@@ -169,11 +181,23 @@ export const BatchReviewSchema = z.strictObject({
     }),
   ),
 });
+export const BatchRevisionContextSchema = z.strictObject({
+  batchId: z.uuid(),
+  schemaVersion: z.union([z.literal(1), z.literal(2)]),
+  sourceSequence: z.number().int().positive().nullable(),
+  latestEvidenceId: z.uuid(),
+  latestSourceSequence: z.number().int().positive().nullable(),
+  latestAcceptedEvidenceId: z.uuid().nullable(),
+  isLatest: z.boolean(),
+  isCurrentAccepted: z.boolean(),
+});
+export type BatchRevisionContext = z.infer<typeof BatchRevisionContextSchema>;
 export const BatchEvidenceSchema = z.strictObject({
   id: z.uuid(),
   createdAt: z.iso.datetime(),
   contentHash: z.string(),
   payload: BatchInputSchema,
+  revision: BatchRevisionContextSchema,
   provenance: z.literal('MANUAL_UPLOAD'),
   cashReceipt: z.literal('UNVERIFIED'),
   posting: z.literal('UNVERIFIED'),
@@ -181,12 +205,23 @@ export const BatchEvidenceSchema = z.strictObject({
   review: BatchReviewSchema.nullable(),
 });
 export type BatchEvidenceResponse = z.infer<typeof BatchEvidenceSchema>;
+const MembershipChangeSchema = ClaimMemberSchema.extend({
+  evidenceId: z.uuid().nullable(),
+  claimId: z.string().nullable(),
+});
 export const BatchPreviewSchema = z.strictObject({
   evidence: BatchEvidenceSchema,
   reviewToken: z.string(),
   ledgerVersion: z.string(),
   blockers: z.array(BatchBlockerSchema),
   members: z.array(BatchMemberMatchSchema),
+  membershipChanges: z.strictObject({
+    previousAcceptedEvidenceId: z.uuid().nullable(),
+    added: z.array(MembershipChangeSchema).max(100),
+    retained: z.array(MembershipChangeSchema).max(100),
+    omitted: z.array(MembershipChangeSchema).max(100),
+    ownershipPolicy: z.literal('RETAINED_ACROSS_REVISIONS'),
+  }),
   listedClaimAmount: TotalMoneySchema,
   listedAdjustmentAmount: TotalMoneySchema,
   calculatedNetAmount: TotalMoneySchema,
@@ -200,6 +235,8 @@ export const BatchListSchema = z.strictObject({
   nextCursor: z.string().nullable(),
   hasMore: z.boolean(),
 });
+
+export const BatchHistorySchema = BatchListSchema.extend({ batchId: z.uuid() });
 
 export function batchTotals(payload: BatchInput): {
   listedClaimAmount: string;
