@@ -6,7 +6,30 @@ integration. Demonstrate actual implemented UI workflows and clearly label simul
 behavior; the demo is an additional deliverable, not evidence that real connector, model,
 voice or deployment gates have passed.
 
-Current local progress (2026-10-14, ADR-081): FW-44 adds reviewed exact-source posting-entry
+Current local progress (2026-10-14, ADR-082): FW-45 preparation adds the connected synthetic
+fixture manifest/parser contract, dedicated localhost read-only preflight and current-screen
+walkthrough. The bundle preserves remittance100+80/provider−30/batch150, cash150 matched100 then50,
+posting header150/entries180 and optional correction140/release facts. Explicit synthetic settings,
+known external-config exclusions, exact local/Clerk actor bindings and migration/fixture hashes
+bound the check. Success does not verify Clerk authentication, start servers, provision data or
+create a recording. Prior115 tests/checks30/CLI types/API build and the read-only33-migration smoke
+remain fixture/database proofs only. Generated Prisma could reload repository dotenv after
+validation. A private0700 generated-client/bundled runtime now has no configured env paths, minimal
+generator/esbuild child environments and an allowlisted command environment with closed reports.
+Fresh122/122 root tests plus15/15 helper tests pass across two runs, including zero guarded dotenv
+reads, and the actual isolated33-migration CLI smoke retained unchanged data. Current API/dependency
+checks24/24, strict CLI types and API build pass; prior30/30 was a broader pre-fix scope. Installed
+Node/pnpm/tsx are trusted and already-executed parent
+preloads cannot be undone. The smoke used nonworking Clerk keys and does not verify authentication. ADR-081 is committed as `8dd6f11`.
+Next: ADR-083 create-only guarded local provisioning, then an isolated web/API launcher without
+live-setting dotenv symlinks, followed by an actual
+authenticated rehearsal before recording and landing-page asset integration. The legacy seed/
+simulator is not the supported path and no demo-ready claim is made. FW-43 source observations,
+reviewed legacy binding/additive snapshots, remaining corrections/ownership/cash attribution and
+the complete original scope stay open. No schema, public API or product UI change, provider action,
+merge or deployment is introduced by this bounded preparation.
+
+Previous local progress (2026-10-14, ADR-081; committed as `8dd6f11`): FW-44 adds reviewed exact-source posting-entry
 relationships to imported claims and optional immutable source lines. Supplied source-line and
 procedure identity must agree; without a source line, a raw procedure stays unresolved in a
 claim-only link. Latest observed accepted evidence and claim version/hash bind review. Immutable
@@ -20,9 +43,8 @@ found no actionable issue. Synthetic1280/390 actual-page/hook/SDK captures have 
 axe violations, independent review ship and no durable design delta. Detector126 has no verdict;
 this is not authenticated full-app evidence. Full API passes 956/956 across 44 files; affected
 lint/typecheck 30/30 and API/Lambda/Next production builds pass. ADR-080 is committed as `710060b`.
-The immediate independent slice is FW-45 preparation: guarded synthetic fixtures/manifest,
-read-only preflight and a reproducible walkthrough, followed by authenticated rehearsal and
-finished-video support. The planned exact-identity
+That checkpoint's FW-45 preparation is now implemented locally in ADR-082 above; guarded setup,
+authenticated rehearsal and finished-video integration still follow. The planned exact-identity
 fixture chain uses CSV claims, remittance100/80, provider-30/batch150, cash150 matched100 then50,
 posting header150/entries180 and a correction140/release chapter on a dedicated localhost demo DB.
 Authenticated rehearsal/recording and asset integration follow; no recording asset exists yet.

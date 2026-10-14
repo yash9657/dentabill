@@ -439,3 +439,15 @@ manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
 - `apps/web/src/components/dashboard/posting-evidence/posting-relationships.tsx`: target review, current/stale/released history and explicit full release within the existing posting evidence page.
 - `apps/web/src/lib/posting-evidence/use-posting-relationships.ts`: user/practice-scoped SDK reads/mutations and stable uncertain retry commands.
 - `apps/api/test/fixtures/posting-relationships` and `apps/web/public/examples/synthetic-posting-associations.json`: fabricated exact-source claims/lines and header150/entries180 examples, without authenticated exports or external posting.
+
+## Synthetic demo preparation (FW-45; ADR-082, local only)
+
+- `apps/web/public/examples/demo/manifest.json` and sibling CSV/JSON files: connected synthetic identity/financial bundle and content hashes, including optional correction/release chapter.
+- `apps/api/src/lib/demo/bundle.ts`: bounded file/hash admission through existing import contracts plus cross-file identity and financial checks; no imports or database mutations.
+- `apps/api/src/lib/demo/preflight-policy.ts`: dedicated localhost/demo-name, local-origin, explicit synthetic configuration, Clerk format and exact actor/migration assessment.
+- `apps/api/src/lib/demo/preflight-database.ts`: local migration checksum reader and read-only repeatable-read database metadata inspection.
+- `apps/api/scripts/demo-preflight.mts` and API package script `demo:preflight`: outer configuration admission, private-runtime execution with an explicit environment allowlist, closed JSON reports and cleanup; no seed/reset or app launcher behavior.
+- `apps/api/src/lib/demo/isolated-runtime.ts`: private0700 temporary schema/client/native engine, generated env-path checks, minimal generator/esbuild child environments and bundled workspace modules; only private Prisma and trusted logger packages remain external.
+- `apps/api/src/lib/demo/preflight-command.ts`: bundle/migration/read-only database checks executed only inside that private runtime.
+- `apps/api/src/lib/demo/{bundle,bundle-flow,preflight-policy,preflight-database,preflight-cli,isolated-runtime}.test.ts`: fixture/workflow checks and isolation/process regression proof; root122 and helper15 pass in separate runs; current API/dependency checks24/24, strict CLI types and API build pass.
+- `DEMO.md`: current-screen walkthrough, expected source facts, optional chapters and recording boundaries; authenticated rehearsal and the landing video asset remain separate deliverables.

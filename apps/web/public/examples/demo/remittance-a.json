@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "sourceNamespace": "synthetic-demo-payer",
+  "sourceRecordId": "demo-remittance-a",
+  "sourceDocumentId": "synthetic-demo-remittance-document",
+  "sourceVersion": "synthetic-v1",
+  "kind": "PAYMENT",
+  "reversesSourceRecordId": null,
+  "currency": "USD",
+  "reportedAmount": "100.00",
+  "payerName": "Delta Dental PPO (synthetic)",
+  "payerIdentifier": "SYNTHETIC-DEMO-PAYER",
+  "payerIdentifierSystem": "SYNTHETIC",
+  "payerClaimControlNumber": "SYNTHETIC-DEMO-CONTROL-A",
+  "sourceCoverageId": null,
+  "paymentTrace": "synthetic-demo-shared-trace",
+  "paymentTraceType": "SYNTHETIC",
+  "paymentTraceIssuer": "Synthetic demo payer",
+  "reportedDate": "2026-10-13",
+  "sourceStatus": "synthetic-reported-only",
+  "lineDetailCompleteness": "COMPLETE",
+  "allocations": [
+    {
+      "sourceLineId": "demo-line-a",
+      "amount": "100.00",
+      "sourceStatus": "synthetic-reported-only"
+    }
+  ],
+  "adjustments": []
+}

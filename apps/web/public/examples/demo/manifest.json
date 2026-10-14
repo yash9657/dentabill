@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "financial-review-v1",
+  "synthetic": true,
+  "sourceSystem": "OPEN_DENTAL",
+  "sourceNamespace": "synthetic-demo-office",
+  "payerNamespace": "synthetic-demo-payer",
+  "files": [
+    {
+      "name": "claims.csv",
+      "kind": "CLAIMS_CSV",
+      "sha256": "1edd70ec32ccdcc032b78ca42f780a9e9dfc975faa4e2c186ebfac51f4dda297"
+    },
+    {
+      "name": "remittance-a.json",
+      "kind": "CLAIM_REMITTANCE",
+      "sha256": "11d519b1925d177e9bc40b55541faf5d6415cff5810448d1df86567ff5d6a97d"
+    },
+    {
+      "name": "remittance-b.json",
+      "kind": "CLAIM_REMITTANCE",
+      "sha256": "f3c4fa89b160a262ba7afe4938ea59982a77a6bf6be40192c402caeb1940d44b"
+    },
+    {
+      "name": "batch.json",
+      "kind": "REMITTANCE_BATCH",
+      "sha256": "867c765472028bf4ca0952783fbbf60de4df34df869aa8d1d8b84967a860e3dd"
+    },
+    {
+      "name": "cash.json",
+      "kind": "CASH_EVIDENCE",
+      "sha256": "758d408b0bcafa9299c27d4082ced1635dafbf03834230bf7e4053665b49f37b"
+    },
+    {
+      "name": "posting.json",
+      "kind": "POSTING_EVIDENCE",
+      "sha256": "e50c210a1eff3b8cdf0a0354fff084d724651d064bc9f7a2c740705ed55fff64"
+    },
+    {
+      "name": "batch-correction.json",
+      "kind": "BATCH_CORRECTION",
+      "sha256": "f111023f15a0991e772732cdb84e4d9cdc7c86227fc93d68524af15be9b9ee57"
+    }
+  ],
+  "claims": [
+    {
+      "sourceClaimId": "demo-claim-a",
+      "claimNumber": "DEMO-CLAIM-A",
+      "remittanceFile": "remittance-a.json"
+    },
+    {
+      "sourceClaimId": "demo-claim-b",
+      "claimNumber": "DEMO-CLAIM-B",
+      "remittanceFile": "remittance-b.json"
+    }
+  ],
+  "expected": {
+    "claimReported": "180.00",
+    "providerAdjustment": "-30.00",
+    "batchNet": "150.00",
+    "cash": "150.00",
+    "postingHeader": "150.00",
+    "postingEntries": "180.00",
+    "postingDifference": "-30.00",
+    "partialMatches": ["100.00", "50.00"],
+    "correctedBatchNet": "140.00"
+  }
+}

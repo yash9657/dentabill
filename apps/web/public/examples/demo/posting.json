@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "evidenceBasis": "PMS_PAYMENT_RECEIPT",
+  "sourceSystem": "OPEN_DENTAL",
+  "sourceProduct": "Synthetic demo receipt export",
+  "sourceNamespace": "synthetic-demo-office",
+  "sourceReceiptId": "demo-posting-receipt",
+  "sourceRecordId": "demo-posting-record-1",
+  "sourceSequence": 1,
+  "sourceVersion": "synthetic-v1",
+  "sourceDocumentId": "synthetic-demo-posting-document",
+  "observedAt": "2026-10-14T12:00:00.000Z",
+  "status": "POSTED",
+  "sourceStatus": "synthetic-posted-as-supplied",
+  "sourceIsPartial": false,
+  "currency": "USD",
+  "amount": "150.00",
+  "sourceAmount": "-150.00",
+  "sourceSignConvention": "DEBIT_POSITIVE",
+  "sourceEntryDate": "2026-10-13",
+  "sourceIssuedDate": "2026-10-13",
+  "paymentTrace": "synthetic-demo-shared-trace",
+  "sourceDepositId": "synthetic-demo-deposit",
+  "detailCompleteness": "COMPLETE",
+  "entries": [
+    {
+      "sourceEntryId": "demo-posting-entry-a",
+      "sourceClaimId": "demo-claim-a",
+      "sourceLineId": "demo-line-a",
+      "sourceProcedureId": "demo-procedure-a",
+      "entryKind": "PAYMENT",
+      "sourceStatus": "synthetic-payment-as-supplied",
+      "sourceVersion": "synthetic-entry-v1",
+      "sourceIsTransfer": false,
+      "amount": "100.00",
+      "sourceAmount": "-100.00",
+      "sourceSignConvention": "DEBIT_POSITIVE"
+    },
+    {
+      "sourceEntryId": "demo-posting-entry-b",
+      "sourceClaimId": "demo-claim-b",
+      "sourceLineId": null,
+      "sourceProcedureId": "demo-unresolved-procedure-b",
+      "entryKind": "TRANSFER",
+      "sourceStatus": "synthetic-transfer-as-supplied",
+      "sourceVersion": "synthetic-entry-v7",
+      "sourceIsTransfer": true,
+      "amount": "80.00",
+      "sourceAmount": "80.00",
+      "sourceSignConvention": "CREDIT_POSITIVE"
+    }
+  ]
+}

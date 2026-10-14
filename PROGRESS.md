@@ -3,13 +3,38 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-14
-**Current work:** reviewed posting relationships and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
+**Current work:** synthetic demo preparation and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
 `codex/w0-containment`. The full parity assignment remains incomplete; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice — FW-44 posting-entry relationships (ADR-081), locally verified:**
+**Latest local slice — FW-45 synthetic demo preparation (ADR-082), locally verified:**
+A connected public fixture bundle and manifest now describe the actual financial-review workflow:
+claims/remittance100+80, provider adjustment−30/batch150, cash150 matched100 then50, posting
+header150/entries180 and an optional correction140/release chapter. A read-only CLI preflight
+requires an exclusive localhost `dentabill_demo_` database, exact local/Clerk actor bindings,
+current migration checksums, verified fixture hashes and explicit synthetic configuration.
+Known external provider/cloud/billing/mail settings are rejected; Clerk test-key presence is
+reported as not verified. The guide follows existing screens and replaces the outdated seed/
+simulator instructions. It does not provision the database/actor, launch servers or record video.
+Generated Prisma could reload repository dotenv after validation, so the initial115-test baseline
+did not prove startup isolation. The private0700 client/bundled runtime now uses no configured env
+paths, minimal generation/build environments and an allowlisted command environment. Fresh122/122
+checks plus15/15 helper cases pass in separate runs, including zero guarded dotenv reads. A fresh
+isolated33-migration CLI smoke passed with unchanged1-org/1-actor/0-claim/0-audit data and nonworking
+Clerk keys. Current affected API/dependency checks24/24, strict CLI types and API production build
+pass; the earlier30/30 was a broader pre-fix scope. Installed Node/pnpm/tsx
+remain trusted; parent preloads already executed cannot be undone. Authentication stays unverified. ADR-081 is committed as
+`8dd6f11`. No schema, public API or product UI change is part of this bounded preparation.
+
+**Immediate next:** ADR-083 create-only guarded local provisioning, then an isolated web/API
+launcher and actual authenticated rehearsal. Do not reintroduce live settings through dotenv symlinks. Record and integrate the
+finished landing-page asset afterward; no recording asset or demo-ready claim exists yet. FW-43
+source observations/reviewed legacy binding/additive snapshots, remaining financial correction/
+ownership/allocation work and the full original scope remain open.
+
+**Previous local slice — FW-44 posting-entry relationships (ADR-081), committed as `8dd6f11`:**
 Reviewed associations now bind a current accepted posting entry to an exact-source imported claim
 and, when supplied, its immutable source line. Supported source system, namespace and claim ID
 must agree; a source line requires an exact local line and any supplied procedure ID must agree.
@@ -27,15 +52,6 @@ ship and separate documentation inspection found no durable system change. Detec
 verdict; this does not verify the authenticated full app. Full API passes 956/956 across 44 files.
 Affected lint/typecheck 30/30 and API/Lambda/Next production builds pass. ADR-080 is committed as
 `710060b`; no real source integration, financial action, merge or deployment ran.
-
-**Immediate next:** prepare FW-45: a guarded synthetic fixture pack/manifest, read-only preflight
-and reproducible walkthrough. Use a dedicated localhost demo database and a coherent CSV/
-remittance/batch/cash/posting fixture chain, followed by the correction/release chapter. Actual
-authenticated rehearsal, recording and landing-page asset integration follow; no recording asset
-exists yet.
-The existing seed/simulator paths are not demo-ready and retain stale recovered-money assumptions. FW-43 canonical source observations, reviewed legacy binding and additive snapshots/
-application, claim-remittance correction chains, explicit cross-batch ownership transfer, claim
-cash allocation/attribution and the full remaining plan remain required.
 
 **Previous local slice — FW-44 batch source corrections (ADR-080), committed as `710060b`:**
 Migration 32 adds immutable stable batch identity, source revision and permanent member ownership

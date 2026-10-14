@@ -352,3 +352,32 @@ rejected revisions and receipt changes until explicit full release. Release rema
 stale evidence without mutating amounts, claim workflow, source facts, cash or settlement.
 Migration 33 has no historical backfill. Local verification is tracked in ADR-081; authenticated
 connectors, production retention/erasure and deployment evidence remain open.
+
+### Synthetic demo preparation (ADR-082; local only)
+
+The preflight requires a dedicated localhost/loopback `dentabill_demo_` database and consistent
+local origins. Explicit synthetic mode and known external-provider/cloud/billing/mail/telemetry
+configuration exclusions prevent a successful check with inherited live-service settings. Clerk
+test-key format is admitted intentionally, but success explicitly leaves authentication unverified.
+It does not contact Clerk or authorize a provider/financial action.
+
+Initial tests and read-only smoke did not prove startup isolation: generated Prisma could load
+repository dotenv after validation. The remediation validates outer configuration before imports,
+then generates a fresh client from the tracked schema inside a private0700 temporary directory.
+Generated environment paths must be absent; generator and esbuild children receive minimal explicit
+environments. Workspace modules are bundled and the command gets an environment allowlist; only
+private Prisma and trusted pino/pino-pretty stay external. NODE_PATH, ESBUILD_BINARY_PATH,
+DOTENV_CONFIG_PATH and DEBUG are now rejected alongside NODE_OPTIONS. Closed JSON reports and
+private cleanup bound failures. Fresh122 tests plus15 helper cases and an isolated read-only smoke
+pass, along with current API/dependency checks24/24, strict CLI types and API build. Installed
+Node/pnpm/tsx/dependencies are trusted; the guard cannot undo parent preloads already executed.
+
+Database reads run in a repeatable-read READ ONLY transaction. Actual database name, exact local/
+Clerk actor bindings, stored OWNER/ADMIN role, exclusive practice/actor counts and every migration
+checksum/status must agree. Fixture hashes, strict parsers and bounded regular-file/symlink checks
+protect the connected local bundle; these checks do not establish source authenticity or prove
+patient-data provenance. Diagnostics expose closed codes without credentials, database URLs or
+raw fixtures. No reset, migration application, actor provisioning, data import or audit write is
+performed by preflight. Isolated setup, an environment-clean launcher and actual authenticated
+rehearsal remain required before recording. Legacy seed/simulator and browser test-header bypasses
+are not the verified path; full external and production evidence gates remain open.

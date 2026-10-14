@@ -18,6 +18,7 @@
     "dev": "tsx watch src/server.ts",
     "seed:demo": "tsx scripts/demo-seed.mts",
     "demo:call": "tsx scripts/simulate-live-call.mts",
+    "demo:preflight": "tsx scripts/demo-preflight.mts",
     "gen:openapi": "tsx scripts/dump-openapi.mts",
     "build:vercel": "pnpm --filter @dentabill/db db:generate && node scripts/build-vercel.mjs",
     "build:lambda": "pnpm --filter @dentabill/db db:generate && node scripts/build-lambda.mjs"

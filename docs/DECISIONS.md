@@ -1959,3 +1959,98 @@ recording asset exists yet. FW-43 canonical source observations, reviewed legacy
 source snapshots/application, claim-remittance correction chains, explicit cross-batch ownership
 transfer, claim cash allocation/attribution, real connectors and the full remaining plan stay open. Local associations do not prove external
 posting, source authenticity, cash receipt, settlement or recovered revenue.
+
+## ADR-082 — Connected synthetic demo bundle and read-only preparation gate
+
+**Date:** 2026-10-14. **Status:** local preparation and startup isolation implemented and verified.
+ADR-081 is committed as `8dd6f11`. No migration, public API or product UI change is introduced.
+Authenticated rehearsal, recording and landing-page asset integration remain unverified/open.
+
+The earlier seed/simulator path used stale financial assumptions and was not an authenticated
+walkthrough of the current source-review workflow. Prepare one coherent synthetic fixture chain
+and check a dedicated local environment without silently creating, resetting or modifying it.
+
+1. `apps/web/public/examples/demo/manifest.json` defines `financial-review-v1` and hashes the
+   connected custom fixtures. The existing CSV/financial parsers validate exact claim/line/
+   namespace references, source signs and expected totals. The sequence is remittance100+80,
+   provider adjustment−30/batch150, cash150 matched100 then50, posting header150/entries180 and
+   optional same-batch correction140. Posting claim A has an exact line; claim B's transfer has
+   no line and its raw procedure reference remains unresolved. These are fabricated manual
+   inputs, not authenticated exports or evidence of source/bank verification or recovered revenue.
+2. Bundle admission uses strict manifest/contract shapes, bounded regular files, path-safe names,
+   symlink refusal, SHA-256 checks and cross-file identity/financial invariants. Hashes establish
+   consistency with this local manifest; they do not authenticate a provider. The preflight does
+   not import, accept, match, post or otherwise apply the bundle.
+3. `demo-preflight.mts` accepts only explicit organization/user and Clerk organization/user IDs.
+   It validates configuration before application/client imports and does not call the legacy
+   seed/reset/simulator. Database targets must use
+   PostgreSQL on localhost/loopback with a `dentabill_demo_` name and only optional public schema;
+   application/API origins must be distinct consistent local HTTP origins. Explicit development,
+   inline jobs, synthetic analysis, disabled auto-transition and demo interlocks are required.
+   Known live-provider/cloud/billing/mail/telemetry settings, Redis/SQS URLs, model-release
+   selectors, Clerk webhook secret, NODE_OPTIONS, NODE_PATH, ESBUILD_BINARY_PATH,
+   DOTENV_CONFIG_PATH and DEBUG are rejected. Clerk test-key format is the
+   intentional exception, and is never reported as successful authentication.
+4. The database inspector uses a repeatable-read transaction set READ ONLY and verifies the
+   actual database name/mode. Every applied migration must match the current local checksum,
+   be finished and not rolled back, with no missing/duplicate/extra migration. The exact local
+   organization/user must bind to the supplied Clerk IDs and stored OWNER/ADMIN role; any other
+   practice or actor fails the exclusive-demo check. It reads binding/count metadata without
+   selecting other tenant facts or writing audit/application records.
+5. Successful output is limited to safe status/scenario/manifest-hash/migration-count/role and explicit
+   `CLERK_TEST_CONFIGURATION_PRESENT_NOT_VERIFIED`, rehearsal `NOT_VERIFIED` and recording
+   `NOT_VERIFIED` markers. Failure exposes a closed reason code, without URLs, credentials or
+   raw fixtures. Preflight success cannot stand in for browser authentication, provider proof,
+   actor provisioning, server startup or a recording.
+6. `DEMO.md` follows the implemented screens with the connected bundle and separates optional
+   call/correction chapters. Claims and evidence remain manual/synthetic, cash stays unallocated,
+   and no recovered-money narrative is invented. The old `seed:demo --reset`, 40-claim seed,
+   `demo:call` and `simulate-live-call.mts` are not the supported walkthrough. Guarded local
+   provisioning and an environment-clean launcher remain separate work; raw `pnpm dev`, dotenv
+   symlinks or test-header browser bypasses are not a verified launch path.
+
+7. Startup isolation uses a private runtime because the repository's generated Prisma client can
+   auto-load `packages/db/.env` through `warnEnvConflicts` after initial configuration validation.
+   The outer CLI now validates first, then `prepareIsolatedDemoRuntime` creates a private0700
+   temporary directory, copies the tracked schema and uses the installed pinned Prisma generator/
+   client with the native engine and automatic installation disabled. Generated metadata must
+   contain no configured environment-file paths, and the private tree must contain no dotenv file.
+   Generation and esbuild run as separate children with minimal explicit environments. All workspace
+   application modules are bundled; only the fresh private Prisma client and trusted pino/pino-pretty
+   packages remain external. The command executes with an explicit environment allowlist and its
+   output must match the closed JSON report schema. Temporary artifacts are cleaned up on success
+   and failure. This trusts the installed Node/pnpm/tsx/dependency toolchain and cannot undo a parent
+   preload that already executed; it is not a hostile-host sandbox or authenticated app launcher.
+
+**Local verification:** the earlier115 tests and read-only
+smoke remain fixture/financial/database evidence but did not prove startup isolation. Fresh
+root checks pass122/122 across5 files in27.53s (bundle29, HTTP flow1, policy82, database4, CLI6;
+`/tmp/dentabill-demo-isolated-focused.log`). The isolated-runtime helper separately passes15/15
+in5.72s (`/tmp/dentabill-demo-isolated-runtime.log`), including generated metadata admission,
+zero dotenv reads under the guard, private Prisma engine initialization, bundled workspace code
+and rejected override canaries. This is137 passing cases across two runs, not one combined run.
+An admitted real private command against an unreachable database returns the closed
+DEMO_DATABASE_UNAVAILABLE report. Independent review found no remaining actionable issue.
+
+A fresh positive smoke of the actual isolated CLI passed after all33 migrations with an exact
+OWNER binding and readOnly status (`/tmp/dentabill-demo-isolated-smoke.log`). Migration setup used
+a private copied schema/migration chain, pinned CLI and explicit fresh environment. Nonworking
+synthetic Clerk test keys left authentication, rehearsal and recording NOT_VERIFIED. Postcheck
+retained1 organization/1 actor/0 claims/0 audits; only the newly owned ephemeral database was
+removed afterward. Provisioning/dropping belongs to the smoke harness, not preflight. The earlier
+manifest formatting changed its own hash but no fixture hashes; no stale hash is pinned as current.
+
+The runtime remediation is verified. Current affected API/dependency lint/typecheck passes24/24
+(22 cached,19.697s; `/tmp/dentabill-demo-isolated-checks.log`), and strict CLI.mts typecheck and
+API production build pass. The earlier30/30 used a broader pre-fix filter; it is not the current
+remediation check count. Test-flow cleanup stays limited to the
+two explicit localhost test databases. No additional browser, Next or Lambda build is claimed
+for this slice; there is no product UI or runtime API import change. No authenticated Clerk
+rehearsal, recording, landing-page asset, production change or real provider/financial action
+is claimed.
+
+Next: ADR-083 create-only guarded local provisioning, then an isolated web/API launcher without
+dotenv symlinks that reintroduce live configuration. An authenticated walkthrough follows before
+recording and integrating the finished asset. FW-43 source observations, reviewed legacy binding,
+additive snapshots/application, claim-remittance corrections, cross-batch ownership transfer,
+claim cash allocation/attribution and the complete remaining plan stay open.

@@ -738,3 +738,29 @@ reservations; never release or delete records merely to roll back code. Local DB
 verification, affected lint/typecheck 30/30 and API/Lambda/Next builds pass as recorded in ADR-081. Real source authentication, external posting, bank cash, settlement,
 retention/restore and production rollout remain separate gates; no provider credential activates
 this local manual workflow. ADR-080 is the preceding committed slice (`710060b`).
+
+### Local synthetic demo preparation (ADR-082; no deployment change)
+
+FW-45 preparation adds a connected public fixture bundle, strict parser/manifest checks, a
+read-only local preflight and the current-screen guide in `DEMO.md`. There is no schema migration,
+public API change or deployed UI feature in this slice. Require an exclusive localhost database
+named `dentabill_demo_…`, current exact migration checksums, intended local/Clerk actor bindings
+and explicit synthetic local configuration. Known cloud/provider/billing/mail settings must be
+absent; Clerk test-key presence alone is not authentication evidence.
+
+The preflight neither applies migrations nor creates/resets a database, actor or fixture data.
+It does not start the app, run old seeds/simulators or install a landing video. Prior115 tests,
+checks30/30, CLI types/API build and the read-only smoke establish the earlier fixture/database
+checkpoint only. Generated Prisma could reload dotenv after validation; startup-isolation proof
+was missing. The remediation creates a private0700 temporary schema/client with native engine and
+no env paths, bundles workspace modules, runs generator/esbuild in minimal-env children and executes
+the command with an explicit environment allowlist and closed reports. Private artifacts are cleaned
+up; installed Node/pnpm/tsx remain trusted and parent preloads already executed cannot be undone.
+Fresh122 tests plus15 separate helper cases and the actual isolated read-only33-migration smoke
+pass, plus current API/dependency checks24/24, strict CLI types and API build (ADR-082). The earlier
+30/30 had a broader pre-fix scope. ADR-083 create-only guarded provisioning and the isolated
+web/API launcher remain the next steps. Guarded setup and an environment-clean launcher must precede
+an actual authenticated rehearsal; a completed recording and asset integration follow separately.
+Do not treat test-header HTTP flow, a synthetic-key positive preflight or raw development startup
+as a production/Clerk/browser certification. The full AWS/connector/financial rollout gates and
+FW-43 source reconciliation remain open.

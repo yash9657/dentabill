@@ -4,6 +4,62 @@ _Last updated: 2026-10-14 (full-scope goal active; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
+### 2026-10-14: FW-45 connected demo preparation verified (ADR-082)
+
+ADR-081 is committed as `8dd6f11`. This bounded FW-45 slice supplies the connected synthetic
+bundle in `apps/web/public/examples/demo/`, a strict manifest/verifier, a read-only
+`demo:preflight` CLI and the rewritten `DEMO.md` walkthrough. No public API, product UI or
+schema changed. The entire implementation goal remains ACTIVE.
+
+The real HTTP/Postgres proof imports two exact-source claims, accepts reports 100 + 80,
+reviews the provider adjustment −30 / batch net 150 and cash 150, records matches 100 + 50
+and exact-line/claim-only posting associations (header 150 / details 180). Correcting the
+batch to 140 retains stale reservations until both explicit full releases; rematching 140
+leaves cash capacity 10. Claim/source-line records remain unchanged, and this proof creates
+no calls, inference or billing records.
+
+Preflight requires an explicit localhost `dentabill_demo_<run>` target, Clerk development
+key formats, exact organization/actor binding, OWNER/ADMIN, local origins, inline synthetic
+execution and absent external-provider/cloud/mail/billing/telemetry configuration. It checks
+all migration checksums and local bindings in a Postgres read-only transaction. Authentication,
+authenticated rehearsal and recording remain explicitly NOT_VERIFIED.
+
+Review discovered that the normal generated Prisma client could load `packages/db/.env`
+after initial validation. The fixed command stages a private 0700 runtime, generates a fresh
+native client from the copied tracked schema and rejects configured dotenv paths. Generation
+and pinned esbuild bundling run in separate minimal-environment children; application execution
+gets only approved values. All workspace application modules are bundled; private Prisma and
+pinned logger packages are the only externals. Reports contain bounded metadata/fixed codes,
+and the private directory is removed. The installed Node/pnpm/tsx launcher is trusted; command
+checks cannot undo preloads already executed by that launcher.
+
+Verification: 137 passing cases across two runs: five files / 122 cases (bundle 29, real HTTP
+flow 1, policy 82, DB 4, CLI 6; 27.53s), plus isolated-runtime 15 (5.72s). The latter proves
+zero dotenv reads, original sentinel/credential absence, private engine initialization and
+ignored ambient esbuild override; the CLI suite exercises the actual bundled command.
+Affected API/dependency lint/types pass 24/24 (22 cached); explicit strict `.mts` types and
+API production build pass. Independent read-only review has no remaining finding.
+
+A fresh positive CLI smoke copied schema/migrations to private staging, applied all 33 to a
+new owned local database, bound one synthetic OWNER and passed using deliberately nonworking
+Clerk test keys. Postcheck remained 1 organization / 1 actor / 0 claims / 0 audits; the owned
+test database was removed. This proves isolated preflight behavior, not a real Clerk session.
+Logs: `/tmp/dentabill-demo-isolated-focused.log`, `...-runtime.log`, `...-checks.log`,
+`...-cli-types.log`, `...-api-build.log`, `...-smoke.log`, `...-cli-positive.log`,
+`...-postcheck.log`, `...-drop-db.log`. The earlier 115-case/30-check smoke predates the isolation
+fix and is not its proof. Shared and isolated local test databases are available; keep heavy
+checks serial because measured host memory pressure caused paging. No unrelated processes
+were stopped.
+
+**Immediate next task:** implement create-only local demo provisioning against a fresh admitted
+database, pinned migrations and the exact intended Clerk organization/user. Refuse existing
+databases; preserve partial failures rather than resetting or rebinding. Then implement the
+isolated API/web launcher (Next also loads dotenv from its app directory), rehearse real Clerk
+authentication and the current durable FakeRetell/synthetic-summary path, and prepare the user
+recording. Integrate the actual recording/poster/captions into the landing page and verify
+playback once available. No recording asset exists. Continue FW-43 and the remaining complete
+implementation plan afterward; synthetic demo evidence does not establish real connectors.
+
 ### 2026-10-14: posting relationships verified; demo preparation next
 
 The user requested continued completion and added the need to conduct a full app demo and
@@ -1582,10 +1638,10 @@ Four further defects were invisible to any static check and are recorded as **AD
 
 ## Next task
 
-Follow the latest ADR-081 checkpoint at the top of this file and
-`docs/HANDOFF_2026-10-13.md`. Implement FW-45 guarded demo preparation next, then continue
-FW-43 and the entire active gap-closure goal. No recording, authenticated rehearsal or
-production readiness is yet verified.
+Follow the latest ADR-082 checkpoint at the top of this file and
+`docs/HANDOFF_2026-10-13.md`. Finish FW-45 guarded local demo provisioning/launch and actual
+authenticated rehearsal, then recording integration and FW-43/full-scope work. The bundle,
+preflight and walkthrough are locally verified; recording and production readiness are not.
 
 ## Historical next task — superseded by the current handoff
 

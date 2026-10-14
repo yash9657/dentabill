@@ -13,6 +13,27 @@ Evidence labels:
 
 ## Local implementation evidence added after the baseline
 
+FW-45 synthetic demo preparation (ADR-082) is **repository/local synthetic evidence**. A connected
+manifest and existing-parser contract keep CSV claims, remittance100/80, provider−30/batch150,
+cash150 partial matches, posting header150/entries180 and correction140 in one identity chain.
+The dedicated localhost preflight checks explicit synthetic settings, known external-config
+exclusions, exact local/Clerk actor bindings, migration checksums and fixture hashes. Database
+inspection runs read-only. Clerk test-key presence remains NOT_VERIFIED authentication; it
+is not an account probe or authenticated browser rehearsal. Prior115 tests/checks30/CLI types/API
+build and the positive33-migration smoke remain fixture/database evidence only. They do not prove
+startup isolation: generated Prisma could load repository dotenv after configuration admission.
+A private0700 client/runtime now removes generated env paths, bundles workspace modules and uses
+minimal generator/build environments plus an allowlisted execution environment and closed reports.
+Fresh122/122 root tests and15/15 helper tests pass across two runs, including zero guarded dotenv
+reads. A fresh isolated33-migration CLI smoke retained1org/1actor/0claims/0audits unchanged using
+nonworking Clerk keys. Current API/dependency checks24/24, strict CLI types and API build pass;
+earlier30/30 was a broader pre-fix scope. Installed Node/pnpm/
+tsx are trusted; parent preloads already executed cannot be undone. No authenticated rehearsal
+is claimed. The guide uses actual
+screens but no recording asset or landing-page video is supplied. Guarded setup/launcher,
+authenticated rehearsal and recording/asset integration follow. ADR-081 is committed as `8dd6f11`;
+FW-43, financial follow-ons and all original real-provider/production gates remain open.
+
 FW-44 reviewed posting-entry relationships (ADR-081) are **repository/local synthetic evidence**.
 Exact supported source system, namespace and claim identity resolve imported claims, with an exact
 immutable line/procedure check when a source line is supplied. Without a source line, raw procedure
