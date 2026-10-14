@@ -1703,3 +1703,51 @@ Four real-Postgres route regressions fail before the fix and pass after it, prov
 ordering, shared practice quotas, different-practice isolation and blocked writes. Focused
 rate-limit/me/calls77/77 pass. The test call route uses a nonexistent synthetic claim and cannot
 create a call intent or external call. No schema, provider configuration or external action changed.
+
+## ADR-078 — Independent PMS posting observations and retained entry identity
+
+**Date:** 2026-10-14. **Status:** local synthetic implementation validated; not deployed, no authenticated PMS connector or external financial action.
+
+PMS payment headers and procedure-payment entries are separate source facts. Open Dental's
+batch API allows a payment header that differs from its claim-procedure payment sum; entry
+records can be detached and attached to another partial payment. A payment-record observation
+is neither bank receipt nor authorization to write a payment.
+
+1. Migration30 adds immutable PostingSourceReceipt/Evidence/Review/Entry. Identity is scoped to
+   organization/source system/namespace/receipt ID; the product is stable within that source
+   scope. Exact source-record replay and unique receipt sequence prevent silent replacement.
+   Explicit positive source sequence orders the full snapshot; opaque versions, observation
+   times and arrival order never substitute. Child source versions are retained separately.
+2. The custom PMS_PAYMENT_RECEIPT input preserves nullable signed header and entry amounts,
+   original signs, raw statuses and partial/transfer flags, source entry/issued dates, deposit/
+   trace references and claim/line/procedure IDs. Source entry ID is distinct from procedure ID.
+   PAYMENT/TRANSFER/ADJUSTMENT/UNKNOWN categories remain importer assertions. Native source
+   adapters must interpret documented sentinel dates as absent, not meaningful posting dates.
+3. Header and entry totals need not match. Known listed subtotal includes every supplied entry
+   kind; unknown entry count remains visible. A complete total and header difference exist only
+   with COMPLETE detail and known entry amounts (and a known header for the difference). No
+   difference becomes a fabricated adjustment, allocation or paid amount. REMOVED has no amount
+   or entries and does not establish a refund. Partial and unknown facts remain reviewable.
+4. ACCEPT requires the latest observed sequence and a fresh evidence/prior-review/ledger token;
+   older evidence may be rejected. Newer unreviewed or rejected evidence makes the prior accepted
+   observation stale. Exact actor/command/token/key retries return the original immutable review.
+5. One source entry cannot be held by two accepted receipt histories in the same source scope.
+   The most recent accepted COMPLETE snapshot replaces its retained entry IDs; accepted REMOVED
+   clears them. Later accepted PARTIAL/ABSENT snapshots union observed IDs with retained history,
+   rather than freeing omitted entries. Rejected/unreviewed revisions never release identities.
+   This reservation is source membership only, not a monetary reservation or cash allocation.
+6. Accepted child rows mirror every payload entry/index exactly, including nullable values;
+   rejected reviews create none. Scoped restrictive references, deferred seals, organization
+   tuple admission, stored role checks, audit and closed errors protect API and direct SQL writes.
+   Raw/canonical/JSONB inputs256KiB,100 entries and20-record/2MiB pages bound the workflow.
+7. The five API handlers, SDK and dashboard support import, inbox/history, preview and review.
+   References remain UNLINKED: acceptance creates no local claim/procedure relationship or total.
+   MANUAL_UPLOAD provenance and UNVERIFIED source/bank verification/settlement remain explicit.
+   A separate evidence-bound relationship review and real supported read/write connectors are
+   required before posting can be reconciled to claims or an external payment action authorized.
+
+Primary documentation refreshed2026-10-14:
+[Open Dental ClaimPayments](https://www.opendental.com/site/apiclaimpayments.html),
+[Open Dental ClaimProcs](https://www.opendental.com/site/apiclaimprocs.html).
+This design preserves their distinct identities and partial-header behavior without claiming
+that the custom manual input is a native export, authenticated API capture or connector.

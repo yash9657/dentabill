@@ -4,6 +4,53 @@ _Last updated: 2026-10-14 (full-scope goal active; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
+### 2026-10-14: independent PMS posting receipt milestone (ADR-078)
+
+FW-44 independent PMS posting receipts (ADR-078) now preserve immutable source receipt identity,
+ordered full-snapshot revisions, raw source statuses/flags/dates/versions and signed header/entry
+amounts. Header150 and complete entries180 remain distinct with difference−30; no adjustment or
+claim payment is invented. Partial/unknown observations are reviewable as source facts, with
+UNLINKED claim references and UNVERIFIED source/bank verification/settlement. The newest accepted
+COMPLETE/REMOVED revision resets retained source-entry membership; later PARTIAL/ABSENT revisions
+retain prior IDs and add newly observed ones. Rejected/unreviewed revisions cannot free entry IDs.
+Fresh token, exact retry, stored-role, tenant, audit, immutable mirror and race invariants apply
+to API and direct SQL. Five handlers, generated SDK and `/dashboard/posting-evidence` provide
+import, paged inbox/history, preview and explicit accept/reject.
+
+Migration30 `20261014180000_posting_source_evidence` applied successfully first try to localhost
+isolated `dentabill_w0_identity`, then shared `dentabill_test`. Prior migrations/helpers and all
+legacy claim/remittance/cash/batch/match/release facts are preserved, with no posting backfill.
+New DB89 + preservation1 =90 pass; existing financial/tenant287 pass; focusedAPI51 pass; SDK53;
+UI39 (21 posting +18 navigation); affected Turbo lint/types30/30. API TypeScript and Lambda
+builds pass (API36.2MB/worker28.9MB unzip,10.8/9.4MB zip). Next production build passes (posting route7.7kB/180kB first load); full API863/863 across42 files passes (161.77s).
+The initial large pagination API case exceeded5s; its bounded30s test allowance then passed.
+The initial Turbo run caught a test-only exact-optional typing error; the corrected run passes.
+
+Logs `/tmp/dentabill-posting-`: `migration30-isolated.log`, `migration30-shared.log`,
+`db-final-tests.log`, `db-regression.log`, `db-types.log`, `db-lint.log`, `api-focused.log`,
+`api-full.log`, `sdk-tests.log`, `checks-final.log`, `api-build.log`, `lambda-build.log`,
+`web-build.log`. Web logs use the temporary `fw45` prefix (this is still FW-44):
+`/tmp/dentabill-fw45-ui-tests.log`, `...-ui-lint.log`, `...-web-types.log`, `...-visual.log`.
+
+One actual-component synthetic auth/API browser round at1280/390 passed download/import, partial/
+unknown and complete-mismatch review, identical uncertain retry, stale history and overlap
+blocking/rejection, with zero overflow, page errors or axe violations. All four captures reviewed;
+root inspected mobile. Captures/results:
+`/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-posting-visual-pjg4wjdf/`.
+Independent API and nonauthor UI reviews found no actionable/material issues. Separate documenter
+found no durable design-system delta. PRODUCT/DESIGN/sidecar preserved. Harness stopped; detector
+unavailable126, so no detector verdict or full authenticated-shell/live integration claim.
+
+Full-scope goal remains ACTIVE; original completion standard and external gates remain intact.
+Financial follow-ons: evidence-bound posting-to-claim relationships, explicit batch/source
+corrections, claim cash allocation/attribution and real supported PMS/bank connectors. FW-40
+transactional review-notification outbox is the immediate next independent dependency. The
+post-commit loss window and ALREADY_PROCESSED retry bypass are confirmed. Bind intent to exact
+domain/recipient/content version and separate provider receipts/unknown outcomes; no external
+message is authorized. This posting slice is included in `feat(monorepo): add reviewed PMS posting
+evidence`, following `e178b44`, without merge/deployment. No
+provider message, real payment/claim write, paid inference, merge or deployment occurred.
+
 ### 2026-10-14: FW-30 tenant rate-limit correction (ADR-077)
 
 Completed after reconciliation commit `a3d1d84`: two route overrides keyed by organization ran
@@ -18,8 +65,14 @@ Next financial slice is underway: independent PMS posting receipts. Contract pre
 header separately from entry totals, ordered revisions and original signs/raw statuses. Accepted
 PARTIAL/ABSENT revisions must retain prior source-entry identity reservations until a COMPLETE
 replacement or REMOVED revision explicitly clears them. Source review leaves claim references
-UNLINKED and source/bank verification/settlement UNVERIFIED. Migration30 and API/UI integration
-are not yet validated. Continue the full handoff after this slice; fake data only.
+UNLINKED and source/bank verification/settlement UNVERIFIED. Migration30 `20261014180000_posting_source_evidence` and API/UI integration
+are not yet validated (ADR-078). Root owns posting contract/service/routes/app/SDK; batch_db
+owns schema/migration/DB tests; cash_review owns API tests/fixtures; batch_ui owns web workflow.
+API types/scoped lint and SDK53/53 already pass; database and end-to-end synthetic checks remain.
+Do not apply migration30 to shared DB until isolated admission tests pass and the DB agent
+freezes it. Native Open Dental docs were refreshed; ClaimProcNum is entry identity, ProcNum is
+procedure identity; partial headers can differ from entries, and entry edits must be captured
+independently of header versions. No external call, payment write or provider inference ran. Continue the full handoff after this slice; fake data only.
 
 ### 2026-10-14: full-scope persistent goal and FW-44 reconciliation
 

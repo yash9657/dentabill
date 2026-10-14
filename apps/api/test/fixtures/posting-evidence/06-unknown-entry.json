@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "evidenceBasis": "PMS_PAYMENT_RECEIPT",
+  "sourceSystem": "SYNTHETIC_PMS",
+  "sourceProduct": "Manual source fixture",
+  "sourceNamespace": "synthetic-posting",
+  "sourceReceiptId": "synthetic-unknown",
+  "sourceRecordId": "synthetic-unknown-seq-1",
+  "sourceSequence": 1,
+  "sourceVersion": "receipt-v1",
+  "sourceDocumentId": "synthetic-posting-document",
+  "observedAt": "2026-10-01T12:00:00.000Z",
+  "status": "POSTED",
+  "sourceStatus": "vendor:posted",
+  "sourceIsPartial": false,
+  "currency": "USD",
+  "amount": "0.00",
+  "sourceAmount": "0.00",
+  "sourceSignConvention": "CREDIT_POSITIVE",
+  "sourceEntryDate": "2026-10-01",
+  "sourceIssuedDate": "2026-09-30",
+  "paymentTrace": "synthetic-trace",
+  "sourceDepositId": "synthetic-deposit",
+  "detailCompleteness": "COMPLETE",
+  "entries": [
+    {
+      "sourceEntryId": "synthetic-unknown-entry",
+      "sourceClaimId": null,
+      "sourceLineId": null,
+      "sourceProcedureId": null,
+      "entryKind": "UNKNOWN",
+      "sourceStatus": "vendor:unknown-X",
+      "sourceVersion": null,
+      "sourceIsTransfer": null,
+      "amount": null,
+      "sourceAmount": null,
+      "sourceSignConvention": "CREDIT_POSITIVE"
+    }
+  ]
+}

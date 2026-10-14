@@ -646,3 +646,23 @@ run their10/minute organization limiter at `preHandler`, after `requireAuth`. Va
 anonymous traffic,429 after ten practice requests and independent quota for a second practice.
 The plugin store is process-local; this fix does not establish a fleet-wide spend/call ceiling.
 No real calls were made by the local regression.
+
+### Independent PMS posting evidence expansion (ADR-078; not deployed)
+
+Migration30 `20261014180000_posting_source_evidence` follows29. Four immutable tables and
+posting-only admission/membership helpers preserve prior records and helpers without backfill.
+Apply the complete chain and regenerate Prisma before exposing `/dashboard/posting-evidence`.
+Only localhost isolated/shared test databases have run this migration; no new vendor credentials
+or external payment instruction is enabled.
+
+Validate header150/complete entries180 (difference−30, never a synthetic adjustment), partial/
+unknown source facts, negative/mixed entry kinds, exact retries, stale previews, and retained
+entry ownership through accepted PARTIAL/ABSENT snapshots. Only accepted COMPLETE/REMOVED
+snapshots reset source-entry membership; rejected/unreviewed changes cannot free identities.
+Check tenant/role/audit failures and READ COMMITTED/REPEATABLE READ races. Bodies256KiB/100entries
+and pages20/2MiB are bounded; follow cursor/hasMore. Source receipt history and all accepted
+entry mirrors are retained; roll back application exposure rather than delete evidence.
+Monitor audit health, closed errors and organization lock/query latency without source values.
+Native sync must capture child edits as well as header versions and correctly interpret native
+sentinel dates. Actual authenticated connectors, source-to-claim binding, external posting,
+retention/restore and authorized AWS end-to-end evidence remain deployment gates.

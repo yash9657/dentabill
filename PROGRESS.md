@@ -3,18 +3,26 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-14
-**Current work:** reviewed cash-to-batch reconciliation and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
+**Current work:** independent PMS posting evidence and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
 `codex/w0-containment`. The full parity assignment remains incomplete; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
+
+**Latest local slice:** independent PMS posting receipt observations (ADR-078): immutable revisions,
+separate header/entry facts, unknowns, fresh reviews and historical entry-identity protection across
+incomplete snapshots. API/SDK/dashboard work locally; source references remain UNLINKED and
+source/bank verification/settlement UNVERIFIED. Migration30 local only. NewDB90, prior financial/
+tenant287, focusedAPI51, SDK53, UI39 and lint/types30 pass; API/Lambda builds and independent
+reviews pass. Next build and fullAPI863/863 across42 files pass. Real connectors, posting relationships, source
+corrections, allocation/attribution and the full remaining plan stay open.
 
 **Additional local fix:** FW-30 tenant rate limits now run after authentication on call enqueue
 and practice settings. Four before/after regressions and focused77/77 pass (ADR-077). This
 removes shared anonymous quotas across practices; deployed/fleet-wide behavior remains unverified.
 Independent PMS posting evidence is now in progress.
 
-**Latest local slice:** FW-44 reviewed cash-to-batch reconciliation (ADR-076) supports signed
+**Previous local slice:** FW-44 reviewed cash-to-batch reconciliation (ADR-076) supports signed
 partial many-to-many matches with exact accepted source/review bindings, two-sided capacities,
 retained stale/replacement reservations, immutable retry receipts and explicit full releases.
 Migration29/API/SDK/dashboard are locally implemented and validated. FullAPI808/41files, focused55,

@@ -398,3 +398,13 @@ manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
 - `apps/web/src/app/dashboard/cash-reconciliations/page.tsx`: authenticated dashboard entry.
 - `apps/web/src/components/dashboard/cash-reconciliations`: explicit source selection, signed preview, current/stale/released history and full release controls.
 - `apps/web/src/lib/cash-reconciliations`: scoped generated-SDK transport, source paging, immutable uncertain retries and tests.
+
+## Independent PMS posting observations (FW-44; ADR-078)
+
+- `apps/api/src/lib/posting-evidence/{contract,service}.ts`: bounded receipt/revision source facts, exact replay, separate totals and fresh reviews.
+- `apps/api/src/routes/v1/posting-evidence{,.test}.ts`: five authenticated handlers and51 synthetic real-Postgres lifecycle/fault/race tests.
+- `packages/db/prisma/migrations/20261014180000_posting_source_evidence/migration.sql`: four immutable scoped tables, accepted-entry mirrors and historical membership admission.
+- `packages/db/src/lib/posting-source-evidence{,-migration}.test.ts`:89 direct SQL/tenant/race cases and prior financial/helper preservation proof.
+- `apps/web/src/app/dashboard/posting-evidence/page.tsx`: dashboard entry; components in `apps/web/src/components/dashboard/posting-evidence`.
+- `apps/web/src/lib/posting-evidence/use-posting-evidence.ts`: scoped generated-SDK transport, paging and exact uncertain retries.
+- `apps/api/test/fixtures/posting-evidence`: six custom fabricated source examples and limitations; web download at `apps/web/public/examples/synthetic-posting-evidence.json`.

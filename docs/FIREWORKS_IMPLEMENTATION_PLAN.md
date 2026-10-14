@@ -1,5 +1,13 @@
 # DentaBill: competitive gaps and the Fireworks implementation plan
 
+Current local progress (2026-10-14, ADR-078): FW-44 adds independent manual PMS posting receipt
+observations through API/SDK/dashboard, with immutable ordered revisions, separate signed
+header/entry facts and source review. Incomplete snapshots retain prior accepted entry identities
+until explicit complete replacement/removal. Source claim references remain UNLINKED; no bank
+verification, local/external payment write, settlement or attribution is inferred. Migration30
+is local only; newDB90, financial/tenant287, focusedAPI51/fullAPI863, SDK53, UI39 and lint/types30 pass, plus API/Lambda/Next builds. Real connectors and every original parity gate remain in scope. FW-30's two
+pre-auth organization limiter defects were also reproduced/fixed locally (ADR-077).
+
 Current local progress (2026-10-14, ADR-076): the full original assignment is an ACTIVE durable
 goal. FW-44 adds reviewed signed partial cash-to-batch matches, retained reservations across
 source changes/replacements, and separately reviewed full releases through API/SDK/dashboard.

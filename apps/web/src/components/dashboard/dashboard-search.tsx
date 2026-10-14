@@ -5,6 +5,7 @@ import {
   FileText,
   LayoutDashboard,
   Landmark,
+  ClipboardList,
   Link2,
   ReceiptText,
   PhoneCall,
@@ -59,6 +60,12 @@ const destinations = [
     description: 'Review cash-to-batch matches and release reservations',
     href: '/dashboard/cash-reconciliations',
     icon: Link2,
+  },
+  {
+    label: 'Posting evidence',
+    description: 'Review PMS receipt observations and source entry history',
+    href: '/dashboard/posting-evidence',
+    icon: ClipboardList,
   },
   {
     label: 'Reports',

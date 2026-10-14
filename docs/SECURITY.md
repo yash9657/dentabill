@@ -280,3 +280,16 @@ Call enqueue and practice-settings writes now apply their10/minute practice limi
 that anonymous requests cannot drain authenticated quota, users/IPs share their practice limit
 and other practices remain isolated. These are process-local plugin limits; no distributed
 quota or production WAF/load evidence is claimed. Production configuration is unchanged.
+
+### Manual PMS posting observations (ADR-078; local only)
+
+Posting source identifiers, dates, traces, deposit and claim/procedure references may be sensitive.
+All five handlers require scoped stored OWNER/ADMIN/BILLING_STAFF roles, mandatory read/replay
+audit and atomic mutation audit. Closed validation/Prisma errors and opaque metadata avoid source
+logging. Immutable review/entry mirrors, restrictive references and organization serialization
+prevent tenant crossing and duplicate accepted source-entry identity. Incomplete accepted history
+retains old entry IDs; only accepted COMPLETE/REMOVED revisions reset them. This is membership
+protection, not a cash reservation.256KiB source/JSONB,100 entries and20-record/2MiB pages bound
+input/output. Source claims remain UNLINKED; no authenticated PMS, bank verification, payment
+write or settlement is implied. Production PHI agreements, lifecycle/retention and restore remain
+required before real data.

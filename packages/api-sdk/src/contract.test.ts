@@ -68,11 +68,78 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/cash-reconciliations/preview',
   '/v1/cash-reconciliations/{id}/release/preview',
   '/v1/cash-reconciliations/{id}/release',
+  '/v1/posting-evidence',
+  '/v1/posting-evidence/receipts/{id}',
+  '/v1/posting-evidence/{id}/preview',
+  '/v1/posting-evidence/{id}/review',
 ];
 
 describe('OpenAPI ↔ generated types contract', () => {
   it('declares an OpenAPI 3.x document', () => {
     expect(spec.openapi).toMatch(/^3\./);
+  });
+
+  it('preserves independent posting source facts without promoting them to linked claim payments', () => {
+    const body = ['post', 'requestBody', 'content', 'application/json', 'schema'];
+    expect(spec.paths['/v1/posting-evidence']).toHaveProperty(
+      [...body, 'additionalProperties'],
+      false,
+    );
+    expect(spec.paths['/v1/posting-evidence']).toHaveProperty(
+      [...body, 'properties', 'entries', 'maxItems'],
+      100,
+    );
+    const entry = [...body, 'properties', 'entries', 'items', 'properties'];
+    for (const field of [
+      'sourceEntryId',
+      'sourceClaimId',
+      'sourceLineId',
+      'sourceProcedureId',
+      'sourceVersion',
+      'sourceStatus',
+      'sourceIsTransfer',
+      'sourceAmount',
+      'sourceSignConvention',
+    ])
+      expect(spec.paths['/v1/posting-evidence']).toHaveProperty([...entry, field]);
+    expect(spec.paths['/v1/posting-evidence']).toHaveProperty(
+      [...entry, 'entryKind', 'enum'],
+      ['PAYMENT', 'TRANSFER', 'ADJUSTMENT', 'UNKNOWN'],
+    );
+    const response = [
+      'post',
+      'responses',
+      '201',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    expect(spec.paths['/v1/posting-evidence']).toHaveProperty(
+      [...response, 'claimLinkage', 'enum'],
+      ['UNLINKED'],
+    );
+    for (const field of ['sourceVerification', 'bankVerification', 'settlement'])
+      expect(spec.paths['/v1/posting-evidence']).toHaveProperty(
+        [...response, field, 'enum'],
+        ['UNVERIFIED'],
+      );
+    for (const field of [
+      'knownListedEntryAmount',
+      'unknownEntryCount',
+      'completeEntryAmount',
+      'headerDifference',
+    ])
+      expect(spec.paths['/v1/posting-evidence']).toHaveProperty([
+        ...response,
+        'totals',
+        'properties',
+        field,
+      ]);
+    expect(spec.paths['/v1/posting-evidence/{id}/review']).toHaveProperty(
+      [...body, 'required'],
+      ['decision', 'reviewToken', 'idempotencyKey'],
+    );
   });
 
   it('separates immutable match receipts from live source currentness and explicit release', () => {

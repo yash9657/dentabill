@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "evidenceBasis": "PMS_PAYMENT_RECEIPT",
+  "sourceSystem": "SYNTHETIC_PMS",
+  "sourceProduct": "Manual source fixture",
+  "sourceNamespace": "synthetic-posting",
+  "sourceReceiptId": "synthetic-receipt-A",
+  "sourceRecordId": "synthetic-receipt-A-seq-2",
+  "sourceSequence": 2,
+  "sourceVersion": "receipt-v2",
+  "sourceDocumentId": "synthetic-posting-document",
+  "observedAt": "2026-10-01T12:00:00.000Z",
+  "status": "PARTIAL",
+  "sourceStatus": "vendor:posted",
+  "sourceIsPartial": true,
+  "currency": "USD",
+  "amount": "150.00",
+  "sourceAmount": "150.00",
+  "sourceSignConvention": "CREDIT_POSITIVE",
+  "sourceEntryDate": "2026-10-01",
+  "sourceIssuedDate": "2026-09-30",
+  "paymentTrace": "synthetic-trace",
+  "sourceDepositId": "synthetic-deposit",
+  "detailCompleteness": "PARTIAL",
+  "entries": [
+    {
+      "sourceEntryId": "synthetic-entry-B",
+      "sourceClaimId": "synthetic-source-claim-A",
+      "sourceLineId": "synthetic-source-line-A",
+      "sourceProcedureId": "synthetic-source-procedure-A",
+      "entryKind": "PAYMENT",
+      "sourceStatus": "vendor:posted",
+      "sourceVersion": "entry-v8",
+      "sourceIsTransfer": false,
+      "amount": "80.00",
+      "sourceAmount": "80.00",
+      "sourceSignConvention": "CREDIT_POSITIVE"
+    }
+  ]
+}

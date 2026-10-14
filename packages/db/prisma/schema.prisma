@@ -190,6 +190,7 @@ model Organization {
   billingUsageRecords      BillingUsageRecord[]
   cashSourceTransactions   CashSourceTransaction[]
   remittanceBatchEvidence  RemittanceBatchEvidence[]
+  postingSourceReceipts    PostingSourceReceipt[]
 }
 
 model User {
@@ -210,6 +211,7 @@ model User {
   remittanceBatchReviews   RemittanceBatchReview[]
   cashBatchMatches         CashBatchMatch[]
   cashBatchReleases        CashBatchRelease[]
+  postingSourceReviews     PostingSourceReview[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -620,6 +622,111 @@ model CashSourceReview {
   @@unique([evidenceId, organizationId, transactionId])
   @@index([organizationId, transactionId, sourceSequence])
   @@index([previousAcceptedEvidenceId, organizationId, transactionId], map: "CashSourceReview_previous_idx")
+}
+
+// Immutable independently reviewed PMS source observations; no claim allocations or external writes.
+model PostingSourceReceipt {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String
+  sourceSystem    String   @db.VarChar(32)
+  sourceProduct   String   @db.VarChar(80)
+  sourceNamespace String   @db.VarChar(80)
+  sourceReceiptId String   @db.VarChar(200)
+  createdAt       DateTime @default(now())
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  evidence     PostingSourceEvidence[]
+  reviews      PostingSourceReview[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, sourceSystem, sourceNamespace, sourceReceiptId], map: "PostingSourceReceipt_source_key")
+  @@index([organizationId, sourceSystem, sourceNamespace], map: "PostingSourceReceipt_source_scope_idx")
+  @@index([organizationId, createdAt, id])
+}
+
+model PostingSourceEvidence {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organizationId     String
+  receiptId          String   @db.Uuid
+  sourceNamespace    String   @db.VarChar(80)
+  sourceSystem       String   @db.VarChar(32)
+  sourceRecordId     String   @db.VarChar(200)
+  sourceSequence     Int
+  sourceVersion      String?  @db.VarChar(200)
+  sourceDocumentId   String   @db.VarChar(200)
+  status             String   @db.VarChar(8)
+  detailCompleteness String   @db.VarChar(8)
+  amount             Decimal? @db.Decimal(10, 2)
+  payload            Json
+  contentHash        String   @db.Char(64)
+  createdAt          DateTime @default(now())
+
+  receipt           PostingSourceReceipt  @relation(fields: [receiptId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  review            PostingSourceReview?  @relation("PostingReviewedEvidence")
+  subsequentReviews PostingSourceReview[] @relation("PostingPreviousAcceptedEvidence")
+
+  @@unique([id, organizationId, receiptId])
+  @@unique([organizationId, sourceSystem, sourceNamespace, sourceRecordId], map: "PostingSourceEvidence_source_event_key")
+  @@unique([receiptId, sourceSequence])
+  @@index([organizationId, receiptId, sourceSequence])
+}
+
+model PostingSourceReview {
+  id                         String   @id @default(uuid()) @db.Uuid
+  organizationId             String
+  receiptId                  String   @db.Uuid
+  evidenceId                 String   @unique @db.Uuid
+  decision                   String   @db.VarChar(6)
+  reviewedByUserId           String
+  reviewedByRole             UserRole
+  idempotencyKey             String   @db.Uuid
+  requestHash                String   @db.Char(64)
+  reviewToken                String   @db.Char(64)
+  evidenceHash               String   @db.Char(64)
+  ledgerVersion              String   @db.VarChar(80)
+  previousAcceptedEvidenceId String?  @db.Uuid
+  sourceSequence             Int
+  createdAt                  DateTime @default(now())
+
+  receipt                  PostingSourceReceipt   @relation(fields: [receiptId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  evidence                 PostingSourceEvidence  @relation("PostingReviewedEvidence", fields: [evidenceId, organizationId, receiptId], references: [id, organizationId, receiptId], onDelete: Restrict, onUpdate: Restrict)
+  previousAcceptedEvidence PostingSourceEvidence? @relation("PostingPreviousAcceptedEvidence", fields: [previousAcceptedEvidenceId, organizationId, receiptId], references: [id, organizationId, receiptId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy               User                   @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+
+  entries PostingSourceEntry[]
+
+  @@unique([id, organizationId, receiptId, evidenceId], map: "PostingSourceReview_entry_binding_key")
+  @@unique([organizationId, idempotencyKey])
+  @@unique([evidenceId, organizationId, receiptId])
+  @@index([organizationId, receiptId, sourceSequence])
+  @@index([previousAcceptedEvidenceId, organizationId, receiptId], map: "PostingSourceReview_previous_idx")
+}
+
+// Accepted source entry mirrors remain explicitly unlinked to local claims and procedures.
+model PostingSourceEntry {
+  id                   String   @id @default(uuid()) @db.Uuid
+  organizationId       String
+  reviewId             String   @db.Uuid
+  receiptId            String   @db.Uuid
+  evidenceId           String   @db.Uuid
+  sourceIndex          Int
+  sourceEntryId        String   @db.VarChar(200)
+  sourceClaimId        String?  @db.VarChar(200)
+  sourceLineId         String?  @db.VarChar(200)
+  sourceProcedureId    String?  @db.VarChar(200)
+  sourceVersion        String?  @db.VarChar(200)
+  sourceIsTransfer     Boolean?
+  entryKind            String   @db.VarChar(10)
+  sourceStatus         String?  @db.VarChar(80)
+  amount               Decimal? @db.Decimal(10, 2)
+  sourceAmount         Decimal? @db.Decimal(10, 2)
+  sourceSignConvention String   @db.VarChar(15)
+
+  review PostingSourceReview @relation(fields: [reviewId, organizationId, receiptId, evidenceId], references: [id, organizationId, receiptId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([reviewId, sourceIndex])
+  @@unique([reviewId, sourceEntryId])
+  @@index([organizationId, sourceEntryId])
 }
 
 // Explicit human cash-to-batch reconciliation. These reservations do not post

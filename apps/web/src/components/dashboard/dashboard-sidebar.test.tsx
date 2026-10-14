@@ -104,3 +104,14 @@ it('marks cash reconciliation separately from cash source review', () => {
   );
   expect(screen.getByRole('link', { name: 'Cash evidence' })).not.toHaveAttribute('aria-current');
 });
+
+it('marks posting evidence separately from cash reconciliation', () => {
+  renderSidebar({ pathname: '/dashboard/posting-evidence' });
+  expect(screen.getByRole('link', { name: 'Posting evidence' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  expect(screen.getByRole('link', { name: 'Cash reconciliation' })).not.toHaveAttribute(
+    'aria-current',
+  );
+});

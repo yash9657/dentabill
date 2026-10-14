@@ -81,3 +81,14 @@ it('finds cash reconciliation through reservation release work', async () => {
     '/dashboard/cash-reconciliations',
   );
 });
+
+it('finds posting evidence through PMS receipt observation work', async () => {
+  const user = userEvent.setup();
+  render(<DashboardSearch />);
+  await user.click(screen.getByRole('button', { name: /open command palette/i }));
+  await user.type(screen.getByRole('searchbox', { name: 'Find a page' }), 'PMS receipt');
+  expect(screen.getByRole('link', { name: /Posting evidence/ })).toHaveAttribute(
+    'href',
+    '/dashboard/posting-evidence',
+  );
+});
