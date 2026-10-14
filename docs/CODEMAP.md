@@ -429,3 +429,13 @@ manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
 - `apps/api/src/lib/cash-reconciliation/{contract,service}.ts`: latest observed batch bindings and retained stable-batch reservations, with lifecycle regressions in the cash reconciliation route tests.
 - `apps/web/src/components/dashboard/{remittance-batches,cash-reconciliations}` and `apps/web/src/lib/remittance-batches`: existing dashboard extensions for source history, membership changes, shared sequence labels and stale reservation explanation.
 - `apps/api/test/fixtures/remittance-batches/07-corrected-net-140.json` and `apps/web/public/examples/synthetic-remittance-batch-v2.json`: fabricated correction/download examples, without a real connector or financial instruction.
+
+## Reviewed posting-entry relationships (FW-44; ADR-081, local only)
+
+- `packages/db/prisma/migrations/20261014210000_posting_claim_relationships/migration.sql`: immutable relationship/release tables, exact scoped references, organization/claim admission and source-entry reservation guards; no historical backfill or prior helper changes.
+- `packages/db/src/lib/posting-claim-relationships{,-migration}.test.ts`: direct SQL, freshness/identity/tenant/race invariants and previous-record/helper preservation.
+- `apps/api/src/lib/posting-relationships/{contract,service}.ts`: exact-source target resolution, claim/optional line previews, immutable decision receipts, dynamic currentness and full release.
+- `apps/api/src/routes/v1/posting-relationships{,.test}.ts`: six scoped audited handlers, strict retry and cursor binding; registration in `apps/api/src/app.ts`, generated types in `packages/api-sdk`.
+- `apps/web/src/components/dashboard/posting-evidence/posting-relationships.tsx`: target review, current/stale/released history and explicit full release within the existing posting evidence page.
+- `apps/web/src/lib/posting-evidence/use-posting-relationships.ts`: user/practice-scoped SDK reads/mutations and stable uncertain retry commands.
+- `apps/api/test/fixtures/posting-relationships` and `apps/web/public/examples/synthetic-posting-associations.json`: fabricated exact-source claims/lines and header150/entries180 examples, without authenticated exports or external posting.

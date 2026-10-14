@@ -14,6 +14,8 @@ import {
   type PostingReceipt,
 } from '../../../lib/posting-evidence/use-posting-evidence.js';
 
+import { PostingRelationships } from './posting-relationships.js';
+
 const BLOCKERS: Record<PostingPreview['blockers'][number], string> = {
   ALREADY_REVIEWED: 'This revision already has a recorded review.',
   NEWER_SOURCE_EVIDENCE:
@@ -43,7 +45,9 @@ function PostingWorkspace({ scope }: { readonly scope: PostingScope }): React.Re
   const [command, setCommand] = React.useState<PostingReviewCommand | null>(null);
   const [file, setFile] = React.useState<{ name: string; body: unknown } | null>(null);
   const [importUncertain, setImportUncertain] = React.useState(false);
-  const [busy, setBusy] = React.useState(false);
+  const [sourceBusy, setBusy] = React.useState(false);
+  const [relationshipLocked, setRelationshipLocked] = React.useState(false);
+  const busy = sourceBusy || relationshipLocked;
   const [message, setMessage] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const lock = React.useRef(false);
@@ -59,7 +63,7 @@ function PostingWorkspace({ scope }: { readonly scope: PostingScope }): React.Re
     if (preview) previewRef.current?.focus();
   }, [preview]);
   const begin = (): boolean => {
-    if (lock.current) return false;
+    if (lock.current || relationshipLocked) return false;
     lock.current = true;
     setBusy(true);
     setMessage(null);
@@ -117,7 +121,7 @@ function PostingWorkspace({ scope }: { readonly scope: PostingScope }): React.Re
     }
   };
   const openHistory = (id: string): void => {
-    if (lock.current || uncertain) return;
+    if (lock.current || uncertain || relationshipLocked) return;
     setReceiptId(id);
     setSelected(null);
     setPreview(null);
@@ -200,7 +204,8 @@ function PostingWorkspace({ scope }: { readonly scope: PostingScope }): React.Re
         <p className="text-gray-dark mt-3 max-w-prose text-sm">
           Import and review PMS receipt observations independently of cash and remittance evidence.
           Acceptance records source facts; it does not post a payment to a local claim, verify a PMS
-          connector or establish received cash. Claim linkage remains unlinked.
+          connector or establish received cash. Exact claim associations require a separate review
+          below.
         </p>
       </header>
       <section
@@ -224,7 +229,20 @@ function PostingWorkspace({ scope }: { readonly scope: PostingScope }): React.Re
           Download synthetic example JSON
         </a>
         <p className="text-gray-dark mb-3 text-xs">
-          The example contains fake receipt, entry and claim references for testing only.
+          The example contains fake receipt, entry and claim references for testing only. Its
+          unsupported source system keeps those references unresolved.
+        </p>
+        <a
+          href="/examples/synthetic-posting-associations.json"
+          download
+          className="text-brand mb-2 inline-flex min-h-11 items-center text-sm font-medium underline"
+        >
+          Download synthetic exact-association example
+        </a>
+        <p className="text-gray-dark mb-3 max-w-prose text-xs">
+          Uses fake OPEN_DENTAL source IDs. Import the matching claim source identity and any exact
+          source line separately before reviewing an association. This custom JSON is not a native
+          connector or proof of PMS posting.
         </p>
         <Label htmlFor={fileId}>PMS payment receipt JSON</Label>
         <input
@@ -537,6 +555,13 @@ function PostingWorkspace({ scope }: { readonly scope: PostingScope }): React.Re
           )}
         </article>
       ) : null}
+      <PostingRelationships
+        key={selected?.id ?? 'unselected'}
+        scope={scope}
+        evidence={selected}
+        disabled={sourceBusy || uncertain}
+        onLockChange={setRelationshipLocked}
+      />
     </div>
   );
 }
@@ -571,8 +596,9 @@ function EvidenceDetails({ evidence }: { readonly evidence: PostingEvidence }): 
           : 'Awaiting human review'}
       </Badge>
       <p className="text-gray-dark mt-3 max-w-prose text-sm">
-        Manual upload · Source verification: unverified · Claim linkage: unlinked · Bank
-        verification: unverified · Settlement: unverified.
+        Manual upload · Source verification: unverified · Raw receipt claim references: unlinked ·
+        Bank verification: unverified · Settlement: unverified. Reviewed claim associations are
+        shown separately below.
       </p>
       {p.status === 'REMOVED' ? (
         <p className="text-warning mt-3 max-w-prose text-sm">
@@ -656,8 +682,9 @@ function EvidenceDetails({ evidence }: { readonly evidence: PostingEvidence }): 
         <h3 className="font-medium">Receipt source entries</h3>
         <p className="text-gray-dark mt-2 max-w-prose text-sm">
           Payment, transfer and adjustment entries remain distinct source facts. Their claim, line
-          and procedure references are raw source IDs, not links or allocations to local claims. A
-          source transfer flag does not establish a bank transfer.
+          and procedure references remain raw source IDs here. Reviewed claim associations are shown
+          separately below; neither flow allocates money to local claims. A source transfer flag
+          does not establish a bank transfer.
         </p>
         {p.entries.length === 0 ? (
           <p className="text-gray-dark mt-3 text-sm">

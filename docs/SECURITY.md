@@ -335,3 +335,20 @@ release; accepted zero net cannot act as withdrawal. Immutable review records ar
 refreshed response currentness. These controls extend manual evidence admission, not bank/PMS
 verification, payment execution or claim settlement. Local verification is tracked in ADR-080;
 production retention/erasure, external connectors and rollout remain open.
+
+### Reviewed posting-entry relationships (ADR-081; local only)
+
+All six handlers require scoped stored OWNER/ADMIN/BILLING_STAFF authority. Reads and exact
+replays are audited; link/release and their audits commit atomically. Source/claim identifiers
+remain sensitive; closed diagnostics and opaque audit metadata avoid raw payload logs. Strict
+4KiB mutation bodies and 20-record/2MiB history pages bound the API; cursors bind tenant/filter.
+
+Exact supported source system/namespace/claim identity, latest observed accepted evidence and
+claim version/source hash guard association. Supplied source-line identity cannot degrade to a
+guessed claim-only or procedure-code match; without a source line, the raw procedure remains
+unresolved. Immutable entry/claim/line/review/actor references and organization/claim locks extend
+these rules to direct SQL and races. Source-entry reservations survive stale/omitted/removed/
+rejected revisions and receipt changes until explicit full release. Release remains possible for
+stale evidence without mutating amounts, claim workflow, source facts, cash or settlement.
+Migration 33 has no historical backfill. Local verification is tracked in ADR-081; authenticated
+connectors, production retention/erasure and deployment evidence remain open.

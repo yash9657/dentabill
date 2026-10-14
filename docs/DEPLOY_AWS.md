@@ -719,3 +719,22 @@ ownership or release reservations as an application rollback shortcut. These are
 contracts, without connector authentication or any financial action. Local DB/API/SDK/UI checks,
 API/Lambda/Next builds and affected lint/typecheck 30/30 pass as recorded in ADR-080; production
 deployment, restoration/retention and external integration gates remain open. The preceding FW-40 commit is `4af99ec`; external notification delivery stays disabled.
+
+### Reviewed posting-entry relationships (ADR-081; not deployed)
+
+Migration 33 `20261014210000_posting_claim_relationships` follows 32 and is frozen/applied only to
+localhost isolated/shared databases. It adds immutable relationship/release records and exact
+scoped admission guards, without historical backfill or prior helper changes. Apply the complete
+migration chain and regenerate Prisma before exposing the coordinated API/SDK/posting dashboard.
+Retain original posting source fields and imported claim snapshots as independent evidence.
+
+Validate exact system/namespace/source-claim identity, duplicate display numbers/repeated codes,
+optional line/procedure agreement, latest-observed source and claim-edit staleness, immutable
+retry receipts, source-entry reservations across revisions/receipts, full release/rematch, audit
+rollback and tenant/concurrency guards. An unknown or mismatched source must not become a guessed
+link. Monitor closed conflicts, audit failures and organization/claim lock latency without source
+values. Roll back application exposure while retaining all relationship/release receipts and
+reservations; never release or delete records merely to roll back code. Local DB/API/SDK/UI
+verification, affected lint/typecheck 30/30 and API/Lambda/Next builds pass as recorded in ADR-081. Real source authentication, external posting, bank cash, settlement,
+retention/restore and production rollout remain separate gates; no provider credential activates
+this local manual workflow. ADR-080 is the preceding committed slice (`710060b`).

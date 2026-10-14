@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "evidenceBasis": "PMS_PAYMENT_RECEIPT",
+  "sourceSystem": "OPEN_DENTAL",
+  "sourceProduct": "Synthetic manual relationship fixture",
+  "sourceNamespace": "synthetic-relationships",
+  "sourceReceiptId": "relationship-receipt",
+  "sourceRecordId": "relationship-record-1",
+  "sourceSequence": 1,
+  "sourceVersion": "receipt-v1",
+  "sourceDocumentId": "synthetic-relationship-document",
+  "observedAt": "2026-10-01T12:00:00.000Z",
+  "status": "POSTED",
+  "sourceStatus": "vendor:posted",
+  "sourceIsPartial": false,
+  "currency": "USD",
+  "amount": "150.00",
+  "sourceAmount": "150.00",
+  "sourceSignConvention": "CREDIT_POSITIVE",
+  "sourceEntryDate": "2026-10-01",
+  "sourceIssuedDate": "2026-09-30",
+  "paymentTrace": "synthetic-trace",
+  "sourceDepositId": "synthetic-deposit",
+  "detailCompleteness": "COMPLETE",
+  "entries": [
+    {
+      "sourceEntryId": "entry-a",
+      "sourceClaimId": "claim-a",
+      "sourceLineId": "line-a",
+      "sourceProcedureId": "procedure-a",
+      "entryKind": "PAYMENT",
+      "sourceStatus": "vendor:posted",
+      "sourceVersion": "entry-v1",
+      "sourceIsTransfer": false,
+      "amount": "100.00",
+      "sourceAmount": "100.00",
+      "sourceSignConvention": "CREDIT_POSITIVE"
+    },
+    {
+      "sourceEntryId": "entry-b",
+      "sourceClaimId": "claim-a",
+      "sourceLineId": "line-b",
+      "sourceProcedureId": "procedure-b",
+      "entryKind": "PAYMENT",
+      "sourceStatus": "vendor:posted",
+      "sourceVersion": "entry-v7",
+      "sourceIsTransfer": false,
+      "amount": "80.00",
+      "sourceAmount": "80.00",
+      "sourceSignConvention": "CREDIT_POSITIVE"
+    }
+  ]
+}

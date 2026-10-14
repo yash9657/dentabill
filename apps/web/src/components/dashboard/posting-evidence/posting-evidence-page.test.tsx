@@ -107,6 +107,8 @@ beforeEach(() => {
       list = postingListFixture([postingReceiptFixture(evidence)]);
       return json(evidence, 201);
     }
+    if (record.path === '/v1/posting-relationships')
+      return json({ items: [], hasMore: false, nextCursor: null });
     if (getHandler) return getHandler(record);
     return json(
       record.path.endsWith('/preview')

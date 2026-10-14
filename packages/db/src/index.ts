@@ -54,6 +54,8 @@ export type {
   PostingSourceEvidence,
   PostingSourceReview,
   PostingSourceEntry,
+  PostingClaimRelationship,
+  PostingClaimRelease,
   ReviewNotificationIntent,
   ReviewNotificationDelivery,
   ReviewNotificationAttempt,

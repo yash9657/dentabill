@@ -3,13 +3,41 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-14
-**Current work:** remittance batch source corrections and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
+**Current work:** reviewed posting relationships and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
 `codex/w0-containment`. The full parity assignment remains incomplete; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice — FW-44 batch source corrections (ADR-080), locally verified:**
+**Latest local slice — FW-44 posting-entry relationships (ADR-081), locally verified:**
+Reviewed associations now bind a current accepted posting entry to an exact-source imported claim
+and, when supplied, its immutable source line. Supported source system, namespace and claim ID
+must agree; a source line requires an exact local line and any supplied procedure ID must agree.
+Without a source line, the relationship remains claim-only even if a raw procedure reference exists.
+Source snapshots and signed header/entry facts remain separate. Immutable link/full-release
+receipts retain source-entry reservations across revisions and receipts until explicit release;
+newer or rejected evidence and claim edits can make the relationship stale. No claim amount,
+status, cash, settlement or recovered revenue changes.
+Migration 33 is frozen and applied only to localhost isolated/shared databases. DB 68 plus
+preservation 1, SDK 63, UI 56 and focused API 47/47 pass. Prior DB regressions have passing evidence
+for all 292 cases across an initial 290 passes and two timeout rechecks; this was not a clean full
+rerun. Independent API/SQL reviews found no actionable issue. The synthetic actual-page/hook/SDK
+1280/390px browser batch has no overflow, page errors or axe violations; independent review returned
+ship and separate documentation inspection found no durable system change. Detector 126 gives no
+verdict; this does not verify the authenticated full app. Full API passes 956/956 across 44 files.
+Affected lint/typecheck 30/30 and API/Lambda/Next production builds pass. ADR-080 is committed as
+`710060b`; no real source integration, financial action, merge or deployment ran.
+
+**Immediate next:** prepare FW-45: a guarded synthetic fixture pack/manifest, read-only preflight
+and reproducible walkthrough. Use a dedicated localhost demo database and a coherent CSV/
+remittance/batch/cash/posting fixture chain, followed by the correction/release chapter. Actual
+authenticated rehearsal, recording and landing-page asset integration follow; no recording asset
+exists yet.
+The existing seed/simulator paths are not demo-ready and retain stale recovered-money assumptions. FW-43 canonical source observations, reviewed legacy binding and additive snapshots/
+application, claim-remittance correction chains, explicit cross-batch ownership transfer, claim
+cash allocation/attribution and the full remaining plan remain required.
+
+**Previous local slice — FW-44 batch source corrections (ADR-080), committed as `710060b`:**
 Migration 32 adds immutable stable batch identity, source revision and permanent member ownership
 sidecars. Existing version 1 evidence remains unchanged and explicitly unsequenced; version 2
 uses a new source record and positive sequence under the original batch identity. Review/history
@@ -24,12 +52,6 @@ Full API 909/909 across 43 files and API/Lambda builds pass. The final combined 
 synthetic component captures report no overflow, page errors or axe violations; independent review
 returned ship and the documentation pass found no durable system change. Next production build and affected lint/typecheck 30/30 pass. No real source connector, financial action, merge or
 deployment ran. FW-40 is the previous committed slice (`4af99ec`); external delivery stays disabled.
-
-**Immediate next:** continue reviewed posting relationships and
-claim cash allocation/attribution. Cross-batch ownership transfer, claim-remittance correction
-chains, real connectors, recovery, AI/voice and the remaining operational gates remain in scope.
-The full assignment remains active; local source correction support does not establish source
-authenticity, receipt, posting or settlement.
 
 **Previous local slice — FW-40 (ADR-079), committed as `4af99ec`:** review alerts now commit
 atomically with source/domain/audit changes. Frozen intent identity, recipient, generic payload

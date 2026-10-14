@@ -1,6 +1,37 @@
 # DentaBill: competitive gaps and the Fireworks implementation plan
 
-Current local progress (2026-10-14, ADR-080): FW-44 adds stable batch source corrections through
+**Additional delivery objective (2026-10-14):** the user needs a full app demo and its recording
+on the landing page. FW-45 tracks a reproducible synthetic app walkthrough and finished-video
+integration. Demonstrate actual implemented UI workflows and clearly label simulated external
+behavior; the demo is an additional deliverable, not evidence that real connector, model,
+voice or deployment gates have passed.
+
+Current local progress (2026-10-14, ADR-081): FW-44 adds reviewed exact-source posting-entry
+relationships to imported claims and optional immutable source lines. Supplied source-line and
+procedure identity must agree; without a source line, a raw procedure stays unresolved in a
+claim-only link. Latest observed accepted evidence and claim version/hash bind review. Immutable
+link/full-release receipts retain source-entry reservations across revisions/receipts until an
+explicit full release. Raw source facts, signed amounts, claim workflow, cash, settlement and
+recovered revenue remain unchanged. Migration 33 is frozen/applied only to localhost isolated/
+shared databases, without historical backfill or prior helper changes. DB 68 plus preservation 1,
+SDK 63, UI 56 and focused API 47/47 pass. Prior DB 292 has passing evidence across initial 290
+and two timeout rechecks under host paging, not a clean full rerun. Independent API/SQL reviews
+found no actionable issue. Synthetic1280/390 actual-page/hook/SDK captures have no overflow/errors/
+axe violations, independent review ship and no durable design delta. Detector126 has no verdict;
+this is not authenticated full-app evidence. Full API passes 956/956 across 44 files; affected
+lint/typecheck 30/30 and API/Lambda/Next production builds pass. ADR-080 is committed as `710060b`.
+The immediate independent slice is FW-45 preparation: guarded synthetic fixtures/manifest,
+read-only preflight and a reproducible walkthrough, followed by authenticated rehearsal and
+finished-video support. The planned exact-identity
+fixture chain uses CSV claims, remittance100/80, provider-30/batch150, cash150 matched100 then50,
+posting header150/entries180 and a correction140/release chapter on a dedicated localhost demo DB.
+Authenticated rehearsal/recording and asset integration follow; no recording asset exists yet.
+Existing seed/simulator paths are not demo-ready. FW-43 canonical source observations, reviewed legacy binding and additive
+source snapshots/application, claim-remittance correction chains, cross-batch ownership transfer
+and claim cash allocation/attribution remain required. The complete original scope stays active;
+no external financial/provider action, merge or deployment ran.
+
+Previous local progress (2026-10-14, ADR-080; committed as `710060b`): FW-44 adds stable batch source corrections through
 three immutable identity/revision/member-ownership sidecars. Existing v1 evidence remains unchanged
 and unsequenced; v2 uses a new source record and positive explicit sequence under the original
 batch identity. Only latest observed revisions can be accepted; newer rejected evidence stales
@@ -12,8 +43,8 @@ Migration 32 applied only to localhost isolated/shared databases. DB 27 plus exp
 1, prior financial regressions 344, SDK 57, batch API 71/71, cash API 66/66 and UI 70 plus web/API types/scoped lint pass. Full API909/909 across43 files and API/Lambda builds pass. Final coherent synthetic1280/390px
 captures have no overflow/errors/axe violations, with independent review ship and no durable design
 documentation delta. Next production build and affected lint/typecheck 30/30 pass. The preceding FW-40 slice is committed as `4af99ec`, with external delivery disabled.
-Continue reviewed posting relationships and claim cash allocation/
-attribution. Cross-batch ownership transfer, claim-remittance correction chains, real connectors
+Reviewed posting relationships are now implemented locally in ADR-081 above; source reconciliation
+and claim cash allocation/attribution follow. Cross-batch ownership transfer, claim-remittance correction chains, real connectors
 and every remaining parity gate stay open. No real financial/provider action, merge or deployment
 ran; the full assignment remains active.
 

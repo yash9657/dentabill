@@ -13,6 +13,25 @@ Evidence labels:
 
 ## Local implementation evidence added after the baseline
 
+FW-44 reviewed posting-entry relationships (ADR-081) are **repository/local synthetic evidence**.
+Exact supported source system, namespace and claim identity resolve imported claims, with an exact
+immutable line/procedure check when a source line is supplied. Without a source line, raw procedure
+references remain unresolved in a claim-only association. Raw evidence and signed header/entry
+facts stay separate; links/releases neither change claim financial state nor prove an external
+payment. Latest observed accepted evidence and claim versions/hashes bind review; source-entry
+reservations persist across revisions/receipts until explicit full release.
+Migration 33 is frozen/applied only to localhost isolated/shared databases. DB 68 plus preservation
+1, SDK 63, UI 56 and focused API 47/47 pass. Prior DB 292 has passing evidence across initial 290
+and two timeout rechecks under host paging, not a single clean full rerun. Independent API/SQL
+reviews found no actionable issue. Synthetic1280/390 actual-page/hook/SDK captures have no overflow,
+page errors or axe violations, with independent review ship and no durable design delta. Detector
+126 has no verdict; this is not an authenticated full-app rehearsal. Full API passes 956/956
+across 44 files; affected lint/typecheck 30/30 and API/Lambda/Next production builds pass.
+Fixtures use fabricated source claims, duplicate display numbers, repeated procedure codes and
+header150/entries180; supported-system labels do not establish an authenticated connector.
+ADR-080 is committed as `710060b`. FW-43 source reconciliation, cash attribution, FW-45 demo/
+recording and all original external evidence gates remain open; no external action ran.
+
 FW-44 batch source corrections (ADR-080) are **repository/local synthetic evidence**: immutable
 stable batch/revision/ownership sidecars preserve v1 payloads and receipts, while v2 adds explicit
 positive source sequences under the original batch ID. Latest observed evidence governs review

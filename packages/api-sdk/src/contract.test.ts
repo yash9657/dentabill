@@ -73,11 +73,56 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/posting-evidence/receipts/{id}',
   '/v1/posting-evidence/{id}/preview',
   '/v1/posting-evidence/{id}/review',
+  '/v1/posting-evidence/{id}/relationship-targets',
+  '/v1/posting-relationships',
+  '/v1/posting-relationships/preview',
+  '/v1/posting-relationships/{id}/release/preview',
+  '/v1/posting-relationships/{id}/release',
   '/v1/operations/notifications',
   '/v1/operations/notifications/{id}',
 ];
 
 describe('OpenAPI ↔ generated types contract', () => {
+  it('binds reviewed posting associations to exact source and claim identities without allocating money', () => {
+    const path = spec.paths['/v1/posting-relationships'];
+    const body = ['post', 'requestBody', 'content', 'application/json', 'schema'];
+    expect(path).toHaveProperty([...body, 'additionalProperties'], false);
+    expect(path).toHaveProperty(
+      [...body, 'required'],
+      [
+        'evidenceId',
+        'sourceEntryId',
+        'claimId',
+        'claimSourceLineId',
+        'reviewToken',
+        'idempotencyKey',
+      ],
+    );
+    expect(path).not.toHaveProperty([...body, 'properties', 'amount']);
+    const response = [
+      'post',
+      'responses',
+      '201',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    for (const field of ['sourceVerification', 'bankVerification', 'settlement'])
+      expect(path).toHaveProperty([...response, field, 'enum'], ['UNVERIFIED']);
+    expect(path).toHaveProperty([...response, 'claimCashAllocation', 'enum'], ['UNALLOCATED']);
+    expect(path).toHaveProperty(
+      [...response, 'relationshipBasis', 'enum'],
+      ['EXACT_SOURCE_IDENTITY'],
+    );
+    expect(path).not.toHaveProperty([...response, 'status']);
+    expect(path).not.toHaveProperty([...response, 'recoveredRevenue']);
+    expect(spec.paths['/v1/posting-relationships/{id}/release']).toHaveProperty(
+      [...body, 'required'],
+      ['reason', 'reviewToken', 'idempotencyKey'],
+    );
+    expect(spec.paths['/v1/posting-evidence/{id}/relationship-targets']).not.toHaveProperty('post');
+  });
   it('exposes only safe notification operations reads with delivery disabled', () => {
     const path = spec.paths['/v1/operations/notifications'];
     const response = [

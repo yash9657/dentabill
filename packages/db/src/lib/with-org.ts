@@ -236,6 +236,22 @@ export function getOrgScopedDb(orgId: string) {
         aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
         groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
       },
+      postingClaimRelationship: {
+        findMany: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirst: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirstOrThrow: ({ args, query }) => query(injectOrg(args, orgId)),
+        count: ({ args, query }) => query(injectOrg(args, orgId)),
+        aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
+        groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
+      },
+      postingClaimRelease: {
+        findMany: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirst: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirstOrThrow: ({ args, query }) => query(injectOrg(args, orgId)),
+        count: ({ args, query }) => query(injectOrg(args, orgId)),
+        aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
+        groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
+      },
       reviewNotificationIntent: {
         findMany: ({ args, query }) => query(injectOrg(args, orgId)),
         findFirst: ({ args, query }) => query(injectOrg(args, orgId)),

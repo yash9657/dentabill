@@ -214,6 +214,8 @@ model User {
   cashBatchMatches             CashBatchMatch[]
   cashBatchReleases            CashBatchRelease[]
   postingSourceReviews         PostingSourceReview[]
+  postingClaimRelationships    PostingClaimRelationship[]
+  postingClaimReleases         PostingClaimRelease[]
   generatedReviewNotifications ReviewNotificationIntent[] @relation("NotificationActor")
   receivedReviewNotifications  ReviewNotificationIntent[] @relation("NotificationRecipient")
 
@@ -252,7 +254,7 @@ model Claim {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
-  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   calls                    Call[]
   callIntents              CallIntent[]
   observations             ClaimObservation[]
@@ -261,6 +263,7 @@ model Claim {
   remittanceEvidence       ClaimRemittanceEvidence[]
   remittanceReviews        ClaimRemittanceReview[]
   remittanceBatchClaims    RemittanceBatchClaim[]
+  postingRelationships     PostingClaimRelationship[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, sourceSystem, sourceNamespace, sourceClaimId], map: "Claim_source_identity_key")
@@ -310,6 +313,7 @@ model ClaimSourceLine {
   details               ClaimSourceDetails          @relation(fields: [claimId, organizationId], references: [claimId, organizationId], onDelete: Cascade)
   remittanceAllocations ClaimRemittanceAllocation[]
   remittanceAdjustments ClaimRemittanceAdjustment[]
+  postingRelationships  PostingClaimRelationship[]
 
   @@unique([id, organizationId, claimId])
   @@unique([organizationId, claimId, sourceLineId])
@@ -685,9 +689,10 @@ model PostingSourceReceipt {
   sourceReceiptId String   @db.VarChar(200)
   createdAt       DateTime @default(now())
 
-  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  evidence     PostingSourceEvidence[]
-  reviews      PostingSourceReview[]
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  evidence           PostingSourceEvidence[]
+  reviews            PostingSourceReview[]
+  claimRelationships PostingClaimRelationship[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, sourceSystem, sourceNamespace, sourceReceiptId], map: "PostingSourceReceipt_source_key")
@@ -712,9 +717,10 @@ model PostingSourceEvidence {
   contentHash        String   @db.Char(64)
   createdAt          DateTime @default(now())
 
-  receipt           PostingSourceReceipt  @relation(fields: [receiptId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
-  review            PostingSourceReview?  @relation("PostingReviewedEvidence")
-  subsequentReviews PostingSourceReview[] @relation("PostingPreviousAcceptedEvidence")
+  receipt            PostingSourceReceipt       @relation(fields: [receiptId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  review             PostingSourceReview?       @relation("PostingReviewedEvidence")
+  subsequentReviews  PostingSourceReview[]      @relation("PostingPreviousAcceptedEvidence")
+  claimRelationships PostingClaimRelationship[]
 
   @@unique([id, organizationId, receiptId])
   @@unique([organizationId, sourceSystem, sourceNamespace, sourceRecordId], map: "PostingSourceEvidence_source_event_key")
@@ -744,7 +750,8 @@ model PostingSourceReview {
   previousAcceptedEvidence PostingSourceEvidence? @relation("PostingPreviousAcceptedEvidence", fields: [previousAcceptedEvidenceId, organizationId, receiptId], references: [id, organizationId, receiptId], onDelete: Restrict, onUpdate: Restrict)
   reviewedBy               User                   @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
 
-  entries PostingSourceEntry[]
+  entries            PostingSourceEntry[]
+  claimRelationships PostingClaimRelationship[]
 
   @@unique([id, organizationId, receiptId, evidenceId], map: "PostingSourceReview_entry_binding_key")
   @@unique([organizationId, idempotencyKey])
@@ -753,7 +760,8 @@ model PostingSourceReview {
   @@index([previousAcceptedEvidenceId, organizationId, receiptId], map: "PostingSourceReview_previous_idx")
 }
 
-// Accepted source entry mirrors remain explicitly unlinked to local claims and procedures.
+// Accepted source entry mirrors preserve raw references. Local relationships are
+// separately reviewed append-only records; they never mutate these source facts.
 model PostingSourceEntry {
   id                   String   @id @default(uuid()) @db.Uuid
   organizationId       String
@@ -775,9 +783,78 @@ model PostingSourceEntry {
 
   review PostingSourceReview @relation(fields: [reviewId, organizationId, receiptId, evidenceId], references: [id, organizationId, receiptId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
 
+  claimRelationships PostingClaimRelationship[]
+
+  @@unique([id, organizationId, receiptId, evidenceId, reviewId], map: "PostingSourceEntry_relationship_binding_key")
   @@unique([reviewId, sourceIndex])
   @@unique([reviewId, sourceEntryId])
   @@index([organizationId, sourceEntryId])
+}
+
+// Explicit reviewed source-to-claim relationships, with no payment allocation or
+// workflow mutation. Active source-entry identity is reserved until full release.
+model PostingClaimRelationship {
+  id                     String   @id @default(uuid()) @db.Uuid
+  organizationId         String
+  receiptId              String   @db.Uuid
+  evidenceId             String   @db.Uuid
+  reviewId               String   @db.Uuid
+  entryId                String   @db.Uuid
+  claimId                String
+  claimSourceLineId      String?  @db.Uuid
+  claimVersion           DateTime
+  claimSourceContentHash String   @db.Char(64)
+  sourceSystem           String   @db.VarChar(32)
+  sourceNamespace        String   @db.VarChar(80)
+  sourceEntryId          String   @db.VarChar(200)
+  sourceClaimId          String   @db.VarChar(200)
+  evidenceHash           String   @db.Char(64)
+  reviewedByUserId       String
+  reviewedByRole         UserRole
+  idempotencyKey         String   @db.Uuid
+  requestHash            String   @db.Char(64)
+  reviewToken            String   @db.Char(64)
+  ledgerVersion          String   @db.VarChar(160)
+  createdAt              DateTime @default(now())
+
+  receipt         PostingSourceReceipt  @relation(fields: [receiptId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  evidence        PostingSourceEvidence @relation(fields: [evidenceId, organizationId, receiptId], references: [id, organizationId, receiptId], onDelete: Restrict, onUpdate: Restrict)
+  review          PostingSourceReview   @relation(fields: [reviewId, organizationId, receiptId, evidenceId], references: [id, organizationId, receiptId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+  entry           PostingSourceEntry    @relation(fields: [entryId, organizationId, receiptId, evidenceId, reviewId], references: [id, organizationId, receiptId, evidenceId, reviewId], onDelete: Restrict, onUpdate: Restrict)
+  claim           Claim                 @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  claimSourceLine ClaimSourceLine?      @relation(fields: [claimSourceLineId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy      User                  @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  release         PostingClaimRelease?
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, sourceSystem, sourceNamespace, sourceEntryId], map: "PostingClaimRelationship_source_idx")
+  @@index([organizationId, claimId])
+  @@index([organizationId, receiptId])
+  @@index([organizationId, createdAt, id])
+}
+
+// Release is an immutable correction, preserving the original reviewed binding.
+model PostingClaimRelease {
+  id                      String   @id @default(uuid()) @db.Uuid
+  organizationId          String
+  relationshipId          String   @unique @db.Uuid
+  reviewedByUserId        String
+  reviewedByRole          UserRole
+  reason                  String   @db.VarChar(20)
+  idempotencyKey          String   @db.Uuid
+  requestHash             String   @db.Char(64)
+  reviewToken             String   @db.Char(64)
+  ledgerVersion           String   @db.VarChar(160)
+  relationshipRequestHash String   @db.Char(64)
+  createdAt               DateTime @default(now())
+
+  relationship PostingClaimRelationship @relation(fields: [relationshipId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy   User                     @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([relationshipId, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, createdAt, id])
 }
 
 // Explicit human cash-to-batch reconciliation. These reservations do not post

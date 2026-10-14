@@ -1888,3 +1888,74 @@ settle a claim. Reviewed posting relationships, claim cash allocation/attributio
 cross-batch ownership transfer, claim-remittance correction chains and real bank/PMS connectors
 remain open, alongside the full original parity plan. No real financial/provider action,
 external notification, merge or deployment is authorized by this local implementation.
+
+## ADR-081 — Reviewed posting-entry identity associations
+
+**Date:** 2026-10-14. **Status:** implemented and verified locally. Migration 33
+is frozen and applied only to localhost isolated/shared databases. Not merged or deployed.
+ADR-080 is the preceding committed slice (`710060b`).
+
+Raw posting references must remain source facts, while a biller can separately review their
+association with an imported claim and optional immutable source line. Matching display numbers,
+procedure codes or amounts is insufficient, and linking an entry must not mutate financial state.
+
+1. Migration 33 `20261014210000_posting_claim_relationships` adds immutable
+   PostingClaimRelationship and PostingClaimRelease tables. Composite organization/source/review/
+   entry/claim/line/actor references, organization and claim admission locks, ledger checks and
+   direct SQL guards protect the association. There is no historical backfill or modification of
+   prior helper definitions, raw snapshots, evidence/review receipts or financial records.
+2. Only DENTRIX, EAGLESOFT and OPEN_DENTAL source systems can resolve targets. Source system,
+   namespace and source claim ID must exactly match the imported claim and its retained source
+   hash. A supplied source line ID requires the exact immutable local source line; a supplied
+   procedure ID must agree on that line. Without a source line ID, only a claim-level association
+   is allowed, even if a raw procedure reference exists. That procedure remains unresolved;
+   duplicate display numbers, repeated procedure codes and monetary similarity are never keys.
+3. The posting observation must be the latest observed revision and accepted. Preview binds the
+   exact source entry/review/hash/currentness, claim version/source hash, optional line, blockers
+   and ledger. Review revalidates those bindings. A newer unreviewed/rejected observation or a
+   changed local claim makes a retained association stale; prior acceptance is not a fallback.
+4. Link and full-release decisions have immutable actor-bound receipts and audited exact retries.
+   A changed request under an existing idempotency key conflicts. List responses separately
+   expose dynamic CURRENT/STALE/RELEASED status. Original posting evidence, source references,
+   header/detail differences, unknowns and signs are never rewritten by the relationship.
+5. An unreleased relationship reserves organization/system/namespace/source-entry identity across
+   revisions and receipt IDs, including omitted, removed, rejected or changed entries. Staleness
+   cannot free it. A fresh separately reviewed full release frees only that association; it remains
+   available when the source or claim is stale. No partial release, automatic relink or transfer
+   occurs. Neither linking nor release changes claim amounts/status, cash, posting evidence,
+   settlement or recovered revenue.
+6. Six authenticated OWNER/ADMIN/BILLING_STAFF handlers provide source targets, filtered history,
+   relationship preview/create and release preview/create. Reads/replays are audited; decision
+   audits commit atomically. Mutation bodies are 4KiB; history pages are bounded to 20 records/
+   2MiB with tenant/filter-bound cursors. Generated SDK and the existing posting dashboard expose
+   exact target review, immutable retry receipts, stale reservations and explicit full release.
+   Source/bank verification and settlement remain UNVERIFIED; claim cash remains UNALLOCATED.
+
+**Local verification:** DB 68 plus migration preservation 1, SDK 63,
+UI 56 and API typecheck/scoped lint pass. Focused API passes 47/47 in 15.42s after an initial 45/47
+with two timeout-only failures; a bounded 30-second test/hook allowance resolved them without a
+product change. Prior DB regressions have passing evidence for all 292 cases across initial 290
+passes plus two timeout rechecks in 721ms under observed host memory paging, not one clean full
+rerun. Independent API and SQL reviews found no actionable issue. The synthetic actual-page/hook/
+SDK capture batch at 1280/390px reports no overflow, page errors or axe violations and proves exact
+create/release retries, explicit release reasons and retained unallocated cash. An initial harness
+async assertion needed a bounded wait; no UI product fix was required. Root nonauthor review
+returned ship; separate documentation inspection found no durable PRODUCT/DESIGN/sidecar delta.
+Detector exit 126 gives no verdict, and this is not an authenticated full-app rehearsal. Full API
+passes cleanly: 956/956 across 44 files in 320.50s
+(`/tmp/dentabill-posting-relationships-api-full.log`). Affected workspace lint/typecheck passes
+30/30 in 1m21.295s (14 cached). API TypeScript, Lambda and Next production builds pass; the posting
+route is 11.6kB/184kB first load. Overlapping suites are not summed.
+No real source/provider request or financial action ran.
+
+Next independent slice: FW-45 guarded synthetic fixtures/manifest, read-only preflight and a
+reproducible walkthrough, followed by authenticated rehearsal and finished-video support. Plan one coherent exact-identity
+bundle: CSV claims, remittance 100/80, provider adjustment -30 and batch net 150, cash 150 matched
+as 100 then 50, posting header 150/entries 180, then corrected batch 140 and explicit releases.
+Use a dedicated localhost demo database and read-only preflight; external configuration remains
+absent except intentional Clerk authentication. Actual authenticated rehearsal/recording and asset
+integration follow the fixture pack. Existing seed/simulator paths are not demo-ready and no
+recording asset exists yet. FW-43 canonical source observations, reviewed legacy binding and additive
+source snapshots/application, claim-remittance correction chains, explicit cross-batch ownership
+transfer, claim cash allocation/attribution, real connectors and the full remaining plan stay open. Local associations do not prove external
+posting, source authenticity, cash receipt, settlement or recovered revenue.

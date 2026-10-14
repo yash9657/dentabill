@@ -32,6 +32,8 @@ export const MULTI_TENANT_MODELS = [
   'postingSourceEvidence',
   'postingSourceReview',
   'postingSourceEntry',
+  'postingClaimRelationship',
+  'postingClaimRelease',
   'reviewNotificationIntent',
   'reviewNotificationDelivery',
   'reviewNotificationAttempt',
