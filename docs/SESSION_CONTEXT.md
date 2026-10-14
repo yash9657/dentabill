@@ -1,8 +1,54 @@
 # Session Context
 
-_Last updated: 2026-10-13 (W0 implementation; AWS baseline reconciled)._
+_Last updated: 2026-10-14 (full-scope goal active; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
+
+### 2026-10-14: full-scope persistent goal and FW-44 reconciliation
+
+The user explicitly requested completion of the entire remaining handoff/main implementation
+plan with continuous work until done. A durable goal is ACTIVE for the full original assignment;
+do not narrow completion to a milestone or synthetic-only feature. Prior authorization remains:
+fake data, local implementation/tests/migrations/commits and useful subagents; no unapproved
+production cutover, real calls, actual claim/payment writes, paid experiment or external message.
+Continue all independent work while external clinic/contracts/connector access remains absent.
+
+Completed this local slice (ADR-076): immutable reviewed signed partial many-to-many cash-to-batch
+matches and explicit full releases. Exact accepted source/review bindings, both capacities and
+historical pending-link identity reservations survive source changes until released. Fresh
+previews bind source/amount/graph/capacity and the six-part ledger. Exact actor/action/token/key
+retries return immutable receipts, while paged status derives CURRENT/STALE/RELEASED. Release
+preview/action never depend on source validity or graph traversal. No bank verification, claim
+cash allocation, external posting or settlement is inferred. Five API handlers, generated SDK
+and actual dashboard support the full local workflow with scoped audit and closed errors.
+
+Migration29 applied only to localhost shared `dentabill_test` and isolated `dentabill_w0_identity`.
+Direct SQL/tenant/race tests and migration preservation retain prior records/helper definitions.
+Final local verification: full API808/808 across41 files (200.25s), focusedAPI55/55; new
+DB59/59 plus migration preservation1/1; existing cash/remittance/batch/tenant228/228; SDK48/48;
+web50/50 (34 reconciliation plus16 navigation); affected Turbo lint/types30/30. API TypeScript,
+both Lambda bundles and Next production build pass; reconciliation route7.83kB/184kB first load.
+Logs `/tmp/dentabill-reconciliation-`: `api-focused.log`, `api-full.log`, `db-regression.log`,
+`checks.log`, `api-build.log`, `lambda-build.log`, `web-build.log`, `api-types.log`. DB logs:
+`/tmp/dentabill-cash-batch-db-final-tests.log`, `...-types.log`, `...-lint.log`. UI logs:
+`/tmp/dentabill-fw44-ui-tests.log`, `...-web-types.log`, `...-ui-lint.log`.
+
+One actual-component synthetic auth/API browser round at1280/390 verified explicit source
+selection, net150, match/release previews, stale retained reservations, released history and
+identical uncertain retries, with zero overflow, page errors or axe violations. Four captures
+and results: `/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-reconciliation-visual-5g9mji22/`.
+Root inspected the mobile capture; independent API and nonauthor UI review found no material
+issues. Separate documenter found no durable design delta; PRODUCT/DESIGN/sidecar preserved.
+Harness stopped. Context/detector permission denial means no detector verdict; full authenticated
+dashboard chrome, Clerk/AWS/bank/PMS integrations remain unverified.
+
+This complete slice is included in `feat(monorepo): add reviewed cash batch reconciliation` on
+`codex/w0-containment`, following `e8b4f7f`; no merge/deployment, both stashes preserved.
+**Exact next task:** independent PMS posting receipts: immutable source identities and ordered
+revisions, explicit claim/procedure source references, separate source-reported amounts/status,
+fresh review and currentness. Then batch/source corrections, claim cash allocation/attribution,
+recovery workflows, real source sync and all remaining W0–W8 gates. Fake data only; no clinic yet.
+All completion claims below refer to earlier milestones, not the active full-scope goal.
 
 ### Latest continuation: FW-44 remittance batch evidence (ADR-075)
 

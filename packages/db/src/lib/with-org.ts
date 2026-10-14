@@ -180,6 +180,22 @@ export function getOrgScopedDb(orgId: string) {
         aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
         groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
       },
+      cashBatchMatch: {
+        findMany: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirst: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirstOrThrow: ({ args, query }) => query(injectOrg(args, orgId)),
+        count: ({ args, query }) => query(injectOrg(args, orgId)),
+        aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
+        groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
+      },
+      cashBatchRelease: {
+        findMany: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirst: ({ args, query }) => query(injectOrg(args, orgId)),
+        findFirstOrThrow: ({ args, query }) => query(injectOrg(args, orgId)),
+        count: ({ args, query }) => query(injectOrg(args, orgId)),
+        aggregate: ({ args, query }) => query(injectOrg(args, orgId)),
+        groupBy: ({ args, query }) => query(injectOrg(args, orgId)),
+      },
       call: {
         findMany: ({ args, query }) => query(injectOrg(args, orgId)),
         findFirst: ({ args, query }) => query(injectOrg(args, orgId)),

@@ -23,6 +23,8 @@ export const MULTI_TENANT_MODELS = [
   'cashSourceTransaction',
   'cashSourceEvidence',
   'cashSourceReview',
+  'cashBatchMatch',
+  'cashBatchRelease',
   'call',
   'callIntent',
   'jobOutbox',

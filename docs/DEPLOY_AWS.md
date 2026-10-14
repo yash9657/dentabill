@@ -620,3 +620,21 @@ Monitor closed error codes, audit health and organization lock latency without l
 Retain immutable evidence if rolling back application exposure. One snapshot per source batch
 is supported; batch correction, authenticated sources, reconciliation, posting and production
 retention/restore evidence remain required. This migration has run only on localhost test DBs.
+
+### Cash-to-batch reconciliation expansion (ADR-076; not deployed)
+
+Migration29 `20261014170000_cash_batch_reconciliation` follows28, adding two immutable tables,
+exact source/review references and bounded cash identity/capacity/ledger admission helpers.
+Applied only to localhost `dentabill_test` and `dentabill_w0_identity`; prior data and helpers
+are retained. Apply the complete migration chain and regenerate Prisma before exposing
+`/dashboard/cash-reconciliations`. No credential or external financial instruction is added.
+
+Validate signed partial many-to-many matches, net150 from180−30, stale/replaced source reservations,
+explicit full release/rematch, exact retries, stale amount/source/ledger previews, audit rollback,
+role/tenant isolation and concurrent capacity races. Releases must remain available even when
+source validity or graph traversal fails. Mutation receipts are immutable; list status is dynamic.
+Bodies4KiB and pages20/2MiB leave response headroom. Monitor closed failure codes, audit health and
+organization lock/query latency without source values. Roll back application exposure while
+retaining immutable financial history. No bank verification, claim cash allocation, external
+posting or settlement is asserted; authenticated connectors, retention/restore and AWS end-to-end
+operation remain gates.

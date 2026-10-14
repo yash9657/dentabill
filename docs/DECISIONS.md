@@ -1636,3 +1636,48 @@ Primary sources checked2026-10-13:
 Next: reviewed bank-to-batch reconciliation with revision/staleness handling and bounded cash
 capacities, then independent PMS posting receipts. Batch corrections, native connectors and
 defensible recovery attribution remain open.
+
+## ADR-076 — Reviewed cash-to-batch matches retain reservations until released
+
+**Date:** 2026-10-14. **Status:** local synthetic implementation; no authenticated bank/PMS
+connector, verified cash receipt, external posting, settlement or production migration.
+
+A bank source can be revised, removed or replaced after a biller matches it to a remittance
+batch. Silently freeing that reservation would let the same reported money be reused. Matches
+therefore retain their exact accepted evidence/review bindings and both capacity reservations
+until a separately reviewed full release. A fresh source observation can make a match stale;
+it cannot erase the decision or change its retry receipt.
+
+1. Migration29 adds immutable `CashBatchMatch` and `CashBatchRelease`, scoped restrictive source,
+   review and actor references, direct SQL admission and organization tuple serialization. It
+   leaves prior evidence and helper definitions unchanged. The organization timestamp is preserved.
+2. Signed nonzero matches support partial many-to-many matching. Both sources must have the
+   proposed direction; the cash evidence must be accepted, latest-observed and POSTED, and the
+   batch must be accepted. Active absolute match sums cannot exceed either absolute source amount.
+   Batch capacity is reviewed net: claim reports180 less provider deduction30 permit150.
+3. Historical accepted pending-link components retain replacement identity across revisions,
+   missing parents, siblings, chains and cycles. A reservation against another evidence in that
+   component blocks reuse until explicit release. A later null never erases an earlier link.
+   Traversal over100 source IDs fails closed. Identity remains scoped to source namespace/account;
+   this does not resolve two connectors referring to the same real bank account or transaction.
+4. Fresh match previews bind both sources, reviews, amount, component, capacities and the six-part
+   cash-evidence:cash-review:batch-evidence:batch-review:match:release ledger. Stored roles remain
+   OWNER/ADMIN/BILLING_STAFF. Exact retries bind actor, command, token and idempotency key.
+5. A full release records WRONG_MATCH, SOURCE_CHANGED or OTHER_REVIEWED_ERROR and requires its
+   own fresh preview and exact retry binding. Release never depends on current source validity
+   or successful graph traversal, so a stale or overflowed source cannot trap its reservation.
+   There is one release per match; partial releases are not supported. No source record is deleted.
+6. Mutation receipts remain immutable on replay. Paged reads separately derive CURRENT, STALE
+   or RELEASED status. All reads/replays/mutations require scoped audit; audit failure withholds
+   reads or rolls back changes. Raw validation/source/Prisma errors stay closed. Five handlers
+   use four `/v1/cash-reconciliations` path keys; bodies4KiB, pages default10/max20 and2MiB.
+7. The generated-SDK dashboard requires explicit source selection and signed amount, shows
+   original source signs separately from nonnegative capacity magnitudes, and preserves uncertain
+   retry commands across both actions. User/organization changes clear scoped state. Source labels
+   or matching traces never infer a relationship. Provenance is MANUAL_REVIEW; bank verification,
+   posting and settlement remain UNVERIFIED and claim cash remains UNALLOCATED.
+
+Primary sources refreshed2026-10-14: [Open Dental reconciliation](https://www.opendental.com/manual/reconcile.html),
+[CMS payment/remittance advice](https://www.cms.gov/medicare/coding-billing/electronic-billing/health-care-payment-remittance-advice).
+Next: independent PMS posting receipts, explicit source/batch corrections, claim cash allocation
+and defensible attribution. Real connectors and authorized end-to-end evidence remain mandatory.

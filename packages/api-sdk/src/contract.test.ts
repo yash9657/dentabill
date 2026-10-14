@@ -64,11 +64,67 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/remittance-batches',
   '/v1/remittance-batches/{id}/preview',
   '/v1/remittance-batches/{id}/review',
+  '/v1/cash-reconciliations',
+  '/v1/cash-reconciliations/preview',
+  '/v1/cash-reconciliations/{id}/release/preview',
+  '/v1/cash-reconciliations/{id}/release',
 ];
 
 describe('OpenAPI ↔ generated types contract', () => {
   it('declares an OpenAPI 3.x document', () => {
     expect(spec.openapi).toMatch(/^3\./);
+  });
+
+  it('separates immutable match receipts from live source currentness and explicit release', () => {
+    const body = ['post', 'requestBody', 'content', 'application/json', 'schema'];
+    expect(spec.paths['/v1/cash-reconciliations']).toHaveProperty(
+      [...body, 'required'],
+      ['cashEvidenceId', 'batchEvidenceId', 'amount', 'reviewToken', 'idempotencyKey'],
+    );
+    const receipt = [
+      'post',
+      'responses',
+      '201',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    for (const field of ['bankVerification', 'posting', 'settlement'])
+      expect(spec.paths['/v1/cash-reconciliations']).toHaveProperty(
+        [...receipt, field, 'enum'],
+        ['UNVERIFIED'],
+      );
+    expect(spec.paths['/v1/cash-reconciliations']).toHaveProperty(
+      [...receipt, 'claimCashAllocation', 'enum'],
+      ['UNALLOCATED'],
+    );
+    expect(spec.paths['/v1/cash-reconciliations']).not.toHaveProperty([...receipt, 'status']);
+    expect(spec.paths['/v1/cash-reconciliations']).toHaveProperty(
+      [
+        'get',
+        'responses',
+        '200',
+        'content',
+        'application/json',
+        'schema',
+        'properties',
+        'items',
+        'items',
+        'properties',
+        'status',
+        'enum',
+      ],
+      ['CURRENT', 'STALE', 'RELEASED'],
+    );
+    expect(spec.paths['/v1/cash-reconciliations/{id}/release']).toHaveProperty(
+      [...body, 'required'],
+      ['reason', 'reviewToken', 'idempotencyKey'],
+    );
+    expect(spec.paths['/v1/cash-reconciliations/{id}/release']).toHaveProperty(
+      [...body, 'properties', 'reason', 'enum'],
+      ['WRONG_MATCH', 'SOURCE_CHANGED', 'OTHER_REVIEWED_ERROR'],
+    );
   });
 
   it('keeps batch gross, signed provider effects and net separate from verified money', () => {

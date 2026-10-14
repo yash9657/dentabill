@@ -44,6 +44,8 @@ export type {
   CashSourceTransaction,
   CashSourceEvidence,
   CashSourceReview,
+  CashBatchMatch,
+  CashBatchRelease,
   Call,
   CallIntent,
   CallIntentState,

@@ -388,3 +388,13 @@ manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
 - `apps/web/src/components/dashboard/remittance-batches`: source inbox, header/listed totals, original signs, member review and transport-level regressions.
 - `apps/web/src/lib/remittance-batches/use-remittance-batches.ts`: scoped generated-SDK paging, preview and stable retry commands.
 - `apps/api/test/fixtures/remittance-batches` and `apps/web/public/examples/synthetic-remittance-batch.json`: explicitly fabricated custom JSON, not native provider exports.
+
+## Cash-to-batch reconciliation (FW-44; ADR-076)
+
+- `apps/api/src/lib/cash-reconciliation/{contract,service}.ts`: signed partial matching, retained replacement reservations, immutable decision receipts, dynamic status and full releases.
+- `apps/api/src/routes/v1/cash-reconciliation{,.test}.ts`: five scoped handlers and55 real-Postgres workflow/fault/race regressions.
+- `packages/db/prisma/migrations/20261014170000_cash_batch_reconciliation/migration.sql`: two immutable tables, exact accepted-source references, bounded historical identity components, capacity/ledger admission and organization serialization.
+- `packages/db/src/lib/cash-batch-reconciliation{,-migration}.test.ts`: direct SQL, capacity/tenant/revision/race/overflow invariants and preservation proof.
+- `apps/web/src/app/dashboard/cash-reconciliations/page.tsx`: authenticated dashboard entry.
+- `apps/web/src/components/dashboard/cash-reconciliations`: explicit source selection, signed preview, current/stale/released history and full release controls.
+- `apps/web/src/lib/cash-reconciliations`: scoped generated-SDK transport, source paging, immutable uncertain retries and tests.

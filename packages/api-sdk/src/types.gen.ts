@@ -3854,6 +3854,535 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cash-reconciliations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                reviewedByUserId: string;
+                                /** @enum {string} */
+                                reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                amount: string;
+                                cash: {
+                                    /** Format: uuid */
+                                    transactionId: string;
+                                    /** Format: uuid */
+                                    evidenceId: string;
+                                    /** Format: uuid */
+                                    reviewId: string | null;
+                                    /** @enum {string|null} */
+                                    reviewDecision: "ACCEPT" | "REJECT" | null;
+                                    contentHash: string;
+                                    sourceSystem: string;
+                                    sourceProduct: string;
+                                    sourceNamespace: string;
+                                    sourceAccountId: string;
+                                    sourceTransactionId: string;
+                                    sourceRecordId: string;
+                                    sourceSequence: number;
+                                    sourceDocumentId: string;
+                                    /** Format: uuid */
+                                    latestEvidenceId: string;
+                                    latestSourceSequence: number;
+                                    /** Format: uuid */
+                                    currentAcceptedEvidenceId: string | null;
+                                    /** @enum {string} */
+                                    status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                                    amount: string | null;
+                                    sourceAmount: string | null;
+                                    /** @enum {string} */
+                                    sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                                    /** @enum {string} */
+                                    currency: "USD";
+                                    postingDate: string | null;
+                                    paymentTrace: string | null;
+                                    pendingSourceTransactionId: string | null;
+                                };
+                                batch: {
+                                    /** Format: uuid */
+                                    evidenceId: string;
+                                    /** Format: uuid */
+                                    reviewId: string | null;
+                                    /** @enum {string|null} */
+                                    reviewDecision: "ACCEPT" | "REJECT" | null;
+                                    contentHash: string;
+                                    sourceNamespace: string;
+                                    sourceBatchId: string;
+                                    sourceRecordId: string;
+                                    sourceDocumentId: string;
+                                    payerName: string;
+                                    claimReportedAmount: string | null;
+                                    providerAdjustmentAmount: string | null;
+                                    netAmount: string | null;
+                                    /** @enum {string} */
+                                    currency: "USD";
+                                    paymentTrace: string | null;
+                                };
+                                /** @enum {string} */
+                                status: "CURRENT" | "STALE" | "RELEASED";
+                                blockers: ("CASH_NOT_ACCEPTED" | "CASH_NOT_CURRENT" | "CASH_NOT_POSTED" | "CASH_ZERO_AMOUNT" | "BATCH_NOT_ACCEPTED" | "BATCH_ZERO_NET" | "DIRECTION_MISMATCH" | "CASH_CAPACITY_EXCEEDED" | "BATCH_CAPACITY_EXCEEDED" | "STALE_CASH_RESERVATION" | "SOURCE_LINK_LIMIT" | "CASH_IDENTITY_CONFLICT")[];
+                                release: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                    reviewedByUserId: string;
+                                    /** @enum {string} */
+                                    reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                    /** @enum {string} */
+                                    reason: "WRONG_MATCH" | "SOURCE_CHANGED" | "OTHER_REVIEWED_ERROR";
+                                } | null;
+                                /** @enum {string} */
+                                provenance: "MANUAL_REVIEW";
+                                /** @enum {string} */
+                                bankVerification: "UNVERIFIED";
+                                /** @enum {string} */
+                                posting: "UNVERIFIED";
+                                /** @enum {string} */
+                                settlement: "UNVERIFIED";
+                                /** @enum {string} */
+                                claimCashAllocation: "UNALLOCATED";
+                            }[];
+                            hasMore: boolean;
+                            nextCursor: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Record a reviewed signed match between current accepted manual cash evidence and an accepted remittance batch. Reserves both capacities; does not verify bank receipt, allocate claim cash, post payments or establish settlement. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        cashEvidenceId: string;
+                        /** Format: uuid */
+                        batchEvidenceId: string;
+                        amount: string;
+                        reviewToken: string;
+                        /** Format: uuid */
+                        idempotencyKey: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            reviewedByUserId: string;
+                            /** @enum {string} */
+                            reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                            /** Format: uuid */
+                            cashTransactionId: string;
+                            /** Format: uuid */
+                            cashEvidenceId: string;
+                            /** Format: uuid */
+                            cashReviewId: string;
+                            /** Format: uuid */
+                            batchEvidenceId: string;
+                            /** Format: uuid */
+                            batchReviewId: string;
+                            amount: string;
+                            /** @enum {string} */
+                            provenance: "MANUAL_REVIEW";
+                            /** @enum {string} */
+                            bankVerification: "UNVERIFIED";
+                            /** @enum {string} */
+                            posting: "UNVERIFIED";
+                            /** @enum {string} */
+                            settlement: "UNVERIFIED";
+                            /** @enum {string} */
+                            claimCashAllocation: "UNALLOCATED";
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            reviewedByUserId: string;
+                            /** @enum {string} */
+                            reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                            /** Format: uuid */
+                            cashTransactionId: string;
+                            /** Format: uuid */
+                            cashEvidenceId: string;
+                            /** Format: uuid */
+                            cashReviewId: string;
+                            /** Format: uuid */
+                            batchEvidenceId: string;
+                            /** Format: uuid */
+                            batchReviewId: string;
+                            amount: string;
+                            /** @enum {string} */
+                            provenance: "MANUAL_REVIEW";
+                            /** @enum {string} */
+                            bankVerification: "UNVERIFIED";
+                            /** @enum {string} */
+                            posting: "UNVERIFIED";
+                            /** @enum {string} */
+                            settlement: "UNVERIFIED";
+                            /** @enum {string} */
+                            claimCashAllocation: "UNALLOCATED";
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cash-reconciliations/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        cashEvidenceId: string;
+                        /** Format: uuid */
+                        batchEvidenceId: string;
+                        amount: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            candidate: {
+                                /** Format: uuid */
+                                cashEvidenceId: string;
+                                /** Format: uuid */
+                                batchEvidenceId: string;
+                                amount: string;
+                            };
+                            cash: {
+                                /** Format: uuid */
+                                transactionId: string;
+                                /** Format: uuid */
+                                evidenceId: string;
+                                /** Format: uuid */
+                                reviewId: string | null;
+                                /** @enum {string|null} */
+                                reviewDecision: "ACCEPT" | "REJECT" | null;
+                                contentHash: string;
+                                sourceSystem: string;
+                                sourceProduct: string;
+                                sourceNamespace: string;
+                                sourceAccountId: string;
+                                sourceTransactionId: string;
+                                sourceRecordId: string;
+                                sourceSequence: number;
+                                sourceDocumentId: string;
+                                /** Format: uuid */
+                                latestEvidenceId: string;
+                                latestSourceSequence: number;
+                                /** Format: uuid */
+                                currentAcceptedEvidenceId: string | null;
+                                /** @enum {string} */
+                                status: "PENDING" | "POSTED" | "REMOVED" | "UNKNOWN";
+                                amount: string | null;
+                                sourceAmount: string | null;
+                                /** @enum {string} */
+                                sourceSignConvention: "CREDIT_POSITIVE" | "DEBIT_POSITIVE";
+                                /** @enum {string} */
+                                currency: "USD";
+                                postingDate: string | null;
+                                paymentTrace: string | null;
+                                pendingSourceTransactionId: string | null;
+                            };
+                            batch: {
+                                /** Format: uuid */
+                                evidenceId: string;
+                                /** Format: uuid */
+                                reviewId: string | null;
+                                /** @enum {string|null} */
+                                reviewDecision: "ACCEPT" | "REJECT" | null;
+                                contentHash: string;
+                                sourceNamespace: string;
+                                sourceBatchId: string;
+                                sourceRecordId: string;
+                                sourceDocumentId: string;
+                                payerName: string;
+                                claimReportedAmount: string | null;
+                                providerAdjustmentAmount: string | null;
+                                netAmount: string | null;
+                                /** @enum {string} */
+                                currency: "USD";
+                                paymentTrace: string | null;
+                            };
+                            capacity: {
+                                cashReservedMagnitude: string;
+                                cashAvailableMagnitude: string | null;
+                                batchReservedMagnitude: string;
+                                batchAvailableMagnitude: string | null;
+                            };
+                            blockers: ("CASH_NOT_ACCEPTED" | "CASH_NOT_CURRENT" | "CASH_NOT_POSTED" | "CASH_ZERO_AMOUNT" | "BATCH_NOT_ACCEPTED" | "BATCH_ZERO_NET" | "DIRECTION_MISMATCH" | "CASH_CAPACITY_EXCEEDED" | "BATCH_CAPACITY_EXCEEDED" | "STALE_CASH_RESERVATION" | "SOURCE_LINK_LIMIT" | "CASH_IDENTITY_CONFLICT")[];
+                            reviewToken: string;
+                            ledgerVersion: string;
+                            /** @enum {string} */
+                            provenance: "MANUAL_REVIEW";
+                            /** @enum {string} */
+                            bankVerification: "UNVERIFIED";
+                            /** @enum {string} */
+                            posting: "UNVERIFIED";
+                            /** @enum {string} */
+                            settlement: "UNVERIFIED";
+                            /** @enum {string} */
+                            claimCashAllocation: "UNALLOCATED";
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cash-reconciliations/{id}/release/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        reason: "WRONG_MATCH" | "SOURCE_CHANGED" | "OTHER_REVIEWED_ERROR";
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            match: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                reviewedByUserId: string;
+                                /** @enum {string} */
+                                reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                /** Format: uuid */
+                                cashTransactionId: string;
+                                /** Format: uuid */
+                                cashEvidenceId: string;
+                                /** Format: uuid */
+                                cashReviewId: string;
+                                /** Format: uuid */
+                                batchEvidenceId: string;
+                                /** Format: uuid */
+                                batchReviewId: string;
+                                amount: string;
+                                /** @enum {string} */
+                                provenance: "MANUAL_REVIEW";
+                                /** @enum {string} */
+                                bankVerification: "UNVERIFIED";
+                                /** @enum {string} */
+                                posting: "UNVERIFIED";
+                                /** @enum {string} */
+                                settlement: "UNVERIFIED";
+                                /** @enum {string} */
+                                claimCashAllocation: "UNALLOCATED";
+                            };
+                            release: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: date-time */
+                                createdAt: string;
+                                reviewedByUserId: string;
+                                /** @enum {string} */
+                                reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                                /** @enum {string} */
+                                reason: "WRONG_MATCH" | "SOURCE_CHANGED" | "OTHER_REVIEWED_ERROR";
+                            } | null;
+                            /** @enum {string} */
+                            reason: "WRONG_MATCH" | "SOURCE_CHANGED" | "OTHER_REVIEWED_ERROR";
+                            canRelease: boolean;
+                            reviewToken: string;
+                            ledgerVersion: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cash-reconciliations/{id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Explicitly release one entire source match while retaining its immutable history. Available despite stale source evidence or replacement graph limits. Does not reverse a payment or change source records. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        reason: "WRONG_MATCH" | "SOURCE_CHANGED" | "OTHER_REVIEWED_ERROR";
+                        reviewToken: string;
+                        /** Format: uuid */
+                        idempotencyKey: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            reviewedByUserId: string;
+                            /** @enum {string} */
+                            reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                            /** @enum {string} */
+                            reason: "WRONG_MATCH" | "SOURCE_CHANGED" | "OTHER_REVIEWED_ERROR";
+                            /** Format: uuid */
+                            matchId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            reviewedByUserId: string;
+                            /** @enum {string} */
+                            reviewedByRole: "OWNER" | "ADMIN" | "BILLING_STAFF";
+                            /** @enum {string} */
+                            reason: "WRONG_MATCH" | "SOURCE_CHANGED" | "OTHER_REVIEWED_ERROR";
+                            /** Format: uuid */
+                            matchId: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/observations/{id}/regeneration-preview": {
         parameters: {
             query?: never;

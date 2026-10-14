@@ -5,6 +5,7 @@ import {
   FileText,
   LayoutDashboard,
   Landmark,
+  Link2,
   ReceiptText,
   PhoneCall,
   Search,
@@ -52,6 +53,12 @@ const destinations = [
     description: 'Import and review account source records',
     href: '/dashboard/cash-evidence',
     icon: Landmark,
+  },
+  {
+    label: 'Cash reconciliation',
+    description: 'Review cash-to-batch matches and release reservations',
+    href: '/dashboard/cash-reconciliations',
+    icon: Link2,
   },
   {
     label: 'Reports',

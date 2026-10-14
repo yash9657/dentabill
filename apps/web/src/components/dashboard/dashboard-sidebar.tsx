@@ -7,6 +7,7 @@ import {
   FileText,
   LayoutDashboard,
   Landmark,
+  Link2,
   ReceiptText,
   PhoneCall,
   Settings,
@@ -50,6 +51,7 @@ export const DASHBOARD_NAV_LINKS: readonly {
   { href: '/dashboard/calls', label: 'Calls', icon: PhoneCall },
   { href: '/dashboard/remittance-batches', label: 'Remittance batches', icon: ReceiptText },
   { href: '/dashboard/cash-evidence', label: 'Cash evidence', icon: Landmark },
+  { href: '/dashboard/cash-reconciliations', label: 'Cash reconciliation', icon: Link2 },
   { href: '/dashboard/reports', label: 'Reports', icon: TrendingUp },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];

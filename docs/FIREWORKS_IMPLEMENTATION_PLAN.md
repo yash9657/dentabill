@@ -1,5 +1,15 @@
 # DentaBill: competitive gaps and the Fireworks implementation plan
 
+Current local progress (2026-10-14, ADR-076): the full original assignment is an ACTIVE durable
+goal. FW-44 adds reviewed signed partial cash-to-batch matches, retained reservations across
+source changes/replacements, and separately reviewed full releases through API/SDK/dashboard.
+Exact immutable retry receipts are separate from live CURRENT/STALE/RELEASED status; direct SQL
+and concurrent reviews enforce both capacities. Migration29 is local only. Matching manual
+evidence does not verify bank receipt, allocate claim cash, post a payment or settle a claim.
+Next: independent PMS posting receipts, batch/source corrections, claim allocation/attribution,
+then the remaining source sync, recovery, AI/voice and operational work below. External gates and
+the complete parity scope remain unchanged; continue independent work while access is absent.
+
 Current local progress (2026-10-13, ADR-075): FW-44 now adds immutable manual batch snapshots,
 explicit full signed claim-event membership, provider adjustment source signs/codes and separate
 claim/adjustment/net totals through API/SDK/dashboard review.100+80−30=150 is payer-reported batch

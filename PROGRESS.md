@@ -2,14 +2,26 @@
 
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
-**Last updated:** 2026-10-13
-**Current work:** reviewed remittance batch evidence and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
+**Last updated:** 2026-10-14
+**Current work:** reviewed cash-to-batch reconciliation and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
 `codex/w0-containment`. The full parity assignment remains incomplete; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice:** FW-44 now preserves explicit remittance batch net, full signed claim
+**Latest local slice:** FW-44 reviewed cash-to-batch reconciliation (ADR-076) supports signed
+partial many-to-many matches with exact accepted source/review bindings, two-sided capacities,
+retained stale/replacement reservations, immutable retry receipts and explicit full releases.
+Migration29/API/SDK/dashboard are locally implemented and validated. FullAPI808/41files, focused55,
+newDB59+preservation1, financial/tenant228, UI50, SDK48 and lint/types30 pass; API/Lambda/Next
+builds pass. Synthetic desktop/mobile checks and independent API/UI reviews pass. The coherent
+slice is committed locally; no merge or deployment. The durable full-scope goal remains ACTIVE.
+
+Next: independent PMS posting receipts, then explicit source/batch corrections, claim cash
+allocation/attribution and all remaining recovery/integration/AI/voice/operation gates. Manual
+matching does not verify bank receipt, post a payment or settle a claim. No real financial action ran.
+
+**Previous local slice:** FW-44 now preserves explicit remittance batch net, full signed claim
 report membership and provider adjustments with original signs/codes/references (ADR-075).
 Import, fresh preview, immutable review and dashboard support100+80−30=150 without calling150
 verified cash. Incomplete/unknown/unbalanced evidence cannot be accepted; claim report events

@@ -95,3 +95,12 @@ it('marks remittance batches as a separate review destination', () => {
   );
   expect(screen.getByRole('link', { name: 'Cash evidence' })).not.toHaveAttribute('aria-current');
 });
+
+it('marks cash reconciliation separately from cash source review', () => {
+  renderSidebar({ pathname: '/dashboard/cash-reconciliations' });
+  expect(screen.getByRole('link', { name: 'Cash reconciliation' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  expect(screen.getByRole('link', { name: 'Cash evidence' })).not.toHaveAttribute('aria-current');
+});

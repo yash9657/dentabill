@@ -259,3 +259,16 @@ Organization admission locks, immutable exact member/review bindings and restric
 FKs prevent tenant crossing and repeated accepted claim events. Manual acceptance establishes
 neither source authenticity nor bank receipt, posting or settlement. Production retention,
 erasure, PHI agreements, batch corrections and authenticated connectors remain separate gates.
+
+### Manual cash reconciliation (ADR-076; local only)
+
+Five scoped handlers require stored OWNER/ADMIN/BILLING_STAFF roles and mandatory audited reads,
+replays and atomic mutations. Source/payment identities remain sensitive; fixed errors and opaque
+audit metadata avoid payload logging. Signed capacities, exact accepted-review references and
+organization serialization prevent duplicate reservations, including direct SQL and concurrent
+reviews. Historical replacement components retain reservations after source changes; traversal
+over100 IDs blocks matching. Full release is available independently of stale/overflowed source
+state. Mutation receipts never change on retry.4KiB bodies and20-record/2MiB pages bound requests.
+Manual review establishes no source authenticity, bank verification, claim allocation, external
+posting or settlement. Cross-connector account identity, production retention/erasure, PHI
+agreements and authorized bank/PMS integration evidence remain unresolved deployment gates.

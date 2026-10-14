@@ -208,6 +208,8 @@ model User {
   remittanceReviews        ClaimRemittanceReview[]
   cashSourceReviews        CashSourceReview[]
   remittanceBatchReviews   RemittanceBatchReview[]
+  cashBatchMatches         CashBatchMatch[]
+  cashBatchReleases        CashBatchRelease[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -455,6 +457,7 @@ model RemittanceBatchEvidence {
   organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   review       RemittanceBatchReview?
   members      RemittanceBatchClaim[]
+  cashMatches  CashBatchMatch[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, sourceNamespace, sourceBatchId], map: "RemittanceBatchEvidence_batch_key")
@@ -485,6 +488,7 @@ model RemittanceBatchReview {
   reviewedBy  User                        @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
   members     RemittanceBatchClaim[]
   adjustments RemittanceBatchAdjustment[]
+  cashMatches CashBatchMatch[]
 
   @@unique([id, organizationId])
   @@unique([id, organizationId, evidenceId], map: "RemittanceBatchReview_binding_key")
@@ -552,6 +556,7 @@ model CashSourceTransaction {
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   evidence     CashSourceEvidence[]
   reviews      CashSourceReview[]
+  batchMatches CashBatchMatch[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, sourceNamespace, sourceAccountId, sourceTransactionId], map: "CashSourceTransaction_source_key")
@@ -578,6 +583,7 @@ model CashSourceEvidence {
   transaction       CashSourceTransaction @relation(fields: [transactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
   review            CashSourceReview?     @relation("CashReviewedEvidence")
   subsequentReviews CashSourceReview[]    @relation("CashPreviousAcceptedEvidence")
+  batchMatches      CashBatchMatch[]
 
   @@unique([id, organizationId, transactionId])
   @@unique([organizationId, sourceNamespace, sourceAccountId, sourceRecordId], map: "CashSourceEvidence_source_event_key")
@@ -607,10 +613,72 @@ model CashSourceReview {
   previousAcceptedEvidence CashSourceEvidence?   @relation("CashPreviousAcceptedEvidence", fields: [previousAcceptedEvidenceId, organizationId, transactionId], references: [id, organizationId, transactionId], onDelete: Restrict, onUpdate: Restrict)
   reviewedBy               User                  @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
 
+  batchMatches CashBatchMatch[]
+
+  @@unique([id, organizationId, transactionId, evidenceId], map: "CashSourceReview_match_binding_key")
   @@unique([organizationId, idempotencyKey])
   @@unique([evidenceId, organizationId, transactionId])
   @@index([organizationId, transactionId, sourceSequence])
   @@index([previousAcceptedEvidenceId, organizationId, transactionId], map: "CashSourceReview_previous_idx")
+}
+
+// Explicit human cash-to-batch reconciliation. These reservations do not post
+// payments, allocate cash to claims, or establish bank verification or settlement.
+model CashBatchMatch {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String
+  cashTransactionId String   @db.Uuid
+  cashEvidenceId    String   @db.Uuid
+  cashReviewId      String   @db.Uuid
+  batchEvidenceId   String   @db.Uuid
+  batchReviewId     String   @db.Uuid
+  amount            Decimal  @db.Decimal(10, 2)
+  reviewedByUserId  String
+  reviewedByRole    UserRole
+  idempotencyKey    String   @db.Uuid
+  requestHash       String   @db.Char(64)
+  reviewToken       String   @db.Char(64)
+  ledgerVersion     String   @db.VarChar(160)
+  cashEvidenceHash  String   @db.Char(64)
+  batchEvidenceHash String   @db.Char(64)
+  createdAt         DateTime @default(now())
+
+  cashTransaction CashSourceTransaction   @relation(fields: [cashTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  cashEvidence    CashSourceEvidence      @relation(fields: [cashEvidenceId, organizationId, cashTransactionId], references: [id, organizationId, transactionId], onDelete: Restrict, onUpdate: Restrict)
+  cashReview      CashSourceReview        @relation(fields: [cashReviewId, organizationId, cashTransactionId, cashEvidenceId], references: [id, organizationId, transactionId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+  batchEvidence   RemittanceBatchEvidence @relation(fields: [batchEvidenceId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  batchReview     RemittanceBatchReview   @relation(fields: [batchReviewId, organizationId, batchEvidenceId], references: [id, organizationId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy      User                    @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  release         CashBatchRelease?
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, cashTransactionId])
+  @@index([organizationId, batchEvidenceId])
+  @@index([organizationId, createdAt, id])
+}
+
+// Immutable release history. Stale reservations remain active until explicitly released.
+model CashBatchRelease {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String
+  matchId          String   @unique @db.Uuid
+  reviewedByUserId String
+  reviewedByRole   UserRole
+  reason           String   @db.VarChar(20)
+  idempotencyKey   String   @db.Uuid
+  requestHash      String   @db.Char(64)
+  reviewToken      String   @db.Char(64)
+  ledgerVersion    String   @db.VarChar(160)
+  matchRequestHash String   @db.Char(64)
+  createdAt        DateTime @default(now())
+
+  match      CashBatchMatch @relation(fields: [matchId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy User           @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([matchId, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, createdAt, id])
 }
 
 model Call {

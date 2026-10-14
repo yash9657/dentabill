@@ -70,3 +70,14 @@ it('finds the remittance batch workflow by provider adjustment task', async () =
     '/dashboard/remittance-batches',
   );
 });
+
+it('finds cash reconciliation through reservation release work', async () => {
+  const user = userEvent.setup();
+  render(<DashboardSearch />);
+  await user.click(screen.getByRole('button', { name: /open command palette/i }));
+  await user.type(screen.getByRole('searchbox', { name: 'Find a page' }), 'release reservations');
+  expect(screen.getByRole('link', { name: /Cash reconciliation/ })).toHaveAttribute(
+    'href',
+    '/dashboard/cash-reconciliations',
+  );
+});
