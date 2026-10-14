@@ -13,6 +13,35 @@ Evidence labels:
 
 ## Local implementation evidence added after the baseline
 
+FW-45 isolated launcher (ADR-084) is **repository/local synthetic evidence**.
+The actual API/private Prisma child repeats the read-only preflight and requires Clerk keys;
+actual Next runs from a physical private copy with no repository dotenv and no database/job
+secrets in its environment. Launch-bound IPC and parent API-readiness/manifest-hash probes gate
+SERVICES_RUNNING. Exact loopback ports, owned process groups, bounded shutdown and explicit cleanup
+failures preserve the local database and avoid unrelated process termination. The actual CLI
+smoke passes: SERVICES_RUNNING, exact served manifest, public200, test-header `/v1/me`401, SIGTERM
+STOPPED, released listeners and unchanged database hashes; the owned test database was removed
+(`/tmp/dentabill-demo-launch-smoke.log`). The final combined suite70/70 across8 files, affected
+API/dependency checks24/24, all three strict CLI types and API build pass. Independent API/process/
+web review is clear. ADR-083 is
+committed as `f3c8796`. Fake/nonworking Clerk keys and running services do not verify authentication,
+the authenticated full app or a recording; those markers remain NOT_VERIFIED. No provider, financial
+integration or production evidence gate is closed by this launcher.
+
+The initial actual Next attempt lacked root-level TypeScript resolution and triggered npm
+metadata GETs plus cache/log writes before failing on `workspace:*`, before installation. Original
+workspace packages were unchanged and the failed private runtime was removed. The helper now
+uses two explicit trusted dependency links and checks the installed TypeScript/React types/Node
+types requirements before Next starts. No zero-network claim applies to the failed attempt.
+A subsequent NextURL loopback normalization/Clerk rewrite self-proxy loop requires an explicit
+web `localhost` hostname and distinct nonzero ports; the launcher refuses other web loopback
+names instead of rewriting them. API loopback support is unchanged. Successful smoke is recorded
+above, with final tests/checks now passing. Separately, the requested read-only Clerk CLI discovery
+identified the development instance/domain and matching existing admin associated with
+`usedentabill.xyz`; no keys were printed and no mutations were made. Actual authentication and the
+full synthetic capabilities rehearsal, including dummy IVR/claim collection, remain follow-on work. No real calls, inference or source production cutover
+is claimed.
+
 FW-45 create-only provisioning (ADR-083) is **repository/local synthetic evidence**. The isolated
 CLI stages checked migration bytes, creates only a fresh admitted localhost database, refuses
 existing/racing targets and checks the exact applied journal. It atomically creates one synthetic

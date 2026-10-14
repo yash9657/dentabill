@@ -405,3 +405,36 @@ CLI 33-migration creation/refusal/read-only preflight smoke passes, along with f
 API/dependency checks24/24, both strict CLI types and API production build. The final 8-case recheck
 overlaps the 42 distinct cases. An isolated app launcher and authenticated
 rehearsal remain separate gates; no provider or production authorization is implied.
+
+### Isolated local demo launcher (ADR-084; locally verified)
+
+The parent validates a fresh environment snapshot and derives explicit API and web allowlists.
+The private API/Prisma child repeats the read-only preflight before constructing/listening with
+the actual API and requires configured Clerk keys. The web allowlist contains local origins and
+Clerk configuration but excludes the database URL and job secret. Next runs against a physical
+private copy of source, public assets, required configuration and shared UI; dotenv names are
+excluded before file access, other source symlinks are refused and file/tree reads are bounded.
+Two explicit links at private root and app `node_modules` reuse trusted installed dependencies.
+TypeScript, React types and Node types must resolve to the same installed setup files before Next
+starts; this guards the initial missing-dependency auto-install path, verified by final tests and
+actual private Next startup.
+The copied manifest and fixture
+hashes must match that launch's successful preflight. Installed toolchain and parent-preload trust
+limits from ADR-082 continue to apply; this is not a hostile-host sandbox.
+
+Owned IPC must match the launch UUID, approved origin and closed message shape before parent
+probes check API readiness and the exact served manifest hash. These checks establish startup
+readiness, not authentication. The web hostname must explicitly be `localhost` to avoid NextURL/
+Clerk self-proxy rewrites; the API permits admitted loopback hosts. Distinct nonzero ports are
+required, without fallback or silent hostname rewriting. Children
+run in owned process groups on macOS/Linux with discarded raw logs; bounded termination targets
+only those groups. `forcedBySupervisor` reports supervisor force only; child watchdogs are separate
+and shutdown does not guarantee job drain. Unconfirmed process/file cleanup returns a closed
+failure instead of success.
+Startup/stop does not migrate, reset or drop the database; later authenticated app actions retain
+their normal local write semantics. SERVICES_RUNNING still reports authentication, rehearsal and
+recording NOT_VERIFIED. Actual CLI startup/public-page/manifest/auth-bypass-refusal/stop smoke passes
+with fake Clerk keys, unchanged database hashes and released listeners. The final combined suite
+passes 70/70 across8 files, affected API/dependency checks24/24, all three strict CLI types and API
+build pass; independent API/process/web review is clear. Actual Clerk rehearsal and external/production evidence remain
+separate gates.

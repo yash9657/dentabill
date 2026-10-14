@@ -80,7 +80,25 @@ pnpm --filter @dentabill/api exec tsx scripts/demo-preflight.mts \
 
 Replace every placeholder with the intended actor’s actual identifiers. Success prints `PREFLIGHT_PASSED`, `readOnly: true` and the migration count/actor role, while authentication, authenticated rehearsal and recording remain explicitly **not verified**. It checks local configuration, the bundle, migrations and database bindings in a read-only transaction. It does not start servers, create an actor or practice, apply migrations, upload records, contact Clerk to validate membership, or record a video. A failure returns a closed reason code; fix the named prerequisite rather than weakening the guard.
 
-**Launch remains a separate pending step.** Create-only provisioning is implemented. The isolated API/web launcher and authenticated rehearsal must still be completed before using this guide to record. Do not treat raw `pnpm dev`, inherited `.env` files or dotenv symlinks as the verified launch path. Do not substitute the legacy seed or simulator for a missing prerequisite.
+### Launch the app
+
+Keep the same explicit configuration and actor arguments. The web URL must use `http://localhost:<port>`; the API may use any admitted loopback host. The launcher refuses a web IP literal because the pinned Next/Clerk combination can turn its normalized localhost rewrite into a routing loop. It never silently rewrites your configured origin. The app and API must use different, nonzero ports. From the repository root, run:
+
+```bash
+pnpm --filter @dentabill/api exec tsx scripts/demo-launch.mts \
+  --organization-id '<local-organization-id>' \
+  --user-id '<local-user-id>' \
+  --clerk-organization-id 'org_REPLACE_WITH_ACTUAL_ID' \
+  --clerk-user-id 'user_REPLACE_WITH_ACTUAL_ID'
+```
+
+The launcher repeats read-only preflight in the API's private runtime before listening. It stages a private physical copy of the web app, its public assets and shared UI styles, excluding dotenv files, caches and test artifacts. Next receives only the selected local URLs and Clerk test configuration; it receives no database or job secrets. Both services bind to the configured loopback origins. An occupied port fails the launch instead of selecting a different port or stopping another server. The installed workspace dependencies remain trusted and linked; this copy is not an independent dependency snapshot.
+
+Wait for `SERVICES_RUNNING`, then open its `appOrigin`. That status confirms owned server startup, API readiness and the served demo manifest hash. It does **not** establish Clerk sign-in, active organization or a successful walkthrough: authentication, authenticated rehearsal and recording remain `NOT_VERIFIED`. The first page compilation may download Google Fonts; allow it to complete before rehearsal. Child logs are suppressed, and startup failures report a fixed reason code without credentials or record contents.
+
+Leave the command running while rehearsing or recording. Press **Ctrl+C** to stop its owned API/web processes and remove their private runtime folders. The demo database and all saved reviews are preserved. `STOPPED` reports whether the supervisor sent a forced termination (`forcedBySupervisor`); children also have their own shutdown deadlines, and this status does not certify graceful completion of in-flight work. Wait for fake calls and analysis to finish in the app before stopping. `DEMO_CLEANUP_UNCONFIRMED` means the launcher could not confirm process or temporary-folder cleanup; it preserves runtime folders if owned processes may still be active.
+
+Do not treat raw `pnpm dev`, inherited `.env` files or dotenv symlinks as this isolated launch path. Do not substitute the legacy seed or simulator for a missing prerequisite. Before recording, sign in with the intended Clerk development user, select the matching organization, verify `/v1/me` resolves that exact local actor, and complete the walkthrough once in the actual browser. That authenticated rehearsal is still pending.
 
 Do **not** run `seed:demo --reset`, the old 40-claim demo seed, or `demo:call` / `simulate-live-call.mts` for this walkthrough. Their old assumptions and unscoped simulation are not this bundle’s authenticated workflow. Do not create test-header browser bypasses.
 

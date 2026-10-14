@@ -9,7 +9,35 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice — FW-45 create-only demo provisioning (ADR-083), locally verified:**
+**Latest local slice — FW-45 isolated demo launcher (ADR-084), locally verified:**
+The launcher starts the actual API and Next app from private runtimes with explicit environment
+allowlists. The API child repeats the read-only preflight before binding its admitted loopback
+origin and requires configured Clerk keys. Next uses a physical private source/public/shared-UI
+copy, excludes repository dotenv and receives no database or job secret. Two trusted root/app
+dependency links and installed TypeScript/React types/Node types checks address the first failed
+Next startup. The web hostname must explicitly be `localhost`; the API permits admitted loopback
+hosts and ports must differ and be nonzero, without silent rewriting. Parent-owned IPC messages
+bind readiness to the launch UUID and approved origins; API readiness and the served manifest hash
+are checked before SERVICES_RUNNING. Startup uses exact ports, with no fallback or unrelated
+process termination. Bounded shutdown stops only owned process groups, preserves the database and
+reports unconfirmed cleanup. Child logs are discarded. Actual CLI smoke passes: running services,
+exact manifest/public200, test-header auth bypass rejected401, SIGTERM stop, released listeners and
+unchanged database hashes. The smoke used fake Clerk keys. The final combined suite passes 70/70
+across 8 files; affected API/dependency lint/typecheck24/24, all three strict CLI types and API
+production build pass. Independent API/process/web review is clear.
+ADR-083 is committed as `f3c8796`. SERVICES_RUNNING leaves authentication, authenticated rehearsal
+and recording NOT_VERIFIED; no new schema migration, public API contract or product UI is added.
+
+**Immediate next:** actual Clerk authentication and the full synthetic capabilities rehearsal,
+including the requested dummy IVR/claim-collection chapter. Read-only Clerk CLI discovery identified
+the development instance/domain and matching existing admin associated with `usedentabill.xyz`;
+no keys were printed and no mutations were made.
+No real calls, inference or source production cutover is implied. Record and integrate the finished landing-page asset afterward; no
+recording asset or demo-ready claim exists yet. FW-43 source observations/reviewed legacy binding/
+additive snapshots, remaining financial correction/ownership/allocation work and the full original
+scope remain open.
+
+**Previous local slice — FW-45 create-only demo provisioning (ADR-083), committed as `f3c8796`:**
 `demo:provision` reuses the isolated runtime and explicit local demo guard from ADR-082
 (`be680d6`). It stages all checked migration bytes before creating a fresh admitted localhost
 database. Existing databases and competing creation are refused; there is no reset, drop or
@@ -24,12 +52,6 @@ read-only preflight smoke pass. Affected API/dependency lint/typecheck passes 24
 entrypoints pass strict typecheck and the API production build passes. The final 8-case recheck
 passes without adding to the 42 distinct cases. No new schema migration, public API or product
 UI change is introduced.
-
-**Immediate next:** an isolated web/API launcher, including a private Next copy that avoids
-repository dotenv, then actual Clerk authentication and rehearsal. Record and integrate the
-finished landing-page asset afterward; no recording asset or demo-ready claim exists yet. FW-43
-source observations/reviewed legacy binding/additive snapshots, remaining financial correction/
-ownership/allocation work and the full original scope remain open.
 
 **Previous local slice — FW-45 synthetic demo preparation (ADR-082), committed as `be680d6`:**
 A connected public fixture bundle and manifest now describe the actual financial-review workflow:

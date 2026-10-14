@@ -6,7 +6,26 @@ integration. Demonstrate actual implemented UI workflows and clearly label simul
 behavior; the demo is an additional deliverable, not evidence that real connector, model,
 voice or deployment gates have passed.
 
-Current local progress (2026-10-14, ADR-083): create-only demo provisioning reuses ADR-082's
+Current local progress (2026-10-14, ADR-084): the isolated launcher starts the actual API/private
+Prisma runtime after same-child read-only preflight and requires Clerk configuration. Actual Next
+runs from a physical private source/public/shared-UI copy without repository dotenv; its smaller
+allowlist excludes database and job secrets. Two trusted root/app dependency links and installed
+TypeScript/React types/Node types checks address the first failed Next startup. The web must
+explicitly use `localhost`; the API permits admitted loopback hosts, with distinct nonzero ports. Owned IPC readiness binds a launch UUID and exact
+origins; parent probes API readiness and the served manifest hash before SERVICES_RUNNING.
+Exact ports have no fallback, only owned process groups are stopped, database data is preserved
+and cleanup uncertainty is reported. Actual CLI startup/public-page/manifest/auth-bypass-refusal/
+stop smoke passes with fake Clerk keys, released listeners and unchanged database hashes. The
+final combined suite passes 70/70 across 8 files, affected API/dependency checks24/24, all three
+strict CLI types and API production build pass; independent API/process/web review is clear. ADR-083 is committed as `f3c8796`.
+Authentication, authenticated rehearsal and recording remain NOT_VERIFIED. Read-only Clerk CLI
+discovery identified the development instance/domain and matching existing admin associated with
+`usedentabill.xyz`, without printing keys or mutations. Next is actual authentication and the full
+synthetic capabilities rehearsal, including the requested dummy IVR/claim collection.
+Recording and landing asset integration follow; no real calls, inference or source cutover is implied.
+FW-43, remaining financial work and the full original scope remain open.
+
+Previous local progress (2026-10-14, ADR-083; committed as `f3c8796`): create-only demo provisioning reuses ADR-082's
 isolated runtime and explicit local guard. It stages verified migration bytes/digests before
 creating a new admitted localhost database, refuses existing/racing targets and never resets,
 drops or resumes them. Exact journal/empty-workflow checks precede atomic creation of one synthetic
@@ -16,8 +35,8 @@ across two runs; independent review is clear. Actual CLI 33-migration creation, 
 existing-target refusal and read-only preflight smoke pass. Final affected API/dependency
 lint/typecheck24/24, both strict CLI types and API production build pass; the final 8-case recheck
 overlaps the 42 distinct cases. ADR-082 is committed as `be680d6`. No new schema migration,
-public API or product UI change is introduced. Next is an isolated web/API launcher, including a
-private Next copy without repository dotenv, followed by actual Clerk authentication/rehearsal,
+public API or product UI change is introduced. The isolated web/API launcher is tracked in ADR-084
+above, followed by actual Clerk authentication/rehearsal,
 recording and landing-page asset integration. Authentication/rehearsal/recording remain NOT_VERIFIED;
 FW-43, financial follow-ons and the complete original scope stay open.
 

@@ -110,7 +110,7 @@ async function executePrivateRuntime(input: {
   });
 }
 
-function parseActorArguments(): { help: boolean; actor: unknown } {
+export function parseDemoActorArguments(): { help: boolean; actor: unknown } {
   try {
     const { values } = parseArgs({
       options: {
@@ -142,7 +142,7 @@ export async function runDemoCli(operation: Operation, scriptUrl: string): Promi
   let provisionId: string | undefined;
   let childStarted = false;
   try {
-    const { actor, help } = parseActorArguments();
+    const { actor, help } = parseDemoActorArguments();
     if (help) {
       process.stdout.write(
         (operation === 'preflight'

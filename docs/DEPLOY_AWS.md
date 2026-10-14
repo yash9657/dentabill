@@ -786,3 +786,32 @@ ADR-082 is committed as `be680d6`; no new schema migration, public endpoint, dep
 change is introduced. The isolated API/web launcher must also avoid Next's repository dotenv
 loading through a private copy. Actual Clerk rehearsal, recording and landing asset integration
 follow; all production and external-provider gates remain open.
+
+### Isolated local demo launcher (ADR-084; no deployment change)
+
+The launcher uses the provisioned dedicated localhost database and the same explicit synthetic
+configuration guard. It starts the actual API from a private Prisma/bundled runtime after a
+same-child read-only preflight, with configured Clerk keys required. Actual Next starts through
+a custom server in a physical private copy of web source/public/config and shared UI, excluding
+repository dotenv and build artifacts. Its explicit environment excludes database and job
+secrets; two explicit root/app dependency links remain trusted, with installed TypeScript/React
+types/Node types checked before Next starts. No new schema, public API contract or
+deployed UI is introduced.
+
+Launch-bound IPC and parent API-readiness/served-manifest checks precede SERVICES_RUNNING. The
+web hostname must be `localhost`; the API permits admitted loopback hosts. Ports are distinct and
+nonzero, without silent hostname rewriting, alternate-port fallback or unrelated-process
+termination. macOS/Linux owned process groups have bounded stop/force-stop behavior; the database
+is preserved and private files are removed only after confirmed process cleanup. The
+`forcedBySupervisor` flag covers supervisor force only, not child watchdogs or a guarantee of job
+drain. Closed failure
+reports replace raw child logs and retain cleanup uncertainty. Actual CLI startup/public-page/
+manifest/test-header-refusal/stop smoke passes with fake Clerk keys, released listeners and
+unchanged database hashes. The final combined suite70/70 across8 files, affected API/dependency
+checks24/24, all three strict CLI types and API production build pass, with independent review clear. ADR-083 is
+committed as `f3c8796`. SERVICES_RUNNING leaves authentication/rehearsal/recording NOT_VERIFIED;
+read-only Clerk CLI discovery identified the development instance/domain and matching existing
+admin associated with `usedentabill.xyz`, without printing keys or mutations. Actual authentication
+and the full synthetic capabilities rehearsal, including dummy IVR/claim collection, follow.
+The finished recording/landing asset remains open; no production source cutover is part of launch.
+This local launcher is not an AWS deployment or evidence of a live provider/financial integration.

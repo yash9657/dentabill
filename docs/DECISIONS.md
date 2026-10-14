@@ -2127,3 +2127,83 @@ then actual Clerk authentication and a complete synthetic walkthrough. Recording
 asset integration follow. FW-43 source reconciliation, remaining financial corrections/ownership/
 allocation work and the full original assignment remain open; no production deployment or real
 provider/financial action is claimed.
+
+## ADR-084 — Isolated local API and Next demo launcher
+
+**Date:** 2026-10-14. **Status:** implemented and verified locally.
+ADR-083 is committed as `f3c8796`. No new schema migration, public API contract or product UI
+change is part of this slice. Authentication, authenticated rehearsal and recording remain open.
+
+The supported synthetic walkthrough needs actual app processes without reintroducing repository
+dotenv through ordinary development startup. Extend the isolated preparation/provisioning path
+with an explicit launcher and honest startup/stop reports.
+
+1. `demo-launch.mts` delegates to `launch-command.ts`. The parent validates a fresh environment
+   snapshot against the same dedicated localhost/demo-name, exact actor, synthetic-mode and
+   external-configuration rules, then derives explicit API and web allowlists. The web hostname
+   must be `localhost`; API hosts may use any admitted loopback address. API/app ports must be
+   distinct and nonzero, with no silent hostname rewrite. Only macOS/Linux owned process groups
+   are supported; there is no shell or alternate-port
+   fallback. No migration, seed, reset, database drop or fixture import is a launcher action.
+2. The private API/Prisma child repeats the complete read-only preflight in the same process before
+   importing the actual server, requires configured Clerk keys and binds only the approved loopback
+   origin. It emits a closed ready/failure IPC message tied to the launch UUID and origin. Signals,
+   parent disconnect and startup failures initiate bounded shutdown, including API/database cleanup.
+   Configured Clerk keys are required for the real authentication path, not evidence of a session.
+3. Next uses its actual public custom-server interface in development mode against a new private0700
+   physical copy of web source, public assets, required configuration and shared UI. Dotenv names,
+   build/test/cache artifacts are excluded; other source symlinks and nonregular files are refused,
+   with bounded file/tree reads. Two explicit links reuse trusted installed dependencies at the
+   private root `node_modules` and `apps/web/node_modules`. Before Next starts, the private copy
+   must resolve the installed TypeScript, React types and Node types setup requirements to the
+   same files as the source workspace, including the type declaration entrypoints. The
+   copied manifest and each fixture hash must agree with that launch's preflight. The web child
+   receives local origins and Clerk configuration but no database URL or job secret. Its exact
+   loopback listener emits launch-bound ready/failure IPC and has bounded shutdown handlers.
+4. The parent accepts only closed messages matching its launch UUID and approved origins, then
+   probes API readiness and the served manifest bytes/hash before reporting SERVICES_RUNNING.
+   These are startup/asset checks; they do not exercise Clerk login or the authenticated dashboard.
+   The report keeps providerMode SYNTHETIC and authentication, authenticatedRehearsal and recording
+   NOT_VERIFIED. Installed Node/dependencies remain trusted; the guard cannot undo an already-run
+   parent preload and is not a hostile-host sandbox.
+5. Child stdout/stderr are discarded; lifecycle diagnostics expose closed codes. Readiness timeouts,
+   cancellation or an unexpected child exit stop the owned processes. Shutdown targets only the
+   detached groups created by this launcher, with bounded graceful and forced phases, and never
+   discovers/kills a process by port. Private files are disposed only after process cleanup is
+   confirmed. `forcedBySupervisor` records only the supervisor's forced termination; child
+   watchdogs may also exit forcibly, and no job-drain guarantee is made. STOPPED/LAUNCH_FAILED
+   preserve the database and expose process-cleanup uncertainty;
+   startup/stop itself does not modify workflow data. Normal authenticated app actions may write
+   to the dedicated demo database during the later rehearsal.
+
+**Local verification:** the single final combined suite passes 70/70 across8 files in16.80s after
+final typing/lint repairs (`/tmp/dentabill-demo-launch-focused-final.log`). Affected API/dependency
+lint/typecheck passes24/24 (22 cached,19.979s; `/tmp/dentabill-demo-launch-checks-final.log`); strict
+types for all three CLI entrypoints and API production build pass
+(`/tmp/dentabill-demo-launch-cli-types.log`, `/tmp/dentabill-demo-launch-api-build.log`). Independent
+API/process/web review found no actionable issue after the port-zero, dependency and self-proxy fixes.
+The actual CLI smoke passes (`/tmp/dentabill-demo-launch-smoke.log`): SERVICES_RUNNING, exact served
+manifest hash, a public page returning200, test headers rejected with401 on `/v1/me`, and SIGTERM
+followed by STOPPED. Owned listeners were released, database hashes remained unchanged and only
+the owned test database was removed. The smoke used fake/nonworking Clerk keys; it does not
+verify authentication, authenticated rehearsal or recording. No additional Next production build
+is claimed for this slice without product UI changes; the actual staged Next public page compiled
+and served200 during the smoke.
+
+The first actual Next startup failed because the private app lacked root-level TypeScript
+resolution. Next attempted npm metadata GETs and cache/log writes, then failed on `workspace:*`
+before installation; original workspace packages were unchanged. The failed private runtime was
+removed. The second explicit dependency link and three installed setup-requirement checks above
+address that path. This failed attempt has no zero-network claim. A later Next/Clerk self-proxy
+loop arose because NextURL normalizes127/IPv6 loopback names to `localhost` while Clerk rewrites
+the same request. The launcher now explicitly requires web `localhost` and distinct nonzero ports,
+without silently rewriting configuration; API hosts retain admitted loopback support. Successful
+startup smoke and final combined tests/checks are recorded above. No actual Clerk
+authentication, full-app browser rehearsal, recording, finished asset or deployment is claimed.
+
+The requested read-only Clerk CLI discovery identified the development instance/domain and
+matching existing admin associated with `usedentabill.xyz`, without printing keys or mutations.
+Next: actual Clerk authentication and the full synthetic capabilities rehearsal. The requested full dummy IVR and claim-collection chapter still
+needs preparation and proof; no production source cutover, real calls or paid inference is implied.
+Recording and landing-page asset integration follow. FW-43 source
+reconciliation, financial corrections/ownership/allocation and the full original scope remain open.
