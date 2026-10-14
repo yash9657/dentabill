@@ -1,8 +1,14 @@
 # DentaBill synthetic walkthrough and recording guide
 
-This guide rehearses the implemented dashboard with a small, connected set of invented records. The core walkthrough takes about **7–8 minutes after sign-in**. Optional call, correction and recovery chapters are separate. It is a recording script, not evidence that a real Clerk session, live PMS/bank connection or recording has been completed.
+This guide rehearses the implemented dashboard with a small, connected set of invented records. The core walkthrough takes about **7–8 minutes after sign-in**. Optional call, correction and recovery chapters are separate.
 
-The presenter records the walkthrough after local setup and rehearsal. No video asset is supplied by this guide, and no landing-page recording is installed yet.
+**2026-10-14 rehearsal checkpoint (ADR-085):** the actual local app authenticated through an official short-lived Clerk development ticket. Bearer-token `/v1/me` returned 200 for the exact local OWNER without test headers. The UI imported two claims and completed a 39-second synthetic call with readable conversation and a pending legacy summary: Denise, reference `REF-SIM-DELTA-001` and **Call back**. The claim remains **Manual review**, no native observation exists, and live IVR-navigation/human-contact flags remain false.
+
+The actual UI sequence covered reports of $100 + $80, batch net $150 after a $30 provider adjustment, cash $150, matches of $100 + $50, posting header $150/entries $180 and exact-line A/claim-only B associations. Correction to $140 staled and blocked prior reservations; full releases then rematch $140 left cash capacity $10 and batch capacity $0. Database proof corroborates the sequence. These synthetic reviews do not establish live connectors, settled cash or recovered revenue.
+
+There are 205 distinct passing focused cases across separate runs, an overlapping 24-case recheck, 30/30 final affected lint/type checks and passing API/isolated Next builds. Actual authenticated call/audit desktop/mobile/drawer QA passes without overflow, page errors or WCAG axe violations. The created Clerk session is revoked, owned services/private test and build runtimes are cleaned up, and the local rehearsal database is preserved.
+
+Raw capture is complete at 1440×900, VP8, 25fps and 1242.24s, with 11 additional review shots. Keep raw footage outside public assets. The edited/captioned final video, poster/transcript package and landing-page integration are still to be produced. Next is the ADR-085 checkpoint commit followed by that media work; this does not complete FW-45 or the full implementation plan.
 
 ## Prepare the local workspace
 
@@ -98,7 +104,7 @@ Wait for `SERVICES_RUNNING`, then open its `appOrigin`. That status confirms own
 
 Leave the command running while rehearsing or recording. Press **Ctrl+C** to stop its owned API/web processes and remove their private runtime folders. The demo database and all saved reviews are preserved. `STOPPED` reports whether the supervisor sent a forced termination (`forcedBySupervisor`); children also have their own shutdown deadlines, and this status does not certify graceful completion of in-flight work. Wait for fake calls and analysis to finish in the app before stopping. `DEMO_CLEANUP_UNCONFIRMED` means the launcher could not confirm process or temporary-folder cleanup; it preserves runtime folders if owned processes may still be active.
 
-Do not treat raw `pnpm dev`, inherited `.env` files or dotenv symlinks as this isolated launch path. Do not substitute the legacy seed or simulator for a missing prerequisite. Before recording, sign in with the intended Clerk development user, select the matching organization, verify `/v1/me` resolves that exact local actor, and complete the walkthrough once in the actual browser. That authenticated rehearsal is still pending.
+Do not treat raw `pnpm dev`, inherited `.env` files or dotenv symlinks as this isolated launch path. Do not substitute the legacy seed or simulator for a missing prerequisite. Before recording, sign in with the intended Clerk development user, select the matching organization, verify `/v1/me` resolves that exact local actor, and complete the walkthrough once in the actual browser. The ADR-085 checkpoint above completed this authenticated rehearsal; every new session or practice binding still needs the same checks.
 
 Do **not** run `seed:demo --reset`, the old 40-claim demo seed, or `demo:call` / `simulate-live-call.mts` for this walkthrough. Their old assumptions and unscoped simulation are not this bundle’s authenticated workflow. Do not create test-header browser bypasses.
 
@@ -206,7 +212,7 @@ In **Claim associations**, click **Inspect exact claim candidates**:
 
 ### 6:50–7:40 — Close with audit and scope
 
-Open **Settings → Audit log** (`/dashboard/settings/audit-log`). Use **From Date** and **To Date**, leaving **All Resources** selected to include financial-evidence events. **Resource Type** currently offers only the listed claim/call/summary/organization categories. Open a relevant row to inspect the saved metadata. Show events actually present for these imports, reviews and relationships; do not promise an event name or count that the page does not show.
+Open **Settings → Audit log** (`/dashboard/settings/audit-log`). Use **From Date** and **To Date**, leaving **All Resources** selected to include financial-evidence events. **Resource Type** currently offers only the listed claim/call/summary/organization categories. Open a relevant row to inspect the saved metadata. Show events actually present for these imports, reviews and relationships; do not promise an event name or count that the page does not show. Current financial actions have verified actor attribution. Older rows with no stored actor correctly say **Actor not recorded**; do not narrate them as system actions or rewrite history to fill the gap.
 
 Optionally return to **Operations → Review notifications**. With no call/analysis chapter, an empty list is expected. When rows exist, use **Notification status**, **Inspect**, and the exact linked claim/call where available. A synthetic receipt, a provider-accepted receipt and delivery to an inbox are different outcomes; this surface has no send, retry or recipient-rebind action.
 
@@ -222,13 +228,17 @@ Prerequisites must be rehearsed separately:
 - New analysis uses `SUMMARY_ANALYSIS_PROVIDER=SYNTHETIC` and `DEMO_SUMMARIZER_FALLBACK=true`, with live provider credentials absent. Do not enable paid providers or promote a model release for this demo.
 - This guide’s strict preflight requires **inline** job dispatch, the local internal API origin and its shared secret. Verify that the guarded launch runs the current durable job path; do not add BullMQ workers, Redis or SQS, and do not assume that opening the browser alone processes work.
 - The practice must have the configured synthetic demo NPI and the claim must have a supported payer and queueable state. `DEMO_IGNORE_PAYER_HOURS=true`, if deliberately configured for the fake demo, only bypasses payer-hours checks when live telephony is absent.
-- **Findings and evidence requires a non-null active Clerk organization in the UI.** This guide’s preflight requires a real `org_…` binding, but still cannot verify which organization is active in the browser. Confirm it after sign-in. A no-organization session displays “Select your practice to see findings”; do not bypass it.
+- The active Clerk practice must match the preflight’s real `org_…` binding. Preflight cannot verify which organization is active in the browser. Confirm it after sign-in; do not bypass missing-practice or access states.
 
-Open `DEMO-CLAIM-A` and use **Call now**. If the screen instead shows **Add NPI**, **Review call**, a current call or a blocked state, follow that state rather than forcing another submission. Open **Calls** and the corresponding call detail. Show saved status, transcript and analysis status as they arrive. Use the existing status/recovery controls only after inspecting their preview; do not start the old simulator or fabricate terminal events.
+Open `DEMO-CLAIM-A` and use **Call now**. If the screen instead shows **Add NPI**, **Review call**, a current call or a blocked state, follow that state rather than forcing another submission. Open **Calls** and the corresponding call detail. Rehearse the **Conversation**, **Post-call analysis** and **Collected call details** sections before recording; their presence and content must be verified in the actual authenticated browser. Use existing status/recovery controls only after inspecting their preview; do not start the old simulator or fabricate terminal events.
 
-**Say:** “This call and its analysis are simulated locally through the application’s durable workflow. No payer is being dialed and no paid model or external email is being used. A summary is a reported finding, not payment verification.”
+The current runtime uses a payer-matched, scripted pending-review scenario. Its conversation includes the synthetic practice, subscriber ID and service date, a simulated representative and a synthetic reference number. Show the saved speaker-labeled turns and the resulting **Reported outcome**, **Reference number**, **Representative** and **Suggested next action**. The saved next action is **Call back** while the claim workflow remains **Manual review**; these are separate fields. The summary contains no approved payment amount. A provisional conversation must remain labeled provisional until the final transcript is available.
 
-On the claim’s **Findings and evidence**, click **Refresh findings**. If **Add saved findings** appears, it publishes already saved analysis for review; it is not a new call or model request. Inspect the finding and its transcript evidence. Use **Mark reviewed**, or **Dismiss finding** with its required review note, only when the shown finding is reviewable. Stale findings remain history. Regeneration is a separate approved workflow; omit it unless its preview, authority and synthetic runtime were separately rehearsed.
+**Say:** “This is a simulated call and offline analysis. The script illustrates collecting claim information and recording a reference for review. No payer is dialed, no audio or DTMF tones are generated, and no paid model or external email is used.”
+
+The IVR greeting, menu choice and hold are **scripted transcript text**, not evidence of actual telephone navigation, voice recognition or audio playback. Do not add payer audio, keypad sounds or a waveform that suggests those actions occurred.
+
+This synthetic path saves the legacy `CallSummary` and leaves the claim in `MANUAL_REVIEW`; it does **not** create a native `ClaimObservation`. Do not demonstrate **Add saved findings**, **Mark reviewed**, **Dismiss finding** or native observation regeneration as an outcome of this call. An empty **Findings and evidence** section is not a missing step to repair. The saved summary and conversation are the supported call demonstration; the subsequent financial imports and reviews remain separate source evidence, not results caused by this simulated conversation.
 
 After the call and analysis settle, refresh the claim and proceed with the financial walkthrough using fresh previews. Any later claim edits or new calls can stale earlier evidence or associations; do not stage them after the financial chapter and then imply everything stayed current.
 
@@ -257,17 +267,41 @@ Posting associations are independent. A batch correction alone does not demonstr
 - **History unavailable:** show the error and retry the read; do not describe unavailable state as empty or completed. Read all required pages before narrating a total.
 - **Auth mismatch:** stop and verify the Clerk session, intended practice and local actor binding. Do not add test headers to the browser or reset the database as an auth workaround.
 
+## Landing-page cut: about 3 minutes
+
+Proposed title: **From claim to clear next step.** Follow one billing coordinator and the two connected synthetic claims. This is an edited showcase plan, not a completed recording. Keep a small **Synthetic demo** label visible throughout and **Simulated call and analysis** during the call chapter. Use only actual captured screen states after rehearsal; label skipped asynchronous waiting rather than implying an instant result.
+
+| Time      | Actual screen and focus                                                                                                             | Suggested narration                                                                                                 |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| 0:00–0:12 | Signed-in practice and **Claims**                                                                                                   | “Follow a claim from import to a documented next step.”                                                             |
+| 0:12–0:35 | **Upload claims CSV**, then the imported claim and procedure/source identity                                                        | “Keep the original claim, procedure and source identity together.”                                                  |
+| 0:35–1:05 | **Call now**, call status/event log and **Conversation**                                                                            | “This scripted simulation illustrates collecting claim information through the follow-up workflow.”                 |
+| 1:05–1:30 | **Post-call analysis → Collected call details**: pending outcome, representative, synthetic reference and **Call back** next action | “The conversation and saved summary give the practice a record to inspect. This example still needs manual review.” |
+| 1:30–2:03 | Reviewed claim remittances and **Remittance batches** preview                                                                       | “Separate imported reports total $180. A $30 provider adjustment makes the batch net $150.”                         |
+| 2:03–2:38 | **Cash reconciliation** reservations of $100 then $50; **Posting evidence** header/entry difference and exact association           | “Review each relationship explicitly. Preserve differences instead of silently balancing them away.”                |
+| 2:38–2:55 | Relevant **Audit log** rows and preserved review history                                                                            | “Keep source facts, decisions and their history connected.”                                                         |
+| 2:55–3:00 | Claim or evidence screen with a restrained closing title                                                                            | “Follow up. Review evidence. Keep control.”                                                                         |
+
+Use focused cuts rather than showing every file picker or scrolling past unreadable data. The call chapter must finish before financial reviews, and the edit must not imply that the call produced the remittance, cash or posting evidence. Do not show native findings review, live connectors, coming-soon Team/Notifications controls, paid-model analysis, verified settlement or recovered-money metrics as demonstrated capabilities. Operations can appear briefly when there is relevant saved work; external notification delivery stays unavailable.
+
+Keep the existing **7–8-minute financial walkthrough** as the detailed companion. Add the call/conversation chapter at its actual rehearsed length, and use the optional correction/full-release chapter to explain stale evidence and retained reservations. Final duration, captions and chapter timestamps must come from the recording that is actually produced.
+
 ## Recording handoff and remaining work
 
-Before recording, mark these complete with actual evidence:
+Current evidence and remaining delivery work:
 
-- [ ] Scoped read-only preflight command/result recorded; intended local database and synthetic actor verified.
-- [ ] Real Clerk sign-in, local actor binding and correct owner/admin practice confirmed in the dashboard.
-- [ ] Local API/web (and optional synthetic call runtime) launched with no unintended live adapters.
-- [ ] Connected bundle imported and this exact screen order rehearsed against the real authenticated dashboard.
-- [ ] Any optional call/findings prerequisites and outcomes checked; omitted chapters identified honestly.
-- [ ] Presenter records the core walkthrough, with synthetic-data disclosure visible/spoken and credentials/private browser content kept outside the frame.
+- [x] Guarded isolated launch used the intended local database and exact Clerk/local actor binding.
+- [x] Real Clerk sign-in, exact local OWNER binding and intended practice confirmed through the actual browser and bearer-token `/v1/me`.
+- [x] Local API/web and the explicitly synthetic call runtime launched; no live payer/paid-model/billing/mail adapter was used.
+- [x] Connected bundle and correction/release chapter completed through the real authenticated dashboard; database proof corroborates saved results.
+- [x] Call/conversation/saved-summary outcomes checked: pending/CALL_BACK summary, MANUAL_REVIEW claim, no native observation and false live-navigation/contact flags.
+- [x] Raw UI capture collected for the rehearsed sequence. Editing, disclosure/caption review and final credential/private-content inspection remain part of delivery.
+- [x] Actual authenticated call and audit desktop/mobile/drawer QA passes without overflow/page errors or WCAG axe violations.
+- [x] Audit API 11/11 and final web 47/47 pass, for 205 distinct milestone cases across separate runs.
+- [x] Final affected lint/type checks pass 30/30; API and isolated Next production builds pass. The 24-case recheck adds no distinct cases.
+- [x] Created Clerk session revoked and owned services stopped, with the rehearsal database preserved.
+- [x] Private Next build runtime and remaining owned test temporary files are cleaned up.
 - [ ] Presenter supplies the actual recording plus a poster frame, captions/transcript and chapter timestamps. No filename, duration or transcript is treated as final until that asset exists.
 - [ ] Landing-page integration is implemented and verified after the asset is approved, with user-controlled playback, readable mobile layout and an accessible text alternative. The existing illustrative `ClaimDemo` is not a screen recording.
 
-No launch, authenticated rehearsal, recording, asset delivery or landing-page publication is asserted by this document.
+The checkpoint above verifies local authentication, the synthetic UI rehearsal and raw capture. It does not assert final media delivery, landing-page integration/publication, production deployment or full-plan completion.

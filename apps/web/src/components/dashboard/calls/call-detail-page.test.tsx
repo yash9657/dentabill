@@ -10,7 +10,14 @@ import { CallDetailPage } from './call-detail-page.js';
 
 const getMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const postMock = vi.fn();
+const auth = vi.hoisted((): { orgId: string | null; userId: string | null; isLoaded: boolean } => ({
+  orgId: 'org-a',
+  userId: 'user-a',
+  isLoaded: true,
+}));
 let profileRole: 'OWNER' | 'ADMIN' | 'BILLING_STAFF' = 'BILLING_STAFF';
+
+vi.mock('@clerk/nextjs', () => ({ useAuth: () => auth }));
 
 // Analysis status has its own scoped API/polling tests; keep cancellation fixtures independent.
 vi.mock('./call-analysis-status.js', () => ({ CallAnalysisStatus: () => null }));
@@ -63,12 +70,19 @@ const pendingCall: CallDetailResponse = {
 function renderDetail() {
   const client = createDentaBillQueryClient();
   const user = userEvent.setup();
-  render(
+  const ui = () => (
     <QueryProvider client={client}>
       <CallDetailPage id={baseCall.id} />
-    </QueryProvider>,
+    </QueryProvider>
   );
-  return { client, user };
+  const view = render(ui());
+  return {
+    client,
+    user,
+    refresh: () => {
+      view.rerender(ui());
+    },
+  };
 }
 
 beforeAll(() => {
@@ -80,9 +94,99 @@ afterAll(() => {
 });
 
 beforeEach(() => {
+  Object.assign(auth, { orgId: 'org-a', userId: 'user-a', isLoaded: true });
   profileRole = 'BILLING_STAFF';
   getMock.mockReset();
   postMock.mockReset();
+});
+
+describe('<CallDetailPage /> authentication scope', () => {
+  const privateCall: CallDetailResponse = {
+    ...baseCall,
+    events: [
+      {
+        id: 'private-turn',
+        eventType: 'call.transcript',
+        timestamp: '2026-10-14T12:00:00.000Z',
+        data: { role: 'agent', text: 'SYNTHETIC_PRIVATE_CONVERSATION' },
+      },
+    ],
+  };
+
+  it.each(['organization', 'user'] as const)(
+    'hides the prior conversation immediately when the %s changes',
+    async (change) => {
+      getMock.mockResolvedValue({ data: privateCall });
+      const view = renderDetail();
+      await screen.findByText('SYNTHETIC_PRIVATE_CONVERSATION');
+      getMock.mockImplementation(() => new Promise(() => undefined));
+      if (change === 'organization') auth.orgId = 'org-b';
+      else auth.userId = 'user-b';
+      view.refresh();
+      expect(screen.queryByText('SYNTHETIC_PRIVATE_CONVERSATION')).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Conversation' })).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(getMock).toHaveBeenCalledTimes(2);
+      });
+      expect(
+        view.client.getQueryData(callQueryKey(baseCall.id, auth.orgId, auth.userId)),
+      ).toBeUndefined();
+    },
+  );
+
+  it.each(['signed out', 'no practice', 'loading'] as const)(
+    'removes the conversation and stops admission when authentication is %s',
+    async (change) => {
+      getMock.mockResolvedValue({ data: privateCall });
+      const view = renderDetail();
+      await screen.findByText('SYNTHETIC_PRIVATE_CONVERSATION');
+      if (change === 'signed out') auth.userId = null;
+      else if (change === 'no practice') auth.orgId = null;
+      else auth.isLoaded = false;
+      view.refresh();
+      expect(screen.queryByText('SYNTHETIC_PRIVATE_CONVERSATION')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Cancel call' })).not.toBeInTheDocument();
+      expect(getMock).toHaveBeenCalledTimes(1);
+      if (change === 'signed out')
+        expect(screen.getByRole('heading', { name: 'Sign in to see call detail' })).toBeVisible();
+      if (change === 'no practice')
+        expect(
+          screen.getByRole('heading', { name: 'Choose a practice to see call detail' }),
+        ).toBeVisible();
+    },
+  );
+});
+
+describe('<CallDetailPage /> conversation', () => {
+  it('renders readable turns once and keeps unrelated event metadata private', async () => {
+    const text = `Please send the requested documentation. ${'Synthetic detail. '.repeat(20)}`;
+    getMock.mockResolvedValue({
+      data: {
+        ...baseCall,
+        events: [
+          {
+            id: 'conversation-turn',
+            eventType: 'call.transcript',
+            timestamp: '2026-10-14T12:00:00.000Z',
+            data: { role: 'representative', text },
+          },
+          {
+            id: 'technical-event',
+            eventType: 'call.started',
+            timestamp: '2026-10-14T11:59:00.000Z',
+            data: { token: 'PRIVATE_EVENT_METADATA' },
+          },
+        ],
+      },
+    });
+    renderDetail();
+    expect(await screen.findByRole('heading', { name: 'Conversation' })).toBeVisible();
+    expect(screen.getAllByText(text.trim())).toHaveLength(1);
+    expect(screen.getByText('Payer representative')).toBeVisible();
+    expect(screen.getByText('Event recorded.')).toBeVisible();
+    expect(screen.queryByText('call.transcript')).not.toBeInTheDocument();
+    expect(screen.queryByText(/PRIVATE_EVENT_METADATA|"role"|"text"/)).not.toBeInTheDocument();
+  });
 });
 
 describe('<CallDetailPage /> cancellation', () => {
@@ -169,7 +273,7 @@ describe('<CallDetailPage /> cancellation', () => {
     expect(requestedButton).toBeDisabled();
     expect(screen.getByRole('status')).toHaveTextContent('Waiting for the call to end.');
     expect(screen.getByLabelText('Status: On hold')).toBeInTheDocument();
-    expect(client.getQueryData(callQueryKey(baseCall.id))).toMatchObject({
+    expect(client.getQueryData(callQueryKey(baseCall.id, 'org-a', 'user-a'))).toMatchObject({
       status: 'ON_HOLD',
       endedAt: null,
       durationSeconds: null,
@@ -189,7 +293,7 @@ describe('<CallDetailPage /> cancellation', () => {
     };
     getMock.mockResolvedValue({ data: terminalCall });
     await act(async () => {
-      await client.refetchQueries({ queryKey: callQueryKey(baseCall.id) });
+      await client.refetchQueries({ queryKey: callQueryKey(baseCall.id, 'org-a', 'user-a') });
     });
     expect(await screen.findByLabelText('Status: Completed')).toBeInTheDocument();
     expect(
@@ -253,7 +357,7 @@ describe('<CallDetailPage /> cancellation', () => {
         durationSeconds: 75,
       };
       await act(async () => {
-        client.setQueryData(callQueryKey(baseCall.id), terminal);
+        client.setQueryData(callQueryKey(baseCall.id, 'org-a', 'user-a'), terminal);
       });
       // Keep the invalidated GET unresolved so it cannot hide a stale mutation merge.
       let resolveRefresh: (value: { data: CallDetailResponse }) => void = () => undefined;
@@ -269,7 +373,7 @@ describe('<CallDetailPage /> cancellation', () => {
       await waitFor(() => {
         expect(getMock).toHaveBeenCalledTimes(2);
       });
-      expect(client.getQueryData(callQueryKey(baseCall.id))).toEqual(terminal);
+      expect(client.getQueryData(callQueryKey(baseCall.id, 'org-a', 'user-a'))).toEqual(terminal);
       expect(screen.queryByRole('button')).not.toBeInTheDocument();
       expect(screen.queryByText(/Waiting for the call to end/)).not.toBeInTheDocument();
       await act(async () => {
@@ -323,7 +427,7 @@ describe('<CallDetailPage /> cancellation', () => {
       );
       expect(screen.getByRole('button', { name: 'Cancel call' })).toBeEnabled();
       expect(screen.queryByText(/Waiting for the call to end/)).not.toBeInTheDocument();
-      expect(client.getQueryData(callQueryKey(baseCall.id))).toMatchObject({
+      expect(client.getQueryData(callQueryKey(baseCall.id, 'org-a', 'user-a'))).toMatchObject({
         status: 'ON_HOLD',
         cancelRequestedAt: null,
         endedAt: null,
@@ -416,7 +520,7 @@ describe('<CallDetailPage /> manual provider status check', () => {
     };
     getMock.mockResolvedValue({ data: completed });
     await act(async () => {
-      client.setQueryData(callQueryKey(baseCall.id), completed);
+      client.setQueryData(callQueryKey(baseCall.id, 'org-a', 'user-a'), completed);
       resolveRequest({
         data: {
           callId: baseCall.id,
@@ -426,7 +530,7 @@ describe('<CallDetailPage /> manual provider status check', () => {
       });
     });
     await waitFor(() => expect(screen.getByLabelText('Status: Completed')).toBeInTheDocument());
-    expect(client.getQueryData(callQueryKey(baseCall.id))).toMatchObject({
+    expect(client.getQueryData(callQueryKey(baseCall.id, 'org-a', 'user-a'))).toMatchObject({
       status: 'COMPLETED',
       durationSeconds: 120,
     });

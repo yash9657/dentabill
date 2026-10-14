@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuth } from '@clerk/nextjs';
 import { Button, Skeleton, StatusDot } from '@dentabill/ui';
 import Link from 'next/link';
 import * as React from 'react';
@@ -21,6 +22,7 @@ import { DashboardEmptyState } from '../dashboard-empty-state.js';
 import { SkeletonList } from '../skeleton-list.js';
 
 import { CallAnalysisStatus } from './call-analysis-status.js';
+import { CallConversation } from './call-conversation.js';
 import { CheckCallStatusControl } from './check-call-status-control.js';
 
 export interface CallDetailPageProps {
@@ -44,7 +46,28 @@ export function CallDetailPage({ id }: CallDetailPageProps): React.ReactElement 
       />
     );
   }
-  return <AuthenticatedCallDetail id={id} />;
+  return <CallDetailAuthGate id={id} />;
+}
+
+function CallDetailAuthGate({ id }: { readonly id: string }): React.ReactElement {
+  const { isLoaded, orgId, userId } = useAuth();
+  if (!isLoaded) return <DetailSkeleton />;
+  if (!userId || !orgId) {
+    return (
+      <DashboardEmptyState
+        eyebrow="Call"
+        title={!userId ? 'Sign in to see call detail' : 'Choose a practice to see call detail'}
+        body="Call details are available only within your active practice."
+        previewChildren={<SkeletonList rows={4} />}
+        primaryCta={
+          !userId
+            ? { label: 'Sign in', href: '/sign-in' }
+            : { label: 'Back to calls', href: '/dashboard/calls' }
+        }
+      />
+    );
+  }
+  return <AuthenticatedCallDetail key={`${orgId}:${userId}:${id}`} id={id} />;
 }
 
 function AuthenticatedCallDetail({ id }: { readonly id: string }): React.ReactElement {
@@ -104,6 +127,7 @@ function DetailLayout({ call }: { readonly call: CallDetailResponse }): React.Re
       </div>
       <SummaryCard call={call} />
       <CallAnalysisStatus call={call} />
+      <CallConversation events={call.events} />
       <Timeline events={call.events} />
     </section>
   );
@@ -247,6 +271,12 @@ function FieldStatus({ status }: { readonly status: CallStatus }): React.ReactEl
 }
 
 function Timeline({ events }: { readonly events: readonly CallEvent[] }): React.ReactElement {
+  const timeline = events.filter(
+    (event) =>
+      event.eventType !== 'call.transcript' &&
+      event.eventType !== 'call.transcript_snapshot' &&
+      event.eventType !== 'webhook.call.transcript_snapshot',
+  );
   return (
     <article aria-labelledby="call-events-heading" className="flex flex-col gap-4">
       <header>
@@ -255,16 +285,18 @@ function Timeline({ events }: { readonly events: readonly CallEvent[] }): React.
           Event log
         </h2>
       </header>
-      {events.length === 0 ? (
+      {timeline.length === 0 ? (
         <p
           className="hairline-edge rounded-card text-body text-gray-warm bg-white px-5 py-4 text-sm"
           data-testid="call-events-empty"
         >
-          No events yet — events stream in as the call progresses.
+          {events.length === 0
+            ? 'No events yet — events stream in as the call progresses.'
+            : 'No other call events are available.'}
         </p>
       ) : (
         <ol className="hairline-edge rounded-card flex flex-col gap-0 bg-white">
-          {events.map((event) => (
+          {timeline.map((event) => (
             <Entry
               key={event.id}
               when={formatDateTime(event.timestamp)}
@@ -321,9 +353,8 @@ function DetailSkeleton(): React.ReactElement {
 /**
  * The CallEvent payload is unstructured `{ [k: string]: unknown }` —
  * by design, since payer-specific events carry varied keys. Render a
- * readable inline summary, falling back to a JSON-flatten if there's
- * no obvious display field. Heavy events (>200 chars) are truncated to
- * keep the timeline scannable.
+ * readable message from named display fields. Other metadata stays out of
+ * the UI; transcript content is rendered separately by its source selector.
  */
 function describeEvent(data: Record<string, unknown>): string {
   if (Object.keys(data).length === 0) return '—';
@@ -334,7 +365,7 @@ function describeEvent(data: Record<string, unknown>): string {
         ? data.notes
         : typeof data.reason === 'string'
           ? data.reason
-          : JSON.stringify(data);
+          : 'Event recorded.';
   return candidate.length > 200 ? `${candidate.slice(0, 197)}…` : candidate;
 }
 

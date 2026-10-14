@@ -25,14 +25,11 @@ vi.mock('@tanstack/react-virtual', () => ({
 
 const SAMPLE_ENTRY: AuditLogEntry = {
   id: 'audit_1',
-  action: 'READ_CLAIM',
-  resourceType: 'CLAIM',
+  action: 'claim.read',
+  resourceType: 'Claim',
   resourceId: 'claim_abc123xyz789',
   userId: 'user_1',
-  user: { id: 'user_1', email: 'alice@acme.co', name: 'Alice Smith' },
   metadata: { reason: 'dashboard_view' },
-  ipAddress: '192.168.1.1',
-  userAgent: 'Mozilla/5.0',
   createdAt: '2026-08-15T10:30:45.000Z',
 };
 
@@ -130,15 +127,15 @@ describe('AuditLogTable', () => {
       />,
     );
 
-    expect(screen.getByText('READ_CLAIM')).toBeInTheDocument();
-    expect(screen.getByText('Alice Smith')).toBeInTheDocument();
-    expect(screen.getByText('CLAIM')).toBeInTheDocument();
+    expect(screen.getByText('claim.read')).toBeInTheDocument();
+    expect(screen.getByText('Recorded user · user_1')).toBeInTheDocument();
+    expect(screen.getByText('Claim')).toBeInTheDocument();
     // ResourceId is truncated to first 8 chars
     expect(screen.getByText(/claim_ab/)).toBeInTheDocument();
   });
 
-  it('displays System actor when user is null', () => {
-    const entryNoUser: AuditLogEntry = { ...SAMPLE_ENTRY, user: null, userId: null };
+  it('does not infer a system actor when no user ID is recorded', () => {
+    const entryNoUser: AuditLogEntry = { ...SAMPLE_ENTRY, userId: null };
     render(
       <AuditLogTable
         items={[entryNoUser]}
@@ -149,7 +146,54 @@ describe('AuditLogTable', () => {
       />,
     );
 
-    expect(screen.getByText('System')).toBeInTheDocument();
+    expect(screen.getByText('Actor not recorded')).toBeInTheDocument();
+    expect(screen.queryByText('System')).not.toBeInTheDocument();
+  });
+
+  it.each(['reconciliation.match', 'reconciliation.release'])(
+    'shows the exact recorded actor in details for an API-shaped %s entry',
+    async (action) => {
+      const entry: AuditLogEntry = {
+        ...SAMPLE_ENTRY,
+        action,
+        userId: 'synthetic-actor-with-complete-id',
+      };
+      render(
+        <AuditLogTable
+          items={[entry]}
+          isLoading={false}
+          isFetchingMore={false}
+          hasMore={false}
+          onReachEnd={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Recorded user · syntheti…')).toBeVisible();
+      expect(screen.queryByText('System')).not.toBeInTheDocument();
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Show' }));
+      expect(screen.getByText('Recorded user')).toBeVisible();
+      expect(screen.getByText('synthetic-actor-with-complete-id')).toBeVisible();
+    },
+  );
+
+  it('keeps an absent actor unknown in the drawer even if metadata contains a user-like value', async () => {
+    const entry: AuditLogEntry = {
+      ...SAMPLE_ENTRY,
+      userId: null,
+      metadata: { clerkUserId: 'synthetic-legacy-id' },
+    };
+    render(
+      <AuditLogTable
+        items={[entry]}
+        isLoading={false}
+        isFetchingMore={false}
+        hasMore={false}
+        onReachEnd={vi.fn()}
+      />,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Show' }));
+    expect(screen.getAllByText('Actor not recorded')).toHaveLength(2);
+    expect(screen.queryByText('Recorded user')).not.toBeInTheDocument();
+    expect(screen.queryByText('System')).not.toBeInTheDocument();
   });
 
   it('calls onReachEnd when user scrolls near the end of the list', async () => {

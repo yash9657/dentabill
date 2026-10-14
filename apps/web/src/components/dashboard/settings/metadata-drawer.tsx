@@ -125,38 +125,14 @@ export function MetadataDrawer({ entry, onClose }: MetadataDrawerProps): React.R
             <h3 className="text-caption text-gray-warm mb-2 font-medium uppercase tracking-[0.12em]">
               Actor
             </h3>
-            {entry.user ? (
+            {entry.userId ? (
               <div className="text-sm text-black">
-                <p className="font-medium">{entry.user.name ?? entry.user.email}</p>
-                {entry.user.name ? (
-                  <p className="text-gray-warm text-xs">{entry.user.email}</p>
-                ) : null}
+                <p className="font-medium">Recorded user</p>
+                <p className="mt-1 break-all font-mono text-xs">{entry.userId}</p>
               </div>
             ) : (
-              <p className="text-gray-warm text-sm italic">System</p>
+              <p className="text-gray-warm text-sm">Actor not recorded</p>
             )}
-          </div>
-
-          {/* IP and user agent */}
-          <div className="grid grid-cols-2 gap-4">
-            {entry.ipAddress ? (
-              <div>
-                <h3 className="text-caption text-gray-warm mb-1 text-xs font-medium uppercase tracking-[0.12em]">
-                  IP Address
-                </h3>
-                <p className="font-mono text-xs text-black">{entry.ipAddress}</p>
-              </div>
-            ) : null}
-            {entry.userAgent ? (
-              <div>
-                <h3 className="text-caption text-gray-warm mb-1 text-xs font-medium uppercase tracking-[0.12em]">
-                  User Agent
-                </h3>
-                <p className="break-all font-mono text-xs text-black">
-                  {entry.userAgent.slice(0, 40)}…
-                </p>
-              </div>
-            ) : null}
           </div>
 
           {/* Full metadata as JSON */}

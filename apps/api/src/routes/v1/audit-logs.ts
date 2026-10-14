@@ -187,8 +187,8 @@ export function auditLogsRoutes(fastify: FastifyInstance): void {
         resourceType: 'AuditLog',
         resourceId: 'list',
         organizationId: orgId,
+        userId: auth.userId,
         metadata: {
-          clerkUserId: auth.userId,
           count: items.length,
           resourceType: query.resourceType ?? null,
           action: query.action ?? null,

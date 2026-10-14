@@ -1,12 +1,6 @@
 /**
- * Demo scenario library (G-B5b) — the scripted payer conversations the
- * `DemoAutopilot` replays when `DEMO_AUTOPILOT` is on.
- *
- * Why this exists as data rather than branches inside the autopilot: the
- * autopilot previously carried exactly two inline outcomes with hard-coded
- * amounts, denial codes and rep names, so a fleet of concurrent demo calls
- * rendered as identical twins. A demo that shows six calls must show six
- * *different* calls.
+ * Synthetic conversation fixtures. Runtime autopilot selects only the neutral
+ * payer-matched scenarios; older financial examples remain contract fixtures.
  *
  * ## Two contracts these scripts must honour
  *
@@ -70,7 +64,7 @@ export interface DemoOutcome {
 export interface DemoScenario {
   /** Stable identifier, used in logs and tests. */
   readonly id: string;
-  /** Payer this script is written for, for display and future per-payer selection. */
+  /** Payer this script is written for. */
   readonly payerCode: string;
   readonly turns: readonly DemoTurn[];
   /** Wall-clock duration reported on `call.ended`. */
@@ -132,7 +126,7 @@ function t(offsetMs: number, role: DemoTurnRole, text: string): DemoTurn {
  *
  * Amounts, denial codes, rep names and durations all vary deliberately.
  */
-export const DEMO_SCENARIOS: readonly DemoScenario[] = [
+const HISTORICAL_DEMO_SCENARIOS: readonly DemoScenario[] = [
   // ── 1. Delta Dental PPO — clean approval, large balance ──────────────────
   {
     id: 'delta-approved-crown',
@@ -337,29 +331,91 @@ export const DEMO_SCENARIOS: readonly DemoScenario[] = [
   },
 ];
 
-/**
- * Pick a scenario deterministically. The same `idempotencyKey` always yields
- * the same call, so a rehearsed demo take is reproducible, while a fleet of
- * different claims spreads across the library.
- */
-export function selectDemoScenario(hash: number): DemoScenario {
-  const scenario = DEMO_SCENARIOS[hash % DEMO_SCENARIOS.length];
-  // Index is always in range, but the non-null assertion is banned and the
-  // array is exported and therefore editable.
-  if (scenario === undefined) {
-    const first = DEMO_SCENARIOS[0];
-    if (first === undefined) throw new Error('DEMO_SCENARIOS is empty');
-    return first;
-  }
+function pendingReviewScenario(
+  payerCode: string,
+  payerName: string,
+  representativeName: string,
+  referenceNumber: string,
+): DemoScenario {
+  return {
+    id: `synthetic-${payerCode.toLowerCase()}-pending-review`,
+    payerCode,
+    durationSeconds: 39,
+    turns: [
+      {
+        atMs: 200,
+        role: 'system',
+        text: 'Simulated call for demonstration only. No payer has been contacted.',
+      },
+      {
+        atMs: 400,
+        role: 'system',
+        text: `Welcome to the simulated ${payerName} provider services line. Please enter the subscriber ID.`,
+      },
+      { atMs: 3_000, role: 'agent', text: 'Subscriber ID {{subscriberId}}.' },
+      { atMs: 5_000, role: 'system', text: 'For claim status, press 2.' },
+      { atMs: 6_200, role: 'agent', text: 'Simulating key 2 for claim status.' },
+      { atMs: 7_500, role: 'system', text: 'Simulating transfer to a representative.' },
+      { atMs: 9_000, role: 'system', text: 'Simulated hold. No audio is playing.' },
+      t(0, 'user', `Simulated ${payerName} provider services, this is ${representativeName}.`),
+      t(2_500, 'agent', 'Calling for {{practiceName}} about date of service {{dateOfService}}.'),
+      t(5_500, 'user', 'In this simulated case, the claim is pending review.'),
+      t(9_000, 'agent', 'What follow-up should the practice record?'),
+      t(
+        12_000,
+        'user',
+        'Follow up in ten business days. No additional documents are requested in this simulated case.',
+      ),
+      t(15_000, 'agent', 'Please provide the simulated reference number.'),
+      t(18_000, 'user', referenceNumber),
+      t(21_000, 'agent', 'Thank you. The practice will review this simulated result.'),
+    ],
+    outcome: {
+      claimStatus: 'pending',
+      representativeName,
+      referenceNumber,
+      nextSteps: 'Simulated follow-up in ten business days; review required.',
+    },
+  };
+}
+
+const RUNTIME_DEMO_SCENARIOS: readonly DemoScenario[] = [
+  pendingReviewScenario('DELTA_DENTAL_PPO', 'Delta Dental PPO', 'Denise', 'REF-SIM-DELTA-001'),
+  pendingReviewScenario('CIGNA_DENTAL', 'Cigna Dental', 'Priya', 'REF-SIM-CIGNA-001'),
+  pendingReviewScenario('METLIFE_DENTAL', 'MetLife Dental', 'Tanya', 'REF-SIM-METLIFE-001'),
+];
+
+export const DEMO_SCENARIOS: readonly DemoScenario[] = [
+  ...HISTORICAL_DEMO_SCENARIOS,
+  ...RUNTIME_DEMO_SCENARIOS,
+];
+
+export function selectDemoScenario(payerCode: string): DemoScenario {
+  const scenario = RUNTIME_DEMO_SCENARIOS.find((candidate) => candidate.payerCode === payerCode);
+  if (!scenario) throw new Error('DEMO_PAYER_UNSUPPORTED');
   return scenario;
 }
 
 /** Substitute the per-call tokens into a scripted line. */
 export function renderTurnText(
   text: string,
-  vars: { readonly subscriberId: string; readonly dateOfService: string },
+  vars: {
+    readonly practiceName: string;
+    readonly subscriberId: string;
+    readonly dateOfService: string;
+  },
 ): string {
-  return text
-    .replace(/\{\{subscriberId\}\}/g, vars.subscriberId)
-    .replace(/\{\{dateOfService\}\}/g, vars.dateOfService);
+  return text.replace(
+    /\{\{(practiceName|subscriberId|dateOfService)\}\}/g,
+    (_match, key: string) => {
+      switch (key) {
+        case 'practiceName':
+          return vars.practiceName;
+        case 'subscriberId':
+          return vars.subscriberId;
+        default:
+          return vars.dateOfService;
+      }
+    },
+  );
 }

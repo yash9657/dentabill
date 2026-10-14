@@ -9,6 +9,8 @@ import * as React from 'react';
 import { useDentaBillApi } from '../../../lib/api-client.js';
 import { isLiveCallStatus, type CallDetailResponse } from '../../../lib/calls/types.js';
 
+import { SavedCallSummary } from './saved-call-summary.js';
+
 type AnalysisStatus =
   paths['/v1/calls/{id}/summary/status']['get']['responses'][200]['content']['application/json'];
 const buttonClass =
@@ -221,6 +223,14 @@ function ScopedAnalysisStatus({
             </button>
           ) : null}
         </div>
+      ) : null}
+      {query.data && hasLegacySummary(query.data) && query.data.summaryId ? (
+        <SavedCallSummary
+          key={query.data.summaryId}
+          callId={callId}
+          summaryId={query.data.summaryId}
+          scope={scope}
+        />
       ) : null}
       {query.error ? (
         <p role="alert" className="text-danger text-sm">

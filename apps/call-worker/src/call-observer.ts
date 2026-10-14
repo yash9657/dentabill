@@ -323,15 +323,28 @@ export async function observeAcceptedCall(
                 data: parsed.data as Prisma.InputJsonValue,
               },
             });
-            if (parsed.data.type === 'call.transcript')
+            if (parsed.data.type === 'call.transcript') {
+              const synthetic =
+                provider === null &&
+                options.allowSyntheticStop === true &&
+                call.retellCallId.startsWith('fake_');
+              const collecting = synthetic && parsed.data.role === 'user';
               await tx.call.updateMany({
                 where: {
                   id: call.id,
                   organizationId,
-                  status: { notIn: ['COMPLETED', 'FAILED', 'VOICEMAIL'] },
+                  status: {
+                    notIn: [
+                      'COMPLETED',
+                      'FAILED',
+                      'VOICEMAIL',
+                      ...(synthetic && !collecting ? (['COLLECTING'] as const) : []),
+                    ],
+                  },
                 },
-                data: { status: 'NAVIGATING_IVR' },
+                data: { status: collecting ? 'COLLECTING' : 'NAVIGATING_IVR' },
               });
+            }
           });
         })
         .catch(() => {

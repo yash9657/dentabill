@@ -4,6 +4,64 @@ _Last updated: 2026-10-14 (full-scope goal active; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
+### 2026-10-14: FW-45 authenticated synthetic rehearsal verified (ADR-085)
+
+ADR-084 is committed as `19f4b9b`. Read-only Clerk CLI discovery verified the existing development
+application, instance, organization and admin. An official short-lived ticket established a real
+browser session; bearer-token `/v1/me` returned 200 for the exact local OWNER, without test headers.
+Keep credentials, tickets, tokens, session values and identifying account data out of committed
+files. This verifies development authentication, not production or live payer/PMS/bank integration.
+
+The actual UI rehearsal used the preserved localhost database
+`dentabill_demo_recording_20261014_d4f91d0b`. It imported two claims and lines, completed one
+39-second payer-matched synthetic call, and displayed the canonical conversation and saved legacy
+summary. The outcome is pending, with Denise, reference `REF-SIM-DELTA-001` and CALL_BACK; claim A
+remains MANUAL_REVIEW. No native ClaimObservation exists. Both `ivrNavigated` and `humanReached`
+remain false: menu/hold text is scripted, with no audio, DTMF, payer contact or paid model request.
+The inference run is SYNTHETIC/APPLIED with 150 synthetic ledger tokens, not paid-usage evidence.
+
+The authenticated financial sequence accepted reports of $100 + $80, a batch of $180 − $30 = $150,
+cash of $150 and matches of $100 + $50. Posting header $150 and entries $180 stayed distinct, with
+an exact-line association for A and a claim-only association for B. Correction to $140 staled the
+old reservations and blocked a new match. Full releases of $50 then $100 preserved history;
+rematching $140 left cash capacity $10 and batch capacity $0. These separate source imports are
+not results caused by the simulated call or proof of settlement, claim allocation or recovery.
+Read-only proof confirms 2 claims, 2 lines, 1 completed call, 1 legacy summary, 0 observations,
+1 inference run/attempt, 3 matches, 2 releases and 2 posting relationships.
+
+Call queries/cancellation updates now bind to the originating actor/practice, and the UI renders
+canonical conversation plus the exact saved summary. Audit UI uses SDK wire types, recorded actor
+IDs or Actor not recorded, saved-case Claim/Call/CallSummary/Organization filters and scoped reads.
+Actual authenticated call and audit desktop/mobile views, including the audit drawer, pass with
+no overflow/page errors and zero axe WCAG 2 A/AA + 2.1 AA violations. Call QA used 1440px/390px;
+audit QA used the same widths. The account-switcher contrast defect was fixed.
+
+Verification: 205 distinct focused cases pass across 147 earlier cases and 58 new audit cases
+(API 11 + web 47), not one combined run. The final web run passed 47/47 across five files in 2.51s;
+a later 24/24 recheck after lint-only repairs overlaps the total. Final affected lint/type checks
+pass 30/30 (24 cached, 41.961s), and API plus fresh isolated Next production builds pass.
+Evidence: `/tmp/dentabill-demo-audit-api.log`, `...-audit-web-final.log`, `...-audit-tests-final.log`,
+`/tmp/dentabill-demo-rehearsal-checks-final.log`, `...-api-build.log` and `...-web-build.log`.
+Authenticated call QA and read-only database proof are under
+`/tmp/dentabill-authenticated-demo.cdscvk/`.
+
+The original raw capture completed at 1440×900, VP8, 25fps, 1242.24s, with 11 additional actual
+review shots. Keep raw media outside public assets. The created Clerk session is revoked, owned
+services are stopped, owned ports have no listeners, and private build/test runtime cleanup is
+complete. The rehearsal database remains PRESERVED. No edited/captioned final video,
+poster/transcript package, landing integration or deployment is claimed.
+
+**Narrow follow-up, not a recording blocker:** eight older authenticated API audit writes omit
+local actor attribution and misname `metadata.clerkUserId`: `calls.ts` call.enqueue/list/read and
+callSummary.read/retry; `claims.ts` claim.list/read; `reports.ts` report.read. Repair separately
+with persisted-actor fixtures. This milestone fixes future auditLog.list attribution only;
+current financial actions are attributed. Preserve historical null actors as Actor not recorded.
+
+**Immediate next:** commit ADR-085, then edit the actual recording, produce poster/captions/
+descriptive transcript, integrate user-controlled responsive landing playback and verify the
+finished asset. Continue FW-43 source observations/reviewed legacy binding/additive snapshots
+and all remaining financial, connector and full-plan work. FW-45 and the overall goal remain open.
+
 ### 2026-10-14: FW-45 isolated demo launcher verified (ADR-084)
 
 ADR-083 is committed as `f3c8796`. `demo:launch` now repeats read-only preflight in its
@@ -41,11 +99,11 @@ Logs: `/tmp/dentabill-demo-launch-focused-final.log`, `...-checks-final.log`, `.
 Web diagnostic logs use `/tmp/dentabill-adr084-next-`; staging logs are under
 `/tmp/dentabill-adr084-web-check.Yr18e7/`. No heavy check or owned server remains running.
 
-**Immediate next task:** commit ADR-084, then conduct the actual authenticated synthetic demo
+**Next task at the ADR-084 checkpoint (superseded by ADR-085 above):** conduct the actual authenticated synthetic demo
 rehearsal and prepare a compelling full-capabilities recording. The user explicitly requested
 Clerk CLI discovery for DentaBill/usedentabill.xyz and an existing development user. Read-only
 CLI discovery confirmed the hosted public key belongs to DentaBill's development instance and
-found an existing Bright Smile Dental admin matching the authenticated CLI account. Keep keys,
+found a matching existing development admin. Keep keys,
 short-lived sign-in tickets and session credentials out of model/tool output and committed
 files. Use only the exact development instance and a separate fresh local demo database; no
 Clerk user/org creation, live calls, paid inference or production cutover is inferred. Prefer

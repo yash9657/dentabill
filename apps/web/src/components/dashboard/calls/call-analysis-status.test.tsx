@@ -9,6 +9,8 @@ import { CallAnalysisStatus } from './call-analysis-status.js';
 
 type Status =
   paths['/v1/calls/{id}/summary/status']['get']['responses'][200]['content']['application/json'];
+type Summary =
+  paths['/v1/calls/{id}/summary']['get']['responses'][200]['content']['application/json'];
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
@@ -39,6 +41,25 @@ function status(overrides: Partial<Status> = {}): Status {
 }
 function ok<T>(data: T, code = 200) {
   return { data, response: new Response(null, { status: code }) };
+}
+function summary(overrides: Partial<Summary> = {}): Summary {
+  return {
+    id: 'summary-one',
+    callId: call.id,
+    organizationId: 'local-org-a',
+    claimStatus: 'pending',
+    denialReason: null,
+    denialCode: null,
+    nextAction: 'SUBMIT_DOCS',
+    confidence: 0.9,
+    repName: 'Synthetic representative',
+    referenceNumber: 'DEMO-REFERENCE-001',
+    callbackDate: null,
+    amountApprovedCents: null,
+    notes: 'Synthetic analysis of the saved conversation.',
+    createdAt: '2026-10-14T12:00:00.000Z',
+    ...overrides,
+  };
 }
 function mount(callStatus: 'COMPLETED' | 'ON_HOLD' = 'COMPLETED') {
   const client = createDentaBillQueryClient();
@@ -112,13 +133,107 @@ describe('Post-call analysis status', () => {
   });
 
   it('distinguishes a saved synthetic summary from native findings', async () => {
-    mocks.get.mockResolvedValue(
-      ok(status({ state: 'APPLIED', provider: 'SYNTHETIC', summaryId: 'summary-one' })),
+    mocks.get.mockImplementation((path: string) =>
+      Promise.resolve(
+        ok(
+          path === '/v1/calls/{id}/summary'
+            ? summary()
+            : status({ state: 'APPLIED', provider: 'SYNTHETIC', summaryId: 'summary-one' }),
+        ),
+      ),
     );
     mount();
     expect(await screen.findByText('The earlier call summary is saved.')).toBeVisible();
     expect(screen.getByText('Synthetic analysis')).toBeVisible();
+    expect(await screen.findByText('DEMO-REFERENCE-001')).toBeVisible();
+    expect(screen.getByText('Synthetic representative')).toBeVisible();
+    expect(screen.getByText('Submit supporting documents')).toBeVisible();
+    expect(screen.getByText('pending')).toBeVisible();
+    expect(mocks.get).toHaveBeenCalledWith(
+      '/v1/calls/{id}/summary',
+      expect.objectContaining({
+        params: { path: { id: call.id } },
+        headers: { authorization: 'Bearer synthetic-fixture' },
+        signal: expect.any(AbortSignal),
+      }),
+    );
     expect(screen.queryByRole('link', { name: 'Review claim findings' })).not.toBeInTheDocument();
+    expect(mocks.post).not.toHaveBeenCalled();
+  });
+
+  it.each(['missing', 'network', 'call', 'summary'] as const)(
+    'keeps a %s saved summary unavailable without leaking private response content',
+    async (failure) => {
+      mocks.get.mockImplementation((path: string) => {
+        if (path !== '/v1/calls/{id}/summary')
+          return Promise.resolve(
+            ok(status({ state: 'APPLIED', provider: 'SYNTHETIC', summaryId: 'summary-one' })),
+          );
+        if (failure === 'network') return Promise.reject(new Error('PRIVATE_SERVER_ERROR'));
+        if (failure === 'missing')
+          return Promise.resolve({
+            response: new Response(null, { status: 404 }),
+            error: { message: 'PRIVATE_SERVER_ERROR' },
+          });
+        return Promise.resolve(
+          ok(
+            summary({
+              ...(failure === 'call' ? { callId: 'another-call' } : { id: 'another-summary' }),
+              referenceNumber: 'PRIVATE_OTHER_SUMMARY',
+            }),
+          ),
+        );
+      });
+      mount();
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'The saved call summary could not be loaded',
+      );
+      expect(screen.queryByText(/PRIVATE_/)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Reload saved summary' })).toBeVisible();
+      expect(
+        mocks.get.mock.calls.filter(([path]) => path === '/v1/calls/{id}/summary'),
+      ).toHaveLength(1);
+    },
+  );
+
+  it('reloads a missing saved summary only when requested and preserves null fields', async () => {
+    let available = false;
+    mocks.get.mockImplementation((path: string) =>
+      Promise.resolve(
+        path !== '/v1/calls/{id}/summary'
+          ? ok(status({ state: 'APPLIED', provider: 'SYNTHETIC', summaryId: 'summary-one' }))
+          : available
+            ? ok(summary({ repName: null, referenceNumber: null }))
+            : { response: new Response(null, { status: 404 }) },
+      ),
+    );
+    mount();
+    const button = await screen.findByRole('button', { name: 'Reload saved summary' });
+    available = true;
+    await userEvent.setup().click(button);
+    expect(await screen.findAllByText('Not recorded')).toHaveLength(2);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('drops collected details immediately when the organization changes', async () => {
+    mocks.get.mockImplementation((path: string) =>
+      Promise.resolve(
+        ok(
+          path === '/v1/calls/{id}/summary'
+            ? summary()
+            : status({ state: 'APPLIED', provider: 'SYNTHETIC', summaryId: 'summary-one' }),
+        ),
+      ),
+    );
+    const view = mount();
+    await screen.findByText('DEMO-REFERENCE-001');
+    mocks.get.mockImplementation(() => new Promise(() => undefined));
+    mocks.auth.orgId = 'org-b';
+    view.refresh();
+    expect(screen.queryByText('DEMO-REFERENCE-001')).not.toBeInTheDocument();
+    expect(
+      view.client.getQueryData(['call-saved-summary', 'org-b:user-a:call-one', 'summary-one']),
+    ).toBeUndefined();
   });
 
   it('stops checking an unrequested analysis after three reads and permits explicit refresh', async () => {

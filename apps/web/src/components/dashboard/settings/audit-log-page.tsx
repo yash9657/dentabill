@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuth } from '@clerk/nextjs';
 import * as React from 'react';
 
 import type { AuditLogsFilters } from '../../../lib/audit/types.js';
@@ -20,6 +21,28 @@ import { AuditLogTable } from './audit-log-table.js';
  * drawer metadata.
  */
 export function AuditLogPage(): React.ReactElement {
+  const { isLoaded, orgId, userId } = useAuth();
+  if (!isLoaded)
+    return (
+      <AuditLogTable
+        items={[]}
+        isLoading
+        isFetchingMore={false}
+        hasMore={false}
+        onReachEnd={() => undefined}
+      />
+    );
+  if (!userId || !orgId) {
+    return (
+      <p role="status" className="text-gray-warm text-sm">
+        {!userId ? 'Sign in to see audit logs.' : 'Choose a practice to see audit logs.'}
+      </p>
+    );
+  }
+  return <ScopedAuditLogPage key={`${orgId}:${userId}`} />;
+}
+
+function ScopedAuditLogPage(): React.ReactElement {
   const [filters, setFilters] = React.useState<AuditLogsFilters>({});
 
   const { data, isLoading, error, hasNextPage, isFetchingNextPage, fetchNextPage } =

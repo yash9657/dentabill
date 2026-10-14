@@ -192,8 +192,14 @@ function AuditLogRow({
         {formatAuditTimestamp(entry.createdAt)}
       </span>
 
-      <span role="gridcell" className="text-body text-gray-dark truncate text-sm">
-        {entry.user?.name ?? entry.user?.email ?? 'System'}
+      <span
+        role="gridcell"
+        className="text-body text-gray-dark truncate text-sm"
+        title={entry.userId ? `Recorded user ${entry.userId}` : undefined}
+      >
+        {entry.userId
+          ? `Recorded user · ${entry.userId.slice(0, 8)}${entry.userId.length > 8 ? '…' : ''}`
+          : 'Actor not recorded'}
       </span>
 
       <span role="gridcell" className="font-mono text-sm text-black">

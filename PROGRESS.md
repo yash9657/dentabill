@@ -9,7 +9,36 @@ Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `doc
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice — FW-45 isolated demo launcher (ADR-084), locally verified:**
+**Latest local slice — FW-45 authenticated synthetic rehearsal (ADR-085), locally verified:**
+Real Clerk development sign-in succeeded through an official short-lived ticket. Bearer-token
+`/v1/me` returned 200 for the exact local OWNER without test headers. The actual UI imported two
+claims, completed a 39-second synthetic payer-matched call, and displayed readable conversation
+and a pending legacy summary with CALL_BACK. Claim A remains MANUAL_REVIEW; there is no native
+observation, audio, actual DTMF, payer contact or paid-model proof.
+
+The browser accepted reports of $100 + $80, batch net $150 after a $30 provider adjustment,
+cash $150 and matches of $100 + $50. Posting header $150 and entries $180 stayed distinct, with
+exact-line A and claim-only B associations. Correction to $140 staled and blocked old reservations;
+full releases then rematch $140 left cash capacity $10 and batch capacity $0. Database proof
+corroborates the sequence. It does not establish settlement, claim allocation or recovered money.
+
+205 distinct focused cases pass across separate runs, followed by an overlapping 24-case recheck.
+Final affected lint/type checks pass 30/30; API and isolated Next production builds pass. Actual
+authenticated call/audit desktop and mobile QA, including the audit drawer, has no overflow,
+page errors or WCAG axe violations. Session revocation, owned-service shutdown and private test/
+build cleanup are complete; the local rehearsal database is preserved. Eight older API audit
+writes need a separate tested actor repair; historical null actors remain unassigned.
+
+Raw capture is complete at 1440×900, 25fps and 1242.24s, with 11 extra review shots. The edited/
+captioned video, poster/transcript package, landing integration and deployment remain open.
+ADR-084 is committed as `19f4b9b`.
+
+**Immediate next:** commit ADR-085, then edit the actual recording and integrate its finished
+poster/captions/transcript with user-controlled responsive playback. FW-43 source observations,
+reviewed legacy binding/additive snapshots and the remaining financial/connector/full-plan work
+stay open. FW-45 and the full goal are not complete.
+
+**Previous local slice — FW-45 isolated demo launcher (ADR-084), committed as `19f4b9b`:**
 The launcher starts the actual API and Next app from private runtimes with explicit environment
 allowlists. The API child repeats the read-only preflight before binding its admitted loopback
 origin and requires configured Clerk keys. Next uses a physical private source/public/shared-UI
@@ -27,15 +56,6 @@ across 8 files; affected API/dependency lint/typecheck24/24, all three strict CL
 production build pass. Independent API/process/web review is clear.
 ADR-083 is committed as `f3c8796`. SERVICES_RUNNING leaves authentication, authenticated rehearsal
 and recording NOT_VERIFIED; no new schema migration, public API contract or product UI is added.
-
-**Immediate next:** actual Clerk authentication and the full synthetic capabilities rehearsal,
-including the requested dummy IVR/claim-collection chapter. Read-only Clerk CLI discovery identified
-the development instance/domain and matching existing admin associated with `usedentabill.xyz`;
-no keys were printed and no mutations were made.
-No real calls, inference or source production cutover is implied. Record and integrate the finished landing-page asset afterward; no
-recording asset or demo-ready claim exists yet. FW-43 source observations/reviewed legacy binding/
-additive snapshots, remaining financial correction/ownership/allocation work and the full original
-scope remain open.
 
 **Previous local slice — FW-45 create-only demo provisioning (ADR-083), committed as `f3c8796`:**
 `demo:provision` reuses the isolated runtime and explicit local demo guard from ADR-082

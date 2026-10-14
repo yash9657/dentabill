@@ -15,13 +15,14 @@ function shortenedScenarioTimers() {
   type Timer = ReturnType<typeof globalThis.setTimeout>;
   interface Pending {
     callback: () => void;
+    delay: number;
     fired: boolean;
     complete: () => void;
   }
   const pending = new Map<Timer, Pending>();
   const completions: Promise<void>[] = [];
   const delays: number[] = [];
-  let released = false;
+  let releasedThrough = -1;
   const fire = (timer: Timer, entry: Pending): void => {
     pending.delete(timer);
     try {
@@ -43,9 +44,9 @@ function shortenedScenarioTimers() {
       const entry = pending.get(timer);
       if (!entry) return;
       entry.fired = true;
-      if (released) fire(timer, entry);
+      if (entry.delay <= releasedThrough) fire(timer, entry);
     }, scaledDelay);
-    pending.set(timer, { callback, fired: false, complete });
+    pending.set(timer, { callback, delay, fired: false, complete });
     return timer;
   };
   const cancel: typeof globalThis.clearTimeout = (timer) => {
@@ -65,8 +66,13 @@ function shortenedScenarioTimers() {
     clearTimeout: cancel,
     delays,
     release(): void {
-      released = true;
+      releasedThrough = Number.POSITIVE_INFINITY;
       for (const [timer, entry] of pending) if (entry.fired) fire(timer, entry);
+    },
+    releaseThrough(delay: number): void {
+      releasedThrough = delay;
+      for (const [timer, entry] of pending)
+        if (entry.fired && entry.delay <= releasedThrough) fire(timer, entry);
     },
     async drained(): Promise<void> {
       await Promise.all(completions);
@@ -74,7 +80,7 @@ function shortenedScenarioTimers() {
   };
 }
 
-async function setup() {
+async function setup(observationWindowMs = 1_000) {
   const organization = await prisma.organization.create({
     data: {
       clerkOrgId: `synthetic_autopilot_${randomUUID()}`,
@@ -124,7 +130,7 @@ async function setup() {
     prisma,
     retellPort: autopilot,
     env,
-    observationWindowMs: 1_000,
+    observationWindowMs,
     logger: createLogger({ level: 'fatal', pretty: false }),
     outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
   });
@@ -158,6 +164,41 @@ afterAll(async () => {
 });
 
 describe('bounded handler with the actual DemoAutopilot wrapper', () => {
+  it('shows collection during scripted representative dialogue without later IVR regression', async () => {
+    const { organization, call, timers, result } = await setup(5_000);
+    timers.releaseThrough(5_000);
+    await vi.waitFor(async () => {
+      const current = await prisma.call.findFirstOrThrow({
+        where: { id: call.id, organizationId: organization.id },
+      });
+      expect(current.status).toBe('NAVIGATING_IVR');
+    });
+    timers.releaseThrough(16_000);
+    await vi.waitFor(async () => {
+      const current = await prisma.call.findFirstOrThrow({
+        where: { id: call.id, organizationId: organization.id },
+      });
+      expect(current.status).toBe('COLLECTING');
+    });
+    timers.releaseThrough(18_500);
+    await vi.waitFor(async () => {
+      const events = await prisma.callEvent.findMany({
+        where: { callId: call.id, call: { organizationId: organization.id } },
+      });
+      expect(
+        events.some((event) => JSON.stringify(event.data).includes('Calling for Synthetic')),
+      ).toBe(true);
+    });
+    expect(
+      await prisma.call.findFirstOrThrow({
+        where: { id: call.id, organizationId: organization.id },
+      }),
+    ).toMatchObject({ status: 'COLLECTING' });
+    timers.release();
+    expect((await result).outcome).toBe('COMPLETED');
+    await timers.drained();
+  });
+
   it('persists the complete shortened scenario and one summary obligation', async () => {
     const { organization, intent, call, fake, timers, result } = await setup();
     timers.release();

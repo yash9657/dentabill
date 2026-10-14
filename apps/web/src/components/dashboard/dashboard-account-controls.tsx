@@ -33,7 +33,7 @@ export function DashboardAccountControls(): React.ReactElement {
             elements: {
               rootBox: 'flex min-w-0 max-w-[160px] items-center',
               organizationSwitcherTriggerIcon: 'shrink-0',
-              organizationPreviewMainIdentifier: 'truncate max-w-[100px]',
+              organizationPreviewMainIdentifier: 'max-w-[100px] truncate !text-black',
               organizationSwitcherTrigger:
                 'rounded-md px-2 py-1.5 hover:bg-warm-stone/60 text-caption text-black',
             },

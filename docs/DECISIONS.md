@@ -2207,3 +2207,74 @@ Next: actual Clerk authentication and the full synthetic capabilities rehearsal.
 needs preparation and proof; no production source cutover, real calls or paid inference is implied.
 Recording and landing-page asset integration follow. FW-43 source
 reconciliation, financial corrections/ownership/allocation and the full original scope remain open.
+
+## ADR-085 — Real Clerk-authenticated synthetic rehearsal and truthful call evidence
+
+**Date:** 2026-10-14. **Status:** local rehearsal, validation and owned-resource cleanup complete.
+ADR-084 is committed as `19f4b9b`. Edited media, landing integration and the full plan remain open.
+
+The user requested an authenticated app demonstration, including simulated IVR/claim-information
+collection and a landing-page recording. Exercise the real local UI while describing synthetic
+phone, analysis and financial evidence accurately.
+
+1. Read-only Clerk CLI discovery verified an existing development application, instance,
+   organization and matching admin. An official short-lived ticket established the real browser
+   session. Bearer-token `/v1/me` returned 200 for the exact local OWNER, without test headers.
+   Keep credentials, ticket/token/session values and identifying account data out of committed
+   files. This proves scoped development authentication, not production or live connectors.
+2. The actual UI imported two connected claims and completed one 39-second payer-matched synthetic
+   call. Its readable conversation includes synthetic practice/subscriber/service-date information
+   and a reference. The saved legacy CallSummary is pending, with Denise, `REF-SIM-DELTA-001` and
+   CALL_BACK; claim A remains MANUAL_REVIEW. No native ClaimObservation is created. Scripted menu
+   choices and hold text are not audio or actual DTMF; `ivrNavigated` and `humanReached` remain
+   false. The inference run is SYNTHETIC/APPLIED with 150 synthetic ledger tokens, not paid usage.
+3. The call page selects canonical transcript evidence, separates conversation from operational
+   events and displays the exact saved summary. Call/summary reads and cancellation cache updates
+   bind to the originating actor/practice. Synthetic representative turns may show collection
+   progress without establishing real human contact. The account-switcher label contrast was fixed.
+4. The authenticated UI accepted reports of $100 + $80, batch gross $180/provider adjustment −$30/
+   net $150, cash $150 and matches of $100 + $50. Posting header $150 and entries $180 stayed
+   separate, with an exact-line association for A and a claim-only association for B. Correction
+   to $140 staled the old reservations and blocked another match. Full releases of $50 then $100
+   preserved history; rematching $140 left cash capacity $10 and batch capacity $0. The simulated
+   call did not cause these separately imported facts or establish cash allocation, posting,
+   settlement or recovered revenue.
+5. Read-only database proof confirms 2 claims, 2 lines, 1 completed call, 1 legacy summary,
+   0 observations, 1 inference run/attempt, 3 matches, 2 releases and 2 posting relationships.
+   The dedicated local rehearsal database is preserved. Raw footage and review captures are
+   evidence of the rehearsal, not an edited/captioned final video or landing integration.
+6. The audit UI previously expected an expanded user object and mislabeled recorded actors as
+   System. It now uses SDK wire types, recorded actor IDs or Actor not recorded, exact saved-case
+   Claim/Call/CallSummary/Organization filters and scoped reads. Future auditLog.list writes record
+   the local actor. Historical null actors are preserved rather than assigned an invented identity.
+
+**Verification:** 205 distinct focused cases pass across 147 earlier cases and 58 new audit cases
+(API 11 + web 47), not one combined run. The final web run passed 47/47 across five files in 2.51s;
+a 24/24 recheck after lint-only repairs overlaps those cases. Final affected lint/type checks pass
+30/30 (24 cached, 41.961s). API and fresh isolated Next production builds pass; the private Next
+runtime was disposed. Logs: `/tmp/dentabill-demo-audit-api.log`,
+`/tmp/dentabill-demo-audit-web-final.log`, `/tmp/dentabill-demo-audit-tests-final.log`,
+`/tmp/dentabill-demo-rehearsal-checks-final.log`, `...-api-build.log` and `...-web-build.log`.
+
+Actual authenticated call and audit pages at 1440px and 390px, including the audit drawer, pass
+with no overflow/page errors and zero axe WCAG 2 A/AA + 2.1 AA violations. Call contrast failed
+initially at 4.21 and passed after the label repair; the failed check is not counted as a pass.
+Call QA and read-only database proof are under `/tmp/dentabill-authenticated-demo.cdscvk/`, including
+`responsive-call-proof.json`, call-review captures, `verify.sql` and `database-proof.txt`.
+
+The original raw capture completed at 1440×900, VP8, 25fps and 1242.24s, with 11 additional actual
+review shots. Keep raw media outside public assets. The created Clerk session is revoked, the
+launcher exited 0, owned services are stopped and ports 4480/4481/4490 have no listeners. Owned
+private build/test cleanup is complete and the rehearsal database remains preserved.
+
+**Narrow follow-up, not a recording blocker:** eight older authenticated API audit writes omit
+local actor attribution and misname `metadata.clerkUserId`: `calls.ts` call.enqueue/list/read and
+callSummary.read/retry; `claims.ts` claim.list/read; `reports.ts` report.read. Repair separately
+with persisted-actor fixtures, without historical rewrites. This milestone fixes future
+auditLog.list attribution only; current financial actions are attributed and verified.
+
+Next: commit ADR-085, edit the actual footage, produce poster/captions/descriptive transcript and
+integrate verified user-controlled responsive landing playback. No finished media, deployment,
+real payer call, paid inference or external financial action is claimed. FW-43 source observations,
+reviewed legacy binding/additive snapshots and the entire remaining financial/connector plan stay
+open. FW-45 and the full goal are not complete.

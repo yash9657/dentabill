@@ -1,4 +1,9 @@
-import { DEMO_SCENARIOS, type DemoScenario } from '@dentabill/payer-ivr';
+import {
+  DEMO_SCENARIOS,
+  renderTurnText,
+  selectDemoScenario,
+  type DemoScenario,
+} from '@dentabill/payer-ivr';
 import { describe, expect, it } from 'vitest';
 
 import { FakeClaude } from './fake.js';
@@ -39,6 +44,35 @@ function toInput(scenario: DemoScenario): SummarizeInput {
 const summarizer = new FakeClaude({ deriveWhenUnregistered: true });
 
 describe('demo scenarios ↔ offline summarizer contract', () => {
+  it.each(['DELTA_DENTAL_PPO', 'CIGNA_DENTAL', 'METLIFE_DENTAL'])(
+    'derives a reviewable pending summary from the rendered %s runtime dialogue',
+    async (payerCode) => {
+      const scenario = selectDemoScenario(payerCode);
+      const input = toInput(scenario);
+      const { summary } = await summarizer.summarize({
+        ...input,
+        transcriptTurns: input.transcriptTurns.map((turn) => ({
+          ...turn,
+          text: renderTurnText(turn.text, {
+            practiceName: 'Synthetic demo practice',
+            subscriberId: 'SYNTHETIC-DEMO-SUBSCRIBER-A',
+            dateOfService: '2026-10-01',
+          }),
+        })),
+      });
+      expect(summary).toMatchObject({
+        claimStatus: 'pending',
+        nextAction: 'CALL_BACK',
+        repName: scenario.outcome.representativeName,
+        referenceNumber: scenario.outcome.referenceNumber,
+        amountApprovedCents: null,
+        denialReason: null,
+        denialCode: null,
+      });
+      expect(summary.notes).toContain('offline summarizer (no model call)');
+    },
+  );
+
   it('ships a library with more than one outcome per payer mix', () => {
     expect(DEMO_SCENARIOS.length).toBeGreaterThanOrEqual(4);
     const statuses = new Set(DEMO_SCENARIOS.map((s) => s.outcome.claimStatus));
