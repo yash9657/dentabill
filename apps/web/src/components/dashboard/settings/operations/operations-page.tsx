@@ -1,11 +1,11 @@
 'use client';
 
+import { useAuth } from '@clerk/nextjs';
 import { Button, Select, Skeleton } from '@dentabill/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import * as React from 'react';
 
-import { useMe } from '../../../../lib/me/use-me.js';
 import {
   deliveryErrorLabel,
   deliveryKindLabel,
@@ -18,6 +18,10 @@ import type {
   OperationsOverview,
 } from '../../../../lib/operations/types.js';
 import {
+  useOperationsAccess,
+  type OperationsScope,
+} from '../../../../lib/operations/use-notifications.js';
+import {
   operationsKey,
   useOperationCalls,
   useOperationDeliveries,
@@ -25,9 +29,18 @@ import {
 } from '../../../../lib/operations/use-operations.js';
 
 import { RecoveryDialog } from './recovery-dialog.js';
+import { ReviewNotifications } from './review-notifications.js';
 
 export function OperationsPage(): React.ReactElement {
-  const profile = useMe();
+  const { userId, orgId, isLoaded } = useAuth();
+  if (!isLoaded) return <WorkSkeleton label="Loading operations access" />;
+  if (!userId) return <p>Sign in to view operations.</p>;
+  const scope: OperationsScope = [userId, orgId ?? null];
+  return <OperationsAccess key={JSON.stringify(scope)} scope={scope} />;
+}
+
+function OperationsAccess({ scope }: { readonly scope: OperationsScope }): React.ReactElement {
+  const profile = useOperationsAccess(scope);
   if (profile.isPending) return <WorkSkeleton label="Loading operations access" />;
   if (profile.isError)
     return (
@@ -48,14 +61,17 @@ export function OperationsPage(): React.ReactElement {
     <OperationsWorkspace
       key={profile.data.organization.id}
       organizationId={profile.data.organization.id}
+      scope={scope}
     />
   );
 }
 
 function OperationsWorkspace({
   organizationId,
+  scope,
 }: {
   readonly organizationId: string;
+  readonly scope: OperationsScope;
 }): React.ReactElement {
   const overview = useOperationsOverview(organizationId);
   const client = useQueryClient();
@@ -102,6 +118,7 @@ function OperationsWorkspace({
       ) : (
         <WorkOverview data={overview.data} />
       )}
+      <ReviewNotifications organizationId={organizationId} scope={scope} />
       <DeliveryWorklist organizationId={organizationId} />
       <CallWorklist organizationId={organizationId} />
     </section>

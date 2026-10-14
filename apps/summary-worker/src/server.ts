@@ -1,6 +1,5 @@
 import { prisma } from '@dentabill/db';
 import { createLogger, type Logger } from '@dentabill/logger';
-import { createNotifierPort, type NotifierPort } from '@dentabill/notifier';
 import {
   type SummariesWorker,
   createSummariesWorker,
@@ -30,7 +29,6 @@ export interface BootSummaryWorkerOptions {
   readonly logger?: Logger;
   readonly prisma?: DbClient;
   readonly summarizer?: SummarizerPort;
-  readonly notifier?: NotifierPort;
   readonly observationConfig?: ObservationJobConfig;
 }
 
@@ -61,19 +59,6 @@ export async function bootSummaryWorker(
 
   const prismaClient = options.prisma ?? prisma;
   const summarizer = options.summarizer ?? createRuntimeSummarizer(env);
-  // Phase 4 ships FakeResend only — the live adapter throws on
-  // construction with a key. Phase 4.5 swaps in LiveResend.
-  const notifier = options.notifier ?? createNotifierPort({}).notifier;
-
-  const resolveRecipient = async (organizationId: string): Promise<string | null> => {
-    const owner = await prismaClient.user.findFirst({
-      where: { organizationId, role: { in: ['OWNER', 'ADMIN'] } },
-      orderBy: { createdAt: 'asc' },
-      select: { email: true },
-    });
-    return owner?.email ?? null;
-  };
-
   const worker = createSummariesWorker({
     connection,
     concurrency: env.QUEUE_CONCURRENCY,
@@ -82,8 +67,6 @@ export async function bootSummaryWorker(
       prisma: prismaClient,
       summarizer,
       env,
-      notifier,
-      resolveRecipient,
       ...(options.observationConfig ? { observationConfig: options.observationConfig } : {}),
     }),
   });

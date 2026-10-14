@@ -4,6 +4,55 @@ _Last updated: 2026-10-14 (full-scope goal active; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
+### 2026-10-14: durable review-notification outbox (ADR-079)
+
+FW-40 now stores generic review-notification intent with the summary/observation/review domain
+transaction and audit. Synthetic summaries, native findings and approved regeneration review
+paths share this producer; retrying an already processed job does not send or create another
+alert. The previous post-commit best-effort notifier is removed from runtime wiring.
+
+Migration31 `20261014190000_review_notification_outbox` adds immutable intent, attempt and receipt
+records plus fenced delivery state. Intent binds organization/run/purpose, generation, exact
+source versions, historical regeneration actor, deterministic eligible recipient, fixed generic
+content/hash and one permanent delivery key. Missing/changed recipients are blocked without
+retargeting. Current-source checks and acknowledgement suppression apply before dispatch.
+Leases last one minute; at most five attempts reuse identical key/content within a fixed23h
+window measured from first submission. Unknown or stale submissions remain visible; expiry
+quarantines them. A simulated receipt is never presented as delivered mail.
+
+External delivery is disabled. The only executable transport is explicitly injected synthetic
+code; default dispatch exits before acquiring a lease. The two audited Owner/Admin Operations
+GET routes provide safe metadata, counts, paged filters and attempt history through generated
+SDK/UI. No email address, payload, provider receipt, key or source hash appears in that response.
+There is no send/retry/rebind endpoint or implicit historical backfill.
+
+Migration31 is frozen and applied to isolated `dentabill_w0_identity`, then shared
+`dentabill_test`. DirectDB37 plus preservation1, prior DB87, focused API15, full API878/878
+across43 files (532.38s), SDK56, notifier20 and UI35 pass. Notification process crash/retry9
+and affected Turbo lint/types30/30 pass. API TypeScript/Lambda builds pass (36.4/29.0MB
+unzipped;10.8/9.4MB zip); Next production build passes (Operations10.7kB/186kB first load).
+Full worker run passed144/145 with one older process test timing out at5s during measured host
+CPU saturation. Its bounded allowance now matches the adjacent25s process test; focused3/3
+recheck passes (5.32s), so all145 cases pass across those runs. This remains local implementation
+evidence, not external delivery. Logs: `/tmp/dentabill-notification-api-full.log`,
+`...-worker-full.log`, `...-inference-process-recheck.log`, `...-process-tests.log`,
+`...-checks.log`, `...-api-build.log`, `...-lambda-build.log`, `...-web-build.log`.
+
+One synthetic actual-component browser round at1280/390 has zero overflow, page errors or axe
+violations. Root independent nonauthor review found no material issue; the separate documenter
+found no durable design delta. PRODUCT/DESIGN/sidecar are unchanged. Captures/results:
+`/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-notification-visual-q70pk1yy/`.
+Harness stopped; detector permission126 means no detector verdict. Live Clerk/AWS/Resend delivery
+and real patient/source systems remain unverified. No external message, paid inference, call,
+financial action, merge or deployment occurred.
+
+Continue the full ACTIVE goal after this milestone. The next independent financial work is
+explicit remittance batch/source corrections: additive stable identity, revision and permanent
+member-ownership records; v2 explicit source sequence while preserving v1 unsequenced snapshots;
+latest-observed acceptance and cash reservations shared across revisions until explicit release.
+Then implement evidence-bound posting relationships and claim cash allocation/attribution. Real connector sync, recovery workflows, model evaluation,
+voice, security and authorized end-to-end gates remain part of the original scope.
+
 ### 2026-10-14: independent PMS posting receipt milestone (ADR-078)
 
 FW-44 independent PMS posting receipts (ADR-078) now preserve immutable source receipt identity,

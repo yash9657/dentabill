@@ -158,17 +158,10 @@ afterEach(async () => {
     'DROP TRIGGER IF EXISTS observation_pending_admission ON "InferenceAttempt"',
   );
   await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS observation_pending_admission()');
-  if (immutableRowsCreated) {
+  if (organizations.splice(0).length > 0 || immutableRowsCreated) {
     // Dedicated local process-test database. Immutable history requires TRUNCATE cleanup.
-    await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "ClaimObservationReview", "ClaimObservation", "ObservationRegeneration" CASCADE',
-    );
+    await prisma.$executeRawUnsafe('TRUNCATE TABLE "Organization" CASCADE');
     immutableRowsCreated = false;
-  }
-  for (const organizationId of organizations.splice(0)) {
-    await prisma.inferenceAttempt.deleteMany({ where: { organizationId } });
-    await prisma.inferenceRun.deleteMany({ where: { organizationId } });
-    await prisma.organization.delete({ where: { id: organizationId } });
   }
   for (const directory of directories.splice(0))
     await rm(directory, { recursive: true, force: true });

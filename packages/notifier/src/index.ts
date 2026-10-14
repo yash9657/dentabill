@@ -7,6 +7,17 @@ export {
 } from './port.js';
 export { FakeResend, type FakeDelivery } from './fake.js';
 export {
+  ReviewNotificationPayloadSchema,
+  ReviewNotificationTransportError,
+  SyntheticReviewNotificationTransport,
+  reviewNotificationPayloadHash,
+  validateReviewNotificationSubmission,
+  type ReviewNotificationPayload,
+  type ReviewNotificationSubmission,
+  type ReviewNotificationReceipt,
+  type ReviewNotificationTransport,
+} from './review-notification.js';
+export {
   LiveResend,
   createNotifierPort,
   type CreateNotifierPortInput,

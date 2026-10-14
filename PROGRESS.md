@@ -3,13 +3,41 @@
 Human-friendly status report. For details see `docs/SESSION_CONTEXT.md` and `docs/TASKS.md`.
 
 **Last updated:** 2026-10-14
-**Current work:** independent PMS posting evidence and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
+**Current work:** transactional review notifications and dental recovery implementation on latest main `4497459` (AWS baseline `23cdc7b`), branch
 `codex/w0-containment`. The full parity assignment remains incomplete; no overall completion claim.
 [Capability/provider matrix](./docs/PROVIDER_EVIDENCE.md) and
 [session evidence](./docs/SESSION_CONTEXT.md) distinguish local fixes, documented APIs,
 actual account probes, and blocked end-to-end capabilities.
 
-**Latest local slice:** independent PMS posting receipt observations (ADR-078): immutable revisions,
+**Latest local slice — FW-40 (ADR-079), locally verified:** review alerts now commit
+atomically with source/domain/audit changes. Frozen intent identity, recipient, generic payload
+and delivery key feed a synthetic-only dispatcher with one-minute leases, at most five attempts,
+a fixed 23-hour retry deadline and immutable receipts. Native human review suppresses alerts
+that never reached submission. Owner/Admin Operations exposes audited read-only counts, filters
+and history; external email delivery is disabled and no send/retry/rebind action exists.
+Migration 31 applied only to localhost isolated/shared databases. DB 37 plus preservation 1,
+prior inference/observation/regeneration 53 plus native accounting 34, producer 69 and process/
+transport 9 pass. Focused notification API 15, affected lint/typecheck 30 and API/Lambda/Next
+builds pass. Full API 878/878 across 43 files passes. The full worker run passed 144/145 cases;
+one existing 5-second process timeout occurred under measured host CPU saturation. After aligning
+two process-test timeouts to the adjacent test's 25-second bound, the focused recheck passed 3/3.
+All 145 worker cases have passing evidence across those runs, not one clean full rerun. Independent
+API/dispatcher review found no actionable issues. SDK 56, notifier 20, UI 35 and web typecheck/lint
+pass. One 1280/390px
+synthetic component capture batch has no overflow, page errors or axe violations; separate visual
+review returned ship and documentation review required no system change. Detector exit 126 gives
+no verdict; the full authenticated shell was not exercised. No real messages, paid inference,
+provider calls, merge or deployment ran.
+
+**Immediate next:** implement additive batch identity/revision/ownership sidecars with explicit
+version 2 source sequences, preserving existing version 1 evidence as unsequenced. Revisions may
+repeat members within the same batch while cross-batch ownership remains permanent. Acceptance
+and freshness use the latest observed revision; cash reservations remain bound to stable batch
+identity until explicit release. Then continue reviewed posting relationships, claim cash
+allocation/attribution and the full remaining connector, recovery, AI/voice and operational plan.
+External notification delivery/rollout remains open.
+
+**Previous local slice:** independent PMS posting receipt observations (ADR-078): immutable revisions,
 separate header/entry facts, unknowns, fresh reviews and historical entry-identity protection across
 incomplete snapshots. API/SDK/dashboard work locally; source references remain UNLINKED and
 source/bank verification/settlement UNVERIFIED. Migration30 local only. NewDB90, prior financial/
@@ -20,7 +48,7 @@ corrections, allocation/attribution and the full remaining plan stay open.
 **Additional local fix:** FW-30 tenant rate limits now run after authentication on call enqueue
 and practice settings. Four before/after regressions and focused77/77 pass (ADR-077). This
 removes shared anonymous quotas across practices; deployed/fleet-wide behavior remains unverified.
-Independent PMS posting evidence is now in progress.
+Independent PMS posting evidence is implemented locally as recorded above.
 
 **Previous local slice:** FW-44 reviewed cash-to-batch reconciliation (ADR-076) supports signed
 partial many-to-many matches with exact accepted source/review bindings, two-sided capacities,
@@ -30,8 +58,8 @@ newDB59+preservation1, financial/tenant228, UI50, SDK48 and lint/types30 pass; A
 builds pass. Synthetic desktop/mobile checks and independent API/UI reviews pass. The coherent
 slice is committed locally; no merge or deployment. The durable full-scope goal remains ACTIVE.
 
-Next: independent PMS posting receipts, then explicit source/batch corrections, claim cash
-allocation/attribution and all remaining recovery/integration/AI/voice/operation gates. Manual
+Next financial dependency: explicit source/batch corrections, reviewed posting relationships,
+claim cash allocation/attribution and all remaining recovery/integration/AI/voice/operation gates. Manual
 matching does not verify bank receipt, post a payment or settle a claim. No real financial action ran.
 
 **Previous local slice:** FW-44 now preserves explicit remittance batch net, full signed claim
@@ -170,7 +198,8 @@ retryable. Configured legacy Claude is blocked by the production factory. Local 
 concurrency/rollback checks and three separate-process crash proofs support this boundary.
 That slice left Fireworks per-send accounting (now implemented in FW-41 below) and versioned
 summaries (FW-27) outstanding;
-review notifications still need an outbox (FW-40). Verification: **791 affected-package tests**
+the notification outbox gap is now locally addressed by ADR-079/FW-40, with external delivery
+remaining open. Verification for that earlier slice: **791 affected-package tests**
 (API415, DB94, summary-worker64, summarizer84, queue79, types36, SDK19), typecheck/lint24/24
 and both AWS Lambda packages pass. No paid inference or production change ran. See ADR-064
 and the latest session entry for evidence and limits.
@@ -182,7 +211,8 @@ rejects contradictory token totals, and refunds expired reservations only when n
 admitted. Process crash and pending-transaction cancellation proofs use localhost synthetic
 providers. Migrations16–18 are local only; existing jobs remain synthetic and model releases
 remain unapproved. Versioned observation publication/review is now local (FW-27 below); notification delivery
-still needs FW-40. **910 affected-package tests** pass (gateway297, DB111, summary-worker87,
+now has the local FW-40 outbox (ADR-079), while external delivery remains disabled. For this
+earlier native inference slice, **910 affected-package tests** pass (gateway297, DB111, summary-worker87,
 API415), along with typecheck/lint24/24 and both AWS Lambda packages. No live inference or
 production change ran. See ADR-065.
 

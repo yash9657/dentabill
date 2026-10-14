@@ -626,6 +626,190 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/operations/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    state?: "ALL" | "PENDING" | "SENDING" | "SIMULATED" | "ACCEPTED" | "BLOCKED" | "QUARANTINED" | "SUPPRESSED";
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: date-time */
+                            sampledAt: string;
+                            /** @enum {string} */
+                            deliveryMode: "DISABLED";
+                            counts: {
+                                pending: number;
+                                sending: number;
+                                blocked: number;
+                                quarantined: number;
+                                simulated: number;
+                                accepted: number;
+                                suppressed: number;
+                                agedPending: number;
+                            };
+                            items: {
+                                id: string;
+                                /** @enum {string} */
+                                purpose: "REVIEW_AVAILABLE" | "INFERENCE_REVIEW_REQUIRED";
+                                /** @enum {string} */
+                                state: "PENDING" | "SENDING" | "SIMULATED" | "ACCEPTED" | "BLOCKED" | "QUARANTINED" | "SUPPRESSED";
+                                /** @enum {string|null} */
+                                reason: "MISSING_RECIPIENT" | "RECIPIENT_CHANGED" | "SOURCE_NOT_READY" | "SOURCE_REVIEWED" | "SOURCE_SUPERSEDED" | "SOURCE_CHANGED" | "DEADLINE_EXPIRED" | "ATTEMPTS_EXHAUSTED" | "TRANSPORT_UNKNOWN" | "TRANSPORT_RETRYABLE" | "IDEMPOTENCY_CONFLICT" | "PAYLOAD_INVALID" | "TRANSPORT_REJECTED" | "LEASE_EXPIRED" | "UNKNOWN" | null;
+                                /** @enum {string} */
+                                recipientBinding: "BOUND" | "MISSING" | "CHANGED";
+                                generation: number;
+                                /** @enum {string} */
+                                templateVersion: "review-available.v1";
+                                claimId: string;
+                                callId: string;
+                                inferenceRunId: string;
+                                observationId: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                                /** Format: date-time */
+                                availableAt: string;
+                                ageSeconds: number;
+                                attemptCount: number;
+                                /** Format: date-time */
+                                firstSubmissionAt: string | null;
+                                /** Format: date-time */
+                                retryDeadlineAt: string | null;
+                                /** Format: date-time */
+                                leaseExpiresAt: string | null;
+                                ambiguous: boolean;
+                            }[];
+                            nextCursor: string | null;
+                            hasMore: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operations/notifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: date-time */
+                            sampledAt: string;
+                            /** @enum {string} */
+                            deliveryMode: "DISABLED";
+                            notification: {
+                                id: string;
+                                /** @enum {string} */
+                                purpose: "REVIEW_AVAILABLE" | "INFERENCE_REVIEW_REQUIRED";
+                                /** @enum {string} */
+                                state: "PENDING" | "SENDING" | "SIMULATED" | "ACCEPTED" | "BLOCKED" | "QUARANTINED" | "SUPPRESSED";
+                                /** @enum {string|null} */
+                                reason: "MISSING_RECIPIENT" | "RECIPIENT_CHANGED" | "SOURCE_NOT_READY" | "SOURCE_REVIEWED" | "SOURCE_SUPERSEDED" | "SOURCE_CHANGED" | "DEADLINE_EXPIRED" | "ATTEMPTS_EXHAUSTED" | "TRANSPORT_UNKNOWN" | "TRANSPORT_RETRYABLE" | "IDEMPOTENCY_CONFLICT" | "PAYLOAD_INVALID" | "TRANSPORT_REJECTED" | "LEASE_EXPIRED" | "UNKNOWN" | null;
+                                /** @enum {string} */
+                                recipientBinding: "BOUND" | "MISSING" | "CHANGED";
+                                generation: number;
+                                /** @enum {string} */
+                                templateVersion: "review-available.v1";
+                                claimId: string;
+                                callId: string;
+                                inferenceRunId: string;
+                                observationId: string | null;
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                updatedAt: string;
+                                /** Format: date-time */
+                                availableAt: string;
+                                ageSeconds: number;
+                                attemptCount: number;
+                                /** Format: date-time */
+                                firstSubmissionAt: string | null;
+                                /** Format: date-time */
+                                retryDeadlineAt: string | null;
+                                /** Format: date-time */
+                                leaseExpiresAt: string | null;
+                                ambiguous: boolean;
+                            };
+                            attempts: {
+                                id: string;
+                                attemptNumber: number;
+                                /** @enum {string} */
+                                mode: "SYNTHETIC";
+                                /** Format: date-time */
+                                startedAt: string;
+                                /** Format: date-time */
+                                leaseExpiresAt: string;
+                                receipt: {
+                                    /** @enum {string} */
+                                    outcome: "SIMULATED" | "ACCEPTED" | "UNKNOWN" | "RETRYABLE" | "CONFLICT";
+                                    /** @enum {string|null} */
+                                    code: "MISSING_RECIPIENT" | "RECIPIENT_CHANGED" | "SOURCE_NOT_READY" | "SOURCE_REVIEWED" | "SOURCE_SUPERSEDED" | "SOURCE_CHANGED" | "DEADLINE_EXPIRED" | "ATTEMPTS_EXHAUSTED" | "TRANSPORT_UNKNOWN" | "TRANSPORT_RETRYABLE" | "IDEMPOTENCY_CONFLICT" | "PAYLOAD_INVALID" | "TRANSPORT_REJECTED" | "LEASE_EXPIRED" | "UNKNOWN" | null;
+                                    /** Format: date-time */
+                                    completedAt: string;
+                                    /** Format: date-time */
+                                    acceptedAt: string | null;
+                                } | null;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/claims": {
         parameters: {
             query?: never;

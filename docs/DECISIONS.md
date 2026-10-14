@@ -1098,8 +1098,9 @@ Independent review reproduced and fixed lost rejection application, changed-conf
 validation and lock-order hazards. PostgreSQL concurrency/rollback and independent-process
 SIGKILL tests use only synthetic localhost requests with fsynced acceptance evidence. They do
 not establish provider idempotency, dental accuracy, spend caps or real recovery parity.
-The best-effort post-commit review notification can still be lost; its transactional outbox is
-split into FW-40. No production deployment, account mutation, paid inference, speech or calls
+At this ADR's date, the best-effort post-commit review notification could still be lost; its
+transactional replacement is now implemented locally in ADR-079/FW-40, with external delivery
+and rollout still open. No production deployment, account mutation, paid inference, speech or calls
 were performed. Production rollout must drain old consumers and preserve this evidence on
 rollback; this ADR does not authorize deployment or messaging.
 
@@ -1273,8 +1274,9 @@ only legacy summaries, so a native response could remain invisible or lack a saf
 Checked-in model releases remain CANDIDATE. Credentials and a selector cannot establish approval,
 dental quality, provider-contract suitability or production readiness. Validation uses localhost
 Postgres and synthetic providers; no paid inference, real calls or AWS deployment is implied.
-Model evaluation/approval, notification outbox, operational monitoring, voice and supported
-connectors remain required by the full objective.
+Model evaluation/approval, operational monitoring, voice and supported connectors remain
+required by the full objective. The notification outbox gap recorded here is locally addressed
+by ADR-079; external notification delivery and rollout remain open.
 
 ## ADR-069 — Independent reference annotations and deterministic evaluation evidence
 
@@ -1751,3 +1753,72 @@ Primary documentation refreshed2026-10-14:
 [Open Dental ClaimProcs](https://www.opendental.com/site/apiclaimprocs.html).
 This design preserves their distinct identities and partial-header behavior without claiming
 that the custom manual input is a native export, authenticated API capture or connector.
+
+## ADR-079 — Transactional review notifications with frozen delivery identity
+
+**Date:** 2026-10-14. **Status:** partial local implementation; migration 31 applied only to
+localhost isolated/shared databases. Local verification recorded below. External delivery disabled;
+not merged or deployed.
+
+The earlier post-commit notification could be lost after a summary commit and could not safely
+recover an ambiguous submission. Store the review alert with its source transaction, then keep
+submission ownership and receipts separate from domain publication and actual email delivery.
+
+1. Migration 31 `20261014190000_review_notification_outbox` adds ReviewNotificationIntent,
+   ReviewNotificationDelivery, ReviewNotificationAttempt and ReviewNotificationReceipt.
+   Intent/domain publication/audit commit atomically for synthetic summary transitions, native
+   observation publication and inference-review outcomes, including approved regeneration.
+   Organization/run/purpose uniqueness prevents duplicate intents. No historical backfill or
+   rewrite is introduced; prior summaries, observations, financial evidence and audit remain.
+2. Immutable intents bind source/request hashes, generation, claim versions, source marker,
+   summary/observation and regeneration actor. The oldest eligible OWNER/ADMIN by createdAt/id
+   is selected deterministically and its user ID, role and email are frozen. Missing recipients
+   block delivery; recipient drift never silently rebinds or resets a blocked intent.
+3. The frozen `review-available.v1` payload contains only the recipient and fixed generic
+   subject/text/application path, with an independently checked SHA-256 hash and permanent UUID
+   delivery key. It contains no patient, claim, payer, amount, transcript or inference content.
+   These private delivery fields are omitted from Operations responses and audit metadata.
+4. Database admission checks retained source/current claim versions, latest call/generation,
+   source transcript, review state and recipient identity. A native human review suppresses
+   never-submitted PENDING/BLOCKED alerts atomically; it cannot erase prior submission history.
+   A source or recipient change after a submission boundary quarantines further attempts.
+5. A one-minute lease, immutable attempt and first-submission timestamp/fixed 23-hour deadline
+   are persisted before submission. At most five attempts reuse the same key and identical
+   payload within that deadline. Retryable receipts wait at least one minute and honor bounded
+   retry-after. Conflicts, exhausted attempts and expired uncertain work quarantine; no new-key
+   retry extends the window. Late/wrong leases cannot overwrite receipts or newer ownership.
+6. The dispatcher accepts only an explicitly injected SYNTHETIC transport and defaults to
+   DISABLED. It bounds each call by 25 seconds, remaining lease and remaining retry window.
+   SIMULATED receipts remain distinct from provider ACCEPTED and actual delivery. There is no
+   callable live adapter, scheduled live relay, send endpoint, retry control or recipient-rebind
+   action in this slice. Existing legacy notification history is retained.
+7. Two audited OWNER/ADMIN GETs expose scoped status counts, filtered cursor pages and at most
+   five attempt receipts. They return closed reason codes, recipient-binding status and safe
+   claim/call links, excluding emails, bodies, hashes, delivery keys and provider receipt IDs.
+   The Operations list/history uses the generated SDK and explicitly labels delivery disabled.
+
+Resend documents a 24-hour idempotency window; the local 23-hour deadline is a conservative
+application bound, not measured provider behavior. Handoff and delivery remain separate facts.
+[Idempotency](https://resend.com/docs/dashboard/emails/idempotency-keys),
+[usage limits](https://resend.com/docs/api-reference/rate-limit),
+[event types](https://resend.com/docs/webhooks/event-types) and
+[retrieve sent email](https://resend.com/docs/api-reference/emails/retrieve-email) were reviewed
+read-only on 2026-10-14. No real provider request or message was sent.
+
+**Verification checkpoint:** DB 37 direct invariants plus 1 migration-preservation test pass;
+prior inference/observation/regeneration 53 and native accounting 34 pass. Focused producers 69
+across 3 files and process/transport 9 pass, including restart/deduplication, competing leases,
+expiry without submission, bounded timeout, malformed receipts, retry-after, conflict and receipt-
+audit rollback. Migration 31 applied to both localhost databases; API/Lambda/Next builds pass.
+SDK 56, notifier 20 and UI 35 plus web typecheck/lint pass. One synthetic 1280/390px component
+batch reports no overflow, page errors or axe violations; separate visual review returned ship
+and documentation review required no system change. Detector exit 126 provides no verdict.
+Focused notification API 15 and affected workspace lint/typecheck 30 pass. Independent API/
+dispatcher review found no actionable issues. Full API passes 878/878 across 43 files in 532.38s
+(`/tmp/dentabill-notification-api-full.log`). The full worker run passed 144/145 across 12 files;
+one existing inference-process test hit its 5-second timeout while the host had 0% CPU idle.
+The first two process-test timeouts were aligned to the adjacent crash test's 25-second bound;
+the focused recheck passed 3/3 in 5.32s (`/tmp/dentabill-notification-inference-process-recheck.log`).
+All 145 worker cases have passing evidence across those runs; this is not a single clean full
+145-case rerun. Focused suites overlap and are not summed. No full authenticated-shell or
+deployment evidence is claimed.

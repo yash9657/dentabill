@@ -11,6 +11,7 @@ import type {
 import type { prisma } from '../client.js';
 
 import { audit } from './audit.js';
+import { enqueueReviewNotification, suppressReviewNotifications } from './review-notifications.js';
 
 type Db = typeof prisma;
 type Tx = Parameters<Parameters<Db['$transaction']>[0]>[0];
@@ -375,6 +376,12 @@ export async function publishClaimObservation(
       },
       tx,
     );
+    await enqueueReviewNotification(tx, {
+      organizationId: run.organizationId,
+      runId: run.id,
+      purpose: 'REVIEW_AVAILABLE',
+      now: time,
+    });
     return { kind: 'PUBLISHED', observation };
   });
 }
@@ -523,6 +530,11 @@ export async function reviewClaimObservation(
       },
       tx,
     );
+    await suppressReviewNotifications(tx, {
+      organizationId: input.organizationId,
+      runId: observation.inferenceRunId,
+      now: time,
+    });
     return { kind: 'RECORDED', review };
   });
 }

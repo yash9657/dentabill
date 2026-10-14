@@ -39,7 +39,7 @@ async function fixture(configure?: (release: ModelRelease) => void) {
   const input = await seedObservation(prisma);
   const organizationId = input.request.organizationId;
   const clerkUserId = `owner_${randomUUID()}`;
-  await prisma.user.create({
+  const owner = await prisma.user.create({
     data: { organizationId, clerkUserId, email: 'synthetic@example.invalid', role: 'OWNER' },
   });
   const release = observationRelease(organizationId);
@@ -98,12 +98,28 @@ async function fixture(configure?: (release: ModelRelease) => void) {
     idempotencyKey: randomUUID(),
     reason: 'Review corrected synthetic transcript',
   };
-  return { ...input, actor, target, config, service, publication, preview, submission, fetch };
+  return {
+    ...input,
+    actor,
+    owner,
+    target,
+    config,
+    service,
+    publication,
+    preview,
+    submission,
+    fetch,
+  };
 }
 
-async function failFinish(): Promise<void> {
+async function failFinish(
+  action:
+    | 'inference.native_attempt_finished'
+    | 'inference.native_response_recorded'
+    | 'notification.enqueued' = 'inference.native_attempt_finished',
+): Promise<void> {
   await prisma.$executeRawUnsafe(
-    `CREATE FUNCTION fail_regeneration_finish() RETURNS trigger AS $$ BEGIN IF NEW.action = 'inference.native_attempt_finished' THEN RAISE EXCEPTION 'synthetic finish fault'; END IF; RETURN NEW; END; $$ LANGUAGE plpgsql`,
+    `CREATE FUNCTION fail_regeneration_finish() RETURNS trigger AS $$ BEGIN IF NEW.action = '${action}' THEN RAISE EXCEPTION 'synthetic finish fault'; END IF; RETURN NEW; END; $$ LANGUAGE plpgsql`,
   );
   await prisma.$executeRawUnsafe(
     'CREATE TRIGGER fail_regeneration_finish BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION fail_regeneration_finish()',
@@ -138,6 +154,26 @@ describe('authorized native observation regeneration', () => {
     expect(observations[0]?.review?.decision).toBe('ACKNOWLEDGED');
     expect(observations[1]?.inferenceRun.generation).toBe(2);
     expect(observations[1]?.supersedesObservationId).toBe(f.publication.observation.id);
+    const notifications = await prisma.reviewNotificationIntent.findMany({
+      where: { organizationId: f.actor.organizationId },
+      orderBy: { generation: 'asc' },
+      include: { delivery: true },
+    });
+    expect(notifications).toHaveLength(2);
+    expect(notifications[0]).toMatchObject({
+      actorKind: 'SYSTEM',
+      delivery: { state: 'SUPPRESSED', reason: 'SOURCE_REVIEWED' },
+    });
+    expect(notifications[1]).toMatchObject({
+      purpose: 'REVIEW_AVAILABLE',
+      generation: 2,
+      regenerationId: result.id,
+      observationId: result.observationId,
+      actorKind: 'USER',
+      actorUserId: f.owner.id,
+      actorRole: 'OWNER',
+      recipientUserId: f.owner.id,
+    });
     expect(
       await prisma.claim.findFirst({
         where: { id: before.id, organizationId: f.actor.organizationId },
@@ -243,6 +279,21 @@ describe('authorized native observation regeneration', () => {
     });
     expect((await f.service.preview(f.target)).canRegenerate).toBe(false);
     expect(f.fetch).toHaveBeenCalledTimes(2);
+    const run = await prisma.inferenceRun.findFirstOrThrow({
+      where: { organizationId: f.actor.organizationId, regenerationId: result.id },
+    });
+    expect(run).toMatchObject({ state: 'UNKNOWN', reviewAppliedAt: expect.any(Date) });
+    expect(
+      await prisma.reviewNotificationIntent.findMany({
+        where: { organizationId: f.actor.organizationId, inferenceRunId: run.id },
+      }),
+    ).toMatchObject([
+      {
+        purpose: 'INFERENCE_REVIEW_REQUIRED',
+        actorKind: 'USER',
+        actorUserId: f.owner.id,
+      },
+    ]);
     await prisma.user.updateMany({
       where: { organizationId: f.actor.organizationId },
       data: { role: 'BILLING_STAFF' },
@@ -251,6 +302,91 @@ describe('authorized native observation regeneration', () => {
     await expect(
       f.service.resume({ ...f.actor, authorizationId: result.id }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  }, 30_000);
+
+  it.each(['REJECTED', 'UNKNOWN'] as const)(
+    'rolls back %s review application if notification audit fails, then resumes without another inference',
+    async (state) => {
+      const f = await fixture();
+      f.fetch.mockImplementation(async () => {
+        if (state === 'UNKNOWN') throw new Error('synthetic network interruption');
+        const run = await prisma.inferenceRun.findFirstOrThrow({
+          where: { organizationId: f.actor.organizationId },
+          orderBy: { generation: 'desc' },
+        });
+        return new Response(
+          observationResponse(GatewayRequestSchema.parse(run.requestPayload), 'schema'),
+        );
+      });
+      await failFinish('notification.enqueued');
+      await expect(f.service.regenerate(f.submission)).rejects.toThrow();
+      const run = await prisma.inferenceRun.findFirstOrThrow({
+        where: { organizationId: f.actor.organizationId, generation: 2 },
+      });
+      expect(run).toMatchObject({ state, reviewAppliedAt: null });
+      expect(
+        await prisma.reviewNotificationIntent.count({
+          where: { organizationId: f.actor.organizationId, inferenceRunId: run.id },
+        }),
+      ).toBe(0);
+      await prisma.$executeRawUnsafe('DROP TRIGGER fail_regeneration_finish ON "AuditLog"');
+      const recovered = await f.service.resume({
+        ...f.actor,
+        authorizationId: run.regenerationId!,
+      });
+      expect(recovered.state).toBe(state === 'REJECTED' ? 'FAILED' : 'REVIEW_REQUIRED');
+      const notification = await prisma.reviewNotificationIntent.findFirstOrThrow({
+        where: { organizationId: f.actor.organizationId, inferenceRunId: run.id },
+      });
+      expect(notification).toMatchObject({
+        purpose: 'INFERENCE_REVIEW_REQUIRED',
+        generation: 2,
+        actorKind: 'USER',
+        actorUserId: f.owner.id,
+        actorRole: 'OWNER',
+      });
+      expect(await f.service.regenerate(f.submission)).toEqual(recovered);
+      expect(
+        await prisma.reviewNotificationIntent.findMany({
+          where: { organizationId: f.actor.organizationId, inferenceRunId: run.id },
+        }),
+      ).toEqual([notification]);
+      expect(f.fetch).toHaveBeenCalledTimes(2);
+    },
+    30_000,
+  );
+
+  it('settles an expired regeneration submission without a receipt into durable review without credentials', async () => {
+    const f = await fixture();
+    await failFinish('inference.native_response_recorded');
+    const pending = await f.service.regenerate(f.submission);
+    expect(pending.state).toBe('RUNNING');
+    const run = await prisma.inferenceRun.findFirstOrThrow({
+      where: { organizationId: f.actor.organizationId, regenerationId: pending.id },
+    });
+    expect(run.reviewAppliedAt).toBeNull();
+    await prisma.$executeRawUnsafe('DROP TRIGGER fail_regeneration_finish ON "AuditLog"');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(run.leaseExpiresAt!.getTime() + 1));
+    const recovery = createObservationRegenerationService({
+      prisma,
+      config: { dailyTokenLimit: 1_000_000 },
+    });
+    expect(await recovery.resume({ ...f.actor, authorizationId: pending.id })).toMatchObject({
+      state: 'REVIEW_REQUIRED',
+      canResume: false,
+    });
+    expect(
+      await prisma.inferenceRun.findFirstOrThrow({
+        where: { organizationId: f.actor.organizationId, id: run.id },
+      }),
+    ).toMatchObject({ state: 'UNKNOWN', reviewAppliedAt: expect.any(Date) });
+    expect(
+      await prisma.reviewNotificationIntent.findFirstOrThrow({
+        where: { organizationId: f.actor.organizationId, inferenceRunId: run.id },
+      }),
+    ).toMatchObject({ purpose: 'INFERENCE_REVIEW_REQUIRED', actorUserId: f.owner.id });
+    expect(f.fetch).toHaveBeenCalledTimes(2);
   }, 30_000);
   it('closes an expired unused reservation without credentials and permits a new explicit approval', async () => {
     const f = await fixture();

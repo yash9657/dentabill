@@ -80,7 +80,8 @@ remains disabled; its lazy factory cannot prevent recovery of a saved native res
 does not approve or select a model. Reviewed releases and authorized rollout remain required.
 `SUMMARIZER_DAILY_TOKEN_BUDGET` is operational admission, not a verified dollar ceiling.
 Unknown usage remains held across UTC days; legacy `summaryTokensUsed` is a display projection,
-not the admission authority. Review notifications still need a durable outbox (FW-40).
+not the admission authority. ADR-079/FW-40 now implements the review-notification outbox locally;
+local verification is recorded in ADR-079; coordinated rollout and external delivery remain open.
 
 ### Versioned observation release (not executed)
 
@@ -666,3 +667,35 @@ Monitor audit health, closed errors and organization lock/query latency without 
 Native sync must capture child edits as well as header versions and correctly interpret native
 sentinel dates. Actual authenticated connectors, source-to-claim binding, external posting,
 retention/restore and authorized AWS end-to-end evidence remain deployment gates.
+
+### Review-notification outbox expansion (ADR-079; not deployed)
+
+Migration 31 `20261014190000_review_notification_outbox` follows 30. It adds scoped immutable
+intent/attempt/receipt records plus guarded delivery state without historical backfill. At this
+checkpoint it has run only on localhost isolated/shared databases; direct invariants and
+migration-preservation checks pass. Local verification is recorded below; authorized rollout and
+production environment evidence remain separate gates.
+Regenerate Prisma and coordinate API/summary-worker artifacts after applying the validated chain.
+Older workers retain the obsolete post-commit path, so drain/review them before switching writers.
+
+External delivery remains DISABLED. The dispatcher is exported for explicit synthetic transport
+injection only; no runtime live adapter, send endpoint or scheduled live relay is enabled. No
+provider key or migration alone enables email. Operations adds two audited OWNER/ADMIN GETs with
+filtered counts/list/history and safe metadata; it offers no send, retry or recipient-rebind action.
+
+Before release, validate atomic source/intent/audit rollback, stable key/content across crashes,
+recipient/source drift, native review suppression, tenant/role/read-audit failures and late-lease
+fencing. First submission persists a one-minute lease, at most five attempts and a fixed 23-hour
+deadline; expiration/uncertainty must quarantine without extending the window or minting a new key.
+Keep SIMULATED, provider acceptance and actual email delivery distinct. Focused producer and
+process/transport checks, focused notification API 15, affected lint/typecheck 30 and API/Lambda/
+Next builds pass. Full API passes 878/878 across 43 files. Full worker run 144/145 plus a focused
+3/3 recheck covers all 145 cases after bounded process-timeout alignment under CPU saturation;
+this is not one clean full rerun. Keep that qualification with the evidence in ADR-079.
+
+Rollback application exposure while retaining all intents, leases, attempts, receipts and source
+history. Do not delete/reseed pending work or rebind recipients to force delivery. Monitor only
+closed status/reason/count fields; never log addresses, bodies, keys or hashes. A future live
+release requires verified domain/account configuration, explicit authorization, current provider
+idempotency/rate-limit contracts, transport and receipt reconciliation, retention/restore and any
+applicable PHI/vendor agreements. No production change or real message occurred in this slice.

@@ -9,8 +9,8 @@ import type { TemplateName, TemplateVars } from './templates/index.js';
 /**
  * `FakeResend` — in-memory delivery log used by every Phase-4 test.
  *
- *   - Validates every payload against the template's Zod schema (so a
- *     PHI-leaking template misuse fails loudly in CI).
+ *   - Validates payload types against the template's Zod schema. This
+ *     does not screen PHI and these legacy templates are synthetic-only.
  *   - Records every dispatch in `deliveries` for spy-style assertions.
  *   - Returns a deterministic id per call so tests can correlate.
  *

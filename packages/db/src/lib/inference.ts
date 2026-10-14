@@ -5,6 +5,7 @@ import { Prisma, type InferenceRun } from '@prisma/client';
 import type { prisma } from '../client.js';
 
 import { audit } from './audit.js';
+import { enqueueReviewNotification } from './review-notifications.js';
 
 type Db = typeof prisma;
 type Tx = Parameters<Parameters<Db['$transaction']>[0]>[0];
@@ -496,7 +497,7 @@ export async function markInferenceApplied(
   await record(tx, updated, 'inference.applied');
 }
 
-/** Call first inside the transaction that applies review effects; rollback keeps them retryable. */
+/** Commit with review effects after claim changes; rollback keeps effects and notification retryable. */
 export async function markInferenceReviewed(
   tx: Tx,
   input: Omit<InferenceOwnership, 'leaseToken'>,
@@ -513,5 +514,11 @@ export async function markInferenceReviewed(
     data: { reviewAppliedAt: now },
   });
   await record(tx, updated, 'inference.review_applied');
+  await enqueueReviewNotification(tx, {
+    organizationId: input.organizationId,
+    runId: run.id,
+    purpose: 'INFERENCE_REVIEW_REQUIRED',
+    now,
+  });
   return true;
 }

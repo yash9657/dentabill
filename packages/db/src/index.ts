@@ -1,3 +1,4 @@
+export * from './lib/review-notifications.js';
 export * from './lib/claim-observations.js';
 export * from './lib/observation-regenerations.js';
 export * from './lib/fireworks-inference.js';
@@ -50,6 +51,10 @@ export type {
   PostingSourceEvidence,
   PostingSourceReview,
   PostingSourceEntry,
+  ReviewNotificationIntent,
+  ReviewNotificationDelivery,
+  ReviewNotificationAttempt,
+  ReviewNotificationReceipt,
   Call,
   CallIntent,
   CallIntentState,

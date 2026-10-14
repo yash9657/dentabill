@@ -68,14 +68,8 @@ afterEach(async () => {
       });
     });
   }
-  for (const organizationId of organizations.splice(0)) {
-    await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "ClaimObservationReview", "ClaimObservation" CASCADE',
-    );
-    await prisma.inferenceAttempt.deleteMany({ where: { organizationId } });
-    await prisma.inferenceRun.deleteMany({ where: { organizationId } });
-    await prisma.organization.delete({ where: { id: organizationId } });
-  }
+  if (organizations.splice(0).length > 0)
+    await prisma.$executeRawUnsafe('TRUNCATE TABLE "Organization" CASCADE');
 });
 afterAll(async () => {
   await prisma.$disconnect();

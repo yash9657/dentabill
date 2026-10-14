@@ -293,3 +293,29 @@ protection, not a cash reservation.256KiB source/JSONB,100 entries and20-record/
 input/output. Source claims remain UNLINKED; no authenticated PMS, bank verification, payment
 write or settlement is implied. Production PHI agreements, lifecycle/retention and restore remain
 required before real data.
+
+### Durable generic review notifications (ADR-079; local only)
+
+Review alerts commit with the source publication/review outcome and audit. Immutable intent
+bindings retain organization, source/run/generation, actor, selected recipient, fixed generic
+payload/hash and UUID delivery key. Recipient selection is deterministic among eligible
+OWNER/ADMIN users; missing or changed identity blocks before submission, with no implicit rebind.
+Source/current-claim/transcript/review guards suppress never-submitted obsolete work and quarantine
+changed work after submission. Native human review suppresses never-submitted alerts atomically.
+
+The payload contains only the frozen email address and fixed review-available text/path; no
+patient, claim, payer, amount, transcript or inference content is rendered into it. Treat retained
+recipient addresses as sensitive. Operations requires a stored scoped OWNER/ADMIN role and audits
+both read endpoints. Responses expose binding status and closed codes, not emails, message bodies,
+payload hashes, delivery keys or provider receipt IDs. Public errors and audit metadata omit those
+fields; browser caches are scoped to user/practice and requests are cancelled when views change.
+
+Submission ownership is persisted before the boundary: one-minute leases, at most five attempts
+and a fixed 23-hour deadline using the same key/content. Immutable attempts/receipts and scoped
+restrictive references preserve evidence; expired uncertainty cannot create a fresh-key retry.
+The only callable transport is synthetic and runtime delivery defaults to disabled. SIMULATED
+and provider ACCEPTED must never be represented as inbox delivery. No send/retry/rebind endpoint
+or UI exists. Migration 31 applied only to localhost isolated/shared databases with no historical
+backfill. Local verification is recorded in ADR-079; authorized rollout, provider/domain
+configuration, recipient/PHI agreements, retention/erasure and external receipt reconciliation
+remain separate gates.

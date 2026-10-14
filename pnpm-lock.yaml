@@ -111,12 +111,12 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@dentabill/model-gateway':
-        specifier: workspace:*
-        version: link:../../packages/model-gateway
       '@dentabill/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@dentabill/model-gateway':
+        specifier: workspace:*
+        version: link:../../packages/model-gateway
       '@types/node':
         specifier: ^20.15.1
         version: 20.19.39
@@ -533,9 +533,12 @@ importers:
       '@dentabill/config':
         specifier: workspace:*
         version: link:../config
+      '@types/node':
+        specifier: ^20.19.39
+        version: 20.19.39
       vitest:
         specifier: ^2.1.9
-        version: 2.1.9(@types/node@25.6.0)(jsdom@29.0.2)(lightningcss@1.32.0)
+        version: 2.1.9(@types/node@20.19.39)(jsdom@29.0.2)(lightningcss@1.32.0)
 
   packages/payer-ivr:
     dependencies:

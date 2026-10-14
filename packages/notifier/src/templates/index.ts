@@ -4,10 +4,10 @@ import { z } from 'zod';
  * Templates the notifier accepts. Each entry is a strict Zod schema
  * describing the variables that template renders against.
  *
- * **PHI rule (load-bearing).** Templates MUST NOT accept patient name,
- * DOB, SSN, or full diagnosis. Use `claimNumber + payer + serviceDate`
- * to identify a claim. Adding a new field here without revisiting
- * `docs/SECURITY.md` Phase-4 entries is a HIPAA-compliance regression.
+ * Legacy synthetic-only templates. Type validation does not screen PHI:
+ * claim references, service dates and free text can identify patient care.
+ * Durable review notifications use the fixed generic template in
+ * review-notification.ts and never render these source fields.
  */
 
 export const ClaimResolvedTemplate = z
@@ -25,7 +25,7 @@ export const ClaimNeedsInfoTemplate = z
     claimNumber: z.string().min(1),
     payerCode: z.string().min(1),
     serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'serviceDate must be ISO YYYY-MM-DD'),
-    /** Free-text "what to attach" hint from the summarizer. PHI-screened. */
+    /** Legacy synthetic fixture text; not safe for external delivery. */
     hint: z.string().min(1).max(280),
   })
   .strict();

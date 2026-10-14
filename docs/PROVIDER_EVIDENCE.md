@@ -13,6 +13,34 @@ Evidence labels:
 
 ## Local implementation evidence added after the baseline
 
+FW-40 now adds a transactional generic review-notification outbox (ADR-079): frozen source/run/
+purpose/generation/actor/recipient/payload/key, one-minute leases, at most five attempts inside a
+fixed 23-hour deadline, immutable receipts and read-only Owner/Admin Operations. Source outcomes
+and alert intents commit together; native human review suppresses never-submitted alerts. This is
+**repository/local synthetic evidence**. External delivery is disabled, no live adapter or send
+endpoint exists, and SIMULATED never means provider acceptance or inbox delivery. Migration 31
+applied only to localhost isolated/shared databases. DB 37 plus preservation 1, prior inference/
+observation/regeneration 53 plus native accounting 34, producer 69, process/transport 9 and
+API/Lambda/Next builds pass. Focused notification API 15 and affected lint/typecheck 30 pass;
+full API passes 878/878 across 43 files. Full worker run 144/145 encountered one existing process
+timeout under host CPU saturation; focused 3/3 recheck passed after aligning its timeout bound.
+All 145 cases have passing evidence across runs, not a single clean full rerun. Independent
+API/dispatcher review found no actionable issues.
+SDK 56, notifier 20, UI 35 and web typecheck/lint pass; synthetic 1280/390px component checks report
+no overflow/errors/axe violations. Separate visual review returned ship; detector 126 is no verdict.
+No full authenticated-shell, real provider request, email, deployment or account change is claimed.
+
+**Documented, refreshed 2026-10-14:** Resend keeps idempotency keys for 24 hours and requires the
+same key for the same request. The implementation's 23-hour deadline is a conservative local bound;
+it does not establish account behavior. [Idempotency keys](https://resend.com/docs/dashboard/emails/idempotency-keys)
+The provider separately documents rate limits, event types and retrieval by sent-email ID; these
+inform future retry and acceptance/delivery reconciliation without proving integration.
+[Usage limits](https://resend.com/docs/api-reference/rate-limit),
+[event types](https://resend.com/docs/webhooks/event-types),
+[retrieve sent email](https://resend.com/docs/api-reference/emails/retrieve-email).
+Verified sending-domain/account access, a live adapter, actual receipts/reconciliation, authorized
+delivery and applicable vendor/PHI agreements remain open. Public documentation reads sent no messages.
+
 FW-44 adds manual remittance batch snapshots with explicit accepted claim-event membership,
 signed provider adjustments and separately reported claim/adjustment/net totals (ADR-075).
 The synthetic100+80−30=150 case retains gross reports and original adjustment convention; it

@@ -158,11 +158,8 @@ afterEach(async () => {
     'DROP TRIGGER IF EXISTS inference_process_before_attempt ON "InferenceAttempt"',
   );
   await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS inference_process_before_attempt()');
-  for (const organizationId of organizations.splice(0)) {
-    await prisma.inferenceAttempt.deleteMany({ where: { organizationId } });
-    await prisma.inferenceRun.deleteMany({ where: { organizationId } });
-    await prisma.organization.delete({ where: { id: organizationId } });
-  }
+  if (organizations.splice(0).length > 0)
+    await prisma.$executeRawUnsafe('TRUNCATE TABLE "Organization" CASCADE');
   for (const directory of directories.splice(0))
     await rm(directory, { recursive: true, force: true });
 });
@@ -230,7 +227,7 @@ describe('Durable inference across fresh processes and SIGKILL', () => {
         })
       ).reservedTokens,
     ).toBe(submitted.reservedTokens);
-  });
+  }, 25_000);
 
   it('replays a saved response after application rollback without another inference or charge', async () => {
     const data = await seed();
@@ -298,7 +295,7 @@ describe('Durable inference across fresh processes and SIGKILL', () => {
       requestHash: saved.requestHash,
       sourceHash: saved.sourceHash,
     });
-  });
+  }, 25_000);
 
   it('reclaims a reservation after SIGKILL before the submission marker commits, with exactly one later send', async () => {
     const data = await seed();

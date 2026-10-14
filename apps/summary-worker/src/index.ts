@@ -1,4 +1,9 @@
 export { loadSummaryWorkerEnv, type SummaryWorkerEnv } from './env.js';
+export {
+  dispatchReviewNotification,
+  type ReviewNotificationDispatchOptions,
+  type ReviewNotificationDispatchResult,
+} from './review-notification-dispatch.js';
 export { createRuntimeSummarizer } from './runtime-summarizer.js';
 export { ObservationJobError } from './summary-errors.js';
 export { type ObservationJobConfig } from './observation-handler.js';

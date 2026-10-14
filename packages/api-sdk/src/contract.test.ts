@@ -72,9 +72,44 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/posting-evidence/receipts/{id}',
   '/v1/posting-evidence/{id}/preview',
   '/v1/posting-evidence/{id}/review',
+  '/v1/operations/notifications',
+  '/v1/operations/notifications/{id}',
 ];
 
 describe('OpenAPI ↔ generated types contract', () => {
+  it('exposes only safe notification operations reads with delivery disabled', () => {
+    const path = spec.paths['/v1/operations/notifications'];
+    const response = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    expect(path).toHaveProperty([...response, 'deliveryMode', 'enum'], ['DISABLED']);
+    expect(path).toHaveProperty(
+      [...response, 'items', 'items', 'properties', 'state', 'enum'],
+      ['PENDING', 'SENDING', 'SIMULATED', 'ACCEPTED', 'BLOCKED', 'QUARANTINED', 'SUPPRESSED'],
+    );
+    expect(path).not.toHaveProperty('post');
+    expect(spec.paths['/v1/operations/notifications/{id}']).not.toHaveProperty('post');
+    for (const field of [
+      'recipientEmail',
+      'payload',
+      'deliveryKey',
+      'payloadHash',
+      'sourceHash',
+      'providerReceiptId',
+      'deliveredAt',
+    ]) {
+      expect(path).not.toHaveProperty([...response, 'items', 'items', 'properties', field]);
+      expect(JSON.stringify(spec.paths['/v1/operations/notifications/{id}'])).not.toContain(
+        `"${field}"`,
+      );
+    }
+  });
   it('declares an OpenAPI 3.x document', () => {
     expect(spec.openapi).toMatch(/^3\./);
   });

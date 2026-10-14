@@ -1,6 +1,5 @@
 import { prisma, reserveInferenceRun } from '@dentabill/db';
 import { createLogger } from '@dentabill/logger';
-import { FakeResend } from '@dentabill/notifier';
 import type { SummaryJobData, SummaryJobResult } from '@dentabill/queue';
 import { FakeClaude, SummaryValidationError, LiveClaude } from '@dentabill/summarizer';
 import type { Job } from 'bullmq';
@@ -120,6 +119,21 @@ async function seedOrgClaimCall(): Promise<Seeded> {
 
 function jobFor(data: SummaryJobData): Pick<Job<SummaryJobData, SummaryJobResult>, 'id' | 'data'> {
   return { id: `job_summary_${Math.random().toString(36).slice(2)}`, data };
+}
+
+function seedRecipient(organizationId: string) {
+  return prisma.user.create({
+    data: {
+      organizationId,
+      clerkUserId: `notification-owner-${organizationId}`,
+      role: 'OWNER',
+      email: 'owner@practice.test',
+    },
+  });
+}
+
+function notificationFor(organizationId: string) {
+  return prisma.reviewNotificationIntent.findFirstOrThrow({ where: { organizationId } });
 }
 
 describe('createSummaryJobHandler — happy path (kill-switch OFF)', () => {
@@ -257,21 +271,25 @@ describe('createSummaryJobHandler — cost guard', () => {
   });
 });
 
-describe('createSummaryJobHandler — notifier dispatch (P4-T6)', () => {
-  it('dispatches review-required notification for a payer-reported payment', async () => {
+describe('createSummaryJobHandler — durable review notifications', () => {
+  const payload = (seeded: Seeded): SummaryJobData => ({
+    organizationId: seeded.orgId,
+    callId: seeded.callId,
+    promptVersion: 'v1',
+    idempotencyKey: `notification.${seeded.callId}`,
+  });
+
+  it('persists review intent and a frozen recipient without a notifier or Redis dependency', async () => {
     const seeded = await seedOrgClaimCall();
+    const recipient = await seedRecipient(seeded.orgId);
     const fake = new FakeClaude();
     fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
-    const notifier = new FakeResend();
 
     const handler = createSummaryJobHandler({
       logger: silentLogger,
       prisma,
-      redis,
       summarizer: fake,
       env: baseEnv,
-      notifier,
-      resolveRecipient: () => Promise.resolve('owner@practice.test'),
     });
     await handler(
       jobFor({
@@ -281,24 +299,47 @@ describe('createSummaryJobHandler — notifier dispatch (P4-T6)', () => {
         idempotencyKey: 'sum-notify-1',
       }),
     );
-    expect(notifier.deliveries).toHaveLength(1);
-    expect(notifier.deliveries[0]?.template).toBe('summary.review_required');
-    expect(notifier.deliveries[0]?.to).toBe('owner@practice.test');
+    const intent = await notificationFor(seeded.orgId);
+    expect(intent).toMatchObject({
+      purpose: 'REVIEW_AVAILABLE',
+      actorKind: 'SYSTEM',
+      recipientUserId: recipient.id,
+      recipientRole: 'OWNER',
+      recipientEmail: recipient.email,
+    });
+    expect(intent.payloadHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(intent.payload)).not.toContain('CL-SUM-1');
+    expect(JSON.stringify(intent.payload)).not.toContain('DELTA_DENTAL_PPO');
+    const claim = await prisma.claim.findFirstOrThrow({
+      where: { organizationId: seeded.orgId, id: seeded.claimId },
+    });
+    const run = await prisma.inferenceRun.findFirstOrThrow({
+      where: { organizationId: seeded.orgId, id: intent.inferenceRunId },
+    });
+    expect(intent.claimVersion).toEqual(run.claimVersion);
+    expect(intent.resultingClaimVersion).toEqual(claim.updatedAt);
+    expect(
+      await prisma.reviewNotificationDelivery.findFirstOrThrow({
+        where: { organizationId: seeded.orgId, notificationId: intent.id },
+      }),
+    ).toMatchObject({ state: 'PENDING' });
+    expect(
+      await prisma.reviewNotificationAttempt.count({
+        where: { organizationId: seeded.orgId },
+      }),
+    ).toBe(0);
   });
 
-  it('skips notification when resolveRecipient returns null', async () => {
+  it('retains a blocked notification when no eligible recipient exists', async () => {
     const seeded = await seedOrgClaimCall();
     const fake = new FakeClaude();
     fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
-    const notifier = new FakeResend();
     const handler = createSummaryJobHandler({
       logger: silentLogger,
       prisma,
       redis,
       summarizer: fake,
       env: baseEnv,
-      notifier,
-      resolveRecipient: () => Promise.resolve(null),
     });
     await handler(
       jobFor({
@@ -308,7 +349,144 @@ describe('createSummaryJobHandler — notifier dispatch (P4-T6)', () => {
         idempotencyKey: 'sum-notify-skip-1',
       }),
     );
-    expect(notifier.deliveries).toHaveLength(0);
+    const intent = await notificationFor(seeded.orgId);
+    expect(intent.recipientUserId).toBeNull();
+    expect(
+      await prisma.reviewNotificationDelivery.findFirstOrThrow({
+        where: { organizationId: seeded.orgId, notificationId: intent.id },
+      }),
+    ).toMatchObject({ state: 'BLOCKED' });
+  });
+
+  it.each(['intent', 'audit'] as const)(
+    'rolls back summary application on notification %s failure and recovers from the saved model receipt',
+    async (fault) => {
+      const seeded = await seedOrgClaimCall();
+      await seedRecipient(seeded.orgId);
+      const fake = new FakeClaude();
+      fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
+      let now = new Date();
+      const handler = createSummaryJobHandler({
+        logger: silentLogger,
+        prisma,
+        summarizer: fake,
+        env: baseEnv,
+        clock: () => now,
+      });
+      const table = fault === 'intent' ? 'ReviewNotificationIntent' : 'AuditLog';
+      const predicate = fault === 'intent' ? 'TRUE' : "NEW.action = 'notification.enqueued'";
+      await prisma.$executeRawUnsafe(
+        `CREATE FUNCTION summary_notification_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF ${predicate} THEN RAISE EXCEPTION 'synthetic notification failure'; END IF; RETURN NEW; END $$`,
+      );
+      await prisma.$executeRawUnsafe(
+        `CREATE TRIGGER summary_notification_fault BEFORE INSERT ON "${table}" FOR EACH ROW EXECUTE FUNCTION summary_notification_fault()`,
+      );
+      try {
+        await expect(handler(jobFor(payload(seeded)))).rejects.toThrow();
+        expect(await prisma.callSummary.count({ where: { organizationId: seeded.orgId } })).toBe(0);
+        expect(
+          await prisma.reviewNotificationIntent.count({ where: { organizationId: seeded.orgId } }),
+        ).toBe(0);
+        expect(
+          await prisma.claim.findFirstOrThrow({
+            where: { organizationId: seeded.orgId, id: seeded.claimId },
+          }),
+        ).toMatchObject({ status: 'COMPLETED' });
+        const run = await prisma.inferenceRun.findFirstOrThrow({
+          where: { organizationId: seeded.orgId, callId: seeded.callId },
+        });
+        expect(run).toMatchObject({ state: 'RESPONDED', summaryId: null, appliedAt: null });
+        expect(run.resultPayload).not.toBeNull();
+        expect(run.totalTokens).not.toBeNull();
+        now = new Date(run.leaseExpiresAt!.getTime() + 1);
+      } finally {
+        await prisma.$executeRawUnsafe(`DROP TRIGGER summary_notification_fault ON "${table}"`);
+        await prisma.$executeRawUnsafe('DROP FUNCTION summary_notification_fault()');
+      }
+      expect(await handler(jobFor(payload(seeded)))).toMatchObject({ outcome: 'MANUAL_REVIEW' });
+      const intent = await notificationFor(seeded.orgId);
+      expect(await handler(jobFor(payload(seeded)))).toMatchObject({
+        outcome: 'ALREADY_PROCESSED',
+      });
+      expect(await notificationFor(seeded.orgId)).toEqual(intent);
+      expect(fake.invocations).toHaveLength(1);
+      expect(
+        await prisma.auditLog.count({
+          where: { organizationId: seeded.orgId, action: 'notification.enqueued' },
+        }),
+      ).toBe(1);
+    },
+  );
+
+  it.each(['REJECTED', 'UNKNOWN'] as const)(
+    'retains %s evidence but blocks its stale notification after an operator changes the claim',
+    async (state) => {
+      const seeded = await seedOrgClaimCall();
+      await seedRecipient(seeded.orgId);
+      const fake = new FakeClaude();
+      const handler = createSummaryJobHandler({
+        logger: silentLogger,
+        prisma,
+        env: baseEnv,
+        summarizer: {
+          inference: fake.inference,
+          summarize: async () => {
+            await prisma.claim.updateMany({
+              where: { organizationId: seeded.orgId, id: seeded.claimId },
+              data: { status: 'WRITTEN_OFF', updatedAt: new Date(Date.now() + 1000) },
+            });
+            if (state === 'REJECTED') throw new SummaryValidationError(seeded.callId, [], 37);
+            throw new Error('Synthetic unknown model response.');
+          },
+        },
+      });
+      expect(await handler(jobFor(payload(seeded)))).toMatchObject({
+        outcome: state === 'REJECTED' ? 'DLQ' : 'INFERENCE_REVIEW_REQUIRED',
+      });
+      const notification = await notificationFor(seeded.orgId);
+      const delivery = await prisma.reviewNotificationDelivery.findFirstOrThrow({
+        where: { organizationId: seeded.orgId, notificationId: notification.id },
+      });
+      expect(['BLOCKED', 'SUPPRESSED']).toContain(delivery.state);
+      expect(delivery.reason).toBe('SOURCE_CHANGED');
+      expect(
+        await prisma.claim.findFirstOrThrow({
+          where: { organizationId: seeded.orgId, id: seeded.claimId },
+        }),
+      ).toMatchObject({ status: 'WRITTEN_OFF' });
+      expect(
+        await prisma.inferenceRun.findFirstOrThrow({
+          where: { organizationId: seeded.orgId, id: notification.inferenceRunId },
+        }),
+      ).toMatchObject({ state, reviewAppliedAt: expect.any(Date) });
+    },
+  );
+
+  it('does not backfill notification intent when replaying a historical summary', async () => {
+    const seeded = await seedOrgClaimCall();
+    await prisma.callSummary.create({
+      data: {
+        organizationId: seeded.orgId,
+        callId: seeded.callId,
+        claimStatus: 'unknown',
+        nextAction: 'MANUAL_REVIEW',
+        confidence: 0.5,
+        rawTranscript: 'Synthetic historical transcript.',
+        claudeSummary: '{}',
+      },
+    });
+    const fake = new FakeClaude();
+    const handler = createSummaryJobHandler({
+      logger: silentLogger,
+      prisma,
+      summarizer: fake,
+      env: baseEnv,
+    });
+    expect(await handler(jobFor(payload(seeded)))).toMatchObject({ outcome: 'ALREADY_PROCESSED' });
+    expect(fake.invocations).toHaveLength(0);
+    expect(
+      await prisma.reviewNotificationIntent.count({ where: { organizationId: seeded.orgId } }),
+    ).toBe(0);
   });
 });
 
@@ -373,15 +551,12 @@ describe('summary containment under retries and stale evidence', () => {
     });
     const fake = new FakeClaude();
     fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
-    const notifier = new FakeResend();
     const handler = createSummaryJobHandler({
       logger: silentLogger,
       prisma,
       redis,
       summarizer: fake,
       env: baseEnv,
-      notifier,
-      resolveRecipient: async () => 'owner@practice.test',
     });
     const result = await handler(jobFor(payload(seeded)));
     expect(result.outcome).toBe('STALE_RESULT');
@@ -393,7 +568,9 @@ describe('summary containment under retries and stale evidence', () => {
         })
       ).status,
     ).toBe('RESOLVED');
-    expect(notifier.deliveries).toHaveLength(0);
+    expect(
+      await prisma.reviewNotificationIntent.count({ where: { organizationId: seeded.orgId } }),
+    ).toBe(0);
     expect(
       await prisma.auditLog.count({
         where: { organizationId: seeded.orgId, action: 'claim.transition' },
@@ -499,15 +676,12 @@ describe('summary containment under retries and stale evidence', () => {
     const seeded = await seedOrgClaimCall();
     const fake = new FakeClaude();
     fake.setDefault('DELTA_DENTAL_PPO', RESOLVED_FIXTURE);
-    const notifier = new FakeResend();
     const handler = createSummaryJobHandler({
       logger: silentLogger,
       prisma,
       redis,
       summarizer: fake,
       env: baseEnv,
-      notifier,
-      resolveRecipient: async () => 'owner@practice.test',
     });
     const first = await handler(jobFor(payload(seeded)));
     const second = await handler(jobFor(payload(seeded)));
@@ -517,7 +691,9 @@ describe('summary containment under retries and stale evidence', () => {
       tokensUsed: 0,
     });
     expect(fake.invocations).toHaveLength(1);
-    expect(notifier.deliveries).toHaveLength(1);
+    expect(
+      await prisma.reviewNotificationIntent.count({ where: { organizationId: seeded.orgId } }),
+    ).toBe(1);
     expect(
       (await prisma.organization.findUniqueOrThrow({ where: { id: seeded.orgId } }))
         .summaryTokensUsed,
@@ -952,10 +1128,15 @@ describe('durable inference admission and receipts', () => {
     expect(run.reservedTokens).toBeGreaterThan(0n);
   });
 
-  it.each(['REJECTED', 'UNKNOWN'] as const)(
-    'replays %s review effects atomically after an audit failure without resubmitting',
-    async (state) => {
+  it.each(
+    (['REJECTED', 'UNKNOWN'] as const).flatMap((state) =>
+      (['domain', 'notification'] as const).map((fault) => ({ state, fault })),
+    ),
+  )(
+    'replays $state review effects atomically after $fault audit failure without resubmitting',
+    async ({ state, fault }) => {
       const seeded = await seedOrgClaimCall();
+      await seedRecipient(seeded.orgId);
       const fake = new FakeClaude();
       const summarize = vi.fn(async () => {
         if (state === 'REJECTED') throw new SummaryValidationError(seeded.callId, [], 37);
@@ -967,8 +1148,12 @@ describe('durable inference admission and receipts', () => {
         summarizer: { inference: fake.inference, summarize },
         env: baseEnv,
       });
+      const predicate =
+        fault === 'notification'
+          ? "NEW.action = 'notification.enqueued'"
+          : "NEW.action IN ('summary.dlq', 'summary.inference_review_required')";
       await prisma.$executeRawUnsafe(
-        `CREATE FUNCTION summary_test_fail_review() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action IN ('summary.dlq', 'summary.inference_review_required') THEN RAISE EXCEPTION 'synthetic review failure'; END IF; RETURN NEW; END $$`,
+        `CREATE FUNCTION summary_test_fail_review() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF ${predicate} THEN RAISE EXCEPTION 'synthetic review failure'; END IF; RETURN NEW; END $$`,
       );
       await prisma.$executeRawUnsafe(
         `CREATE TRIGGER summary_test_fail_review BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION summary_test_fail_review()`,
@@ -991,6 +1176,9 @@ describe('durable inference admission and receipts', () => {
           await prisma.auditLog.count({
             where: { organizationId: seeded.orgId, action: 'inference.review_applied' },
           }),
+        ).toBe(0);
+        expect(
+          await prisma.reviewNotificationIntent.count({ where: { organizationId: seeded.orgId } }),
         ).toBe(0);
       } finally {
         await prisma.$executeRawUnsafe(`DROP TRIGGER summary_test_fail_review ON "AuditLog"`);
@@ -1028,6 +1216,26 @@ describe('durable inference admission and receipts', () => {
           where: { organizationId: seeded.orgId, action: 'inference.snapshot.read' },
         }),
       ).toBe(2);
+      const notification = await notificationFor(seeded.orgId);
+      expect(notification).toMatchObject({
+        purpose: 'INFERENCE_REVIEW_REQUIRED',
+        actorKind: 'SYSTEM',
+      });
+      expect(notification.resultingClaimVersion).toEqual(
+        (
+          await prisma.claim.findFirstOrThrow({
+            where: { organizationId: seeded.orgId, id: seeded.claimId },
+          })
+        ).updatedAt,
+      );
+      expect(
+        await prisma.reviewNotificationDelivery.findFirstOrThrow({
+          where: { organizationId: seeded.orgId, notificationId: notification.id },
+        }),
+      ).toMatchObject({ state: 'SUPPRESSED', reason: 'SOURCE_CHANGED' });
+      expect(
+        await prisma.reviewNotificationIntent.count({ where: { organizationId: seeded.orgId } }),
+      ).toBe(1);
       expect(await prisma.callSummary.count({ where: { organizationId: seeded.orgId } })).toBe(0);
       expect(
         (await prisma.inferenceBudget.findFirstOrThrow({ where: { organizationId: seeded.orgId } }))

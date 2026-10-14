@@ -1,4 +1,4 @@
-import { prisma } from '@dentabill/db';
+import { prisma, reviewClaimObservation } from '@dentabill/db';
 import { createLogger } from '@dentabill/logger';
 import { createFireworksTransport } from '@dentabill/model-gateway';
 import { FakeClaude } from '@dentabill/summarizer';
@@ -29,6 +29,14 @@ const logger = createLogger({ level: 'fatal' });
 async function fixture() {
   const seeded = await seedObservation(prisma);
   organizations.push(seeded.request.organizationId);
+  const owner = await prisma.user.create({
+    data: {
+      organizationId: seeded.request.organizationId,
+      clerkUserId: `notification-owner-${seeded.request.organizationId}`,
+      email: 'synthetic-owner@example.invalid',
+      role: 'OWNER',
+    },
+  });
   const fetcher = vi.fn(async () => new Response(observationResponse(seeded.request)));
   const transport = createFireworksTransport({ fetch: fetcher });
   const config: ObservationJobConfig = {
@@ -66,7 +74,7 @@ async function fixture() {
       },
       include: { attempts: true, observation: true },
     });
-  return { ...seeded, config, transport, fetcher, job, handler, run };
+  return { ...seeded, owner, config, transport, fetcher, job, handler, run };
 }
 
 async function failAudit(action: string): Promise<void> {
@@ -75,6 +83,8 @@ async function failAudit(action: string): Promise<void> {
       'claimObservation.published',
       'inference.native_finalized',
       'observation.inference_review_required',
+      'notification.enqueued',
+      'notification.suppressed',
     ].includes(action)
   )
     throw new Error('Unsupported test action.');
@@ -112,6 +122,19 @@ describe('automatic native post-call jobs', () => {
     const stored = await f.run();
     expect(stored.state).toBe('APPLIED');
     expect(typeof stored.releaseSnapshot).toBe('string');
+    const intent = await prisma.reviewNotificationIntent.findFirstOrThrow({
+      where: { organizationId: f.request.organizationId, inferenceRunId: stored.id },
+    });
+    expect(intent).toMatchObject({
+      purpose: 'REVIEW_AVAILABLE',
+      observationId: first.observationId,
+      generation: 1,
+      actorKind: 'SYSTEM',
+      recipientUserId: f.owner.id,
+      sourceHash: stored.sourceHash,
+      requestHash: stored.requestHash,
+      claimVersion: stored.claimVersion,
+    });
     expect(stored.requestPayload).toMatchObject({
       invocationId: `observation.${f.callId}.g1`,
       dataClass: 'SYNTHETIC',
@@ -123,6 +146,11 @@ describe('automatic native post-call jobs', () => {
       )(f.job),
     ).toEqual(first);
     expect(f.fetcher).toHaveBeenCalledTimes(1);
+    expect(
+      await prisma.reviewNotificationIntent.findMany({
+        where: { organizationId: f.request.organizationId },
+      }),
+    ).toEqual([intent]);
     expect(
       await prisma.callSummary.count({ where: { organizationId: f.request.organizationId } }),
     ).toBe(0);
@@ -173,23 +201,39 @@ describe('automatic native post-call jobs', () => {
     ).toBe(0);
   });
 
-  it('recovers a saved final result without configuration after publication fails', async () => {
-    const f = await fixture();
-    await failAudit('claimObservation.published');
-    await expect(f.handler()(f.job)).rejects.toMatchObject({
-      code: 'OBSERVATION_EXECUTION_UNCONFIRMED',
-    });
-    expect(await f.run()).toMatchObject({
-      state: 'RESPONDED',
-      totalTokens: 31n,
-      observation: null,
-    });
-    await clearFault();
-    expect(
-      await f.handler({ apiKey: '', releases: [], implementationArtifactSha256: '' }, true)(f.job),
-    ).toMatchObject({ outcome: 'OBSERVATION_PUBLISHED', tokensUsed: 31 });
-    expect(f.fetcher).toHaveBeenCalledTimes(1);
-  });
+  it.each(['claimObservation.published', 'notification.enqueued'])(
+    'recovers a saved final result without configuration after %s fails',
+    async (action) => {
+      const f = await fixture();
+      await failAudit(action);
+      await expect(f.handler()(f.job)).rejects.toMatchObject({
+        code: 'OBSERVATION_EXECUTION_UNCONFIRMED',
+      });
+      expect(await f.run()).toMatchObject({
+        state: 'RESPONDED',
+        totalTokens: 31n,
+        observation: null,
+      });
+      expect(
+        await prisma.reviewNotificationIntent.count({
+          where: { organizationId: f.request.organizationId },
+        }),
+      ).toBe(0);
+      await clearFault();
+      expect(
+        await f.handler(
+          { apiKey: '', releases: [], implementationArtifactSha256: '' },
+          true,
+        )(f.job),
+      ).toMatchObject({ outcome: 'OBSERVATION_PUBLISHED', tokensUsed: 31 });
+      expect(f.fetcher).toHaveBeenCalledTimes(1);
+      expect(
+        await prisma.reviewNotificationIntent.count({
+          where: { organizationId: f.request.organizationId, purpose: 'REVIEW_AVAILABLE' },
+        }),
+      ).toBe(1);
+    },
+  );
 
   it('uses its archived release to recover raw evidence after expiry with no key/catalog or send', async () => {
     const f = await fixture();
@@ -228,6 +272,11 @@ describe('automatic native post-call jobs', () => {
       reviewAppliedAt: null,
       totalTokens: null,
     });
+    expect(
+      await prisma.reviewNotificationIntent.count({
+        where: { organizationId: f.request.organizationId },
+      }),
+    ).toBe(0);
     await clearFault();
     expect(
       await f.handler({ apiKey: '', implementationArtifactSha256: '', releases: [] }, true)(f.job),
@@ -242,6 +291,63 @@ describe('automatic native post-call jobs', () => {
       }),
     ).toMatchObject({ status: 'COMPLETED' });
     expect(f.fetcher).not.toHaveBeenCalled();
+    expect(
+      await prisma.reviewNotificationIntent.findFirstOrThrow({
+        where: { organizationId: f.request.organizationId, inferenceRunId: saved.id },
+      }),
+    ).toMatchObject({ purpose: 'INFERENCE_REVIEW_REQUIRED', actorKind: 'SYSTEM' });
+  });
+
+  it('suppresses pending review delivery atomically with an exact observation acknowledgement', async () => {
+    const f = await fixture();
+    await f.handler()(f.job);
+    const run = await f.run();
+    const observation = run.observation!;
+    const intent = await prisma.reviewNotificationIntent.findFirstOrThrow({
+      where: { organizationId: f.request.organizationId, inferenceRunId: run.id },
+    });
+    const review = {
+      organizationId: f.request.organizationId,
+      clerkUserId: f.owner.clerkUserId,
+      observationId: observation.id,
+      expectedObservationDigest: observation.digest,
+      expectedClaimVersion: observation.claimVersion,
+      decision: 'ACKNOWLEDGED' as const,
+    };
+    await failAudit('notification.suppressed');
+    await expect(reviewClaimObservation(prisma, review)).rejects.toThrow();
+    expect(
+      await prisma.claimObservationReview.count({
+        where: { organizationId: f.request.organizationId, observationId: observation.id },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.reviewNotificationDelivery.findFirstOrThrow({
+        where: { organizationId: f.request.organizationId, notificationId: intent.id },
+      }),
+    ).toMatchObject({ state: 'PENDING' });
+    await clearFault();
+    const recorded = await reviewClaimObservation(prisma, review);
+    expect(recorded.kind).toBe('RECORDED');
+    expect(
+      await prisma.reviewNotificationDelivery.findFirstOrThrow({
+        where: { organizationId: f.request.organizationId, notificationId: intent.id },
+      }),
+    ).toMatchObject({ state: 'SUPPRESSED' });
+    expect(await reviewClaimObservation(prisma, review)).toMatchObject({
+      kind: 'ALREADY_RECORDED',
+      review: recorded.review,
+    });
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: f.request.organizationId, action: 'notification.suppressed' },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.reviewNotificationIntent.findFirstOrThrow({
+        where: { organizationId: f.request.organizationId, id: intent.id },
+      }),
+    ).toEqual(intent);
   });
 
   it('keeps a persisted synthetic provider when new-job selection changes to Fireworks', async () => {

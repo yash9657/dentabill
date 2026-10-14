@@ -35,6 +35,7 @@ import { healthRoutes } from './routes/v1/health.js';
 import { ingestRoutes } from './routes/v1/ingest.js';
 import { internalJobsRoutes } from './routes/v1/internal-jobs.js';
 import { meRoutes } from './routes/v1/me.js';
+import { notificationOperationsRoutes } from './routes/v1/notification-operations.js';
 import { observationRegenerationRoutes } from './routes/v1/observation-regenerations.js';
 import { onboardingRoutes } from './routes/v1/onboarding.js';
 import { operationsRoutes } from './routes/v1/operations.js';
@@ -234,6 +235,7 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(meRoutes, { prefix: '/v1' });
   await fastify.register(onboardingRoutes, { prefix: '/v1' });
   await fastify.register(operationsRoutes, { prefix: '/v1' });
+  await fastify.register(notificationOperationsRoutes, { prefix: '/v1' });
   await fastify.register(claimsRoutes, { prefix: '/v1' });
   await fastify.register(claimObservationRoutes, { prefix: '/v1' });
   await fastify.register(claimRemittanceRoutes, { prefix: '/v1' });

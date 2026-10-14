@@ -7,6 +7,7 @@ import {
   saveInferenceReceipt,
   markInferenceApplied,
   markInferenceReviewed,
+  enqueueReviewNotification,
   getOrgScopedDb,
   type ClaimStatus,
   type InferenceRun,
@@ -14,7 +15,6 @@ import {
   type prisma,
 } from '@dentabill/db';
 import type { Logger } from '@dentabill/logger';
-import type { NotifierPort } from '@dentabill/notifier';
 import { isKnownDenialCode } from '@dentabill/payer-ivr';
 import { SummaryJobDataSchema, type SummaryJobData, type SummaryJobResult } from '@dentabill/queue';
 import {
@@ -52,21 +52,6 @@ export interface SummaryHandlerDeps {
   readonly env: SummaryWorkerEnv;
   readonly observationConfig?: ObservationJobConfig;
   readonly clock?: () => Date;
-  /**
-   * Optional notifier — when present, the handler dispatches a
-   * review-required event to the operator. Phase 4 wires FakeResend
-   * (which only logs to memory); the live adapter ships in 4.5. The
-   * notifier is intentionally optional: a misconfigured org without an
-   * outbound mailbox should still get summaries persisted, just no
-   * email.
-   */
-  readonly notifier?: NotifierPort;
-  /**
-   * Recipient resolver — given an org id, return the email to notify.
-   * Defaults to "skip notification" so the handler stays usable in
-   * tests that don't care.
-   */
-  readonly resolveRecipient?: (organizationId: string) => Promise<string | null>;
 }
 
 export type SummaryJobLike = Pick<Job<SummaryJobData, SummaryJobResult>, 'id' | 'data'>;
@@ -286,14 +271,14 @@ function createSyntheticSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHand
     const call = { ...captured.call, createdAt: new Date(captured.call.createdAt) };
     const applyInferenceReview = async (run: InferenceRun): Promise<void> => {
       await deps.prisma.$transaction(async (tx) => {
-        if (
-          !(await markInferenceReviewed(tx, {
-            organizationId: data.organizationId,
-            runId: run.id,
-            now: clock(),
-          }))
-        )
-          return;
+        const organizations = await tx.$queryRaw<{ id: string }[]>`
+          SELECT "id" FROM "Organization" WHERE "id" = ${data.organizationId} FOR NO KEY UPDATE
+        `;
+        if (organizations.length !== 1) throw new Error('SUMMARY_ORGANIZATION_MISSING');
+        const currentRun = await tx.inferenceRun.findFirstOrThrow({
+          where: { id: run.id, organizationId: data.organizationId },
+        });
+        if (currentRun.reviewAppliedAt) return;
         const transition = SUMMARY_ELIGIBLE_STATUSES.has(claim.status)
           ? await tx.claim.updateMany({
               where: summaryTransitionWhere(claim, call, data.organizationId),
@@ -314,6 +299,11 @@ function createSyntheticSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHand
           },
           tx,
         );
+        await markInferenceReviewed(tx, {
+          organizationId: data.organizationId,
+          runId: run.id,
+          now: clock(),
+        });
       });
     };
     const reservationTokens =
@@ -524,32 +514,15 @@ function createSyntheticSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHand
         summaryId: summary.id,
         now: clock(),
       });
+      if (transitionApplied)
+        await enqueueReviewNotification(tx, {
+          organizationId: data.organizationId,
+          runId: applicationOwnership.runId,
+          purpose: 'REVIEW_AVAILABLE',
+          now: clock(),
+        });
       return { summary, transitionApplied };
     });
-
-    // Optional notify. PHI-screened by the template's Zod schema —
-    // we only pass claim metadata, never patient identifiers.
-    if (transitionApplied && deps.notifier && deps.resolveRecipient) {
-      try {
-        const to = await deps.resolveRecipient(data.organizationId);
-        if (to) {
-          await dispatchClaimNotification(deps.notifier, {
-            to,
-            organizationId: data.organizationId,
-            claimNumber: claim.claimNumber,
-            payerCode: claim.payerCode,
-            serviceDate: claim.serviceDate,
-          });
-        }
-      } catch (err) {
-        // Notify failure is NOT fatal — the summary is persisted
-        // and audited. Log and continue.
-        deps.logger.error(
-          { errorType: err instanceof Error ? err.name : 'UnknownError' },
-          'summary-worker: notifier dispatch failed — summary still persisted',
-        );
-      }
-    }
 
     return {
       summaryId: summary.id,
@@ -642,33 +615,4 @@ export function applyTransitionPolicy(input: TransitionPolicyInput): TransitionP
     return { autoTransitioned: true, targetStatus: 'NEEDS_INFO', reason: 'NON_FINANCIAL_ROUTING' };
   }
   return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW', reason: 'REVIEW_REQUIRED' };
-}
-
-interface DispatchInput {
-  readonly to: string;
-  readonly organizationId: string;
-  readonly claimNumber: string;
-  readonly payerCode: string;
-  readonly serviceDate: Date;
-}
-
-async function dispatchClaimNotification(
-  notifier: NotifierPort,
-  input: DispatchInput,
-): Promise<void> {
-  const serviceDate = input.serviceDate.toISOString().slice(0, 10);
-  const baseVars = {
-    claimNumber: input.claimNumber,
-    payerCode: input.payerCode,
-    serviceDate,
-  };
-  await notifier.notify({
-    to: input.to,
-    template: 'summary.review_required',
-    vars: {
-      ...baseVars,
-      hint: 'Review the call evidence. Payer-reported amounts are not verified payments.',
-    },
-    organizationId: input.organizationId,
-  });
 }

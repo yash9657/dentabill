@@ -408,3 +408,14 @@ manifests remain unapproved and new-job defaults remain synthetic (ADR-068).
 - `apps/web/src/app/dashboard/posting-evidence/page.tsx`: dashboard entry; components in `apps/web/src/components/dashboard/posting-evidence`.
 - `apps/web/src/lib/posting-evidence/use-posting-evidence.ts`: scoped generated-SDK transport, paging and exact uncertain retries.
 - `apps/api/test/fixtures/posting-evidence`: six custom fabricated source examples and limitations; web download at `apps/web/public/examples/synthetic-posting-evidence.json`.
+
+## Transactional review notifications (FW-40; ADR-079, local only)
+
+- `packages/db/prisma/migrations/20261014190000_review_notification_outbox/migration.sql`: four scoped intent/delivery/attempt/receipt tables, immutable bindings, source/recipient admission, lease/deadline guards and deferred completion seals; migration 31 applied only to localhost isolated/shared databases.
+- `packages/db/src/lib/review-notifications.ts`: transaction-bound enqueue/suppression and bounded attempt/receipt lifecycle; corresponding invariant and migration-preservation test files.
+- `packages/db/src/lib/{inference,claim-observations}.ts` and `apps/summary-worker/src/handler.ts`: atomic review-required/native/synthetic publication hooks and native human-review suppression. Regeneration preserves its recorded actor.
+- `packages/notifier/src/review-notification.ts`: strict generic payload/hash contract and a finite-window synthetic transport; no network or live adapter.
+- `apps/summary-worker/src/review-notification-dispatch.ts`: explicit synthetic-only dispatch, persisted ownership before submission, bounded timeout and receipt commit; process fixture/tests cover crash boundaries with 9 passing process/transport cases. The full worker run passed 144/145; a focused 3/3 process recheck passed after bounded timeout alignment. This is passing evidence across runs, not a clean full rerun.
+- `apps/api/src/routes/v1/notification-operations{,.test}.ts`: two audited OWNER/ADMIN GETs for filtered scoped lists/counts and attempt history; delivery mode is DISABLED.
+- `apps/web/src/components/dashboard/settings/operations/review-notifications.tsx`: read-only list/filter/history and scoped claim/call links within Operations.
+- `apps/web/src/lib/operations/{use-notifications,notification-labels}.ts`: user/practice-scoped generated-SDK reads, cancellation, closed diagnostic labels and recipient-binding state. No send/retry/rebind mutation.

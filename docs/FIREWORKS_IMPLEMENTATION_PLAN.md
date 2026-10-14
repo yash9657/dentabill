@@ -1,5 +1,28 @@
 # DentaBill: competitive gaps and the Fireworks implementation plan
 
+Current local progress (2026-10-14, ADR-079): FW-40 has a transactional review-notification
+outbox and read-only Owner/Admin Operations list/history/filter. Intent/domain/audit commit
+atomically; source/generation/actor, deterministic recipient, generic content/hash and permanent
+delivery key are frozen. Synthetic-only dispatch uses one-minute leases, at most five attempts
+and a fixed 23-hour retry bound; ambiguity cannot gain a new key or window. Native human review
+suppresses never-submitted alerts. External delivery remains disabled, with no live adapter or
+send/retry/rebind action. Migration 31 applied only to localhost isolated/shared databases.
+DB 37 plus preservation 1, prior inference/observation/regeneration 53 plus native accounting 34,
+producer 69, process/transport 9, focused notification API 15, affected lint/typecheck 30 and
+API/Lambda/Next builds pass. Full API passes 878/878 across 43 files. Full worker run 144/145 had
+one existing process timeout under CPU saturation; focused recheck 3/3 passed after bounded
+timeout alignment. All 145 cases have passing evidence across runs, not one clean full rerun.
+Independent API/dispatcher review found no actionable issues. SDK 56, notifier 20, UI 35 and web
+types/lint pass, plus synthetic
+1280/390px component checks and separate visual/documentation review. Detector 126 is no verdict.
+No real message/provider request, paid inference, call, merge or deployment ran. The full original
+assignment remains active. The next concrete dependency is additive batch identity/revision/
+ownership sidecars with version 2 explicit sequences, preserving existing version 1 evidence as
+unsequenced. Revisions may repeat same-batch members while cross-batch ownership stays permanent;
+latest-observed acceptance/freshness and stable-identity cash reservations remain until explicit
+release. Reviewed posting relationships and claim cash allocation/attribution follow. Real
+connectors, external notification delivery and all remaining parity gates remain in scope.
+
 Current local progress (2026-10-14, ADR-078): FW-44 adds independent manual PMS posting receipt
 observations through API/SDK/dashboard, with immutable ordered revisions, separate signed
 header/entry facts and source review. Incomplete snapshots retain prior accepted entry identities
@@ -65,8 +88,8 @@ connectors and all original parity gates remain open. This does not narrow the r
 > FW-42 adds isolated bounded contract-discovery tooling with private durable receipts
 > (ADR-070). Account/model metadata checks ran; serving identity, paid captures and actual quality
 > remain unverified. Discovery cannot approve models or produce production observations.
-> Notification outbox (FW-40), live model
-> evaluation and provider approval remain open.
+> FW-40's transactional notification outbox is now implemented and locally verified (ADR-079);
+> external delivery/rollout remains open. Live model evaluation and provider approval remain open.
 > Fireworks/ElevenLabs credentials are now present locally. FW-37 adds scoped operations and audited delivery
 > recovery (ADR-062); current Fireworks gateway requirements are in FIREWORKS_GATEWAY_CONTRACT.md.
 > FW-36 has local persisted accepted-call observation,

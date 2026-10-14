@@ -15,6 +15,9 @@ import { OperationsPage } from './operations-page.js';
 
 const getMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const postMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
+vi.mock('@clerk/nextjs', () => ({
+  useAuth: () => ({ userId: 'user_synthetic', orgId: null, isLoaded: true }),
+}));
 vi.mock('../../../../lib/api-client.js', () => ({
   useDentaBillApi: () => ({
     client: { GET: getMock, POST: postMock },
@@ -98,6 +101,26 @@ beforeEach(() => {
     if (path === '/v1/operations/outbox') return { data: deliveries };
     if (path === '/v1/operations/outbox/{id}') return { data: currentPreview };
     if (path === '/v1/operations/calls') return { data: calls };
+    if (path === '/v1/operations/notifications')
+      return {
+        data: {
+          sampledAt: instant,
+          deliveryMode: 'DISABLED',
+          items: [],
+          nextCursor: null,
+          hasMore: false,
+          counts: {
+            pending: 0,
+            sending: 0,
+            blocked: 0,
+            quarantined: 0,
+            simulated: 0,
+            accepted: 0,
+            suppressed: 0,
+            agedPending: 0,
+          },
+        },
+      };
     throw new Error('Unexpected synthetic request');
   });
   HTMLDialogElement.prototype.showModal = vi.fn(function showModal(this: HTMLDialogElement) {

@@ -2,8 +2,11 @@ import { createHash } from 'node:crypto';
 
 import {
   authorizeObservationRegeneration,
+  audit,
+  markInferenceReviewed,
   ObservationRegenerationError,
   previewObservationRegeneration,
+  reserveFireworksInferenceRun,
   type ObservationRegeneration,
   type PreviewObservationRegenerationInput,
   type Prisma,
@@ -207,6 +210,32 @@ export function createObservationRegenerationService(options: {
         observation: { select: { id: true } },
       },
     });
+  const review = async (auth: ObservationRegeneration, runId: string): Promise<void> => {
+    await db.$transaction(async (tx) => {
+      if (
+        !(await markInferenceReviewed(tx, {
+          organizationId: auth.organizationId,
+          runId,
+        }))
+      )
+        return;
+      await audit(
+        {
+          organizationId: auth.organizationId,
+          userId: auth.createdByUserId,
+          action: 'observation.inference_review_required',
+          resourceType: 'InferenceRun',
+          resourceId: runId,
+          metadata: {
+            callId: auth.callId,
+            generation: auth.generation,
+            regenerationId: auth.id,
+          },
+        },
+        tx,
+      );
+    });
+  };
   const status = async (auth: ObservationRegeneration): Promise<RegenerationStatus> => {
     const run = await work(auth);
     const base = {
@@ -383,9 +412,48 @@ export function createObservationRegenerationService(options: {
     }
     if (
       run?.state === 'REJECTED' ||
-      (run?.attempts.length && !run.attempts.at(-1)?.responseRecordedAt)
-    )
+      (run?.state === 'UNKNOWN' && !run.attempts.at(-1)?.responseRecordedAt)
+    ) {
+      await review(auth, run.id);
       return status(auth);
+    }
+    if (run?.attempts.length && !run.attempts.at(-1)?.responseRecordedAt) {
+      if (run.leaseExpiresAt && run.leaseExpiresAt.getTime() > Date.now()) return status(auth);
+      savedRequest(auth);
+      if (
+        !run.executionDeadlineAt ||
+        !run.releasePolicyHash ||
+        !run.wireRequestHash ||
+        (run.maxAttempts !== 1 && run.maxAttempts !== 2)
+      )
+        throw new ObservationRegenerationError('AUTHORIZATION_INVALID');
+      const settled = await reserveFireworksInferenceRun(db, {
+        organizationId: auth.organizationId,
+        callId: auth.callId,
+        claimId: run.claimId,
+        claimVersion: run.claimVersion,
+        sourceHash: run.sourceHash,
+        requestHash: run.requestHash,
+        releaseId: run.releaseId,
+        promptVersion: run.promptVersion,
+        requestPayload: json(run.requestPayload),
+        reservationTokens: Number(run.tokenAllowance),
+        dailyTokenLimit: config.dailyTokenLimit,
+        maxAttempts: run.maxAttempts,
+        executionDeadlineAt: run.executionDeadlineAt,
+        releasePolicyHash: run.releasePolicyHash,
+        wireRequestHash: run.wireRequestHash,
+        regenerationId: auth.id,
+        ...(typeof run.releaseSnapshot === 'string'
+          ? { releaseSnapshot: run.releaseSnapshot }
+          : {}),
+      });
+      if (settled.kind === 'BUSY') return status(auth);
+      if (settled.kind !== 'REVIEW_REQUIRED' || !settled.run)
+        throw new RegenerationUnavailableError('WORK_NOT_READY');
+      await review(auth, settled.run.id);
+      return status(auth);
+    }
     const replayOnly = !!run?.attempts.at(-1)?.responseRecordedAt;
     const unusedExpired =
       !!run &&
@@ -422,6 +490,10 @@ export function createObservationRegenerationService(options: {
           organizationId: auth.organizationId,
           runId: stored.id,
         });
+    } else {
+      const stored = await work(auth);
+      if (stored && (stored.state === 'UNKNOWN' || stored.state === 'REJECTED'))
+        await review(auth, stored.id);
     }
     const current = await status(auth);
     if (result.status !== 'FAILED' || current.state !== 'READY') return current;
