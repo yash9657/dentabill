@@ -406,6 +406,8 @@ resource "aws_cloudwatch_metric_alarm" "dlq" {
   threshold           = 1
   comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"
+  alarm_actions       = [local.platform.alerts_topic_arn]
+  ok_actions          = [local.platform.alerts_topic_arn]
 }
 
 resource "aws_cloudwatch_metric_alarm" "errors" {
@@ -420,6 +422,8 @@ resource "aws_cloudwatch_metric_alarm" "errors" {
   threshold           = 5
   comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"
+  alarm_actions       = [local.platform.alerts_topic_arn]
+  ok_actions          = [local.platform.alerts_topic_arn]
 }
 
 # ---------------------------------------------------------------- outputs
