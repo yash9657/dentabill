@@ -113,6 +113,7 @@ export function meRoutes(fastify: FastifyInstance): void {
       },
       config: {
         rateLimit: {
+          hook: 'preHandler',
           max: 10,
           timeWindow: '1 minute',
           keyGenerator: (req): string => req.dentabillAuth?.orgId ?? 'anon',

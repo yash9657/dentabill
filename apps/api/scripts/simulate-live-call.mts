@@ -99,7 +99,10 @@ function generateCallEventSequence(speedMultiplier: number): CallEventStep[] {
     {
       type: 'ivr.prompt',
       delay: randomDelay(1500, 2500, speedMultiplier),
-      data: { text: 'Welcome to Dental Insurance. Please enter your claim number.', audioUrl: null },
+      data: {
+        text: 'Welcome to Dental Insurance. Please enter your claim number.',
+        audioUrl: null,
+      },
     },
     {
       type: 'ivr.dtmf',
@@ -210,7 +213,9 @@ async function main(): Promise<void> {
 
   if (!args.claim) {
     console.error('\n❌ Missing --claim argument. Usage:');
-    console.error('   pnpm --filter @dentabill/api exec tsx scripts/simulate-live-call.mts --claim <id|auto>');
+    console.error(
+      '   pnpm --filter @dentabill/api exec tsx scripts/simulate-live-call.mts --claim <id|auto>',
+    );
     process.exit(1);
   }
 
@@ -419,8 +424,7 @@ async function main(): Promise<void> {
   console.log(`   Visit: http://localhost:3000/dashboard/calls/${call.id}`);
 }
 
-main()
-  .catch((err) => {
-    console.error('\n❌ Simulation failed:', err);
-    process.exit(1);
-  });
+main().catch((err) => {
+  console.error('\n❌ Simulation failed:', err);
+  process.exit(1);
+});

@@ -1,6 +1,1823 @@
 # Session Context
 
-_Last updated: 2026-08-22 (go-live execution session)._
+_Last updated: 2026-10-14 (full-scope goal active; AWS baseline reconciled)._
+
+## Current session — W0 implementation on AWS baseline
+
+### 2026-10-15: ADR-087 film rebuild and call screen redesign (Claude Code)
+
+Codex ran out of usage mid-session; its uncommitted W0 work (CSV observations, migration
+`20261014220000_claim_source_observations`, payer-ivr local navigation demo) is untouched and
+still uncommitted, as is a git stash it left. On top of its call-screen edits: the call detail
+redesign (ADR-087 §4, 167 call tests pass) and the new film in `apps/demo-film` rendered into
+`apps/web/public/media/dentabill-demo/`. Next: owner watches the film, then commit the film/UI
+work separately from codex's W0 changes.
+
+### 2026-10-14: FW-45 narrated film and landing integration (ADR-086)
+
+ADR-085 is committed as `de6b1ac`. The actual authenticated synthetic rehearsal is now edited into
+`apps/web/public/media/dentabill-demo/walkthrough.mp4`: 171.6 seconds (about 2:52), 1600×1000,
+25fps, H.264/AAC stereo at 48 kHz, 16,827,456 bytes. Companion assets are a poster, 43 English
+WebVTT cues with native automatic placement and no overlapping cues, and a ten-chapter descriptive
+HTML/CSS transcript. Ten narration chapters were generated locally with Kokoro 0.9.4/af_heart;
+independent local Whisper base.en transcription found no material omissions. The background is
+original quiet synthesized arpeggios. `docs/demo-film/production.json` records sources, the
+Apache-2.0 model license, hashes and media details; `script.json`, `edit.json` and README preserve
+the production handoff. Raw footage, chapter WAVs, graphics and render recipe remain in gitignored
+`.impeccable/review/demo-film-source/`, without authentication metadata or caches.
+
+The native landing player has controls, inline playback, captions, transcript/download links,
+`preload="none"` and no autoplay or loop. The shared mark, favicon, Apple icon and standalone SVG
+now use the abstract open-D ribbon; DESIGN.md and its sidecar match. Persistent synthetic labeling
+and narration distinguish the simulated call/analysis from separately imported financial evidence.
+The film does not demonstrate live payer contact, actual DTMF, provider inference, bank/PMS
+verification, settlement, external financial writes or recovered revenue.
+
+ADR-086 verification: 22 tests across four files pass, as do 10 affected lint/type checks
+(6 cached, about 26 seconds) and the isolated Next production build. These are separate from
+ADR-085's 205 cases. Actual Chrome landing and transcript views at 1440px/390px have no overflow,
+page errors or axe violations. Browser proof confirms zero MP4 requests before play, native play,
+seek to 128 seconds, fullscreen, download, a 206 response for a 1024-byte range and a 200 WebVTT
+response with 43 cues. Caption placement was corrected to automatic and rechecked. Logs:
+`/tmp/dentabill-demo-film-tests.log`, `...-checks.log`, `...-build.log`; browser proof:
+`/tmp/dentabill-authenticated-demo.cdscvk/film/browser-proof.json`.
+
+**Closeout complete:** the fresh reviewer requested established Inter/Newsreader typography and
+removal of the transcript's decorative eyebrow. Both were fixed together. Self-hosted WOFF2 fonts
+and official OFL notices are included; no runtime external font request is needed. Updated
+1440px/390px captures confirm loaded fonts, no eyebrow, no overflow and no axe violations.
+The reviewer returned SHIP for those two fixes, with no visible fix-batch regression; this is
+not independent whole-surface, audio or motion approval. Full MP4 decode and normalized narration/
+caption matching pass. The 43 native automatically placed cues were rechecked. Review servers on
+ports 4485 and 4487 are stopped, and the owned private runtime is removed. The detector attempt
+exited 126 (permission denied), so there is no automated verdict. No publication or deployment.
+
+**Immediate next:** commit ADR-086, then implement FW-43 additive canonical source
+observations, reviewed legacy binding and additive snapshots under the existing plan. Keep the
+eight older authenticated actor-write repairs listed below open, with persisted-actor fixtures
+and no historical rewrite. The local demo is one bounded milestone; the full goal remains ACTIVE,
+and remaining financial, connector and production evidence gates are unchanged.
+
+### 2026-10-14: FW-45 authenticated synthetic rehearsal verified (ADR-085)
+
+ADR-084 is committed as `19f4b9b`. Read-only Clerk CLI discovery verified the existing development
+application, instance, organization and admin. An official short-lived ticket established a real
+browser session; bearer-token `/v1/me` returned 200 for the exact local OWNER, without test headers.
+Keep credentials, tickets, tokens, session values and identifying account data out of committed
+files. This verifies development authentication, not production or live payer/PMS/bank integration.
+
+The actual UI rehearsal used the preserved localhost database
+`dentabill_demo_recording_20261014_d4f91d0b`. It imported two claims and lines, completed one
+39-second payer-matched synthetic call, and displayed the canonical conversation and saved legacy
+summary. The outcome is pending, with Denise, reference `REF-SIM-DELTA-001` and CALL_BACK; claim A
+remains MANUAL_REVIEW. No native ClaimObservation exists. Both `ivrNavigated` and `humanReached`
+remain false: menu/hold text is scripted, with no audio, DTMF, payer contact or paid model request.
+The inference run is SYNTHETIC/APPLIED with 150 synthetic ledger tokens, not paid-usage evidence.
+
+The authenticated financial sequence accepted reports of $100 + $80, a batch of $180 − $30 = $150,
+cash of $150 and matches of $100 + $50. Posting header $150 and entries $180 stayed distinct, with
+an exact-line association for A and a claim-only association for B. Correction to $140 staled the
+old reservations and blocked a new match. Full releases of $50 then $100 preserved history;
+rematching $140 left cash capacity $10 and batch capacity $0. These separate source imports are
+not results caused by the simulated call or proof of settlement, claim allocation or recovery.
+Read-only proof confirms 2 claims, 2 lines, 1 completed call, 1 legacy summary, 0 observations,
+1 inference run/attempt, 3 matches, 2 releases and 2 posting relationships.
+
+Call queries/cancellation updates now bind to the originating actor/practice, and the UI renders
+canonical conversation plus the exact saved summary. Audit UI uses SDK wire types, recorded actor
+IDs or Actor not recorded, saved-case Claim/Call/CallSummary/Organization filters and scoped reads.
+Actual authenticated call and audit desktop/mobile views, including the audit drawer, pass with
+no overflow/page errors and zero axe WCAG 2 A/AA + 2.1 AA violations. Call QA used 1440px/390px;
+audit QA used the same widths. The account-switcher contrast defect was fixed.
+
+Verification: 205 distinct focused cases pass across 147 earlier cases and 58 new audit cases
+(API 11 + web 47), not one combined run. The final web run passed 47/47 across five files in 2.51s;
+a later 24/24 recheck after lint-only repairs overlaps the total. Final affected lint/type checks
+pass 30/30 (24 cached, 41.961s), and API plus fresh isolated Next production builds pass.
+Evidence: `/tmp/dentabill-demo-audit-api.log`, `...-audit-web-final.log`, `...-audit-tests-final.log`,
+`/tmp/dentabill-demo-rehearsal-checks-final.log`, `...-api-build.log` and `...-web-build.log`.
+Authenticated call QA and read-only database proof are under
+`/tmp/dentabill-authenticated-demo.cdscvk/`.
+
+The original raw capture completed at 1440×900, VP8, 25fps, 1242.24s, with 11 additional actual
+review shots. Keep raw media outside public assets. The created Clerk session is revoked, owned
+services are stopped, owned ports have no listeners, and private build/test runtime cleanup is
+complete. The rehearsal database remains PRESERVED. No edited/captioned final video,
+poster/transcript package, landing integration or deployment is claimed.
+
+**Narrow follow-up, not a recording blocker:** eight older authenticated API audit writes omit
+local actor attribution and misname `metadata.clerkUserId`: `calls.ts` call.enqueue/list/read and
+callSummary.read/retry; `claims.ts` claim.list/read; `reports.ts` report.read. Repair separately
+with persisted-actor fixtures. This milestone fixes future auditLog.list attribution only;
+current financial actions are attributed. Preserve historical null actors as Actor not recorded.
+
+**Next task at the ADR-085 checkpoint (superseded by ADR-086 above):** edit the actual recording, produce poster/captions/
+descriptive transcript, integrate user-controlled responsive landing playback and verify the
+finished asset. Continue FW-43 source observations/reviewed legacy binding/additive snapshots
+and all remaining financial, connector and full-plan work. FW-45 and the overall goal remain open.
+
+### 2026-10-14: FW-45 isolated demo launcher verified (ADR-084)
+
+ADR-083 is committed as `f3c8796`. `demo:launch` now repeats read-only preflight in its
+private API/Prisma child before listening, restores the captured allowlisted configuration,
+requires Clerk mode and derives the API port from the approved loopback origin. A private
+physical Next app copy excludes dotenv, caches and tests; two explicit links preserve trusted
+app/root installed dependencies. Staging verifies Next's installed TypeScript prerequisites
+and the preflighted manifest/files. Web receives no database or job secrets.
+
+The web origin must explicitly use localhost, and app/API ports must differ and be nonzero.
+Pinned Next normalizes loopback IPs to localhost; Clerk's same-request rewrite otherwise
+creates an external self-proxy loop. No origin is silently rewritten. Owned UUID/origin-bound
+IPC plus API readiness and served-manifest checks gate SERVICES_RUNNING. Signals or child
+failure stop only owned process groups, with bounded shutdown and owned-folder cleanup after
+confirmed exit. The database is preserved. forcedBySupervisor refers only to supervisor force;
+child watchdogs exist, and STOPPED does not certify graceful in-flight job completion.
+
+Verification: 70/70 tests across eight files passed in one final run (16.80s): API lifecycle19,
+web staging17, process lifecycle5, launch policy5, launch CLI4, shared CLI8, existing preflight
+CLI6 and provisioning CLI6. Affected API/dependency lint/types pass24/24 (22 cached;19.979s),
+explicit strict types for all three CLI entry points and API production build pass. Independent
+reviews are clear after the port0, dependency-resolution and localhost fixes. No product UI,
+schema or public API changed; the actual staged Next public page compiled and served200.
+
+The actual combined CLI smoke started both services, matched the served manifest, rejected
+x-test headers at /v1/me with401, rendered the public page and stopped on SIGTERM. Before/after
+practice/actor/payer/audit hashes and zero workflow counts matched. Only the owned smoke DB was
+removed after verification. Clerk keys in this smoke were deliberately nonworking: real
+sign-in, authenticated rehearsal and recording remain NOT_VERIFIED. An initial dependency
+failure caused Next's automatic npm metadata requests/cache-log writes before workspace:\*
+failure; no packages installed, original dependencies remained intact and private runtime was
+removed. Corrected isolated diagnostics blocked package-manager execution and succeeded.
+Logs: `/tmp/dentabill-demo-launch-focused-final.log`, `...-checks-final.log`, `...-cli-types.log`,
+`...-api-build.log`, `...-smoke.log` and `...-smoke-{stdout,stderr,before,after,drop}.log`.
+Web diagnostic logs use `/tmp/dentabill-adr084-next-`; staging logs are under
+`/tmp/dentabill-adr084-web-check.Yr18e7/`. No heavy check or owned server remains running.
+
+**Next task at the ADR-084 checkpoint (superseded by ADR-085 above):** conduct the actual authenticated synthetic demo
+rehearsal and prepare a compelling full-capabilities recording. The user explicitly requested
+Clerk CLI discovery for DentaBill/usedentabill.xyz and an existing development user. Read-only
+CLI discovery confirmed the hosted public key belongs to DentaBill's development instance and
+found a matching existing development admin. Keep keys,
+short-lived sign-in tickets and session credentials out of model/tool output and committed
+files. Use only the exact development instance and a separate fresh local demo database; no
+Clerk user/org creation, live calls, paid inference or production cutover is inferred. Prefer
+an official short-lived sign-in ticket with exact membership and revoke the created session
+when finished. Include synthetic IVR/claim collection and the implemented evidence/review
+flows, clearly labeled; never substitute test-header browser authentication. Integrate the
+finished recording once reviewed/available. FW-43 and the full original plan remain open;
+the full goal stays ACTIVE and heavy checks remain serialized.
+
+### 2026-10-14: FW-45 create-only demo provisioning verified (ADR-083)
+
+ADR-082 is committed as `be680d6`. `demo:provision` now uses the same private generated-client
+runtime as read-only preflight. It validates the explicit demo configuration and exact actor
+binding, freezes all checked-in migration bytes/hashes, then creates only a new admitted local
+`dentabill_demo_<run>` database. Existing targets and concurrent losing creators are refused;
+there is no reset, drop, resume or rebind path in the production command.
+
+The pinned migration engine runs with a minimal environment and private schema/migrations.
+The database journal and empty workflow tables are checked before one atomic transaction adds
+a synthetic practice, OWNER, Delta Dental PPO settings (synthetic NPI `9999999999`) and one
+`demo.provisioned` audit. A read-only postcheck verifies the exact binding, migration digest,
+zero workflow data and audit receipt. Success JSON contains the provisioning UUID, actor/audit
+IDs and manifest/migration hashes. Authentication, rehearsal and recording remain NOT_VERIFIED.
+
+Failures retain their phase and database state. Acknowledged databases are preserved after
+migration/seed/verification failure. Unknown CREATE responses remain uncertain. Child-process,
+cleanup or receipt-write failures after starting the command return OUTCOME_UNKNOWN; they never
+claim that the database was untouched. `DEMO.md` now documents setup, receipt handling and
+existing/partial database refusal. No schema, public API or product UI changed.
+
+Verification: 42 distinct passing cases across two runs: database integration 15 (37.86s) and
+five root files / 27 cases (13.72s). Proofs cover actual standalone CREATE, all 33 migrations,
+concurrent creators, unchanged exact/changed-actor retries, migration/checksum/journal failures,
+atomic audit rollback, postseed tamper, private staging, process uncertainty and both CLI entry
+points. Seven acknowledged-created test databases were removed; shared test records were not
+mutated. Current API/dependency lint/types pass 24/24 (22 cached; 18.531s), explicit strict types
+for both `.mts` entry points and API production build pass. Eight relevant tests passed again
+after final lint-only repairs (4.23s); do not count them as additional distinct cases.
+
+A separate actual CLI smoke created a fresh database, returned an exact audit-linked receipt,
+refused the second invocation, passed read-only preflight and preserved before/after hashes of
+all organization/user/payer/audit rows. It held 1 practice / 1 owner / 1 payer / 1 audit and no
+claims, calls, inference or billing. The owned test database was removed. The supplied Clerk
+test keys were deliberately nonworking; this is not authenticated-browser evidence.
+Logs: `/tmp/dentabill-demo-provision-database.log`, `...-focused.log`, `...-smoke.log`,
+`...-checks-final.log`, `...-cli-types.log`, `...-api-build.log`, `...-final-recheck.log`.
+Detailed CLI smoke logs use `/tmp/dentabill-demo-provision-smoke-`.
+
+**Immediate next task — ADR-084:** implement the isolated API/web launcher, using the existing
+private Prisma/application bundle and a private physical Next app copy. Next must not reload
+workspace dotenv symlinks. Require the same preflighted target/actor/configuration, bind the
+approved loopback origins, manage only owned processes and preserve the database on shutdown.
+Then rehearse real Clerk authentication and the supported durable FakeRetell/synthetic-summary
+workflow before the user records. Actual Clerk configuration/active organization and the
+recording asset are still unverified; no auth bypass or fabricated recording is permitted.
+Continue landing-page media integration and the remaining FW-43/full implementation plan.
+The full goal remains ACTIVE. Heavy checks remain serialized on the memory-constrained host.
+
+### 2026-10-14: FW-45 connected demo preparation verified (ADR-082)
+
+ADR-081 is committed as `8dd6f11`. This bounded FW-45 slice supplies the connected synthetic
+bundle in `apps/web/public/examples/demo/`, a strict manifest/verifier, a read-only
+`demo:preflight` CLI and the rewritten `DEMO.md` walkthrough. No public API, product UI or
+schema changed. The entire implementation goal remains ACTIVE.
+
+The real HTTP/Postgres proof imports two exact-source claims, accepts reports 100 + 80,
+reviews the provider adjustment −30 / batch net 150 and cash 150, records matches 100 + 50
+and exact-line/claim-only posting associations (header 150 / details 180). Correcting the
+batch to 140 retains stale reservations until both explicit full releases; rematching 140
+leaves cash capacity 10. Claim/source-line records remain unchanged, and this proof creates
+no calls, inference or billing records.
+
+Preflight requires an explicit localhost `dentabill_demo_<run>` target, Clerk development
+key formats, exact organization/actor binding, OWNER/ADMIN, local origins, inline synthetic
+execution and absent external-provider/cloud/mail/billing/telemetry configuration. It checks
+all migration checksums and local bindings in a Postgres read-only transaction. Authentication,
+authenticated rehearsal and recording remain explicitly NOT_VERIFIED.
+
+Review discovered that the normal generated Prisma client could load `packages/db/.env`
+after initial validation. The fixed command stages a private 0700 runtime, generates a fresh
+native client from the copied tracked schema and rejects configured dotenv paths. Generation
+and pinned esbuild bundling run in separate minimal-environment children; application execution
+gets only approved values. All workspace application modules are bundled; private Prisma and
+pinned logger packages are the only externals. Reports contain bounded metadata/fixed codes,
+and the private directory is removed. The installed Node/pnpm/tsx launcher is trusted; command
+checks cannot undo preloads already executed by that launcher.
+
+Verification: 137 passing cases across two runs: five files / 122 cases (bundle 29, real HTTP
+flow 1, policy 82, DB 4, CLI 6; 27.53s), plus isolated-runtime 15 (5.72s). The latter proves
+zero dotenv reads, original sentinel/credential absence, private engine initialization and
+ignored ambient esbuild override; the CLI suite exercises the actual bundled command.
+Affected API/dependency lint/types pass 24/24 (22 cached); explicit strict `.mts` types and
+API production build pass. Independent read-only review has no remaining finding.
+
+A fresh positive CLI smoke copied schema/migrations to private staging, applied all 33 to a
+new owned local database, bound one synthetic OWNER and passed using deliberately nonworking
+Clerk test keys. Postcheck remained 1 organization / 1 actor / 0 claims / 0 audits; the owned
+test database was removed. This proves isolated preflight behavior, not a real Clerk session.
+Logs: `/tmp/dentabill-demo-isolated-focused.log`, `...-runtime.log`, `...-checks.log`,
+`...-cli-types.log`, `...-api-build.log`, `...-smoke.log`, `...-cli-positive.log`,
+`...-postcheck.log`, `...-drop-db.log`. The earlier 115-case/30-check smoke predates the isolation
+fix and is not its proof. Shared and isolated local test databases are available; keep heavy
+checks serial because measured host memory pressure caused paging. No unrelated processes
+were stopped.
+
+**Immediate next task:** implement create-only local demo provisioning against a fresh admitted
+database, pinned migrations and the exact intended Clerk organization/user. Refuse existing
+databases; preserve partial failures rather than resetting or rebinding. Then implement the
+isolated API/web launcher (Next also loads dotenv from its app directory), rehearse real Clerk
+authentication and the current durable FakeRetell/synthetic-summary path, and prepare the user
+recording. Integrate the actual recording/poster/captions into the landing page and verify
+playback once available. No recording asset exists. Continue FW-43 and the remaining complete
+implementation plan afterward; synthetic demo evidence does not establish real connectors.
+
+### 2026-10-14: posting relationships verified; demo preparation next
+
+The user requested continued completion and added the need to conduct a full app demo and
+upload its recording to the landing page. Include a coherent end-to-end synthetic demo flow,
+a recording walkthrough and landing-page video support in the remaining deliverables. Keep
+synthetic source/model/voice behavior visibly labeled; no new permission for real calls,
+financial writes, paid inference or production cutover is inferred from the demo request.
+The full implementation goal remains active.
+
+ADR-081/FW-44 is implemented and verified locally after ADR-080 commit `710060b`.
+Reviewed posting-entry relationships bind exact source identity, claim version/hash and optional
+immutable source lines. Latest accepted source evidence is required; newer observations and
+claim edits stale associations. Source-entry reservations persist until an explicit full release.
+Exact retries preserve immutable receipts. These links do not change money, settlement, cash
+allocation or claim status. Migration33 is frozen and applied only to localhost isolated/shared
+DBs; all33 migrations remain local implementation evidence.
+
+Verification: DB68 plus preservation1, focusedAPI47/47, SDK63, UI56, fullAPI956/956 across44 files
+(320.50s), affected Turbo lint/types30/30, API TypeScript/Lambda and Next production builds pass.
+All prior292 DB cases have passing evidence across initial290 and two targeted timeout rechecks
+(721ms), not a clean complete rerun. API/SQL independent reviews pass. Initial API/UI timeouts
+occurred during measured host paging and passed after serialized verification with bounded
+allowances. Keep heavy jobs serial; do not terminate unrelated applications.
+
+The synthetic actual-page/hook/SDK browser round at1280/390 has zero overflow, page errors or
+axe violations. Root fresh nonauthor review found no material issue; the separate documenter
+found no durable design delta. PRODUCT/DESIGN/sidecar are unchanged. Detector126 provides no
+verdict. Harness and Chrome are stopped. Captures/results:
+`/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-posting-relationships-visual-x549r_q0/`.
+Logs use `/tmp/dentabill-posting-relationships-`: `api-full.log`, `api-focused.log`, `sdk-tests.log`,
+`ui-tests.log`, `db-first-tests.log`, `prior-financial.log`, `timeout-rechecks.log`, `checks.log`,
+`api-build.log`, `lambda-build.log`, `web-build.log`. Posting route11.6kB/184kB first load.
+No full authenticated-shell, real connector, external call/message/inference, deployment or
+production evidence is claimed.
+
+**Immediate next task — FW-45:** create one coherent synthetic claim/remittance/batch/cash/posting
+fixture bundle and manifest, a strict read-only local demo preflight and an accurate walkthrough.
+Then rehearse the actual authenticated app and prepare the finished recording for landing-page
+playback. Do not run the old seed/reset/simulator scripts: they contain destructive resets,
+unscoped simulation and obsolete recovered-money assumptions. Real Clerk authentication and
+local actor binding must be verified; test headers do not authenticate the browser. No recording
+asset exists yet. Continue FW-43 source observations/legacy binding/versioned snapshots and the
+remaining corrections, allocation/attribution, connectors, recovery, models/voice, security and
+authorized end-to-end requirements afterward. The full goal remains ACTIVE.
+
+### 2026-10-14: remittance batch source corrections (ADR-080)
+
+FW-40 is committed as `4af99ec`. The current independent financial slice adds immutable stable
+batch identity, source revision and permanent member-ownership sidecars. Migration32
+`20261014200000_remittance_batch_revisions` is frozen and applied only to localhost isolated
+`dentabill_w0_identity` and shared `dentabill_test`. Existing v1 payloads/hashes/reviews remain
+unchanged and explicitly unsequenced; v2 requires a new source record and positive source sequence
+under the original namespace/batch ID. Latest-observed-only acceptance, source-ordered history,
+added/retained/omitted member previews and stable-batch cash reservation guards are implemented.
+Omitted members stay owned; old revision cash matches stay reserved until explicit release.
+Exact retries return the original immutable review object with refreshed currentness metadata.
+Zero net is not withdrawal. Cross-batch ownership transfer, claim-remittance correction chains,
+reviewed posting relationships and claim cash attribution remain follow-on work.
+
+Local verification: DB27 plus expanded migration preservation1, prior financial344, focused
+batchAPI71, cashAPI66, fullAPI909/909 across43 files (216.61s), SDK57 and UI70 all pass.
+Affected Turbo lint/types30/30 pass after fixing two test-only lint findings. API TypeScript
+and Lambda builds pass; Next production build passes (batch8.55kB/184kB first load; cash
+reconciliation8.38kB/184kB). Migration32 remains frozen.
+Logs use `/tmp/dentabill-batch-revisions-`: `api-full.log`, `batch-api-focused.log`,
+`cash-api-focused.log`, `db-final-tests.log`, `preservation-final.log`, `prior-financial.log`,
+`sdk-tests.log`, `ui-tests.log`, `checks-verified.log`, `api-build.log`, `lambda-build.log`,
+`web-build.log`.
+
+The combined synthetic actual-component browser cycle at1280/390 has zero overflow, page errors
+or axe violations. A public-example identity mismatch was caught and fixed; a regression now
+proves the baseline/correction share namespace, batch and member identities. Only corrected
+batch captures count as evidence. Root fresh nonauthor review found no material issue; the
+separate documenter found no durable design delta. PRODUCT/DESIGN/sidecar are unchanged.
+Captures/results: `/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-batch-revisions-visual-zv_xnuu_/`.
+Harness stopped. Detector permission126 yields no verdict. Full authenticated shell and real
+Clerk/AWS/PMS/bank integration remain unverified. No external action, merge or deployment ran.
+
+**Immediate next task:** reviewed posting-entry relationships to existing exact-source imported
+claims and optional immutable source lines, with source/claim-version-bound previews, retained
+stale identity reservations and explicit full release. This adds identity association only;
+cash allocation, source verification, settlement and recovered revenue remain separate. Then
+implement FW-43 canonical source observations, reviewed legacy binding and additive source
+snapshots/application; claim-remittance correction chains; explicit cross-batch ownership
+transfer; claim cash allocation/attribution. Real connectors, recovery actions, models/voice,
+security and authorized end-to-end evidence remain in the full ACTIVE goal. Continue independent
+implementation without treating this local milestone as full completion.
+
+### 2026-10-14: durable review-notification outbox (ADR-079)
+
+FW-40 now stores generic review-notification intent with the summary/observation/review domain
+transaction and audit. Synthetic summaries, native findings and approved regeneration review
+paths share this producer; retrying an already processed job does not send or create another
+alert. The previous post-commit best-effort notifier is removed from runtime wiring.
+
+Migration31 `20261014190000_review_notification_outbox` adds immutable intent, attempt and receipt
+records plus fenced delivery state. Intent binds organization/run/purpose, generation, exact
+source versions, historical regeneration actor, deterministic eligible recipient, fixed generic
+content/hash and one permanent delivery key. Missing/changed recipients are blocked without
+retargeting. Current-source checks and acknowledgement suppression apply before dispatch.
+Leases last one minute; at most five attempts reuse identical key/content within a fixed23h
+window measured from first submission. Unknown or stale submissions remain visible; expiry
+quarantines them. A simulated receipt is never presented as delivered mail.
+
+External delivery is disabled. The only executable transport is explicitly injected synthetic
+code; default dispatch exits before acquiring a lease. The two audited Owner/Admin Operations
+GET routes provide safe metadata, counts, paged filters and attempt history through generated
+SDK/UI. No email address, payload, provider receipt, key or source hash appears in that response.
+There is no send/retry/rebind endpoint or implicit historical backfill.
+
+Migration31 is frozen and applied to isolated `dentabill_w0_identity`, then shared
+`dentabill_test`. DirectDB37 plus preservation1, prior DB87, focused API15, full API878/878
+across43 files (532.38s), SDK56, notifier20 and UI35 pass. Notification process crash/retry9
+and affected Turbo lint/types30/30 pass. API TypeScript/Lambda builds pass (36.4/29.0MB
+unzipped;10.8/9.4MB zip); Next production build passes (Operations10.7kB/186kB first load).
+Full worker run passed144/145 with one older process test timing out at5s during measured host
+CPU saturation. Its bounded allowance now matches the adjacent25s process test; focused3/3
+recheck passes (5.32s), so all145 cases pass across those runs. This remains local implementation
+evidence, not external delivery. Logs: `/tmp/dentabill-notification-api-full.log`,
+`...-worker-full.log`, `...-inference-process-recheck.log`, `...-process-tests.log`,
+`...-checks.log`, `...-api-build.log`, `...-lambda-build.log`, `...-web-build.log`.
+
+One synthetic actual-component browser round at1280/390 has zero overflow, page errors or axe
+violations. Root independent nonauthor review found no material issue; the separate documenter
+found no durable design delta. PRODUCT/DESIGN/sidecar are unchanged. Captures/results:
+`/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-notification-visual-q70pk1yy/`.
+Harness stopped; detector permission126 means no detector verdict. Live Clerk/AWS/Resend delivery
+and real patient/source systems remain unverified. No external message, paid inference, call,
+financial action, merge or deployment occurred.
+
+Continue the full ACTIVE goal after this milestone. The next independent financial work is
+explicit remittance batch/source corrections: additive stable identity, revision and permanent
+member-ownership records; v2 explicit source sequence while preserving v1 unsequenced snapshots;
+latest-observed acceptance and cash reservations shared across revisions until explicit release.
+Then implement evidence-bound posting relationships and claim cash allocation/attribution. Real connector sync, recovery workflows, model evaluation,
+voice, security and authorized end-to-end gates remain part of the original scope.
+
+### 2026-10-14: independent PMS posting receipt milestone (ADR-078)
+
+FW-44 independent PMS posting receipts (ADR-078) now preserve immutable source receipt identity,
+ordered full-snapshot revisions, raw source statuses/flags/dates/versions and signed header/entry
+amounts. Header150 and complete entries180 remain distinct with difference−30; no adjustment or
+claim payment is invented. Partial/unknown observations are reviewable as source facts, with
+UNLINKED claim references and UNVERIFIED source/bank verification/settlement. The newest accepted
+COMPLETE/REMOVED revision resets retained source-entry membership; later PARTIAL/ABSENT revisions
+retain prior IDs and add newly observed ones. Rejected/unreviewed revisions cannot free entry IDs.
+Fresh token, exact retry, stored-role, tenant, audit, immutable mirror and race invariants apply
+to API and direct SQL. Five handlers, generated SDK and `/dashboard/posting-evidence` provide
+import, paged inbox/history, preview and explicit accept/reject.
+
+Migration30 `20261014180000_posting_source_evidence` applied successfully first try to localhost
+isolated `dentabill_w0_identity`, then shared `dentabill_test`. Prior migrations/helpers and all
+legacy claim/remittance/cash/batch/match/release facts are preserved, with no posting backfill.
+New DB89 + preservation1 =90 pass; existing financial/tenant287 pass; focusedAPI51 pass; SDK53;
+UI39 (21 posting +18 navigation); affected Turbo lint/types30/30. API TypeScript and Lambda
+builds pass (API36.2MB/worker28.9MB unzip,10.8/9.4MB zip). Next production build passes (posting route7.7kB/180kB first load); full API863/863 across42 files passes (161.77s).
+The initial large pagination API case exceeded5s; its bounded30s test allowance then passed.
+The initial Turbo run caught a test-only exact-optional typing error; the corrected run passes.
+
+Logs `/tmp/dentabill-posting-`: `migration30-isolated.log`, `migration30-shared.log`,
+`db-final-tests.log`, `db-regression.log`, `db-types.log`, `db-lint.log`, `api-focused.log`,
+`api-full.log`, `sdk-tests.log`, `checks-final.log`, `api-build.log`, `lambda-build.log`,
+`web-build.log`. Web logs use the temporary `fw45` prefix (this is still FW-44):
+`/tmp/dentabill-fw45-ui-tests.log`, `...-ui-lint.log`, `...-web-types.log`, `...-visual.log`.
+
+One actual-component synthetic auth/API browser round at1280/390 passed download/import, partial/
+unknown and complete-mismatch review, identical uncertain retry, stale history and overlap
+blocking/rejection, with zero overflow, page errors or axe violations. All four captures reviewed;
+root inspected mobile. Captures/results:
+`/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-posting-visual-pjg4wjdf/`.
+Independent API and nonauthor UI reviews found no actionable/material issues. Separate documenter
+found no durable design-system delta. PRODUCT/DESIGN/sidecar preserved. Harness stopped; detector
+unavailable126, so no detector verdict or full authenticated-shell/live integration claim.
+
+Full-scope goal remains ACTIVE; original completion standard and external gates remain intact.
+Financial follow-ons: evidence-bound posting-to-claim relationships, explicit batch/source
+corrections, claim cash allocation/attribution and real supported PMS/bank connectors. FW-40
+transactional review-notification outbox is the immediate next independent dependency. The
+post-commit loss window and ALREADY_PROCESSED retry bypass are confirmed. Bind intent to exact
+domain/recipient/content version and separate provider receipts/unknown outcomes; no external
+message is authorized. This posting slice is included in `feat(monorepo): add reviewed PMS posting
+evidence`, following `e178b44`, without merge/deployment. No
+provider message, real payment/claim write, paid inference, merge or deployment occurred.
+
+### 2026-10-14: FW-30 tenant rate-limit correction (ADR-077)
+
+Completed after reconciliation commit `a3d1d84`: two route overrides keyed by organization ran
+before authentication and shared an `anon` bucket. Call enqueue and practice-settings limits
+now run in `preHandler` after `requireAuth`. Four focused regressions failed before and pass
+after the two-line fix; combined rate-limit/me/calls77/77 pass. Logs:
+`/tmp/dentabill-fw30-rate-limit-before.log`, `...-focused.log`. Scoped lint/API types pass.
+No schema/provider change, external action or deployment. Process-local quotas do not establish
+a distributed fleet limit. Full-scope goal remains ACTIVE.
+
+Next financial slice is underway: independent PMS posting receipts. Contract preserves source
+header separately from entry totals, ordered revisions and original signs/raw statuses. Accepted
+PARTIAL/ABSENT revisions must retain prior source-entry identity reservations until a COMPLETE
+replacement or REMOVED revision explicitly clears them. Source review leaves claim references
+UNLINKED and source/bank verification/settlement UNVERIFIED. Migration30 `20261014180000_posting_source_evidence` and API/UI integration
+are not yet validated (ADR-078). Root owns posting contract/service/routes/app/SDK; batch_db
+owns schema/migration/DB tests; cash_review owns API tests/fixtures; batch_ui owns web workflow.
+API types/scoped lint and SDK53/53 already pass; database and end-to-end synthetic checks remain.
+Do not apply migration30 to shared DB until isolated admission tests pass and the DB agent
+freezes it. Native Open Dental docs were refreshed; ClaimProcNum is entry identity, ProcNum is
+procedure identity; partial headers can differ from entries, and entry edits must be captured
+independently of header versions. No external call, payment write or provider inference ran. Continue the full handoff after this slice; fake data only.
+
+### 2026-10-14: full-scope persistent goal and FW-44 reconciliation
+
+The user explicitly requested completion of the entire remaining handoff/main implementation
+plan with continuous work until done. A durable goal is ACTIVE for the full original assignment;
+do not narrow completion to a milestone or synthetic-only feature. Prior authorization remains:
+fake data, local implementation/tests/migrations/commits and useful subagents; no unapproved
+production cutover, real calls, actual claim/payment writes, paid experiment or external message.
+Continue all independent work while external clinic/contracts/connector access remains absent.
+
+Completed this local slice (ADR-076): immutable reviewed signed partial many-to-many cash-to-batch
+matches and explicit full releases. Exact accepted source/review bindings, both capacities and
+historical pending-link identity reservations survive source changes until released. Fresh
+previews bind source/amount/graph/capacity and the six-part ledger. Exact actor/action/token/key
+retries return immutable receipts, while paged status derives CURRENT/STALE/RELEASED. Release
+preview/action never depend on source validity or graph traversal. No bank verification, claim
+cash allocation, external posting or settlement is inferred. Five API handlers, generated SDK
+and actual dashboard support the full local workflow with scoped audit and closed errors.
+
+Migration29 applied only to localhost shared `dentabill_test` and isolated `dentabill_w0_identity`.
+Direct SQL/tenant/race tests and migration preservation retain prior records/helper definitions.
+Final local verification: full API808/808 across41 files (200.25s), focusedAPI55/55; new
+DB59/59 plus migration preservation1/1; existing cash/remittance/batch/tenant228/228; SDK48/48;
+web50/50 (34 reconciliation plus16 navigation); affected Turbo lint/types30/30. API TypeScript,
+both Lambda bundles and Next production build pass; reconciliation route7.83kB/184kB first load.
+Logs `/tmp/dentabill-reconciliation-`: `api-focused.log`, `api-full.log`, `db-regression.log`,
+`checks.log`, `api-build.log`, `lambda-build.log`, `web-build.log`, `api-types.log`. DB logs:
+`/tmp/dentabill-cash-batch-db-final-tests.log`, `...-types.log`, `...-lint.log`. UI logs:
+`/tmp/dentabill-fw44-ui-tests.log`, `...-web-types.log`, `...-ui-lint.log`.
+
+One actual-component synthetic auth/API browser round at1280/390 verified explicit source
+selection, net150, match/release previews, stale retained reservations, released history and
+identical uncertain retries, with zero overflow, page errors or axe violations. Four captures
+and results: `/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-reconciliation-visual-5g9mji22/`.
+Root inspected the mobile capture; independent API and nonauthor UI review found no material
+issues. Separate documenter found no durable design delta; PRODUCT/DESIGN/sidecar preserved.
+Harness stopped. Context/detector permission denial means no detector verdict; full authenticated
+dashboard chrome, Clerk/AWS/bank/PMS integrations remain unverified.
+
+This complete slice is included in `feat(monorepo): add reviewed cash batch reconciliation` on
+`codex/w0-containment`, following `e8b4f7f`; no merge/deployment, both stashes preserved.
+**Exact next task:** independent PMS posting receipts: immutable source identities and ordered
+revisions, explicit claim/procedure source references, separate source-reported amounts/status,
+fresh review and currentness. Then batch/source corrections, claim cash allocation/attribution,
+recovery workflows, real source sync and all remaining W0–W8 gates. Fake data only; no clinic yet.
+All completion claims below refer to earlier milestones, not the active full-scope goal.
+
+### Latest continuation: FW-44 remittance batch evidence (ADR-075)
+
+The user said “keep working” after cash milestone `e5f68af`. Added the next local vertical
+slice: custom batch JSON import, source inbox, fresh preview, immutable accept/reject and exact
+reviewed claim-event membership. Signed provider adjustments retain original amount, convention,
+raw codes and references. Claim reports100+80 with provider deduction30 yield reported net150;
+none of these numbers establish cash received or claim cash allocations. Unknown/incomplete/
+unbalanced source remains inspectable/rejectable and cannot be accepted. Provider-only, zero
+and negative batches plus accepted signed reversal events are supported.
+
+Migration28 `20261014060000_remittance_batch_evidence` adds four immutable tenant-scoped tables
+and batch-only admission helpers. One accepted claim event belongs to at most one batch; exact
+member/review/hash bindings, deferred parent sealing and organization serialization apply to
+direct SQL as well as API writes. Evidence/review replays are audited; mutation audit failures
+roll back and read audit failures withhold the response. Fixed MANUAL_UPLOAD provenance and
+UNVERIFIED cash receipt/posting/settlement remain explicit. Batch correction/revision is not
+implemented: changed source identity payloads conflict rather than overwrite retained facts.
+
+Four `/v1/remittance-batches` routes, generated SDK and `/dashboard/remittance-batches` expose
+the workflow. Raw/canonical/PostgreSQL JSONB imports256KiB, arrays100 each, pages20/2MiB. The
+storage-size query handles JSONB whitespace expansion with a closed400 before insertion.
+Browser command/cache scopes include user and optional organization; uncertain retries preserve
+the exact command and409 requires a fresh review.
+
+Final local verification: full API753/753 across40 files (291.63s), new DB54/54 plus migration preservation1/1; focused API51/51; web37/37;
+SDK43/43; existing cash/remittance/tenant regressions174/174; affected Turbo lint/types30/30;
+API TypeScript, both Lambda bundles and Next production build. API36.0MB/worker28.9MB unzip,
+10.8/9.4MB zip. Logs use `/tmp/dentabill-batch-`: `api-focused.log`, `db-regression.log`,
+`sdk-tests.log`, `checks.log`, `api-build.log`, `lambda-build.log`, `web-build.log`, `api-full.log`. Migration28 applied only to
+isolated `dentabill_w0_identity` and shared `dentabill_test` on localhost. Initial isolated SQL
+parser failure rolled back atomically before successful correction/application; prior25–27
+unchanged. Migration proof retains exact prior claim/source/remittance/cash rows and helper
+definitions. DB agent results are in tool outputs, not saved log files.
+
+Actual-component synthetic auth/API browser checks at1280/390 passed download/import/identical
+retry/blocked acceptance/rejection with zero horizontal overflow, page errors or axe violations.
+One bounded screenshot round, independently reviewed with no material findings. Separate
+documenter found no design-system changes. Context/detector launchers failed permission denied;
+neither report is claimed. Authenticated dashboard chrome and live Clerk/AWS/source integrations
+were not browser-tested. Captures/results:
+`/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-batch-visual-qm8nmteu`.
+Independent API review found no actionable issues. Root inspected the mobile capture.
+
+This complete slice is included in `feat(monorepo): add reviewed remittance batch evidence`
+on `codex/w0-containment`; no merge or deployment. Both prior stashes remain intact.
+
+**Exact next task:** evidence-bound bank-to-batch reconciliation
+with current reviewed cash revision checks, stale/replacement handling and bounded capacities.
+Keep gross claim reports, provider net effects, batch net and bank evidence distinct; never clone
+batch150 per claim or allocate180 from150. Then independent PMS posting receipts. Batch source
+corrections, native connectors, reviewed external posting and recovery attribution remain open.
+Use fake data. No deployment, paid inference, external message or real financial action ran.
+Full parity remains incomplete; the optional up-to-$4 Fireworks experiment remains unanswered.
+
+### Latest continuation: FW-44 cash-source milestone closeout (ADR-074)
+
+Resumed the existing checkout from [HANDOFF_2026-10-13.md](./HANDOFF_2026-10-13.md), preserving
+migration26 and both existing stashes. The cash import/review milestone includes immutable
+practice/account observations, explicit source revision order, scoped accept/reject decisions,
+fresh previews, per-account totals, bounded replacement identity graph, API/SDK and dashboard.
+Manual source evidence remains distinct from verified bank receipt, posting and settlement.
+
+Additive migration27 `20261014050000_cash_source_token_bounds` closes direct-SQL/API Unicode
+admission mismatch. Cash-only helpers enforce UTF-16 limits, JS edge trimming and Unicode
+Cc/Cf/Cs exclusion in every required/nullable token. No shared helper or applied26 was changed.
+It validates existing rows atomically; incompatible retained evidence stops the migration
+without a rewrite or partial constraint installation. Applied only to localhost shared
+`dentabill_test` and isolated `dentabill_w0_identity`.
+
+**Final verification:** cash DB73/73, migration preservation/rollback3/3, tenant32/32 and
+focused API50/50 pass. The API additions prove direct database boundary records remain readable
+and reviewable, malformed input is rejected, and read audits identify the correct resource type.
+Affected Turbo lint/types30/30 pass. API TypeScript build and both Lambda bundles pass
+(API35.9MB/worker28.8MB unzip;10.8/9.4MB zip). Full API **702/702 across39 files** passes
+(173.88s); this completed run supersedes the earlier interrupted attempt. Independent read-only review found
+no additional actionable API/DB/tenant/UI issues beyond the Unicode fix.
+
+Prior unchanged web32/32, SDK39/39, Next production build and synthetic actual-component
+browser checks at1280/390px remain passing evidence from the original session. Browser auth/API
+were mocked; this does not establish Clerk/AWS/bank/PMS integration. Current logs use
+`/tmp/dentabill-cash-token-`: `db-tests.log`, `preservation-tests.log`, `tenant-tests.log`,
+`api-focused.log`, `api-full.log`, `checks.log`, `api-build.log`, `lambda-build.log`.
+Original web/SDK/build/browser artifact paths remain in the handoff.
+
+The complete cash-source slice is included in the `feat(monorepo): add reviewed cash source
+evidence` commit on `codex/w0-containment`. It is not merged or deployed.
+
+**Exact next task:** define explicit reviewed remittance batch-net and
+provider-adjustment evidence before cash-to-batch reconciliation. Preserve gross claim/PLB
+mapping and allocation capacities: claim reports100+80 less provider deduction30 yield150 cash;
+never clone150 per claim, allocate180 from150 or infer a batch solely from a trace. Then add
+independent PMS posting receipts. Native ERA, actual bank/PMS/clearinghouse connectors, reviewed
+external posting, recovery attribution and full parity remain open. Use fake data; no clinic
+exists. No deployment, real financial action, paid inference or external message occurred.
+The optional up-to-$4 Fireworks experiment remains unanswered; do not repeat the question or
+infer approval. The previous chat's paused goal is historical; this chat has no separate active
+goal object. The full assignment is incomplete.
+
+### Latest continuation: remittance import-to-reviewed totals (ADR-073)
+
+The user again asked how much remains. The answer keeps full parity as substantial multi-week
+work, not a few final fixes; external clinic/connector/voice/production gates remain open.
+The prior goal turn made progress (`eee520b`); this continuation builds the next FW-21 slice.
+No clinic exists; all data and local test systems are synthetic. No paid inference, speech,
+call, external submission, real claim/payment change, AWS migration or deployment ran.
+The prepared up-to-$4 Fireworks request is still unanswered and does not block independent work.
+
+- Four immutable tables retain custom payer-reported remittance evidence, exact accepted/rejected
+  decisions, source-line allocations and signed adjustments. Composite scoped/restrictive FKs,
+  direct SQL admission, exact child mirrors and cumulative header/line/residual/adjustment caps
+  prevent cross-tenant and duplicate/over-reversal corruption. Review admission preserves claim
+  updatedAt while serializing concurrent repeatable-read snapshots. Existing records are retained.
+- Source identity spans claims within an org/namespace; canonical HMAC content binds its claim.
+  Identical imports replay; changes conflict. Payer traces/document IDs may repeat across claims.
+  Unknown code/reference strings survive without inferred accounting meaning. Orphan reversals
+  may be imported but cannot be accepted until their original PAYMENT is accepted and matched.
+- Four stored-role-gated API routes implement import, paged history/report summaries, fresh
+  preview and atomic review. Tokens bind evidence, claim timestamp and evidence/review counts.
+  Exact decision/token/idempotency retries bind actor and return the original result after a
+  lost response, even if later state changes. Rejections have zero amount/no children. Audit
+  failures roll back mutation; read and replay responses also require PHI-safe access audit.
+- Reported header totals include allocations and an explicit unallocated portion. Adjustments
+  are independent facts, never extra paid money. No cash receipt, recoupment, posting, settlement,
+  workflow resolution or recovered revenue is inferred. Claims with remittance evidence return409
+  on deletion; source/actor references stay retained. This is not a complete legal retention policy.
+- The actual claim screen imports bounded custom JSON, shows raw source/coverage/payment facts,
+  previews mappings and reverse references, accepts/rejects and exposes pending/history totals.
+  It preserves identical commands after uncertain responses, invalidates stale previews and
+  isolates late auth/mutation effects by claim/user/optional practice. Personal accounts work.
+- Raw/canonical input is bounded to1MiB, with500 allocations/adjustments each. Pages fetch at
+  most11 records, return at most10 and stay below2MiB with cursor allowance for Lambda response
+  headroom. The SDK now retains concrete nullable field types: replacing Zod null transforms
+  with nullable defaults fixed initial unknown output types without changing canonical values.
+
+**Verification:** migration25 `20261014030000_remittance_evidence` applied only to
+localhost `dentabill_test` and isolated `dentabill_w0_identity`. Direct ledger69 plus preservation
+migration1 pass, including READ COMMITTED/REPEATABLE READ reversal races; tenant32 pass.
+New remittance API45 pass after fixing two test writes missing org scope and a bounded large
+UTF-8 test timeout. SDK34 pass including nullable-field generation regression. UI20 pass
+(15 actual-hook/SDK transport workflows plus5 claim-detail checks). API TypeScript build and
+both Lambda bundles pass (35.8/28.8MB unzip,10.7/9.4MB zip). Affected Turbo typecheck/lint
+30/30 and full Next production build pass. Full API **652/652 across38 files** pass, including
+all45 new remittance cases. Final API/worker Lambda bundles were rebuilt after the SDK schema fix.
+
+Synthetic actual ClaimDetailPage Chromium at1280/390px passes upload→preview→accept,
+identical review retry after uncertain response and orphan reversal rejection, with no horizontal
+overflow or page errors. This is local mocked auth/API evidence, not deployed Clerk/AWS/PMS e2e.
+Artifacts `/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-remittance-visual-ihyhlr_p`;
+server stopped. Pointer `/tmp/dentabill-remittance-visual-current`; detail log
+`/tmp/dentabill-remittance-visual.log`. Other logs use `/tmp/dentabill-remittance-` prefix:
+`db-tests.log`, `tenant-tests.log`, `web-tests.log`, `sdk-tests.log`, `api-tests.log`,
+`checks.log`, `api-build.log`, `lambda-build.log`, `web-build.log`.
+
+**Exact next task:** continue financial correctness with FW-44 independent source-reported cash
+transactions and posting receipts, then explicit evidence-bound reconciliation without multiplying
+report/cash/posting amounts or assuming settlement. Begin with a small synthetic cash-import/review
+vertical slice; native ERA/PLB, actual banking/PMS receipts, reviewed external posting, correction
+and recovery attribution remain required. FW-43 source revisions/legacy binding/sync and all real
+connectors, appeals/corrections/attachments/receipts, live AI/voice, agreements and AWS end-to-end
+operation retain their full scope. Preserve both existing stashes. No overall complete/blocked
+status is justified by this local milestone or the unanswered optional experiment budget.
+
+### Latest continuation: procedure and coverage import-to-detail (ADR-072)
+
+The user asked how much remains. The status answer identified a substantial multi-week scope,
+with five remaining areas: financial modeling, real connectors, recovery actions, live AI/voice
+validation, and AWS/end-to-end operation. That is a rough scope estimate, not a committed date.
+The active goal then continued from clean `e6c4a77` with the first FW-21 vertical slice. No clinic
+exists; all data remains synthetic. No paid inference, speech, call, external submission, AWS
+migration/deployment or external message ran. The prepared $4 experiment is still unanswered.
+
+- Optional custom `ClaimLines`/`Coverages` CSV cells retain explicit source line identities,
+  submitted procedure codes, dates, entire-line billed amounts, nullable quantity/raw locations,
+  and explicit coverage sequence/target. The parser rejects malformed/unknown fields, duplicate
+  IDs/sequences, inconsistent totals/code lists and missing/ambiguous coverage targets. It never
+  invents missing quantity, tooth, plan/member/subscriber identity or outbound identity.
+- The imported snapshot, individual children, parent and audit share one transaction. Scoped
+  composite FKs and uniqueness fence tenants/identities. Immutable triggers plus deferred counts,
+  line totals/positions and one-target coverage checks seal the snapshot. Parent Claim deletion
+  retains the existing cascade behavior; this is not a permanent financial ledger/retention policy.
+  Current local claim edits are separate from original imported totals. Child IDs survive replay.
+- The details-specific fingerprint makes an earlier unmodeled JSON import report SOURCE_CHANGED,
+  never a false successful enrichment. Changed/legacy rows still require later FW-43 reconciliation.
+  Bounds are500 lines/9 coverages per claim,512 KiB per JSON cell,10,000 accepted children per
+  upload, plus existing10 MB/5,000 CSV-record limits. Unknown code/location text is preserved,
+  not certified as clinical CDT content. The new fake fixture is a custom contract, not a PMS export.
+- GET detail alone adds nullable sourceDetails with ordered, scoped children and exact decimal
+  strings. The real claim screen shows original versus current amount, repeated procedures,
+  optional raw source details, explicit target coverage and50-line pagination. Summary-only
+  records have an honest empty state. Status PATCH remains shallow and preserves/refetches details.
+- Browser-cache regressions found/fixed practice-switch data retention and late PATCH success
+  writing into a later selected scope. Detail keys bind user plus optional Clerk org, and mutation
+  context captures the original key. Independent review caught the initial org-only query gate
+  breaking onboarding’s personal/local organizations; signed-in personal sessions remain enabled,
+  and tests cover both org and user switches. Date-only summary labels now use UTC consistently.
+
+**Verification:** migration24 `20261014020000_claim_source_details` applied only to localhost
+`dentabill_test` and agent-isolated `dentabill_w0_identity`. Final snapshot DB48 pass, plus migration
+preservation1 and tenant-read/write32 pass. Migration replay applies all prior23 migrations,
+seeds reviewed legacy/source claims, then24 and proves original payloads unchanged/no backfill.
+Full API **607/607** pass, including real upload→detail, concurrent import, changed/repeated source
+facts, same child IDs across tenants/claims, and600-child late-chunk rollback of parents/children/
+audit followed by retry. Initial affected run had155 pass/1 assertion mismatch because the
+pre-existing header serializer returns `100`, not `100.00`; corrected expectation then full607 pass.
+SDK **30/30** pass. API TypeScript build and both Lambda bundles pass (35.6/28.8 MB unzip;
+10.7/9.4 MB zip). Affected Turbo typecheck/lint **30/30** pass. Final web component/cache tests **19/19** and the full Next.js production build pass.
+Logs `/tmp/dentabill-source-details-{api-tests,import-tests,parser-tests,checks,sdk-tests,lambda-build,web-build}.log`;
+DB logs `/tmp/dentabill-fw21-db-{tests,boundary-tests,types,lint}.log`.
+
+Actual ClaimDetailPage Chromium at1280/390px passed repeated-code/secondary-coverage/source/legacy
+views, optional detail expansion, shallow status PATCH→GET preserving source facts and no overflow
+or page errors. This is a synthetic local component harness, not live Clerk/API/AWS/PMS e2e.
+Two bounded visual rounds fixed a squeezed mobile payer/badge layout and confirmed it. Vite is
+stopped. Artifacts `/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-source-detail-visual-ce1e8uzu`
+(pointer `/tmp/dentabill-source-detail-visual-current`). The later personal-session auth correction
+is functionally tested; it changes query enabling/cache scope, not rendered layout.
+
+**Exact next task:** continue FW-21 with separate payment/remittance evidence, allocations to
+stable source line IDs, partial payment, adjustments and reversal fixtures/ledger invariants,
+then a real biller reconciliation view. Do not derive payment/settlement from source billed totals,
+call statements or workflow status. Define retention before financial FKs refer to deletable claims.
+FW-43 keeps source-revision review/updates/legacy binding and recurring PMS sync. All contracted
+connectors, appeals/corrections/attachments/receipts, live AI/voice evaluation, agreements and
+production evidence remain in scope. Preserve existing stashes. No overall complete/blocked goal
+status is justified by this local milestone; pending provider budget input does not block local work.
+
+### Previous continuation: source-aware CSV imports (ADR-071)
+
+The preceding turn answered the user's status question and made no code progress. This
+continuation resumed FW-19/20 on clean `402d3c2` rather than treating the unanswered $4
+Fireworks experiment question as an overall blocker. Full parity remains active. No paid
+inference, speech, call, production migration, deployment or external message ran.
+
+- New claims have explicit source-system/database/record identity and optional opaque version.
+  Display claim numbers are never the identity fallback. The schema preserves legacy duplicates,
+  checks complete provenance, enforces tenant-scoped uniqueness and protects imported provenance.
+- Imports now serialize tenant admission and commit all chunks plus aggregate audit together.
+  Same-file/concurrent identical records create one claim. Conflicting same-file IDs are all
+  withheld; changed source data and legacy display matches are reported without overwriting
+  claim state, local corrections, review history or `updatedAt`. Legacy candidate aggregation
+  returns at most one row per incoming display number rather than materializing every duplicate.
+- The HMAC includes every source cell as well as normalized fields, so currently unmodeled source
+  changes cannot silently look unchanged. Raw cells are transient. Header case/order are normalized;
+  changed cell formatting, namespaces or hash secrets may require conservative reconciliation.
+- Parser validation rejects ambiguous headers/aliases/layouts, malformed rows, invalid UTF-8,
+  calendar dates and out-of-range amounts without reflecting raw inputs. Papa's record preview
+  caps input at 5,000 logical data records before normalization, with its full-file split fast path
+  disabled. The route's 10 MiB bound still applies to the decoded input; this is not streaming
+  constant-memory parsing. Missing source IDs yield explicit no-insert row results.
+- The import screen requires a stable database name, sends the CORS-supported source header,
+  validates replies, separates unchanged/attention counts, links identified claims, and exposes
+  every parsed row/validation error through pagination. Downloads omit raw cells. Tenant switch
+  resets the form, and late auth resolution cannot send an unmounted form. SDK and synthetic
+  fixtures reflect the new contract. No customer export or PMS connection is claimed.
+
+**Verification:** local migration23 deployed on localhost `dentabill_test`. A separate-schema
+replay of all prior22 migrations, seeded duplicate reviewed claims, then migration23 preserved
+all original payloads and left provenance null; the test rolls back that schema. Import-focused
+API/parser/real-DB **113/113** pass, including six concurrent callers, changed-payload races,
+legacy ambiguity/isolation, direct constraints and 501-row rollback/retry. Full API run had
+**554 passes and one assertion failure** solely from expecting `5,000` versus the fixed message
+`5000`; the corrected route suite and all affected importer/parser tests pass in the 113 result.
+No broad full-suite rerun was needed after that assertion correction and bounded legacy query.
+SDK **30/30**, import UI **24/24**, and affected Turbo typecheck/lint **30/30** pass. API TypeScript
+build and the API build script's **both Lambda bundles** pass (35.6/28.8 MB unzipped). A redundant
+worker `build:lambda` command reported no such script; packaging already happened in the API
+script, so no separate worker build is required. The full Next.js production build also passes. Final scoped import ESLint passes after the bounded legacy-query change.
+Logs: `/tmp/dentabill-import-{api-tests,final-tests,final-checks,sdk-tests,ui-tests,web-build}.log`
+and `/tmp/dentabill-source-migration-test.log`. Independent review found/fixed the parser limit's
+late application and fast-path split; no other material issue remained in the reviewed boundary.
+
+Actual-component Chromium checks with synthetic API/auth at1280/390px passed form validation,
+exact namespace header, all six outcomes, ambiguous legacy handling, links, report download and
+no overflow/page errors. This is local component evidence, not authenticated Clerk/AWS/PMS e2e.
+Artifacts: `/private/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-import-visual-k5165w46`;
+Vite stopped. Final validation-error pagination is covered by the 51-error component regression.
+
+**Next task:** FW-21 procedure-level claims, coverage sequence and partial-payment/reversal
+modeling with synthetic fixtures and reviewed financial invariants. FW-43 retains source-revision
+history, approved source updates/legacy binding, cross-system mapping and recurring authorized
+PMS sync. Those workflows are not implemented by a conflict report. The prepared Fireworks
+experiment remains pending the user's up-to-$4 answer; do not infer approval from continuations.
+No clinic yet; maintain fake data. Keep the existing stashes and the full parity scope intact.
+
+### Previous continuation: bounded contract discovery (ADR-070)
+
+The previous goal turn made concrete progress by committing independent evaluation tooling in
+`4ca7508`. This continuation started clean on `codex/w0-containment`; full parity remains active.
+No inference, speech, phone call, purchase, production migration, account-policy change or AWS
+deployment ran. User still has no clinic; only fake data is used. Existing stashes are preserved.
+
+- Read-only Fireworks account/model checks at23:05Z succeeded: one READY/UNSUSPENDED account;
+  monthly quota value/max9999999 and usage5.04 (not a task budget or available credits);
+  policy ZDRnull, no residency field returned. Both candidate model records report context1048576
+  and serverless support. Both exact regional router metadata requests returned403. Current
+  Standard rates/default tier and immutable publisher license evidence are in PROVIDER_EVIDENCE.
+  A browser check reached login; credit balance/Auto Reload remain unverified. No secrets or
+  account names were printed. Sanitized evidence: `/tmp/dentabill-fw42-account-evidence.json`.
+- Added a distinct capture-only transport to discover unknown response identities without
+  fabricating a synthetic-evaluation release. Shared fixed-host transport, raw-before-parse
+  persistence, deadlines and required journal remain; ordinary gateway identity/release checks
+  are unchanged. Discovery returns no model/content/observation and cannot approve a release.
+- Added `capture prepare/inspect/run`. Plans bind full synthetic inventory (max25), one candidate,
+  original exact wire builder, current account/price/context/license evidence, code/dependency
+  fingerprint, host/path and24-hour expiry. One attempt per case; integer micro-USD reservations
+  use full context for input and completion with no refunds. This is a conservative price-based
+  allowance, not a proven provider invoice cap or serving-revision mapping.
+- Private immutable fsynced records atomically join each admission with its allowance. An
+  admission without raw response never resends after a confirmed-dead owner; saved raw response
+  replays locally. A NO_SEND tombstone wins the same slot, fixing a reviewed race where concurrent
+  cancellation could otherwise conceal another runner's send. Reverse publication-order reads
+  validate saved-result/receipt bindings. Raw replay usage stops later cases even if an earlier
+  cancelled attempt retained null usage. This store is local/single-host, not a distributed ledger.
+
+**Verification:** evaluator **196 tests /10 files**, gateway **325/8** and affected Turbo
+typecheck/lint/build **9/9** pass. Real-filesystem checks cover modes, symlinks, competing exclusive
+publishes and ambiguous fsync failure. Three separate-process SIGKILL proofs use an independent
+localhost HTTP provider ledger: accepted/no receipt → UNKNOWN without resend; saved raw → local
+replay; saved over-limit raw plus immutable cancelled/unknown-usage receipt → next case NOT_SENT,
+with one total HTTP in every proof. CLI child tests cover prepare/inspect, exact confirmation,
+no credential/no-send, closed errors and old offline seed/score/verify. An initial process-output
+assertion was corrected to separate Node/tsx warnings; lint/type issues were fixed before these
+final results. Logs: `/tmp/dentabill-capture-{evals-tests,gateway-tests,checks-final}.log` plus
+`-process-{tests,types,lint}.log`, `-store-{tests,lint}.log` and `-plan-tests.log`.
+
+**Concrete first experiment, prepared and inspected without authorization:**
+`/private/tmp/dentabill-fw42-ready-gyCCKz/` contains one DRAFT fake-case corpus and two exact plans.
+GLM run allowance$1.10, reserved$1.022362, digest
+`d2ed78e507b748e461c3008db9d8731ea3abcb9bd000a7a6ff1438920874fda6`;
+DeepSeek allowance$2.90, reserved$2.359296, digest
+`f1a379344b1ea6967a647980688f8444fb55bba3daa5a17e4a9262e4bce61fa8`.
+They expire around2026-10-14T23:18Z. Combined proposed allowance$4; two text requests, no retries,
+calls or production changes. No `authorization.json` was created. A user question is pending
+for this exact spending scope because no established test budget is recorded. A large quota
+does not authorize it. Local artifacts and IDs do not themselves establish user permission.
+
+**Exact next task:** if the user approves this experiment, verify current source/plan integrity
+and expiry, then run the two prepared manifests with the root `.env` only through the explicit
+capture CLI; inspect private receipts and reconcile returned serving identities/usage before
+preparing any scored evaluation release. Expired/changed plans need refreshed evidence and a
+new concrete plan within the user's authorized scope. Do not invent served revisions. If budget
+input remains pending, continue independent FW-19/20 source-import identity and concurrent
+duplicate protection using fake data. No clinic-dependent capability, voice evaluation or full
+parity is complete. No overall blocked/complete goal status is justified by this milestone.
+
+### Earlier continuation: independent observation evaluation (ADR-069)
+
+The previous goal turn made concrete progress with automatic native jobs in `f8bdf99`.
+The full parity goal remains active on `codex/w0-containment`; the worktree was clean at
+this continuation's start. This slice implements FW-15/16 tooling without claiming model
+quality or completing the still-missing qualified dental review. No external model request,
+speech, call, paid service, database migration or AWS deployment ran. User still has no clinic;
+only fake data is authorized for the present corpus. Existing credentials/stashes are preserved.
+
+- New `@dentabill/evals` has strict corpus/result/reviewer contracts. Each complete result
+  inventory binds its exact corpus and target-adjusted requests. Missing/duplicate/extra or
+  swapped records fail closed. Group, claim-ID and exact-source leakage across partitions is
+  rejected. Case changes invalidate review digests; two independent original annotations and
+  final adjudication are preserved when supplied, but their credentials remain unauthenticated.
+- The 25 independently authored seed hypotheses remain DRAFT/DEVELOPMENT. They cover negation,
+  corrections, claim/speaker attribution, partial/unallocated/reversed payments, COB, ambiguous
+  currency, unknown code systems, injection and noise. Expected source anchors are exact UTF-16
+  spans. No fixture output is generated from the gold labels. The baseline invokes the existing
+  fake gateway with no registered outputs and therefore abstains on every case.
+- Deterministic scoring separates gateway/output schema, lexical validation, full reference
+  values, exact field-bound citation agreement, answerable coverage, false/required abstention
+  and all declared subgroups. Failed and malformed answers stay visible in denominators.
+  Citation equality is conservative reference agreement, not entailment. Usage includes attempt
+  receipts once and exposes missing/inconsistent/overflowed amounts; price and human-time
+  measurements remain null. Correlated synthetic development cases get no confidence interval.
+- The `seed`, `score`, `verify` CLI creates private exclusive artifacts, recomputes reports and
+  evidence packets from original inputs, and pins evaluator/gateway source, manifests/configs
+  and lockfile fingerprints. Stored provenance is always an unauthenticated declaration.
+  Packets bind all annotations, inventory, results, target policy/artifact and report; every
+  packet keeps production approval false. Runtime release configuration is unchanged.
+
+**Verification:** full evaluator **108 tests / 5 files**, affected Turbo typecheck/lint/build
+**9/9**, and frozen offline dependency installation pass. Initial CLI assertions were corrected
+to tolerate Node26/tsx's unrelated deprecation warning while still checking closed errors and
+private-text exclusion. Lint exceptions are confined to intentional local CLI/test filesystem
+paths; no global rule changed. The lockfile adds only the new workspace importer.
+
+An actual pnpm CLI seed → score → verify run passed with byte-identical report and review packet:
+`/var/folders/2f/5y0vpg7n1v72nc2p9wm66pfh0000gn/T/dentabill-observation-eval-iofeu8dq/`.
+Baseline reference agreement is **4/25**, answerable correct coverage **0/17**, false abstention
+**17/17**, selective accuracy **null (0 answered)**. All25 cases are DRAFT, no reviewer evidence
+is claimed, no provider attempts occurred, and cost remains unknown/null in this report schema.
+These numbers characterize the deliberately weak fake baseline, never a Fireworks model.
+Logs: `/tmp/dentabill-evals-tests-final.log`, `-checks-final.log`, `-frozen-install.log`, and
+`-cli-{smoke,replay,verify}.log` (all share the `dentabill-evals` prefix).
+
+**Exact next task:** FW-42: refresh read-only account/model/contract evidence and build a capped,
+auditable synthetic capture workflow through the durable native gateway, retaining actual
+request/response/usage provenance against this frozen evaluation inventory. Confirm the existing
+budget and execution authorization before paid requests; prepare any needed approval as a
+concrete scoped run. Two qualified dental billers, representative untouched held-out cases and
+ratified quality thresholds remain separate requirements. FW-39 monitoring, FW-40 notifications,
+voice and supported connectors remain open; no clinic-dependent capability is complete.
+
+### Earlier continuation: automatic native generation1 jobs (ADR-068)
+
+The full parity goal remains active on `codex/w0-containment`. Fresh fetch confirms zero commits
+behind main `4497459`; both pre-existing stashes remain intact. The user asked how much remains:
+the full assignment still requires substantial model, voice, connector and production work.
+No clinic exists; all implementation evidence here uses fake data. No new vendor API probe,
+paid inference, speech, call, production migration, deployment or account change ran.
+
+- Shared summary routing now honors stored generation1 provider identity before the explicit
+  new-job selector. Default is SYNTHETIC; FIREWORKS additionally needs release ID, approved
+  scoped manifest, artifact pin and key. Queue payloads are strict and cannot select provider,
+  model, source, data class or generation. Production native requests default PROTECTED; fake
+  data class and transports are trusted constructor seams only. Legacy factory construction
+  is lazy so a historical Anthropic setting cannot block native receipt recovery.
+- Migration22 saves immutable native release manifests. Fresh sends recheck current catalog
+  approval, artifact, claim version/amount and latest final event on the call. Older calls may
+  receive delayed first analysis without displacing newer evidence. Raw receipts replay with
+  the archived manifest/current artifact and no send even after expiry/catalog removal; final
+  results publish without configuration. Unknown acceptance retains liability; zero-attempt
+  expiry refunds under the org lock without a key/artifact. All22 migrations are local only.
+- Native jobs publish ClaimObservation without a CallSummary or financial mutation. Missing
+  admission/configuration and persistence failures remain retryable; durable rejected/unknown
+  outcomes ACK only after review marker/audit commit. A provider-selection race now throws
+  instead of incorrectly acknowledging native work from a stale synthetic choice. Already
+  published historical findings return their audited immutable receipt after transcript
+  correction; new publication still verifies the source and stale review warnings remain.
+- API/runtime status and recovery recognize native completion, preserve legacy evidence and
+  audit safe status access. Owner/Admin delivery retry keeps generation1 and its frozen identity,
+  including retrying failed persistence of review effects without another model request.
+  Operations close requires exact audited publication/review; a late raw response invalidates
+  an earlier review-only close snapshot. The call-detail panel has bounded visible polling,
+  owner retry, explicit refresh and a findings link; claim findings have scoped refresh.
+- Browser checks use actual CSS/fonts with mocked auth/API at 1280/390; no overflow/page errors,
+  full source hashes wrap, 44px controls and retry-to-published/refresh flow verified. Screenshots:
+  `/private/tmp/dentabill-observation-visual-WE4K6l/analysis-1280.png` and `analysis-390.png`.
+  This is component evidence, not deployed Clerk-to-provider validation.
+
+**Verification:** database **164/11 files**, API **463/33**, queue **81/6**, SDK **30/2** and
+call-worker recovery/outbox **47/2** pass. The final API settlement change also passes calls/native
+**73/2**, with native **8/1** repeated after type/lint correction. The summary-worker broad run
+passed **123/124**; its sole failure was an outdated provider-disabled expectation, corrected to
+the intentional retryable busy outcome. The affected handler file then passed **32/32**, covering
+all 124 worker cases across the broad run and affected rerun. This includes 18 automatic-handler
+tests and 11 native process cases, with two new automatic-job SIGKILL/restart proofs: one saved
+response publishes once; uncertain acceptance retains liability/review without a second send.
+UI checks passed **61/3**, then the final status component **21/21** after recovery wording and
+role regressions. An initial API run exposed an outdated fresh-generation fixture ID; it was
+corrected to canonical `.g1`, retaining historical null-snapshot bindings. After lint-only
+corrections, the native handler passes **18/18** again and shared typecheck/lint passes
+**30/30** with concurrency 2. Both Lambda packages build: API **35.6 MB / 10.7 MB zip**,
+worker **28.7 MB / 9.4 MB zip**. Checks were serialized to respect local memory limits.
+
+**Exact next task:** release evaluation infrastructure (FW-15/16): versioned annotation/evaluation
+inputs, deterministic reports and evidence-bound approval artifacts, followed by authorized
+synthetic provider contract probes. Do not approve a production model from fixture success;
+domain-adjudicated quality and applicable provider contract/region/retention/spend evidence
+remain missing. FW-39 monitoring, FW-40 notification outbox, voice and supported connectors
+remain open. Defaults stay synthetic and checked-in model manifests remain CANDIDATE.
+
+### Earlier continuation: FW-27 reviewed same-call regeneration
+
+The parity goal remains active on `codex/w0-containment`; main `4497459` is incorporated.
+The user asked how much remains: the local feature is one slice; automatic routing, evaluation,
+voice and connectors still require substantial work. No clinic exists; use fake data only.
+Fireworks/ElevenLabs keys were previously authenticated; Retell-managed Twilio needs no Telnyx
+key. No new provider account action, actual generation, speech, call, production migration or
+deployment ran. Preserve both pre-existing stashes.
+
+- Migrations 20/21 add immutable Owner/Admin approvals bound to prior observation/run, current
+  claim/source, next generation, reason/idempotency key and serialized release/artifact pins.
+  Auth lasts 15 minutes. Native reserve and each attempt recheck current permission and evidence.
+  Unknown work stays protected; zero-send recovery requires durable audited proof. Original
+  results, reviews and usage remain intact. Same-call currentness follows generation rather
+  than arrival, and pending newer work blocks stale review with NEWER_GENERATION.
+- `createObservationRegenerationService` implements server previews, durable approval and
+  explicit execution/resume. Exact keys replay their original authorization before checking
+  changed current state. Final results publish without provider configuration. Raw evidence
+  uses no-send replay with saved approved manifest/current artifact pin even after expiry.
+  The gateway rechecks live release expiry after awaited admission. Saved 503s cannot retry
+  in replay-only mode. An expired unused reservation can settle without a key.
+- New scoped API preview/approve/resume routes audit evidence access and enforce a 30-second response
+  budget with cancellation of future send permission. Late database authorization may commit;
+  a real database-lock regression proves it cannot send after response timeout. SDK matches.
+- UI exposes exact source/release/token allowance, requires a reason, retains frozen key/body
+  after ambiguous failure and uses explicit saved-request lookup/resume. A new approval requires
+  another explicit action and fresh preview. Browser 1280/390 checks used actual styles/fonts,
+  mocked auth/API, no external requests, no overflow or page errors. Screenshots remain in
+  `/private/tmp/dentabill-observation-visual-WE4K6l/regeneration-1280.png` and
+  `regeneration-390.png`; temporary server stopped.
+- Automatic native job selection remains disabled, model manifests CANDIDATE, legacy jobs
+  synthetic. Adding credentials/artifact pin cannot activate inference. No legacy summary,
+  financial state or external action is changed. See ADR-067 and DEPLOY_AWS.md.
+
+**Verification:** database **146/11 files**, summary-worker **103/10**, API **456/32**,
+model gateway **302/7**, SDK **27/2** pass. Web full suite passed **417/419**; two unchanged
+5-second tests timed out during local memory exhaustion, then both affected files passed
+**31/31** in an isolated single-worker rerun. New UI tests **18/18** also pass; browser checks
+are component-level with mocked auth/API, not deployed Clerk-to-provider evidence. The full
+worker run includes all nine process crash cases and seven regeneration service regressions.
+Affected Turbo typecheck/lint passes **30/30** with concurrency 2. Final gateway test/type/lint
+checks cover the last journal-method delegation change. Both Lambda packages build: API 35.5 MB / 10.7 MB zip and worker 28.4 MB / 9.3 MB zip.
+
+Initial overlapping broad checks exhausted local memory; stopped the owned Turbo process,
+then serialized/throttled checks. No user apps, containers, global settings or unrelated processes
+were changed. All 21 migrations remain local only. Fresh fetch confirms zero commits behind
+main `4497459`. Existing stashes remain intact. No production deploy or external inference ran.
+
+**Exact next task:** add approved-release native generation 1 job routing with durable job identity
+and failure/resume semantics, then release evaluation/approval. FW-40 notification outbox,
+FW-39 operations/monitoring, provider spend/retention/region evidence, ElevenLabs integration
+and supported connectors remain open. This is local synthetic evidence, not full parity.
+
+### Earlier continuation: FW-27 immutable findings and biller review
+
+The parity goal remains active on `codex/w0-containment` with main `4497459` incorporated.
+The user has no clinic and uses fake data. Existing Fireworks/ElevenLabs keys already passed
+read-only authentication; Retell-managed Twilio still needs no Telnyx key. No provider account
+request, model generation, speech, call, purchase, production migration or deployment ran.
+Preserve both existing stashes. The user asked how much remained; current publication/review
+is one local slice, while voice, workflow automation, evaluation/operations and real connectors
+remain substantial work. Do not estimate overall completion from fixture counts.
+
+- Migration19 adds tenant-scoped immutable `ClaimObservation` and `ClaimObservationReview`
+  records. Publication freezes source/output/provenance and commits its audit plus inference
+  APPLIED marker atomically. Provider usage survives failed publication and replay sends no
+  new model request. Existing CallSummary and claim/financial state remain unchanged.
+- `generateAndPublishObservation` / `publishStoredObservation` validate strict native results
+  and source evidence. New inference requires one latest final CallEvent with raw text; source
+  ID is `transcript.<eventId>` and version is SHA-256 of exact text. Replay checks the bound
+  event. Publication repeats binding inside the transaction with a shared event lock. Older
+  unbound receipts fail closed; provisional/missing/mismatched sources cannot be published.
+- Publication versions preserve arrival history. Currentness follows original CallIntent
+  creation chronology (Call creation for legacy rows), not reconciliation insertion time.
+  This prevents a recovered older call from displacing newer evidence.
+- Stored Owner/Admin/Billing Staff roles can acknowledge or dismiss a finding. Reviews bind
+  its immutable digest and exact claim version; dismissal needs a note. Changed claims,
+  superseded findings, newer calls and changed/missing final transcripts block new review.
+  Exact duplicate actor/decision/note returns the historical receipt, including after later
+  changes. An overlapping later source/call can linearize after a review and then appear stale.
+- Scoped APIs list history, publish saved results and record reviews; generated SDK types
+  match. Claim detail shows exact evidence excerpts/transcripts, release information, synthetic
+  labeling independent of FIREWORKS provenance, unverified payer-reported amounts, and stale
+  warnings even after prior review. Publication/review never requests inference or performs
+  external/financial actions. Actor-attributed safe access audits precede GET and POST evidence
+  responses, including duplicate receipts; audit failure withholds evidence. Auth scope changes
+  clear cached findings and draft notes.
+- Independent review caught recovered-call ordering, missing event binding and hidden stale
+  warnings. These are corrected; final-source correction also makes review stale. No legacy
+  confidence, representative identity, verified payment or production model approval is invented.
+
+**Verification:** full database **130/10 files**, summary-worker **95/9**, API **434/31**,
+web **397/70** and SDK **23/2** pass. After the last isolated changes, API observation **20/20**,
+web observation/detail **18/18** and worker publication **8/8** pass; the broad API/web suites
+preceded the final POST-access-audit and transcript-warning/hash-display edits respectively.
+Separate native/synthetic process recovery proofs are included in the summary-worker suite.
+Affected Turbo typecheck/lint passes **30/30**. All 19 migrations are applied only to localhost
+identity/runtime/summary/process databases.
+Both Lambda packages build (API35.1MB/10.6MBzip; worker28.4MB/9.3MBzip).
+
+Headless Chrome rendered the actual component/CSS/tokens/local Inter at 1280 and 390px,
+with synthetic mocked auth/API and nonlocal requests blocked. Evidence expansion, note validation,
+exact review payload, recorded state and stale history worked, with no page errors or overflow.
+The final mobile check uses the real 64-character source-version shape: abbreviated excerpt
+label, full wrapping hash in details. This is component verification, not live Clerk/API E2E.
+Screenshots: `/private/tmp/dentabill-observation-visual-WE4K6l/final-1280.png` and
+`/private/tmp/dentabill-observation-visual-WE4K6l/hash-390.png`. Temporary server stopped.
+
+**Exact next task:** finish FW-27 with explicitly authorized same-call replacement generations,
+protected original receipts and deterministic publication supersession; then automatic native
+job routing once a release is approved. FW-40 notification outbox, FW-39 operational monitoring,
+provider spend/retention/region evidence, model evaluation/approval, ElevenLabs voice integration
+and real connectors remain open. Current production jobs remain synthetic. This local review
+slice does not complete FW-27 or establish live quality/full Lunabill parity. See ADR-066.
+
+### Earlier continuation: FW-41 durable native Fireworks attempts
+
+The parity goal remains active on `codex/w0-containment`. A fresh fetch confirms zero commits
+behind main `4497459`; the AWS backend baseline is incorporated. Fireworks/ElevenLabs keys
+already passed basic read-only authentication and Retell remains configured. Retell-managed
+Twilio needs no Telnyx key. No new private account request, paid inference, speech, call, purchase,
+production migration or deployment ran. The user has no clinic; all fixtures use fake data.
+Preserve both pre-existing stashes.
+
+- The native gateway now requires an awaited journal before any HTTP send. The worker exports
+  `createDurableObservationGateway`, binding a scoped terminal call, claim/source versions,
+  request/wire/release hashes, attempt cap and original send deadline to the database. It is
+  an explicit adapter, not a new production job/runtime selector. Both live releases remain
+  unapproved and the existing summary handler remains synthetic.
+- Migrations16–18 add per-attempt billing day, raw response and completion evidence/history.
+  Every retry needs a committed prior error response/interpretation and another full budget
+  allocation. Unknown prior usage remains reserved across days, even after a later success;
+  contradictory usage rejects output and cannot release liability using a false zero. These
+  operational token allocations are not provider-certified dollar ceilings.
+- Complete bounded success responses are stored before JSON/model/finish/usage/semantic
+  validation. Non-success response bodies are discarded; status/retry delay are saved.
+  Raw evidence survives failed final-result audit, and later owners validate it without another
+  provider request, even after the original send deadline. Unknown acceptance without a saved
+  response cannot authorize a retry. Partial/oversized bodies that never become durable raw
+  receipts conservatively remain unknown; they cannot create recovery sends.
+- Native fetch rechecks cancellation/deadline after database admission. Interrupted parsing
+  may later refine an unknown-usage completion from saved evidence once, retaining history.
+  A definite parsed interpretation and known usage survive later caller cancellation unchanged.
+  Completion identity excludes nondeterministic replay timing; cache reads do not create a
+  send lease. Expired zero-attempt reservations refund exactly once when revisited under the org lock and
+  invalidate old ownership; attempted/ambiguous requests are not refunded by expiry alone.
+- Independent review corrected cancellation replay lockout, inconsistent-usage settlement,
+  unsent-expiry leakage and known-usage interruption. Real native HTTP also exposed fractional
+  timing storage and cached-read lease issues. Local processes scrub provider credentials,
+  use a localhost provider with fsynced acceptance records, and SIGKILL at reservation,
+  raw-response commit and second admission. Pending-admission cancellation uses a real blocked
+  Postgres transaction, then releases it and proves no late HTTP.
+
+**Verification:** full model-gateway **297/6 files**, database **111/9**, summary-worker
+**87/8** and API **415/30** pass: **910 tests** in these affected packages. Summary includes
+8 native process proofs plus the 3 earlier synthetic summary process proofs. The native
+process suite also passed independently on its dedicated database. Affected Turbo type/lint
+passes **24/24**, with gateway **4/4** repeated after the final interpretation fix. Both Lambda
+packages build (API35.0MB/10.6MBzip; worker28.3MB/9.3MBzip). All 18 migrations are applied only
+on isolated localhost identity/runtime/summary/process databases. The first full process run
+exposed a too-short 1s fixture deadline under concurrent checks; fixtures now use 5s, wait for
+actual original expiry and pass as a full suite. Production limit remains unchanged.
+
+**Exact next task:** FW-27 versioned observations and summary replacement, preserving historical
+source/release evidence and never inventing legacy confidence/representative fields. FW-40
+notification outbox, source-access/review workflow, account spend/retention/region evidence,
+model evaluation/approval, ElevenLabs configuration/streaming and real connectors remain open.
+FW-41 local implementation/proof is complete; its checkbox awaits merge. No live quality,
+provider compatibility or full Lunabill parity is established. See ADR-065 and DEPLOY_AWS.md.
+
+### Earlier continuation: FW-26 durable synthetic inference and receipt recovery
+
+The active parity goal continues on `codex/w0-containment`, with latest main `4497459`
+incorporated. Both added provider keys already passed read-only authentication; no new account
+requests, model inference, speech, call, purchase or production action ran in this continuation.
+The user has no clinic and uses fake data. Retell-managed Twilio remains the existing carrier;
+no Telnyx credential is needed. Preserve the two pre-existing stashes.
+
+- Additive migrations fourteen/fifteen create org-scoped budgets, immutable generation 1 request
+  snapshots, one durable attempt per run and a review-application marker. They were applied
+  only to isolated localhost identity/runtime/process/summary databases. No historical provider
+  usage or acceptance is fabricated. Same-day legacy usage is imported once as baseline.
+- Organization locks serialize admission and accounting. RESERVED can be reclaimed after
+  expiry; submitted requests never become sendable again. Ambiguous acceptance retains its
+  reservation across UTC days. A late receipt from the original owner can settle evidence.
+  Bigint usage includes invalid output/overruns and commits independently of summary effects;
+  `summaryTokensUsed` is a bounded compatibility display. Operational token allocations are
+  not provider-certified token or dollar ceilings.
+- The summary handler accepts only the fixed synthetic descriptor, preserves original
+  claim/source/version evidence and stores the receipt before summary/state/audit application.
+  A saved response resumes without inference. Rejected/unknown review effects also resume
+  atomically, with a marker required before review acknowledgement. Independent review fixed
+  lost rejection effects, stale-config allocation checks, stored provider mismatch and lock
+  ordering. Legacy Redis cost guards no longer block recovery.
+- Nonempty `ANTHROPIC_API_KEY` makes production factory creation fail closed. Explicit
+  LiveClaude comparison fixtures remain with zero SDK retries and nullable usage. Neither
+  Fireworks nor ElevenLabs keys activate live inference. Fireworks observations cannot be
+  mapped into legacy confidence/representative fields by invention.
+- Owner/Admin GET summary/status exposes safe scoped state; strict-empty POST retry preserves
+  existing summaries, requires terminal calls and cannot start a replacement/ambiguous run.
+  Runtime busy/unconfirmed failures remain SQS retries/redrive or inline503 after exhaustion.
+  UNKNOWN/REJECTED acknowledgement requires the exact generation 1 run and committed review
+  marker. General quarantined-summary recovery remains `SUMMARY_RETRY_UNSAFE` pending its
+  separate authorization/recovery proof. SDK schemas are regenerated.
+
+**Verification:** full API **415/30 files**, database **94/8**, summary worker **64/6**
+(including three process proofs), summarizer **84**, queue **79/6**, types **36/5** and SDK
+**19/2** pass: **791 tests** across these affected packages.
+Affected typecheck/lint **24/24** and Lambda packaging pass (API35.0MB/10.6MBzip;
+worker28.3MB/9.3MBzip). Final API typecheck/lint also passes after the lock-order regression.
+A fresh fetch confirms zero commits behind main `4497459`. Separate-process
+fixtures scrub credentials and use a localhost HTTP provider with fsynced synthetic receipts.
+SIGKILL before send permits one first request; after provider acceptance it never resubmits;
+a saved response survives application failure and applies without another request. No external
+provider compatibility, quality or production readiness follows from these tests.
+
+**Exact next tasks:** FW-41 awaited admission and receipt hooks for every Fireworks HTTP attempt,
+then FW-27 versioned observation/summary integration that preserves source/release evidence.
+The gateway's current void progress callback is best effort and cannot journal admission.
+FW-40 now explicitly owns the still-missing durable notification outbox; current post-commit
+notification can be lost. Model approval, account spend/retention/region evidence, ElevenLabs
+configuration, qualified dental evaluations, real connectors and full parity remain open.
+See ADR-064 and DEPLOY_AWS.md; no production rollout was authorized or performed.
+
+### Earlier continuation: FW-10–13 release-gated Fireworks text gateway
+
+The full parity goal remains active. Latest main `4497459` (the AWS PR merge) is now
+incorporated; AWS content was already present, so this merge changed no application files.
+The user added `FIREWORKS_API_KEY` and `ELEVENLABS_API_KEY` to root `.env`. Presence-only
+checks confirm those and the existing Retell key in root/API/web configuration, without
+printing values or finding duplicate definitions. Read-only authentication now succeeds for both providers (HTTP200); account limits, inference/agent
+permissions and contractual suitability remain unverified. Telnyx is unnecessary for Retell-managed Twilio.
+`.env.example` now includes the new names and corrects the historical carrier comments.
+Only two bounded read-only provider requests ran: Fireworks accounts and ElevenLabs user.
+No inference, speech, purchase, call, deployment, production migration or account change ran.
+The user has no clinic; development remains synthetic. Preserve the existing stashes.
+
+- New leaf package `@dentabill/model-gateway` implements one versioned claim-observation
+  port, explicit synthetic adapter and native-fetch Fireworks transport. It is not yet wired
+  into summary workers or the voice path. There is no API-key activation, default live model,
+  implicit fake, repair prompt or fallback to another model/provider.
+- Reviewed server manifests bind exact fixed US endpoint/regional route, observed response
+  model IDs, organization/workload scope, prompt/schema/validator-rule hashes, application
+  artifact hash, limits, publisher/license/serving/region/retention/price evidence references,
+  review expiry and evaluation/run authorization. The policy digest invalidates changed scope
+  or limits. Both checked-in candidates remain unapproved. Evidence references and the
+  deployment artifact hash are trusted operator records, not automatic vendor attestation.
+- Strict schemas require echoed claim/version and exact versioned source spans. Local rules
+  enforce tenant/source consistency, UTF-16 offsets, integer USD amounts within billed value,
+  lexical currency/amount/code consistency, explicit code nomenclature or UNKNOWN, and strict
+  abstention/review-only actions. Anchors and lexical checks cannot prove payer attribution,
+  applicability, clinical correctness, payment or truth. Mixed adjudication, overpayments,
+  unsupported amount notation and missing/conflicting evidence require human review.
+- Transport fixes the host/path, refuses redirects, builds only allowlisted JSON fields and
+  isolates prompt caches by an opaque tenant/release hash. Limits are 128KiB request, 1MiB
+  response, depth32, 4096 output tokens, 30s including body/parse/validation/backoff, and two
+  attempts maximum. Only explicit 429/500/502/503/504 may retry once; network ambiguity,
+  cancellation, invalid output, auth/payment failures do not. Retry-After cannot extend the
+  deadline. Provider model identity, one completed assistant choice, UTF-8 and output shape
+  are checked; reasoning/tool payloads never become observations.
+- Usage missing from any attempt stays unknown. Safe progress snapshots preserve completed
+  and active attempts if gateway cancellation wins the race against transport cleanup.
+  Review reproduced and fixed a two-send cancellation that previously lost attempt history;
+  currency review also found and tightened foreign-currency ambiguity. No raw provider body,
+  exception, key, prompt or output is emitted by gateway diagnostics. Returned observations
+  are sensitive evidence and must not be logged by future callers.
+
+**Verification:** model-gateway **274 tests / 5 files** pass, including four real localhost
+HTTP/socket tests. Scoped typecheck/lint/build and the complete focused Turbo run pass **7/7**
+tasks. No authenticated inference or accuracy claim is made. These tests establish our
+boundary behavior only. The operations UI fixture now correctly models 10→13 attempts after
+three additional deliveries; its 13 tests pass. Existing API/worker behavior is unchanged.
+
+**Limits and exact next task:** implement FW-26 durable inference ownership/reservations and
+attempt/usage accounting before wiring this adapter into retrying workers or enabling summary
+recovery. FW-27 must preserve historical summaries/source versions during replacement. Basic read-only authentication is now confirmed (details
+in PROVIDER_EVIDENCE.md). Continue permitted-model/agent, spend-limit, residency/retention and
+ElevenLabs configuration inventory before proposing a capped synthetic run. No model is approved and no streaming/tool/voice compatibility,
+dental quality, real connector, payment reconciliation or full Lunabill parity is established.
+See ADR-063 and FIREWORKS_GATEWAY_CONTRACT.md for the precise boundary.
+
+### Earlier continuation: FW-37 scoped operations and audited recovery
+
+The full parity goal remains active. Retell key presence was rechecked without displaying
+values: root `.env`, API `.env` and web `.env.local` share the configured `RETELL_API_KEY`.
+Fireworks/ElevenLabs remain empty or absent; Telnyx is not required for the existing
+Retell-managed Twilio setup. The user has no clinic and authorizes fake data. Fresh fetch
+confirms latest main `55a1896` is already incorporated, alongside AWS baseline `23cdc7b`.
+No external provider call, account change, purchase, deployment, production migration or
+recovery-schedule activation occurred. Preserve the existing stash.
+
+- Additive migration thirteen (`20261013150000_job_recovery`) adds delivery attempt allowance,
+  recovery generation and separate CLOSED/closedAt disposition. Applied only to isolated
+  localhost identity/runtime/process/summary/receipts databases; Prisma generated. Existing
+  attempts remain monotonic. An exhausted valid READY delivery may receive exactly three
+  additional attempts after an Owner/Admin reviews its current snapshot. Early quarantine,
+  active leases, changed claim/version, invalid canonical binding, submitted or accepted calls
+  cannot be reset. Summary replay remains blocked until FW-26 proves inference ownership/spend.
+- `job-recovery.ts` checks the stored role, canonical payload/hash/key, scoped domain binding
+  and queued claim version. Serializable approval uses row locks and compare-and-swap, with
+  audit and allowance/close in one transaction. Duplicate or stale approval cannot grant twice.
+  Source payloads, lease tokens and provider errors are never projected. Confirmed terminal/
+  cancelled intent or an existing summary can close exact quarantine as no work needed;
+  CLOSED never fabricates DELIVERED, completion or a payment.
+- Retained BullMQ jobs use `outbox.<rowId>.recovery.<count>` as transport identity while the
+  domain payload/key remain immutable. Current-generation DLQ checks reject delayed old
+  failures. Independent review found that SQS/inline also need this provenance: it now survives
+  a validated optional SQS envelope field/private authenticated inline header, Lambda attempt,
+  runtime and DLQ. The runtime rechecks exact durable intent disposition before acknowledging
+  failure handling. Unresolved READY/SUBMITTING no-ops remain SQS retry/inline503, preventing
+  the older implementation's silent acknowledgement. Old consumers must drain before rollout.
+- New scoped `/v1/operations` overview, cursor lists and preview/recover endpoints require the
+  actual stored Owner/Admin role. Five-minute delivery age starts at due time, observation
+  checks use a two-minute threshold; legacy missing commands are visible without fabricated
+  history. Settings → Operations has organization-keyed queries, safe state copy, links to
+  existing reconciliation/status controls and snapshot-bound explicit approval. Stale approval
+  refreshes and requires a new decision. Counts do not establish scheduler/worker health.
+- Refreshed primary Fireworks evidence in `FIREWORKS_GATEWAY_CONTRACT.md` identifies current
+  regional routes, schema/retention/cache/retry limitations and proposed no-key gateway tests.
+  No model is approved and no adapter/inference evidence is claimed. The short project brief
+  now names AWS and Retell-managed Twilio; historical carrier assumptions are corrected.
+
+**Verification:** full API **393 tests / 30 files**, worker **186/23**, database **77/7**,
+queue **78/6**, SDK **19/2** pass. Full web **383/69** passed before the final semantic markup
+correction; the **19** affected UI/tab tests passed after that correction and fixture cleanup.
+Affected typecheck/lint **28/28** pass. Lambda packaging passes: API **38.7 MB / 11.3 MB zip**,
+worker **32.0 MB / 10.0 MB zip**. Actual component renders at desktop1280/mobile390 and native
+review dialogs have no page overflow; dialog axe checks found zero violations after one fix.
+This is synthetic component browser evidence, not authenticated deployed E2E.
+
+New PostgreSQL tests cover canonical binding, tenant/role isolation, stale/concurrent approval,
+audit rollback, preserved commands, three-attempt exhaustion, early quarantine and separate
+close semantics. Actual retained failed/completed Redis jobs prove transport generations.
+Real DB triggers reject pre-submission writes in the actual SQS/inline runtimes: a stale
+failure cannot cancel newer work or be ACKed, while current-generation failure commits one
+cancellation without any provider create. Independent review raised and then verified the
+cross-transport fix. No authenticated provider calls or AWS service requests were used.
+
+**Limits:** no deployed operations/recovery/alert evidence, no service heartbeat, no external
+notifications and no inference-spend-safe summary replay. Delivered-but-unconsumed READY
+monitoring and transport redrive operations remain FW-39; pending inbox operations are FW-33.
+SQL/application error paths beyond existing allowlists and full PHI lifecycle remain gates.
+No clinic/domain-adjudicated quality evidence or complete Lunabill parity is established.
+See ADR-062 and the matching rollout/rollback instructions in DEPLOY_AWS.md.
+
+**Exact next task:** implement FW-10–13 as a bounded typed Fireworks text gateway and synthetic
+adapter tests using the refreshed contract: server-owned exact release/host policy, structural
+and semantic output validation, no hidden fallback, bounded retries/deadlines/cancellation,
+and redacted failure/usage envelopes. Keep all models unapproved until account/license/revision/
+region/retention and dental evaluation gates are evidenced. Then durable inference-attempt
+ownership/usage (FW-26) can unlock safe summary recovery. Continue independent work without
+reasking for the already-known missing credentials or clinic.
+
+### Earlier continuation: FW-36 bounded accepted-call monitoring and FW-38 safe diagnostics
+
+The full parity goal remains active. Retell already has a local API key; current carrier is
+Retell-managed Twilio, so Telnyx is not required. Fireworks/ElevenLabs credentials remain
+absent/empty; testing uses fake data as directed. A fresh fetch confirms main `55a1896` and
+AWS branch `23cdc7b` are still incorporated. No provider calls, deployment, schedule activation,
+production migration, account change or increased spend occurred.
+
+- Additive migration twelve (`20261013140000_call_observation`) persists call deadline,
+  next check, observer lease/attempts/review state and distinct Stop request/attempt/ACK/
+  confirmation fields. Applied only to localhost identity/runtime/process/summary/receipts
+  test databases; Prisma generated. Initial submission freezes cap/deadline before network.
+  Retell per-call max duration override accepts 60000–7200000; existing request hashes remain
+  compatible because the optional field is appended. Code default 900000, example1800000.
+- New `call-observer.ts` replaces the indefinite handler wait with lease-fenced bounded steps.
+  Historical deadline backfill uses submission/creation, never the current worker time.
+  Initial accepted due time includes a thirty-second first-subscriber grace. A sixty-second
+  lease protects source/event/finalization writes; explicit demo windows extend the lease.
+  Known-ID Get Call revalidates exact saved identity, bounded to ten seconds. Actual terminal
+  source, conditional claim transition, audit and one summary outbox commit atomically.
+  Newer biller edits survive; stale owners cannot overwrite the final call or summary.
+- Cancellation/duration expiry persists Stop attempts before sending. Same-ID retries are
+  spaced sixty seconds, at most three; confirmation expires five minutes after first request.
+  ACKs remain nonterminal. Exhaustion surfaces review without invented endedAt/transcript/
+  summary. After confirmation expiry automatic remote reads stop; DB-source checks continue.
+  Fresh no-key FakeRetell cannot acknowledge a persisted live call. Same-process known Fake/
+  DemoAutopilot can complete or stop their own scenario; restarted demo memory is not evidence.
+- Trusted Lambda/private-route/BullMQ recovery runs outbox and accepted-call scans independently.
+  Five-row/twenty-five-second limits and NULLS FIRST avoid skipping legacy missing timers.
+  The existing AWS rule stays disabled. Inline receipts require exact ACCEPTED call binding
+  plus persisted deadline/due state, or matching terminal disposition. RESCHEDULED is distinct
+  from completion. Scheduled observation constructs no summarizer/cost guard.
+- Call detail/list expose only safe monitoring dates/codes. Manual Owner/Admin status lookup
+  retrieves the existing call read-only after automated confirmation expires; it cannot redial
+  or Stop. Role/tenant/payload/cooldown checks and an audited reservation protect this action.
+- FW-38 replaces raw Prisma diagnostic event logging with a closed target/timestamp projection.
+  Error/warn/info callback tests include an actual SQL failure with synthetic private input.
+  Thrown errors elsewhere and complete PHI lifecycle controls remain separate gates.
+
+**Verification:** full API **379 tests / 29 files**, full worker **157/22**, database
+**77/7**, provider **268/13**, queue **66/5**, SDK **19/2**, and targeted web calls
+**101** tests pass. Affected typecheck/lint passed **28/28** tasks; final fixture fixes also
+passed scoped lint/API types. Lambda builds pass: API **38.6 MB / 11.2 MB zip**, worker
+**32.0 MB / 10.0 MB zip**. Actual component/Tailwind synthetic renderings at desktop1280
+and mobile390 have no horizontal overflow; this is not authenticated end-to-end browser proof.
+Independent review fixed legacy null-timer starvation and both recovery routes’ rate-limit
+ordering (tenant keys now run after authentication). The full API suite also exposed two
+outdated entrypoint mocks and one test-owned webhook receipt cleanup issue; these were
+fixed and the complete suite rerun successfully. FW-38 is committed as `89eec8f`.
+New local proof includes three separate-process observer crashes/races against a fsynced
+synthetic provider ledger, exact one-create/summary assertions, Stop ACK nonterminal behavior,
+retry exhaustion/manual later-source recovery, tenant isolation, missing provider safety,
+legacy timer scheduling and finalization rollback. Existing SIGKILL recovery now checks
+pre-expiry ownership, then advances an injected clock in a fresh process without clearing the
+persisted lease. Demo scenarios/cancellation run through the actual adapter with compressed
+injected scenario timers; this is not a ninety-second wall-time or deployed demonstration.
+
+**Limits:** no real telephony/end-to-end AWS recovery evidence, no enabled production schedule,
+no hold detector integration, no clinic or clinical/domain-adjudicated evaluation. Slow DB
+queries are not preempted by network budgets. Stop cannot be exactly once across a lost ACK
+or process pause; retries retain the same existing call ID. Summary spend/attempt ownership
+is FW-26. Preserve the stash and additive evidence on rollback. See ADR-061 and DEPLOY_AWS.md.
+
+**Exact next task:** FW-37 — safe operating visibility for aged delivery/observation work,
+quarantine alerts and audited recovery controls; continue the Fireworks typed gateway and
+synthetic evaluations independently of missing external credentials. Authorized deployment,
+provider comparison, connectors and clinic evidence remain visibly unverified/blocked.
+
+### Earlier continuation: FW-34 positive-only existing-call recovery
+
+The goal remains active. This continuation implements and tests the manual recovery
+vertical slice; no overall parity, deployed recovery or real-provider compatibility claim.
+Fresh fetch confirms `origin/main` at `55a1896` and `origin/infra/aws` at `23cdc7b` are
+already ancestors of this work branch. No merge/deploy was needed. A secret-safe name-only
+`.env` check confirmed `RETELL_API_KEY` is set; Fireworks/ElevenLabs keys remain absent/empty.
+User is correct that no Telnyx key was ever required: current telephony is Retell-managed
+Twilio. Existing configured Retell handles the app's voice agent. Development continues with
+fake data; no new provider requests, account changes or production actions occurred.
+
+- Additive migration eleven, `20261013130000_call_reconciliation`, persists attempts,
+  last checked result, cooldown and token-fenced lookup leases. Applied only to isolated
+  localhost identity/runtime/process/summary/receipts databases; Prisma generated.
+- A new read-only Retell port follows current v3 metadata/list and v2 detail contracts.
+  It completes bounded enumeration or fails, checks identities, rejects duplicate/cyclic/
+  incomplete results, caps bodies at 2 MiB, forbids redirects/retries and bounds each whole
+  operation to ten seconds. Defaults: three pages, twenty candidates, ten per page.
+  Provider detail yields normalized final source transcript only, excluding model analysis.
+- Core validates the canonical saved request hash and exact intent/payer/agent/from/to/
+  outbound-phone identity, then rechecks the fetched detail. Combined lookup is bounded to
+  twenty-five seconds. Submission grace, cooldown and lease are sixty seconds. No-match,
+  failure, malformed snapshot or multiple/conflicting matches preserve the submission fence;
+  none authorizes redial, a new intent or a provider switch. Cross-tenant intent access and
+  globally conflicting provider Call IDs cannot bind.
+- A positive match commits Call/ACCEPTED binding, source terminal event when available,
+  audit and resume outbox together. Get Call evidence records `source=retell_get_call` and
+  retrieval time; it never creates a signed-webhook receipt or invents timing. It preserves
+  reviewed Claim state. The resume key `call.resume.<intentId>` differs from the retained
+  original queue key; strict resume intent/call identity and immutable fields permit only
+  ACCEPTED observation or TERMINAL no-op, never provider creation. Inline receipts verify
+  the same binding and require TERMINAL. SQS round-trip preserves the resume payload.
+- Both original-create/recovery race orderings preserve one Call. A late original response
+  reuses the exact recovered provider ID. Conversely, if original binding wins while lookup
+  is running, the current unexpired lookup lease can atomically retain verified source,
+  audit and resume against that exact bound Call. This prevents dropping the only terminal
+  evidence when no webhook arrives. Stale owners cannot write through a newer lease.
+- Scoped GET status projects safe fields only. Owner/Admin POST accepts an empty body and
+  derives provider lookup from saved intent; staff can read status but cannot reconcile.
+  Missing provider configuration returns explicit unavailable/503. SDK was regenerated.
+  Claim detail offers Check existing call/View call and clear failure/cooldown feedback;
+  compact reviewed-claim actions link to detail. Enqueue replay no longer fabricates IN_QUEUE.
+  Mutation results are bound to the originating claim so navigation or late responses cannot
+  show another claim's recovered-call link.
+
+**Verification:** full API **345 tests / 28 files**, database **66/6**, provider package
+**254/13** (including **58** new adapter cases), queue **66/5**, SDK **19/2** passed.
+Core adds **29** real-Postgres cases covering source-to-resume-to-finalization, cooldown,
+missing/conflicting identities, invalid snapshots, never-settling provider, lease races,
+expiry, tenant isolation, provider-ID conflict, audit rollback and forged resume commands.
+Two new process tests use actual create/read-only adapters against independent fsynced
+synthetic provider/broker ledgers: kill submitter after provider acceptance, then recover in
+a fresh process; additionally kill recovery after binding commit and before resume delivery.
+Fresh relay/consumer complete with exactly one provider create and one summary obligation.
+Two direct race tests cover both create-response commit orderings. Final full worker run
+passed **132/17**; the final API recovery/receipt rerun passed **49/2**. Lambda packaging
+passed: API **38.6 MB / 11.2 MB zip**, worker **32.0 MB / 10.0 MB zip**. API/UI agent verified **90** web tests,
+API/web/SDK types/lint, and actual component/Tailwind desktop1280/mobile390 layouts with no
+overflow; this was a synthetic component fixture, not authenticated full-browser end-to-end
+validation. Root affected-package typecheck/lint passed across **28** tasks before the final
+race adjustment; final worker lint and web typecheck/lint also passed after the fixes. Independent reviews found the late-source
+race and cross-claim link risk; both were fixed with regressions.
+
+**Limits:** a recovered nonterminal call can still wait indefinitely after a lost terminal
+webhook. FW-34 starts only from UNKNOWN/SUBMITTING and is manual, not an account-wide sweep.
+Observer/termination ownership, persisted deadlines, accepted-call detail reconciliation,
+quarantine operations and deployed relay remain open. Slow DB queries are not preempted by
+provider deadlines. Outbox DELIVERED remains transport receipt; summary inference/cost
+ownership remains FW-26. General raw Prisma diagnostic logging is a separate PHI gate:
+this core sanitizes its thrown errors, but the shared DB emitter still logs raw diagnostics.
+No live clinical data has been used; audit/request/transcript lifecycle controls remain W8.
+Do not deploy old workers alongside new recovery producers: their older schema can strip
+resume fields and acknowledge without observation. See ADR-060 and DEPLOY_AWS.md rollout order.
+
+**Exact next task:** FW-36 — persisted observer ownership, hard termination/reconciliation
+deadlines and recovery of ACCEPTED calls after missing terminal delivery. Keep provider
+terminal facts distinct from requested cancellation/timeout. Then FW-37 operating visibility
+and audited quarantine review; continue Fireworks gateway work independently of missing keys.
+No clinic exists yet; authorized connector/domain evidence remains blocked, while independent
+implementation continues. Do not reset uncertain intents or remove the preserved safety stash.
+
+### Earlier continuation: FW-35 durable delivery and FW-32 pending cancellation
+
+The goal remains active. Implementation commit: `bd519a8` on `codex/w0-containment`.
+This continuation made tested progress; no production deployment, schedule activation or external calls.
+Main remains `55a1896`. Final ancestry checks found the additional AWS domain move
+`23cdc7b` after the earlier fetch; it is now merged into this work branch, including
+`usedentabill.xyz` / `api.usedentabill.xyz` defaults and diagrams. Terraform format passes
+after the merge; no deployment occurred. Both remote branches are ancestors of HEAD. The existing Retell key/carrier answer is unchanged: Retell-managed Twilio;
+Telnyx is not a current dependency. No new credential probe or key change occurred.
+
+- Additive migration `20261013120000_job_outbox` creates tenant-scoped immutable queue
+  commands, hash/key uniqueness, pending/delivered/quarantined states, availability and
+  token-fenced leases. Only isolated localhost identity/runtime/process/summary/receipts
+  databases were migrated; Prisma now has ten migrations.
+- New call reservation commits claim/intent/audit/outbox together. HTTP202 confirms the
+  saved request even if immediate transport delivery fails. Active retry retains the
+  identical command/backoff; legacy READY requests can backfill their command. A redundant
+  postcommit outbox write no longer makes a committed new reservation return500.
+- Final call state/intent/audit and summary obligation commit atomically, even without an
+  immediate dispatcher. A finalization/outbox failure rolls back and resumes from saved
+  terminal evidence without redial. Summary retry locks the scoped terminal Call to
+  serialize retry count, command and audit; transport failure leaves recoverable work.
+- Relay validates hash/scope/command, leases with a unique token, persists attempts before
+  dispatch, times out transport, backs off and quarantines poison/exhausted work. Losing
+  an acknowledgement permits the same command to replay; stale owners cannot overwrite
+  a newer lease. It processes at most 25 rows per 20-second work budget (not a hard DB-query
+  timeout), default 5-second send bound/30-second lease and ten delivery attempts.
+- BullMQ boot starts a nonoverlapping five-second sweep and drains it before closing queues.
+  Awaiting queue/worker readiness fixes immediate-shutdown Redis rejection exposed by tests.
+  The private AWS worker accepts only an exact fixed relay event or valid SQS envelope.
+  Terraform prepares a scoped EventBridge rule, disabled by default; no schedule was enabled.
+- Inline dispatch now awaits a matching HTTP200 completion receipt with bounded response/body
+  timeout. HTTP202, lost responses and unconfirmed execution keep the outbox pending. Call
+  receipts additionally verify the exact saved tenant command is TERMINAL/CANCELLED/UNKNOWN;
+  concurrent READY/SUBMITTING/ACCEPTED short-circuits cannot prematurely acknowledge work.
+  A secret-authenticated fixed-bound relay route is available; external recurrence is not set up.
+- Cancellation atomically records only a request marker/event/audit plus version-conditional
+  CALLING-claim review. It preserves provider terminal facts and newer reviewed claim state.
+  The service stores the actual Clerk actor. SDK exposes cancelRequestedAt; detail/list UI
+  show pending cancellation, disable duplicate requests and wait for provider confirmation.
+  A delayed cancellation response cannot replace already cached terminal state.
+
+**Final verification:** full API **325/27 files**, call-worker **99/14**, database **66/6**,
+queue **65/5**, SDK **19/2**, and all call UI/library tests **73/8** passed. Worker coverage
+includes eighteen leased-relay regressions and two new separate-process crash boundaries:
+producer SIGKILL before first dispatch, and relay SIGKILL after an independent synthetic
+broker fsyncs acceptance but before acknowledgement. Fresh relay sends the identical command;
+two fresh consumers produce one independent synthetic provider acceptance. API includes real
+Postgres transaction failure/replay/concurrency tests; cancellation service has 18 race/rollback
+checks and route/UI tests cover both directions of terminal/cancellation races. DB testing
+also exposed a test-module identity leak from the global Prisma cache; teardown now clears
+its disconnected cache before the next isolated file, preserving strict error-class checks.
+Affected typechecks/lints, SDK regeneration and Lambda packaging passed (API 38.5MB/11.2MB zip;
+worker 31.9MB/10.0MB zip). Terraform fmt/backend-disabled validate passed using locked providers,
+without plan/apply. Synthetic desktop/mobile cancellation layouts were checked with no overflow.
+Independent review found premature inline receipts, a redundant postcommit write and wrong
+actor identifier; all were fixed with regressions before this checkpoint.
+
+**Limits:** DELIVERED is transport receipt, not completed work. A timeout can still produce a
+late duplicate transport delivery; CallIntent protects dialing, but concurrent summary inference
+and incurred-cost accounting remain FW-26. The inline path still needs recurrence and may
+quarantine a long-running command whose receipt repeatedly times out. AWS scheduled recovery
+and real Retell stopping remain unverified. No full parity claim: provider-ID reconciliation,
+persisted observer/termination deadlines, operating alerts/quarantine review, source connectors,
+financial ledger, approved Fireworks inference/evals and authorized clinic evidence remain open.
+Existing missing historical commands are not reconstructed. Preserve evidence on rollback;
+pre-intent workers are unsafe against unresolved submissions. See ADR-059/DEPLOY_AWS.md.
+
+**Exact next task:** FW-34 — implement scoped ambiguous provider-ID reconciliation against
+current Retell v3 metadata/list contracts, matching the stored request's exact agent/number
+identity. Multiple matches require review; empty/incomplete lookup never authorizes redial.
+Then FW-36 persisted observer ownership/termination/reconciliation deadlines and FW-37 outbox
+operating controls. Continue synthetic Fireworks gateway work independently of missing keys.
+The user has no clinic and authorized fake data; real connector/domain validation remains
+blocked without a test partner/qualified reviewer, while independent implementation continues.
+
+### Earlier continuation: FW-25 submission ownership and FW-31 streaming
+
+The goal remains active. Implementation commit: `d77eb18`; AWS merge: `57608ad`.
+This turn made tested implementation progress; neither complete parity nor full durable
+recovery is claimed. User clarified the existing key is Retell:
+local Retell access and Retell-managed Twilio were already verified. Telnyx is not an
+existing dependency and no Telnyx key is required for the current integration. A fresh
+name-only local inventory confirms Retell is nonempty; Fireworks, ElevenLabs and Telnyx
+are empty/absent. No keys were printed or changed, and this inventory did not reauthenticate.
+
+- Fetched `main` and `infra/aws` again. Main remains `55a1896`; incorporated new AWS
+  certificate-default commit `c34e970` by normal merge, preserving all W0 work. No deployment.
+- API reserves `CallIntent`, exact queued claim version and audit in one transaction.
+  Concurrent requests reuse the active intent. Delivery failure keeps the same reservation;
+  API retry dispatches that same job key. One active intent per tenant/claim is a partial
+  unique index. Composite foreign keys bind both Claim and accepted Call to its tenant.
+- Worker requires the exact reserved job payload. It commits SUBMITTING, the exact outbound
+  request/hash, claim CAS and audit before invoking the provider. A lost response is UNKNOWN;
+  a crash leaves SUBMITTING. Neither state is reset or redialled. Known ACCEPTED calls resume
+  from stored Call/provider identity, even if source identity has since been removed.
+  Terminal intent/Call/conditional claim/audit commit atomically; duplicate finalization is
+  a no-op. Both webhook and same-process persisted terminal evidence support restart.
+- SDK create sends the opaque intent ID as documented body `idempotency_key` and correlation
+  metadata, disables retries and uses a 30-second bound. Current Retell docs promise only a
+  one-hour deduplication window, not permanent idempotency. No automatic retry depends on it.
+  Removed practice/NPI metadata while retaining necessary dynamic agent variables.
+- Inline/SQS/BullMQ use the same durable fence. Removed claim-status lease and `-rN` bypass.
+  DLQ cancels only the exact READY reservation, with versioned claim CAS and audit together;
+  it never marks an accepted/uncertain/provider call failed. Failed final DLQ persistence
+  remains retryable. Hold-stop acknowledgement no longer automatically schedules a redial.
+- SSE drains stable `(timestamp,id)` pages, catches up from Postgres in both Redis/noRedis
+  modes and deduplicates IDs. Redis is only a wake-up hint. A valid persisted terminal
+  provider event is required for closure; local cancellation alone cannot truncate transcript.
+
+**Verification:** full API **257 tests/25 files**, call-worker **78/12**, payer-ivr
+**196/12**, db **65/6**, queue **56/5**, SDK **19/2** passed. These include two worker
+SIGKILL/restart tests with an independent synthetic provider process and fsynced acceptance
+ledger: exactly one external acceptance after lost response and after known acceptance;
+fresh workers do not redial. Accepted recovery preserves intervening manual review despite
+missing current identity. Other regressions cover concurrent HTTP/job delivery, real audit
+failure rollback, cross-tenant FK rejection, stale versions, prior-day reservations submitted
+today, exact-intent DLQ, and terminal-event finalization retry. SSE's 13 regressions include
+451 tied timestamps, commits behind the replay cursor and cancellation before final evidence.
+Affected package types/lints, regenerated SDK contracts and Lambda packaging passed
+(API38.4MB/11.2MB zip; worker30.5MB/9.8MB zip). Only isolated local DBs received the two
+new migrations; no cloud migration, provider call, claim submission or production mutation.
+
+**Explicit limitations:** missing provider IDs remain fenced for review, not automatically
+reconciled. SUBMITTING can mean a live in-flight owner or a dead worker; persisted lease/
+deadline logic and recovery operations are still required. There is no outbox relay yet:
+crash before dispatch can leave READY work undispatched, and crash/failure after final commit
+can lose summary fan-out. Inline dispatch can acknowledge before its background trigger runs.
+HTTP Idempotency-Key replay beyond the active-intent lifetime is not implemented. Legacy jobs
+without an intent fail closed and need reviewed migration/requeue. Request snapshots contain
+PHI and need retention/access operating controls. SSE scans full history in bounded pages
+and retains a per-connection ID set; total IO is not optimized. Cancellation CAS remains FW-32.
+Provider/platform/clinic evidence remains blocked as recorded below; independent work remains.
+
+**Exact next task:** FW-35 / FW-18 — transactional call + summary outbox, bounded leased relay,
+crash-after-send replay, and actual recoverable scheduling within the existing AWS budget.
+Then FW-34 (verified metadata/provider-ID reconciliation; empty lookup never permits redial)
+and FW-36 (persisted observation/termination deadlines). Keep FW-32 cancellation atomicity
+and the synthetic Fireworks gateway moving as independent tracks. Do not undo the no-redial
+fence to make old jobs or test fixtures run.
+
+### Earlier continuation: FW-07/FW-08/FW-28
+
+The preceding turn made progress (committed W0 implementation/audit). This continuation
+implements the actual Retell wire boundary and a first durable event path; goal stays active.
+Implementation commit: `be3a27a`; a follow-up test ensures skipped claim transitions are
+audited as proposals, without claiming a reviewed claim changed.
+
+- Strict SDK timestamped signatures authenticate raw bytes before JSON parsing. Internal
+  fake envelopes and untimestamped signatures no longer pass the HTTP boundary. Supported
+  call-start/end and cumulative-transcript payloads normalize without post-call analysis,
+  arbitrary metadata, tool output, invented timing, or inferred human contact.
+- Additive migration `20261013090000_retell_inbox` stores normalized early events until
+  the real Call establishes tenant identity. Receipt ownership, CallEvent, source timing,
+  terminal status, and audit commit atomically. Unknown calls return 202 with durable pending
+  data; processed payloads clear after tenant-bound evidence is saved. Conflicting lifecycle
+  evidence returns 409. This is not the general intent/outbox framework yet.
+- Worker observes terminal evidence through scoped Postgres polling; a separate producer
+  process can die after accepting an event, and the worker still reconciles it after Call
+  registration. Provider times update even after cancellation/late starts without reopening
+  terminal status. The reverse cancellation race remains FW-32.
+- Summary/UI share canonical transcript selection. Final text stays exact; structured remote
+  speakers are not assumed human. Cumulative updates remain provisional and never concatenate
+  into final evidence. Missing/empty/provisional transcripts return TRANSCRIPT_UNAVAILABLE
+  without inference. UI call/auth changes clear prior content and reject late old responses.
+- LiveRetell requests Stop Call with a 10-second timeout and no SDK retries; it never deletes data
+  as a hangup action. No guessed already-ended success. Env defaults/generated webhook
+  secrets were removed; the API requires the designated key for configured live telephony.
+  AWS may reference an existing Secrets Manager key, with no-key demo still supported.
+
+**Validation:** Final full API **239/25 files**, full summary-worker **51/5 files**,
+payer-ivr **182**, worker handler **19** + BullMQ/Postgres e2e **4** + separate-process
+regression **1**, shared selector **10**, summarizer **78**, web component **5** +
+stream hook **6** passed. All API contract tests now pass normally (no expected failures).
+Affected typechecks/lints passed. Final Lambda packaging passed (API38.4MB/11.2MB zip;
+worker30.5MB/9.8MB zip). Terraform fmt and backend-disabled validate passed, with no
+plan/account mutation. Local migration applied only to dedicated identity/summary/process
+DBs. The process test kills the webhook producer, not the worker: it does not establish
+no-redial recovery or AWS runtime correctness. Independent review identified source-time
+ordering/cancellation defects; fixed with regressions. No remaining introduced blocker
+was found; documented follow-on gaps remain.
+
+**Still blocked/unverified:** actual provider delivery/stop behavior, Fireworks/ElevenLabs
+inference/voice topology, clinic/domain adjudication and contracted connectors. Independent
+work remains available. W2 needs call intent ownership/ambiguous acceptance reconciliation,
+persisted deadlines and outbox dispatch. Pending unknown-event retention/reconciliation is
+FW-33; server SSE pagination/race is FW-31. No production migration/deployment/calls.
+
+**Next at that checkpoint (superseded above):** implement FW-25's durable call intent before any further live-path use:
+API enqueue transaction, one externally submitted attempt per intent, ambiguous outcomes
+reconcile instead of redial, SQS retry/deadline recovery, and worker-crash process tests.
+Then durable summary dispatch and generic outbox; keep Fireworks gateway work progressing
+against synthetic contracts while external access/approved releases remain prerequisites.
+
+**Goal remains active:** complete the nine-workstream parity program, not just provider replacement.
+User authorized implementation, local tests, branches/commits/draft PRs; no production cutover,
+real third-party calls, actual claim/payment mutations, or destructive production migrations.
+User explicitly allows ElevenLabs speech/orchestration; Fireworks open-weight business inference
+remains required. **No clinic yet: use fake patient data.** Real-clinic/end-to-end evidence and
+billing-expert adjudication remain blocked, not waived.
+
+**Checkout:** started at `25e82a7` on `deploy/vercel-serverless` with dirty audit docs.
+Created `codex/w0-containment`. On user correction, fetched origin: `origin/main=55a1896`
+was already an ancestor; AWS work actually lives at `origin/infra/aws=bfd4e8f`.
+Fast-forwarded the working branch to that revision and reapplied all WIP without conflicts.
+A safety stash named `w0 containment and pre-existing audit before AWS fast-forward` is retained.
+No user audit work was discarded. `pnpm install --frozen-lockfile` completed on the AWS lockfile.
+W0 implementation is committed as `2c8bcdd`; all commit hooks passed. The final
+Lambda bundles were rebuilt successfully after the zero-filled-week correction.
+
+### Implemented locally; not merged, deployed, or parity-complete
+
+- FW-01/02: reproduced duplicate face-value reporting (two calls on a $300 claim became
+  $600 "recovered" despite only a $100 payer-reported partial payment). API/SDK/UI now
+  separate call counts, unique claims, workflow dispositions, and unavailable verified
+  payment data (`amountCents:null`). No claim face value is represented as cash.
+- FW-03: high-confidence model `RESOLVED` advice requires review; protected states and
+  changed claim versions/newer calls are preserved. Summary/state/audit/usage tally commit
+  in one Postgres transaction. Sequential redelivery skips duplicate inference. A real DB
+  audit-trigger failure test proves rollback/retry. Notifications describe required review,
+  not payment recovery. Nonterminal calls cannot create a permanent partial summary.
+- FW-05: no subscriber-ID fallback; missing/blank subscriber or provider NPI prevents
+  enqueue/dial. Worker records `NEEDS_INFO` with scoped CAS and audit. Inline, BullMQ, and
+  AWS SQS paths handle this as non-retryable. Lambda acknowledges without dialing or
+  overwriting the missing-data state, including on final receives.
+- FW-04: corrected existing code-list annotations using current X12 references; raw
+  unknown codes (bounded to 64 characters) survive adapter/schema parsing and force
+  review. Historical v1 prompt can still omit unfamiliar codes; Fireworks migration
+  must remove that limitation. No licensed dictionary or real-domain accuracy claim.
+- FW-06: SDK-signed documented Retell envelopes now have committed synthetic fixtures;
+  initial expected-failure tests exposed parser rejection. The continuation above now
+  implements normalization/signing configuration; real provider validation remains pending.
+
+### Access and actual infrastructure evidence
+
+See [PROVIDER_EVIDENCE.md](./PROVIDER_EVIDENCE.md) for the capability matrix, primary
+vendor sources, model candidates, measured-vs-documented distinction, and probe manifest.
+GitHub, Vercel, Railway, and AWS CLI authentication work. Local PG16/Redis7 run; isolated
+`dentabill_w0_summary`, `dentabill_w0_identity`, `dentabill_w0_finance` databases received
+all six existing migrations. No production migrations ran.
+
+Read-only AWS queries find active `dentabill-api`/`dentabill-worker` in `us-east-1`, Node22,
+900-second timeout, 1024 MB. SQS mapping is Enabled, batch1, ReportBatchItemFailures.
+Worker is demo mode and has no voice/inference provider keys. Aurora `apps-pg` is available,
+Postgres17.11, encrypted, 7-day backup retention; restore has not been tested. Direct Lambda
+`/v1/readyz` first reported PG unavailable, then returned HTTP200 with PG healthy on retry
+(0.67s); cold-start sensitivity is an inference, not a confirmed diagnosis. Custom
+`api.dentabill.site` DNS failed locally, so custom-domain readiness is unverified.
+
+Local `.env`, `apps/api/.env`, `apps/web/.env.local`, and `packages/db/.env` resolve to the
+same root env. At inventory time Fireworks/ElevenLabs keys were absent, Telnyx key/number
+empty, Retell configured. Subsequent Retell phone inventory proved the configured outbound
+number is Retell-managed Twilio (`retell-twilio`), not Telnyx. User has never added a Telnyx
+key; Telnyx remains a prospective candidate and setup is deferred. User received a hidden-input command to add candidate keys; later told to skip Telnyx
+for now after actual carrier verification.
+Recheck presence without displaying secrets before concluding access is still blocked.
+Retell read-only agent GET succeeded: Retell-hosted LLM, GPT-4.1 post-call analysis,
+retention `everything`, max duration 60 minutes. Clerk instance metadata probe returned
+403; configured key presence does not establish working account access.
+
+### Remaining consequential gaps
+
+No financial ledger/allocations/reversals, version-bound approvals, real electronic/PMS
+connectors, or verified provider replacement yet. SQS delivery exists but the call runtime
+can redial after ambiguous `CALLING` redelivery; invocation-owned call execution and unwired
+hard-duration/hold controls remain; DB webhook completion is now implemented locally. Summary notification delivery needs an outbox. The
+usage tally is not an inference billing ledger: failed commits can omit incurred spend,
+and Lambda's process-local cost lock cannot enforce a global cap. Separate-process
+crash/concurrency proof remains required. Existing summary retry deletion needs durable
+versioned replacements. Real-time evaluation, clinic, reference-content licenses, BAAs,
+ElevenLabs custom-LLM/ZRM entitlement, and intended payer products/regions remain unverified.
+
+### Exact next step
+
+W0 focused checks and independent review are recorded below. FW-07 continuation above is now implemented locally. Next implement FW-25 durable call
+intents/outbox against SQS, alongside the Fireworks gateway with synthetic contracts and
+approved releases before real inference.
+Do not restart the old Vercel-only runner decision or claim passing fake tests establish parity.
+
+### Initial W0 verification record (before FW-07 continuation)
+
+- Summary worker: **46 tests passed**, including real Postgres fault injection,
+  sequential replay, stale edits/newer calls, active-call rejection, and unknown code
+  preservation. Typecheck/lint passed. No cross-process or real model accuracy claim.
+- Identity: payer-ivr163, shared types26, worker handler18 and real BullMQ/Postgres e2e4
+  passed. On AWS baseline, inline runtime16 + Lambda worker11 passed with real DB
+  at the runtime/batch boundary; no real AWS messages or third-party calls were sent.
+- Summarizer78 and payer-ivr163 passed for raw codes/reference corrections; both typecheck/lint pass.
+- Queue56 and notifier6 passed. Financial API45, web25, SDK19 focused checks passed;
+  API/web/SDK typechecks and scoped lint passed. One Playwright signed-out dashboard
+  regression passed using installed Chrome on local :3015. Authenticated browser E2E
+  remains unverified. Independent review found sparse-week chart distortion; corrected
+  to eight UTC buckets with gap/boundary/future/cross-tenant regressions. Follow-up
+  reports API6 and component11 tests passed; no additional financial behavior changed.
+- Retell contract suite: **11 passing assertions and 2 expected failures** for the
+  documented-but-unsupported raw envelope. This is blocker reproduction, not compatibility.
+- AWS local packaging succeeded: API38.4MB/worker30.4MB unzipped, zip11.2MB/9.7MB.
+  Artifacts are local only; no deploy performed and no Lambda emulator smoke yet.
+- Full API suite: **232 tests passed**, including the two expected FW-07 failures,
+  before the final zero-filled-week follow-up. API typecheck/lint and web typecheck pass.
+
+## Previous session — 2026-10-12 audit (preserved)
+
+The user requested a blunt comparison with Lunabill, current dental/AI web research,
+and a detailed implementation plan using open-weight models hosted on Fireworks for
+all AI. The deliverable is [FIREWORKS_IMPLEMENTATION_PLAN.md](./FIREWORKS_IMPLEMENTATION_PLAN.md):
+18 ranked gaps with code evidence, current primary sources, model/voice feasibility,
+target data/workflow architecture, evaluation gates, nine workstreams, 24 first-sprint
+implementation slices, staffing estimates, and unit economics. ADR-054 records the
+accepted model requirement separately from proposed architecture.
+
+**No runtime implementation or deployment occurred.** Baseline was `25e82a7`.
+Current production state and signed contracts were not inspected. The older reports
+below describe historical demo/deployment sessions, not present verification.
+ADR-053 contains the newer Vercel-only demo topology and hosting-budget constraint.
+
+Key blockers: model-only `RESOLVED` transitions; face-value “recovery” reporting;
+raw Retell webhook/schema mismatch; process-local call completion; duplicate/partial
+side-effect windows; incorrect N370 mapping; missing dental lines, payment ledger,
+durable follow-ups, source sync, and review workflows. The strict Fireworks requirement
+also needs a verified open-weight streaming ASR/TTS path before autonomous voice.
+
+Validation this session: summarizer 70 tests passed; payer-ivr 153 tests passed;
+synthetic documented-shape Retell webhook rejected by the exported parser, reproducing
+the contract mismatch. These 223 tests do not validate live calling or model quality.
+
+**Next work:** W0 containment and vendor/voice feasibility, seed evaluation cases,
+and a durable-runner decision. Use the FW-01–24 backlog in `docs/TASKS.md`; do not
+interpret this plan as authorization to buy infrastructure, change pricing, or
+enable real PHI/automated submissions. Small US Open Dental practices are a planning
+assumption; agency/DSO requirements would change scope. No application gap is marked fixed.
+
+## Historical context — August 2026
 
 ## What was just done
 
@@ -32,6 +1849,13 @@ Four further defects were invisible to any static check and are recorded as **AD
 - Token drift closed: `rounded-[20px]` 12 files → 0, `border-black/*` 22 → 0, zero `dark:` variants, no user-facing "Phase N".
 
 ## Next task
+
+Follow the latest ADR-082 checkpoint at the top of this file and
+`docs/HANDOFF_2026-10-13.md`. Finish FW-45 guarded local demo provisioning/launch and actual
+authenticated rehearsal, then recording integration and FW-43/full-scope work. The bundle,
+preflight and walkthrough are locally verified; recording and production readiness are not.
+
+## Historical next task — superseded by the current handoff
 
 > **Start at `docs/HANDOFF.md`.** It supersedes this section: it records what is
 > actually deployed on Railway, the five verified gaps blocking real telephony,

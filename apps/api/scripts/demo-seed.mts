@@ -222,7 +222,9 @@ async function main() {
     }
   }
 
-  console.log(`   ✓ Created ${claimIndex} claims across ${Object.keys(CLAIM_DISTRIBUTION).length} statuses`);
+  console.log(
+    `   ✓ Created ${claimIndex} claims across ${Object.keys(CLAIM_DISTRIBUTION).length} statuses`,
+  );
 
   // ─── Billing Usage ─────────────────────────────────────────────────
 
@@ -231,7 +233,12 @@ async function main() {
   const billingClaims = claims.filter((c) => CALLED_STATUSES.has(c.status));
   const billingPromises = billingClaims.map((c) =>
     prisma.billingUsageRecord.upsert({
-      where: { claimId_billingPeriodStart: { claimId: c.id, billingPeriodStart: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+      where: {
+        claimId_billingPeriodStart: {
+          claimId: c.id,
+          billingPeriodStart: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        },
+      },
       update: {},
       create: buildBillingUsageRecord(org.id, c.id),
     }),
@@ -276,9 +283,7 @@ async function main() {
   ]);
 
   const avgCallSeconds =
-    avgCallRow._avg.durationSeconds === null
-      ? null
-      : Math.round(avgCallRow._avg.durationSeconds);
+    avgCallRow._avg.durationSeconds === null ? null : Math.round(avgCallRow._avg.durationSeconds);
 
   const recoveredThisWeekCents = recoveredRows.reduce((acc, row) => {
     const dollars = Number(row.claimAmount);

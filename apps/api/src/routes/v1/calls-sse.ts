@@ -16,19 +16,15 @@
  * Authentication: existing `requireAuth` preHandler. The Call lookup
  * is org-scoped via `getOrgScopedDb` — cross-org access returns 404.
  *
- * The route is fully Postgres-authoritative on connect (replay) and
- * Redis pub/sub for fan-out. Without `REDIS_URL` (ADR-053) the live
- * phase instead polls Postgres every `SSE_POLL_INTERVAL_MS` and closes
- * with `event: close` once the call reaches a terminal status. On
- * Vercel the stream is also cut (without `close`) before the function
- * timeout so the client reconnects and re-replays, de-duplicating by id. A subscriber that connected after the
- * webhook fired but before the SSE write reached it would observe
- * the event via the Postgres replay; a subscriber connected before
- * the webhook fired observes it via the Redis publish. The two
- * sources can overlap on a fast publish — the client de-dupes on
- * `id` (every call.event payload carries a `callEventId`).
+ * Postgres is authoritative for replay and periodic catch-up in every
+ * deployment mode. Redis messages only request an earlier catch-up; they are
+ * never forwarded as evidence. Each scan uses bounded (timestamp, id) pages
+ * and deduplicates already delivered IDs, including rows committed behind an
+ * earlier cursor. A valid provider terminal event precedes the final complete scan.
+ * A max-duration cut omits `close` so clients reconnect and replay safely.
  */
-import { audit, getOrgScopedDb } from '@dentabill/db';
+import { audit, getOrgScopedDb, type CallEvent } from '@dentabill/db';
+import { RetellEventSchema } from '@dentabill/payer-ivr';
 import { createRedisConnection } from '@dentabill/queue';
 import { ApiError } from '@dentabill/types';
 import type { FastifyInstance } from 'fastify';
@@ -38,8 +34,6 @@ import { getEnv, sseMaxStreamMs } from '../../lib/env.js';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const REPLAY_LIMIT = 200;
-/** Call statuses after which no further CallEvents are written. */
-const TERMINAL_CALL_STATUSES: ReadonlySet<string> = new Set(['COMPLETED', 'FAILED', 'VOICEMAIL']);
 
 const StreamParamsSchema = z.object({ id: z.string().min(1) });
 
@@ -59,7 +53,7 @@ export function callsSseRoutes(fastify: FastifyInstance): void {
       preHandler: requireAuth,
       schema: {
         description:
-          'Live call event stream (Server-Sent Events). Replays persisted CallEvent rows on connect, then streams new events via Redis pub/sub. Heartbeat every 15s; closes on server shutdown or auth expiry. See ADR-046.',
+          'Live call event stream (Server-Sent Events). Replays all persisted CallEvent rows in bounded pages, then catches up from Postgres with optional Redis wake-up hints. Heartbeat every 15s; closes after terminal call events are drained. See ADR-046.',
         security: [{ bearer: [] as string[] }],
         params: StreamParamsSchema,
       },
@@ -78,11 +72,12 @@ export function callsSseRoutes(fastify: FastifyInstance): void {
       if (!call) {
         throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
       }
-
-      const events = await db.callEvent.findMany({
-        where: { callId: call.id },
-        orderBy: { timestamp: 'asc' },
-        take: REPLAY_LIMIT,
+      await audit({
+        action: 'call.events.stream.opened',
+        resourceType: 'Call',
+        resourceId: call.id,
+        organizationId: orgId,
+        userId: auth.userId,
       });
 
       // From here on the route owns the raw response: hijack so Fastify does
@@ -106,14 +101,21 @@ export function callsSseRoutes(fastify: FastifyInstance): void {
         if (!reply.raw.writableEnded) reply.raw.write(chunk);
       };
 
-      // Poll-mode cursor: ids already on the wire + the newest timestamp
-      // seen. Polling uses `timestamp >= cursor` and skips sent ids, so
-      // events sharing a timestamp with the cursor are never lost.
       const sent = new Set<string>();
-      let cursor: Date | null = null;
-      const emit = (event: 'replay' | 'call.event', evt: (typeof events)[number]): void => {
+      let hasTerminalEvent = false;
+      const emit = (event: 'replay' | 'call.event', evt: CallEvent): void => {
+        if (sent.has(evt.id)) return;
+        if (evt.eventType === 'call.ended' || evt.eventType === 'webhook.call.ended') {
+          const parsed = RetellEventSchema.safeParse(evt.data);
+          if (
+            parsed.success &&
+            parsed.data.type === 'call.ended' &&
+            parsed.data.retellCallId === call.retellCallId
+          ) {
+            hasTerminalEvent = true;
+          }
+        }
         sent.add(evt.id);
-        cursor = evt.timestamp;
         const payload: ReplayPayload = {
           id: evt.id,
           eventType: evt.eventType,
@@ -122,9 +124,6 @@ export function callsSseRoutes(fastify: FastifyInstance): void {
         };
         write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
       };
-
-      for (const evt of events) emit('replay', evt);
-      write('event: replay-end\ndata: {}\n\n');
 
       const env = getEnv();
       const timers: ReturnType<typeof setTimeout>[] = [];
@@ -159,73 +158,101 @@ export function callsSseRoutes(fastify: FastifyInstance): void {
         resolveDone();
       };
 
+      request.raw.once('aborted', () => {
+        finish(null);
+      });
+      reply.raw.once('close', () => {
+        finish(null);
+      });
+      reply.raw.once('error', () => {
+        finish(null);
+      });
+
+      const drain = async (event: 'replay' | 'call.event'): Promise<void> => {
+        // Restart each scan: transaction commit order is not timestamp/ID order.
+        // A retained high-water cursor would miss late commits behind that cursor.
+        let cursor: { timestamp: Date; id: string } | null = null;
+        while (!isFinished()) {
+          const page: CallEvent[] = await db.callEvent.findMany({
+            where: {
+              callId: call.id,
+              call: { organizationId: orgId },
+              ...(cursor === null
+                ? {}
+                : {
+                    OR: [
+                      { timestamp: { gt: cursor.timestamp } },
+                      { timestamp: cursor.timestamp, id: { gt: cursor.id } },
+                    ],
+                  }),
+            },
+            orderBy: [{ timestamp: 'asc' }, { id: 'asc' }],
+            take: REPLAY_LIMIT,
+          });
+          for (const evt of page) {
+            if (isFinished()) return;
+            emit(event, evt);
+          }
+          const last = page.at(-1);
+          if (page.length < REPLAY_LIMIT || !last) return;
+          cursor = { timestamp: last.timestamp, id: last.id };
+        }
+      };
+
+      let replaying = true;
+      let draining = false;
+      let catchupRequested = false;
+      const needsCatchup = (): boolean => catchupRequested;
+      let pollTimer: ReturnType<typeof setTimeout> | null = null;
+      teardown.push(() => {
+        if (pollTimer !== null) clearTimeout(pollTimer);
+      });
+      const scheduleCatchup = (delay: number): void => {
+        if (isFinished()) return;
+        if (replaying || draining) {
+          catchupRequested = true;
+          return;
+        }
+        if (pollTimer !== null) clearTimeout(pollTimer);
+        pollTimer = setTimeout(() => {
+          void catchup();
+        }, delay);
+      };
+      const catchup = async (): Promise<void> => {
+        if (isFinished()) return;
+        draining = true;
+        catchupRequested = false;
+        try {
+          // A cancellation marker can set FAILED before the remote call ends.
+          // Drain a complete scan after observing durable provider termination.
+          const terminalBeforeDrain = hasTerminalEvent;
+          await drain('call.event');
+          if (terminalBeforeDrain && !isFinished()) finish('call_ended');
+        } catch {
+          request.log.warn({ callId: call.id }, 'sse: catch-up failed; retrying');
+        } finally {
+          draining = false;
+          scheduleCatchup(needsCatchup() ? 0 : env.SSE_POLL_INTERVAL_MS);
+        }
+      };
+
       if (env.REDIS_URL) {
-        // Subscribe to Redis pub/sub. We open a per-connection subscriber
-        // because ioredis subscribers are not shared with the publish
-        // connection, and using a per-process shared subscriber adds
-        // bookkeeping for partial unsubscribe that is not yet justified.
         const subscriber = createRedisConnection(env.REDIS_URL, { lazyConnect: false });
         const channel = `call:${call.retellCallId}:events`;
-        const onMessage = (incoming: string, message: string): void => {
-          if (incoming !== channel) return;
-          write(`event: call.event\ndata: ${message}\n\n`);
+        const onMessage = (incoming: string): void => {
+          if (incoming === channel) scheduleCatchup(0);
         };
-        try {
-          await subscriber.subscribe(channel);
-        } catch (err) {
-          request.log.warn({ err, channel }, 'sse: subscribe failed; continuing replay-only');
-        }
         subscriber.on('message', onMessage);
         teardown.push(() => {
           subscriber.off('message', onMessage);
-          void subscriber.unsubscribe(channel).catch(() => undefined);
           subscriber.disconnect();
         });
-      } else {
-        // ADR-053 — no Redis: Postgres is already the durable store
-        // (ADR-046), so tail it. Status is read BEFORE events: the call
-        // handler persists `call.ended` before it writes the terminal
-        // status, so once a terminal status is observed every event is
-        // already readable and the final batch below is complete.
-        const pollIntervalMs = env.SSE_POLL_INTERVAL_MS;
-        const poll = async (): Promise<void> => {
-          if (isFinished()) return;
-          let terminal = false;
-          try {
-            const current = await db.call.findFirst({
-              where: { id: call.id },
-              select: { status: true, endedAt: true },
-            });
-            terminal =
-              current === null
-                ? true
-                : current.endedAt !== null || TERMINAL_CALL_STATUSES.has(current.status);
-            const fresh = await db.callEvent.findMany({
-              where: { callId: call.id, ...(cursor !== null && { timestamp: { gte: cursor } }) },
-              orderBy: { timestamp: 'asc' },
-              take: REPLAY_LIMIT,
-            });
-            for (const evt of fresh) {
-              if (isFinished()) return;
-              if (!sent.has(evt.id)) emit('call.event', evt);
-            }
-            // A full page means more rows may be waiting; drain before closing.
-            if (fresh.length === REPLAY_LIMIT) terminal = false;
-          } catch (err) {
-            request.log.warn({ err, callId: call.id }, 'sse: poll failed; retrying');
-          }
-          if (isFinished()) return;
-          if (terminal) {
-            finish('call_ended');
-            return;
-          }
-          timers.push(
-            setTimeout(() => {
-              void poll();
-            }, pollIntervalMs),
-          );
-        };
-        void poll();
+        // Start subscription before replay. DB polling also covers an unavailable
+        // Redis connection, dropped hints, and messages during subscription setup.
+        void subscriber.subscribe(channel).catch(() => {
+          if (!isFinished())
+            request.log.warn({ callId: call.id }, 'sse: subscribe failed; using database catch-up');
+        });
       }
 
       const heartbeat = setInterval(() => {
@@ -244,24 +271,18 @@ export function callsSseRoutes(fastify: FastifyInstance): void {
         );
       }
 
-      await audit({
-        action: 'call.events.stream.opened',
-        resourceType: 'Call',
-        resourceId: call.id,
-        organizationId: orgId,
-        userId: auth.userId,
-        metadata: { replayCount: events.length },
-      });
+      try {
+        await drain('replay');
+        if (!isFinished()) {
+          write('event: replay-end\ndata: {}\n\n');
+          replaying = false;
+          scheduleCatchup(0);
+        }
+      } catch {
+        request.log.warn({ callId: call.id }, 'sse: replay failed; reconnect required');
+        finish(null);
+      }
 
-      request.raw.once('close', () => {
-        finish('server_close');
-      });
-      reply.raw.once('error', () => {
-        finish('server_close');
-      });
-
-      // Keep the handler pending until the stream ends — client
-      // disconnect, terminal call (poll mode) or the max-duration cut.
       await done;
     },
   );

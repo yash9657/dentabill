@@ -45,4 +45,22 @@ export {
   RetellWebhookParseError,
   verifyRetellWebhookSignature,
   type VerifyRetellWebhookSignatureInput,
+  RetellWebhookDeliverySchema,
+  type RetellWebhookDelivery,
 } from './webhook.js';
+
+export {
+  acceptRetellWebhook,
+  reconcileRetellWebhookInbox,
+  RetellWebhookConflictError,
+} from './inbox.js';
+
+export {
+  createRetellReconciliationClient,
+  RetellReconciliationError,
+  type ReadonlyRetellReconciliationPort,
+  type RetellCallCandidate,
+  type RetellReconciliationClient,
+  type RetellReconciliationClientOptions,
+  type RetellReconciliationErrorCode,
+} from './reconciliation.js';

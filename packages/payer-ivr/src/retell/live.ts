@@ -12,18 +12,28 @@ import type { RetellEventListener, RetellPort } from './port.js';
  * Internal narrow shape of the `retell-sdk` default export. We declare
  * exactly the methods we depend on so a minor SDK version bump that
  * adds new methods (or renames internal types) doesn't ripple into
- * this package — only `createPhoneCall` and `delete` are load-bearing.
+ * this package — only `createPhoneCall` and `stop` are load-bearing.
  */
 interface RetellLikeClient {
   readonly call: {
-    createPhoneCall(body: {
-      readonly from_number: string;
-      readonly to_number: string;
-      readonly override_agent_id?: string;
-      readonly metadata?: unknown;
-      readonly retell_llm_dynamic_variables?: Record<string, unknown>;
-    }): Promise<{ readonly call_id: string }>;
-    delete(callId: string): Promise<void>;
+    createPhoneCall(
+      body: {
+        readonly from_number: string;
+        readonly to_number: string;
+        readonly idempotency_key: string;
+        readonly override_agent_id?: string;
+        readonly agent_override?: {
+          readonly agent: { readonly max_call_duration_ms: number };
+        };
+        readonly metadata?: unknown;
+        readonly retell_llm_dynamic_variables?: Record<string, unknown>;
+      },
+      options: { readonly maxRetries: number; readonly timeout: number },
+    ): Promise<{ readonly call_id: string }>;
+    stop(
+      callId: string,
+      options: { readonly maxRetries: number; readonly timeout: number },
+    ): Promise<void>;
   };
 }
 
@@ -34,7 +44,7 @@ export type RetellLoader = () => Promise<RetellCtor>;
 /**
  * `LiveRetell` (ADR-033) — production adapter wrapping `retell-sdk`.
  *
- * The only adapter that touches the network. **Lazy-loads `retell-sdk`**
+ * **Lazy-loads `retell-sdk`**
  * via `await import()` so importing the `@dentabill/payer-ivr` index
  * does NOT pull the SDK into dev / test bundles where the API key is
  * absent — matches the `hasClerkKeys` pattern from ADR-024 / ADR-030.
@@ -82,28 +92,47 @@ export class LiveRetell implements RetellPort {
   async startCall(input: StartCallInput): Promise<StartCallResult> {
     const validation = StartCallInputSchema.safeParse(input);
     if (!validation.success) throw validation.error;
+    if (!/^[A-Za-z0-9_-]{5,255}$/.test(input.idempotencyKey)) {
+      throw new Error(
+        'Retell idempotency key must be 5–255 ASCII letters, digits, underscores, or hyphens.',
+      );
+    }
     const client = await this.#getClient();
     const queuedAt = this.#clock();
-    const response = await client.call.createPhoneCall({
-      from_number: input.fromNumberE164,
-      to_number: input.toNumberE164,
-      override_agent_id: input.agentId,
-      metadata: {
-        idempotencyKey: input.idempotencyKey,
-        payerCode: input.payerCode,
-        practiceName: input.agentMetadata.practiceName,
-        providerNpi: input.agentMetadata.providerNpi,
+    // Current Create Phone Call docs define a one-hour idempotency window.
+    // SDK 5.16.0 serializes this body field although its types predate it.
+    // Metadata alone is correlation, not provider-enforced idempotency.
+    // https://docs.retellai.com/api-references/create-phone-call
+    const response = await client.call.createPhoneCall(
+      {
+        from_number: input.fromNumberE164,
+        to_number: input.toNumberE164,
+        idempotency_key: input.idempotencyKey,
+        override_agent_id: input.agentId,
+        // Per-call agent override; leave the configured agent untouched.
+        // https://docs.retellai.com/api-references/create-phone-call
+        ...(input.maxDurationMs === undefined
+          ? {}
+          : { agent_override: { agent: { max_call_duration_ms: input.maxDurationMs } } }),
+        metadata: {
+          dentabill_intent_id: input.idempotencyKey,
+          idempotencyKey: input.idempotencyKey,
+          payerCode: input.payerCode,
+        },
+        // Retell substitutes `{{var}}` placeholders in the agent prompt
+        // from this dictionary. Phase 3 prompts (packages/payer-ivr/agents/*)
+        // reference exactly these four keys.
+        retell_llm_dynamic_variables: {
+          practice_name: input.agentMetadata.practiceName,
+          provider_npi: input.agentMetadata.providerNpi,
+          subscriber_id: input.agentMetadata.subscriberId,
+          date_of_service: input.agentMetadata.dateOfService,
+        },
       },
-      // Retell substitutes `{{var}}` placeholders in the agent prompt
-      // from this dictionary. Phase 3 prompts (packages/payer-ivr/agents/*)
-      // reference exactly these four keys.
-      retell_llm_dynamic_variables: {
-        practice_name: input.agentMetadata.practiceName,
-        provider_npi: input.agentMetadata.providerNpi,
-        subscriber_id: input.agentMetadata.subscriberId,
-        date_of_service: input.agentMetadata.dateOfService,
-      },
-    });
+      // A timeout can follow successful creation. The durable intent owner
+      // must reconcile ambiguous outcomes instead of issuing another create.
+      { maxRetries: 0, timeout: 30_000 },
+    );
     return {
       retellCallId: response.call_id,
       queuedAt: queuedAt.toISOString(),
@@ -114,12 +143,11 @@ export class LiveRetell implements RetellPort {
     const validation = EndCallInputSchema.safeParse(input);
     if (!validation.success) throw validation.error;
     const client = await this.#getClient();
-    // Retell's SDK exposes `client.call.delete(callId)` which terminates
-    // the active call AND removes the call record. We accept the record
-    // removal because we already persist the call lifecycle into our own
-    // CallEvent rows; the canonical record is in our DB, not Retell's.
-    // Idempotent at the Retell API level — repeat deletes return success.
-    await client.call.delete(input.retellCallId);
+    // Stop Call terminates an ongoing call; Delete Call removes its data.
+    // https://docs.retellai.com/api-references/stop-call
+    // Keep failures visible to the caller for reconciliation: neither
+    // a timeout nor a generic 4xx proves the call has already ended.
+    await client.call.stop(input.retellCallId, { maxRetries: 0, timeout: 10_000 });
   }
 
   subscribe(retellCallId: string, listener: RetellEventListener): () => void {

@@ -87,8 +87,11 @@ describe('createBullMqJobDispatcher', () => {
 });
 
 describe('createInlineJobDispatcher', () => {
+  const receipt = (jobId: string): Response =>
+    Response.json({ accepted: true, jobId }, { status: 200 });
+
   it('POSTs the payload to the internal route with the secret header, via waitUntil', async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 202 }));
+    const fetchMock = vi.fn(async () => receipt(callData.idempotencyKey));
     const pending: Promise<unknown>[] = [];
     const dispatcher = createInlineJobDispatcher({
       baseUrl: 'https://api.example.com/',
@@ -113,7 +116,7 @@ describe('createInlineJobDispatcher', () => {
   });
 
   it('routes summaries to the summaries route', async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 202 }));
+    const fetchMock = vi.fn(async () => receipt(summaryData.idempotencyKey));
     const pending: Promise<unknown>[] = [];
     const dispatcher = createInlineJobDispatcher({
       baseUrl: 'http://localhost:3001',
@@ -143,7 +146,7 @@ describe('createInlineJobDispatcher', () => {
       triggerRetryDelayMs: 0,
       onTriggerError,
     });
-    await dispatcher.dispatchCall(callData);
+    await expect(dispatcher.dispatchCall(callData)).rejects.toThrow(/HTTP 502/);
     await Promise.all(pending);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(onTriggerError).toHaveBeenCalledTimes(1);
@@ -165,11 +168,118 @@ describe('createInlineJobDispatcher', () => {
       triggerRetryDelayMs: 0,
       onTriggerError,
     });
-    await dispatcher.dispatchCall(callData);
+    await expect(dispatcher.dispatchCall(callData)).rejects.toThrow(/HTTP 401/);
     await expect(Promise.all(pending)).resolves.toBeDefined();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(onTriggerError).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps dispatch pending until the matching completed receipt arrives', async () => {
+    let resolveResponse: ((value: Response) => void) | undefined;
+    const response = new Promise<Response>((resolve) => {
+      resolveResponse = resolve;
+    });
+    const waitUntil = vi.fn();
+    const dispatcher = createInlineJobDispatcher({
+      baseUrl: 'http://localhost:3001',
+      secret: 'x'.repeat(32),
+      waitUntil,
+      fetch: vi.fn(() => response),
+    });
+    let settled = false;
+    const dispatch = dispatcher.dispatchCall(callData).finally(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+    if (!resolveResponse) throw new Error('Expected response barrier.');
+    resolveResponse(receipt(callData.idempotencyKey));
+    await expect(dispatch).resolves.toBe(callData.idempotencyKey);
+  });
+
+  it.each([
+    ['early acknowledgement', 202, { accepted: true, jobId: callData.idempotencyKey }],
+    ['missing receipt', 200, {}],
+    ['different job', 200, { accepted: true, jobId: 'other-job' }],
+    ['unaccepted job', 200, { accepted: false, jobId: callData.idempotencyKey }],
+  ])('rejects %s without reporting delivery', async (_name, status, body) => {
+    const fetchMock = vi.fn(async () => Response.json(body, { status }));
+    const dispatcher = createInlineJobDispatcher({
+      baseUrl: 'http://localhost:3001',
+      secret: 'x'.repeat(32),
+      waitUntil: () => undefined,
+      fetch: fetchMock,
+    });
+    await expect(dispatcher.dispatchCall(callData)).rejects.toThrow(/unconfirmed/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a lost response with the identical payload and key', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new Error('response lost after acceptance'))
+      .mockResolvedValueOnce(receipt(callData.idempotencyKey));
+    const dispatcher = createInlineJobDispatcher({
+      baseUrl: 'http://localhost:3001',
+      secret: 'x'.repeat(32),
+      waitUntil: () => undefined,
+      fetch: fetchMock,
+      triggerRetryDelayMs: 0,
+    });
+    await expect(dispatcher.dispatchCall(callData)).resolves.toBe(callData.idempotencyKey);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.map(([, init]) => init?.body)).toEqual([
+      JSON.stringify(callData),
+      JSON.stringify(callData),
+    ]);
+  });
+
+  it('sanitizes transport and parser errors before returning or logging them', async () => {
+    const privateText = 'synthetic-sensitive-response-do-not-log';
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new Error(privateText))
+      .mockResolvedValueOnce(new Response(privateText, { status: 200 }));
+    const onTriggerError = vi.fn();
+    const dispatcher = createInlineJobDispatcher({
+      baseUrl: 'http://localhost:3001',
+      secret: 'x'.repeat(32),
+      waitUntil: () => undefined,
+      fetch: fetchMock,
+      triggerAttempts: 2,
+      triggerRetryDelayMs: 0,
+      onTriggerError,
+    });
+    await expect(dispatcher.dispatchCall(callData)).rejects.toThrow(
+      'Inline job completion is unconfirmed.',
+    );
+    expect(onTriggerError).toHaveBeenCalledTimes(1);
+    expect(String(onTriggerError.mock.calls[0]?.[0])).not.toContain(privateText);
+  });
+
+  it.each(['response', 'receipt body'] as const)(
+    'bounds a stalled %s and aborts without a delivery receipt',
+    async (stage) => {
+      const fetchMock = vi.fn<typeof fetch>(async () =>
+        stage === 'response'
+          ? new Promise<Response>(() => undefined)
+          : new Response(new ReadableStream<Uint8Array>(), { status: 200 }),
+      );
+      const pending: Promise<unknown>[] = [];
+      const dispatcher = createInlineJobDispatcher({
+        baseUrl: 'http://localhost:3001',
+        secret: 'x'.repeat(32),
+        waitUntil: (promise) => pending.push(promise),
+        fetch: fetchMock,
+        triggerAttempts: 1,
+        triggerTimeoutMs: 20,
+      });
+      await expect(dispatcher.dispatchSummary(summaryData)).rejects.toThrow(/unconfirmed/);
+      expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+      await expect(Promise.all(pending)).resolves.toBeDefined();
+    },
+  );
 });
 
 describe('computeBackoffMs', () => {

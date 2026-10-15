@@ -1,10 +1,11 @@
 'use client';
 
+import { useAuth } from '@clerk/nextjs';
 import { useInfiniteQuery, type UseInfiniteQueryResult } from '@tanstack/react-query';
 
 import { useDentaBillApi } from '../api-client.js';
 
-import type { AuditLogsFilters, AuditLogsListResponse } from './types.js';
+import type { AuditLogsFilters, AuditLogsListQuery, AuditLogsListResponse } from './types.js';
 
 const DEFAULT_PAGE_SIZE = 25;
 
@@ -12,10 +13,16 @@ const DEFAULT_PAGE_SIZE = 25;
  * Query key factory for audit logs. Includes filters so changing a
  * filter resets pagination to page 1 automatically.
  */
-export function auditLogsQueryKey(filters: AuditLogsFilters): readonly unknown[] {
+export function auditLogsQueryKey(
+  filters: AuditLogsFilters,
+  organizationId: string | null | undefined,
+  userId: string | null | undefined,
+): readonly unknown[] {
   return [
     'auditLogs',
     'list',
+    organizationId ?? null,
+    userId ?? null,
     {
       resourceType: filters.resourceType ?? null,
       from: filters.from ?? null,
@@ -38,41 +45,36 @@ export type UseAuditLogsResult = UseInfiniteQueryResult<{
 }>;
 
 export function useAuditLogs(filters: AuditLogsFilters): UseAuditLogsResult {
+  const { isLoaded, orgId, userId } = useAuth();
+  const admitted = isLoaded && Boolean(orgId && userId);
   const { client, withAuthHeaders } = useDentaBillApi();
 
   return useInfiniteQuery({
-    queryKey: auditLogsQueryKey(filters),
+    queryKey: auditLogsQueryKey(filters, admitted ? orgId : null, admitted ? userId : null),
+    enabled: admitted,
+    retry: false,
+    throwOnError: false,
+    refetchOnWindowFocus: false,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam, signal }): Promise<AuditLogsListResponse> => {
-      const headers = await withAuthHeaders();
-      const query: Record<string, string | number> = { limit: DEFAULT_PAGE_SIZE };
+      const query: AuditLogsListQuery = { limit: DEFAULT_PAGE_SIZE };
 
       if (filters.resourceType) query.resourceType = filters.resourceType;
       if (filters.from) query.from = filters.from;
       if (filters.to) query.to = filters.to;
       if (pageParam) query.cursor = pageParam;
 
-      // The route declares only a 200 response, so the generated types give
-      // `error` a never-ish shape even though 401/400 are reachable at
-      // runtime. Widening the result is the established pattern here — see
-      // lib/claims/use-claims-list.ts. The path itself stays typed.
-      const result = (await client.GET('/v1/audit-logs', {
-        params: { query },
-        headers,
-        signal,
-      })) as {
-        data?: AuditLogsListResponse;
-        error?: { message?: string; code?: string };
-      };
-
-      if (result.error) {
-        throw new Error(result.error.message ?? 'Failed to load audit logs.');
+      try {
+        const result = await client.GET('/v1/audit-logs', {
+          params: { query },
+          headers: await withAuthHeaders(),
+          signal,
+        });
+        if (!result.data) throw new Error();
+        return result.data;
+      } catch {
+        throw new Error('Audit logs could not be loaded. Reload the page to try again.');
       }
-      if (!result.data) {
-        throw new Error('Empty response from /v1/audit-logs.');
-      }
-
-      return result.data;
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });

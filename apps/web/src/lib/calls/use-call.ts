@@ -1,12 +1,17 @@
 'use client';
 
+import { useAuth } from '@clerk/nextjs';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { useDentaBillApi } from '../api-client.js';
 
 import { isLiveCallStatus, type CallDetailResponse } from './types.js';
 
-const callQueryKey = (id: string): readonly unknown[] => ['calls', 'detail', id];
+export const callQueryKey = (
+  id: string,
+  organizationId: string | null | undefined,
+  userId: string | null | undefined,
+): readonly unknown[] => ['calls', 'detail', id, organizationId ?? null, userId ?? null];
 
 const LIVE_POLL_MS = 5000;
 const IDLE_POLL_MS = 30000;
@@ -22,9 +27,12 @@ interface ApiErrorBody {
  * stay coherent if the user opens both in adjacent tabs.
  */
 export function useCall(id: string): UseQueryResult<CallDetailResponse> {
+  const { orgId, userId, isLoaded } = useAuth();
+  const admitted = isLoaded && Boolean(orgId && userId);
   const { client, withAuthHeaders } = useDentaBillApi();
   return useQuery({
-    queryKey: callQueryKey(id),
+    queryKey: callQueryKey(id, admitted ? orgId : null, admitted ? userId : null),
+    enabled: admitted,
     throwOnError: false,
     retry: false,
     queryFn: async ({ signal }): Promise<CallDetailResponse> => {

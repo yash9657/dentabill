@@ -92,6 +92,21 @@ describe('createSqsJobDispatcher', () => {
     });
   });
 
+  it('preserves a distinct observation-only resume command through SQS serialization and parsing', async () => {
+    const { client, inputs } = fakeClient();
+    const dispatcher = createSqsJobDispatcher({ queueUrl: QUEUE_URL, client });
+    const data: CallJobData = {
+      ...callData,
+      idempotencyKey: 'call.resume.intent_synthetic',
+      resume: { intentId: 'intent_synthetic', callId: 'call_synthetic' },
+    };
+    expect(await dispatcher.dispatchCall(data)).toBe(data.idempotencyKey);
+    expect(parseSqsJobMessage(inputs()[0]?.MessageBody ?? '')).toEqual({
+      type: 'call.place',
+      data,
+    });
+  });
+
   it('maps delayMs to DelaySeconds and reports clamping above 900 s', async () => {
     const { client, inputs } = fakeClient();
     const onDelayClamped = vi.fn();

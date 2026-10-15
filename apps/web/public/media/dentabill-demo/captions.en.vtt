@@ -1,0 +1,37 @@
+WEBVTT
+
+00:00:17.167 --> 00:00:20.933
+<v Phone menu>Thanks for calling Delta Dental. For provider services, press 2.
+
+00:00:21.233 --> 00:00:21.633
+[keypad tones: 2]
+
+00:00:21.767 --> 00:00:23.533
+<v Phone menu>For claim status, press 1.
+
+00:00:23.833 --> 00:00:24.233
+[keypad tones: 1]
+
+00:00:24.367 --> 00:00:26.133
+<v Phone menu>Enter the provider NPI.
+
+00:00:26.400 --> 00:00:28.067
+[keypad tones: NPI entered]
+
+00:00:28.233 --> 00:00:30.800
+<v Phone menu>Please hold for the next available representative.
+
+00:00:30.900 --> 00:00:33.200
+[hold music]
+
+00:00:33.333 --> 00:00:35.433
+<v Marcus (payer rep)>Provider services, this is Marcus.
+
+00:00:35.733 --> 00:00:40.900
+<v DentaBill agent>Hi Marcus! I’m checking a claim for DEMO1042, date of service September 18.
+
+00:00:41.200 --> 00:00:49.433
+<v Marcus (payer rep)>I see it. That claim is pending review. Follow up in 10 business days. Reference SIM-2026-1042.
+
+00:00:49.733 --> 00:00:51.100
+<v DentaBill agent>Perfect. Thanks, Marcus!

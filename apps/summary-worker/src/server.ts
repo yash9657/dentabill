@@ -1,26 +1,27 @@
 import { prisma } from '@dentabill/db';
 import { createLogger, type Logger } from '@dentabill/logger';
-import { createNotifierPort, type NotifierPort } from '@dentabill/notifier';
 import {
   type SummariesWorker,
   createSummariesWorker,
   createRedisConnection,
 } from '@dentabill/queue';
-import { createSummarizerPort, type SummarizerPort } from '@dentabill/summarizer';
+import type { SummarizerPort } from '@dentabill/summarizer';
 import type { Redis } from 'ioredis';
 
 import { loadSummaryWorkerEnv, type SummaryWorkerEnv } from './env.js';
 import { createSummaryJobHandler, type DbClient } from './handler.js';
 import { startHealthServer, type HealthServerHandle } from './health.js';
+import type { ObservationJobConfig } from './observation-handler.js';
+import { createRuntimeSummarizer } from './runtime-summarizer.js';
 
 /**
  * Boot the summary-worker. Mirrors `apps/call-worker/src/server.ts`:
  * env load → Redis connect → BullMQ Worker → /healthz → graceful drain.
  *
- * Failure modes routed to MANUAL_REVIEW are not retried (the handler
- * returns instead of throwing). Retryable failures (Anthropic 5xx,
- * Postgres lock contention) throw and BullMQ's exponential backoff
- * picks them up.
+ * Persisted review outcomes complete delivery after their effects commit.
+ * BUSY work and database failures throw for BullMQ backoff/redrive. A
+ * provider attempt whose result is unknown remains reserved for review;
+ * another delivery never submits that inference again.
  */
 
 export interface BootSummaryWorkerOptions {
@@ -28,7 +29,7 @@ export interface BootSummaryWorkerOptions {
   readonly logger?: Logger;
   readonly prisma?: DbClient;
   readonly summarizer?: SummarizerPort;
-  readonly notifier?: NotifierPort;
+  readonly observationConfig?: ObservationJobConfig;
 }
 
 export interface SummaryWorkerHandle {
@@ -57,46 +58,25 @@ export async function bootSummaryWorker(
   await connection.ping();
 
   const prismaClient = options.prisma ?? prisma;
-  const summarizer =
-    options.summarizer ??
-    createSummarizerPort({
-      anthropicApiKey: env.ANTHROPIC_API_KEY,
-      maxOutputTokens: env.SUMMARIZER_MAX_OUTPUT_TOKENS,
-      deriveWhenUnregistered: env.DEMO_SUMMARIZER_FALLBACK === 'true',
-    }).summarizer;
-  // Phase 4 ships FakeResend only — the live adapter throws on
-  // construction with a key. Phase 4.5 swaps in LiveResend.
-  const notifier = options.notifier ?? createNotifierPort({}).notifier;
-
-  const resolveRecipient = async (organizationId: string): Promise<string | null> => {
-    const owner = await prismaClient.user.findFirst({
-      where: { organizationId, role: { in: ['OWNER', 'ADMIN'] } },
-      orderBy: { createdAt: 'asc' },
-      select: { email: true },
-    });
-    return owner?.email ?? null;
-  };
-
+  const summarizer = options.summarizer ?? createRuntimeSummarizer(env);
   const worker = createSummariesWorker({
     connection,
     concurrency: env.QUEUE_CONCURRENCY,
     processor: createSummaryJobHandler({
       logger,
       prisma: prismaClient,
-      redis: connection,
       summarizer,
       env,
-      notifier,
-      resolveRecipient,
+      ...(options.observationConfig ? { observationConfig: options.observationConfig } : {}),
     }),
   });
 
-  worker.on('failed', (job, err) => {
+  worker.on('failed', (job) => {
     logger.error(
       {
         jobId: job?.id,
         attemptsMade: job?.attemptsMade,
-        err: { message: err.message, name: err.name },
+        code: 'SUMMARY_DELIVERY_UNCONFIRMED',
       },
       'summary-worker job failed',
     );

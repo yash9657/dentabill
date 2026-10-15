@@ -33,6 +33,7 @@ export interface FakeClaudeOptions {
 }
 
 export class FakeClaude implements SummarizerPort {
+  public readonly inference = { provider: 'SYNTHETIC', releaseId: 'synthetic-summary.v1' } as const;
   readonly #fixtures = new Map<string, ReturnType<typeof SummaryOutputSchema.parse>>();
   readonly #defaultsByPayer = new Map<string, ReturnType<typeof SummaryOutputSchema.parse>>();
   readonly #deriveWhenUnregistered: boolean;

@@ -188,122 +188,68 @@
     font-size: 12px;
   }
   .demo-label {
-    font-size: 10px;
-    color: var(--color-ink-inverse);
-    opacity: 0.85;
-  }
-  .demo-claim {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    margin: 0 28px;
-    padding: 24px 0;
-    border-bottom: 1px solid var(--color-border-subtle);
-    font-size: 14px;
-  }
-  .demo-steps {
-    display: flex;
-    position: relative;
-    justify-content: space-between;
-    padding: 24px 24px 16px;
-    gap: 12px;
-  }
-  .demo-steps:before {
-    position: absolute;
-    content: '';
-    height: 1px;
-    background: var(--color-border-light);
-    top: 42px;
-    left: 18%;
-    right: 18%;
-  }
-  .demo-steps li {
-    position: relative;
-    flex: 1;
-  }
-  .demo-step {
-    display: flex;
-    align-items: center;
-    flex-direction: column;
-    gap: 9px;
-    width: 100%;
     font-size: 11px;
-    color: var(--color-gray-warm);
-    border-radius: var(--radius-standard);
-    padding-block: 1px;
+    color: var(--color-ink-inverse);
   }
-  .demo-step[aria-pressed='true'] {
-    color: var(--color-brand);
-    font-weight: 600;
-  }
-  .demo-step-icon {
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    border: 1px solid var(--color-border-light);
-    background: var(--color-white);
-    border-radius: 50%;
-  }
-  .demo-step-icon.is-complete {
-    background: var(--color-brand-soft);
-    color: var(--color-brand);
-    border-color: var(--color-brand-soft);
-  }
-  .demo-step[aria-pressed='true'] .demo-step-icon {
-    background: var(--color-brand);
-    color: white;
-  }
-  .demo-result {
-    padding: 16px 28px 24px;
-    min-height: 263px;
-  }
-  .demo-result h2 {
-    font-family: var(--font-display);
-    font-weight: 400;
-    font-size: 29px;
-    line-height: 1.15;
-    margin: 18px 0 8px;
-  }
-  .demo-result > p {
-    font-size: 13px;
-    line-height: 1.65;
-    color: var(--color-gray-dark);
-  }
-  .demo-note {
+  .demo-video-title {
     display: flex;
-    align-items: flex-start;
-    gap: 11px;
-    margin-top: 20px;
-    padding: 14px;
-    background: var(--color-gray-light-alt);
-    border-radius: var(--radius-standard);
-    font-size: 12px;
-  }
-  .demo-note strong {
-    font-weight: 500;
-  }
-  .demo-note p {
-    margin-top: 5px;
-    color: var(--color-gray-dark);
-    line-height: 1.55;
-  }
-  .demo-next {
-    display: flex;
-    width: 100%;
-    justify-content: space-between;
     align-items: center;
-    gap: 12px;
-    padding: 16px 28px;
+    gap: 10px;
+  }
+  .demo-video-title h2 {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+  .demo-video {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: contain;
+    background: var(--color-black);
+  }
+  .demo-video:focus-visible {
+    outline: 3px solid var(--color-brand);
+    outline-offset: -3px;
+  }
+  .demo-video-details {
+    padding: 20px 24px 12px;
+  }
+  .demo-video-details > p {
+    max-width: 60ch;
+    color: var(--color-gray-dark);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .demo-caption-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 12px;
+    color: var(--color-gray-warm);
+    font-size: 12px;
+  }
+  .demo-video-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 24px;
+    margin-top: 4px;
+  }
+  .demo-video-links a {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    gap: 7px;
     color: var(--color-brand);
     font-size: 12px;
     font-weight: 500;
-    border-top: 1px solid var(--color-border-subtle);
-    transition: background var(--duration-fast);
+    text-decoration: underline;
+    text-underline-offset: 4px;
   }
-  .demo-next:hover {
-    background: var(--color-gray-light-alt);
+  .demo-video-links a:hover {
+    color: var(--color-brand-hover);
   }
   .compatibility-band {
     border-block: 1px solid var(--color-border-light);
@@ -825,18 +771,22 @@
     .demo-topline {
       padding-inline: 18px;
     }
-    .demo-claim {
-      margin-inline: 20px;
-    }
-    .demo-result {
-      padding-inline: 20px;
-    }
-    .demo-steps {
-      padding-inline: 12px;
-      gap: 6px;
+    .demo-video-details {
+      padding-inline: 18px;
     }
     .workflow-art {
       grid-column: 1 / -1;
     }
+  }
+}
+
+/* Live-call waveform bars (call detail). Used only behind `motion-safe:`. */
+@keyframes call-wave {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
   }
 }

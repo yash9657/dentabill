@@ -12,12 +12,16 @@ import {
   statusLabel,
   type Claim,
   type ClaimStatus,
+  type DetailClaim,
 } from '../../../lib/claims/types.js';
 import { useClaim } from '../../../lib/claims/use-claim.js';
-import { CallNowPill } from '../calls/call-now-pill.js';
+import { ClaimCallRecovery } from '../calls/claim-call-recovery.js';
 import { DashboardEmptyState } from '../dashboard-empty-state.js';
 import { SkeletonList } from '../skeleton-list.js';
 
+import { ClaimObservations } from './claim-observations.js';
+import { ClaimRemittances } from './claim-remittances.js';
+import { ClaimSourceDetailsSection } from './claim-source-details.js';
 import { ClaimStatusDialog } from './claim-status-dialog.js';
 
 export interface ClaimDetailPageProps {
@@ -85,7 +89,7 @@ function AuthenticatedClaimDetail({ id }: { readonly id: string }): React.ReactE
   return <DetailLayout claim={query.data} />;
 }
 
-function DetailLayout({ claim }: { readonly claim: Claim }): React.ReactElement {
+function DetailLayout({ claim }: { readonly claim: DetailClaim }): React.ReactElement {
   return (
     <section className="flex flex-col gap-8" aria-labelledby="claim-detail-heading">
       <BackLink />
@@ -104,12 +108,18 @@ function DetailLayout({ claim }: { readonly claim: Claim }): React.ReactElement 
       </header>
 
       <SummaryCard claim={claim} />
-      <CallNowPill
+      <ClaimSourceDetailsSection
+        key={claim.id}
+        details={claim.sourceDetails}
+        currentAmount={claim.claimAmount}
+      />
+      <ClaimRemittances claimId={claim.id} />
+      <ClaimCallRecovery
         claimId={claim.id}
         claimStatus={claim.status}
         payerCode={claim.payerCode}
-        variant="detail"
       />
+      <ClaimObservations claimId={claim.id} />
       <Timeline claim={claim} />
     </section>
   );
@@ -361,7 +371,12 @@ function DetailSkeleton(): React.ReactElement {
 function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 function formatDateTime(iso: string): string {

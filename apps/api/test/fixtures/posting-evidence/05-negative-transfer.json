@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "evidenceBasis": "PMS_PAYMENT_RECEIPT",
+  "sourceSystem": "SYNTHETIC_PMS",
+  "sourceProduct": "Manual source fixture",
+  "sourceNamespace": "synthetic-posting",
+  "sourceReceiptId": "synthetic-transfer",
+  "sourceRecordId": "synthetic-transfer-seq-1",
+  "sourceSequence": 1,
+  "sourceVersion": "receipt-v1",
+  "sourceDocumentId": "synthetic-posting-document",
+  "observedAt": "2026-10-01T12:00:00.000Z",
+  "status": "POSTED",
+  "sourceStatus": "vendor:posted",
+  "sourceIsPartial": false,
+  "currency": "USD",
+  "amount": "-25.00",
+  "sourceAmount": "25.00",
+  "sourceSignConvention": "DEBIT_POSITIVE",
+  "sourceEntryDate": "2026-10-01",
+  "sourceIssuedDate": "2026-09-30",
+  "paymentTrace": "synthetic-trace",
+  "sourceDepositId": "synthetic-deposit",
+  "detailCompleteness": "COMPLETE",
+  "entries": [
+    {
+      "sourceEntryId": "synthetic-transfer-entry",
+      "sourceClaimId": "synthetic-source-claim-A",
+      "sourceLineId": "synthetic-source-line-A",
+      "sourceProcedureId": "synthetic-source-procedure-A",
+      "entryKind": "TRANSFER",
+      "sourceStatus": "vendor:transfer",
+      "sourceVersion": "child-v9",
+      "sourceIsTransfer": true,
+      "amount": "-25.00",
+      "sourceAmount": "25.00",
+      "sourceSignConvention": "DEBIT_POSITIVE"
+    }
+  ]
+}

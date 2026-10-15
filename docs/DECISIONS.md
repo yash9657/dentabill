@@ -680,3 +680,1694 @@ The corresponding workaround is removed from each app's `vitest.setup.ts`. `TEST
 - The daily summary token budget becomes a soft cap across instances; rate limiting stays per instance.
 - SSE costs ~2 queries/s per open stream on Neon; streams self-close at call end.
 - Deployment Protection blocks self-calls to `*.vercel.app` deployment URLs: production uses the production domain (`INTERNAL_API_BASE_URL` / `VERCEL_PROJECT_PRODUCTION_URL`); previews need Protection Bypass for Automation, whose secret the dispatcher forwards.
+
+## ADR-054 — Fireworks-hosted open-weight AI direction; production plan and feasibility gates
+
+**Date:** 2026-10-12. **Status:** accepted product constraint; implementation architecture proposed.
+**Plan:** [FIREWORKS_IMPLEMENTATION_PLAN.md](./FIREWORKS_IMPLEMENTATION_PLAN.md).
+
+**Context.** The user requested a candid gap analysis against Lunabill, current domain
+and AI research, an industry-grade implementation plan, and open-weight models hosted
+on Fireworks for all AI. The repository contains a working simulated call/summary path
+and an Anthropic/Retell implementation; this request supersedes the prior provider
+direction for future model inference, but does not itself deploy a replacement.
+
+**Accepted decisions.**
+
+1. All future production model inference is to use approved open-weight models hosted
+   by Fireworks: text, vision, embeddings, reranking, model-based evaluation, and voice
+   inference if available. No hidden proprietary-model or other-provider fallback.
+2. Model/provider migration must preserve reviewability, evidence, tenant boundaries,
+   and historical data. Existing summaries remain readable. A previously approved
+   Fireworks release or human handling is the rollback path.
+3. The audit/implementation plan is the current planning baseline. It does not mark
+   any discovered runtime defect fixed or certify production readiness.
+
+**Proposed, not yet implemented or purchased.** A typed model gateway; dental
+line/coverage/evidence/payment entities; transactional inbox/outbox and durable
+execution; electronic-channel-first source sync; evidence review and version-bound
+approvals; quality/reliability release gates. Initial model candidates and the small
+Open Dental practice segment require evaluation and pilot validation.
+
+**Unresolved gates.** Confirm Fireworks-hosted open-weight streaming ASR and TTS,
+model/deployment identity and region, applicable agreements and content licenses,
+PMS/clearinghouse access, and a funded durable runner. Audio-input support alone does
+not establish TTS. If voice is unavailable under the strict requirement, ship the
+electronic-channel/human-review scope first. ADR-053's existing hosting constraint
+and free-forever pricing remain in force pending separate decisions; the plan does
+not authorize infrastructure spend or change pricing.
+
+**Consequences.** Future implementation starts with containment of unsupported
+financial metrics, model-only claim closure, identity fallback, and external-contract
+gaps, alongside vendor feasibility and evaluations. Durable production workflows
+cannot rely on the demo inline executor. The 14–18 week estimate is conditional on
+three engineers, billing expertise, vendor access, and a deliberately narrow scope;
+it is not a parity or autonomy promise.
+
+## ADR-055 — AWS baseline and the ElevenLabs speech/orchestration exception
+
+**Date:** 2026-10-13. **Status:** accepted user direction; provider choice unverified.
+
+User explicitly permits ElevenLabs speech models and voice orchestration while requiring
+Fireworks-hosted open-weight business reasoning, extraction, vision, retrieval and evaluation.
+This amends ADR-054's all-Fireworks voice constraint; it does not approve hidden fallback LLMs,
+post-call analysis models, or a production provider switch. Existing Retell remains available
+for controlled comparison; no real third-party calls were authorized. See
+[provider evidence](./PROVIDER_EVIDENCE.md) for account/contract/behavior gates.
+
+User also corrected the backend to AWS. Fetch confirmed `origin/main` was already included;
+actual newest backend revision was `origin/infra/aws=bfd4e8f`, incorporated with all prior
+work preserved. Lambda API and SQS worker plus shared Aurora are the current baseline;
+Vercel remains the frontend and historical inline mode remains supported. ADR-053's
+Vercel-only assumption must not drive new production work. Existing budgets remain binding:
+no service purchase, expansion, or production cutover is authorized by this decision.
+
+The user has no pilot clinic yet and directs development with fake patient data. This enables
+synthetic development but leaves real workflow/connector, billing-expert and PHI launch
+verification incomplete. No eventual PMS/payer/product/region scope was silently removed.
+
+## ADR-056 — Financial containment, identity gates, and summary commit boundaries
+
+**Date:** 2026-10-13. **Status:** implemented locally; release and live workflow proof pending.
+
+Claim workflow disposition, call completion, payer-reported amounts, and actual matched cash
+are distinct facts. Remove unsupported recovered-revenue sums rather than relabel uncertain
+payments as zero. Reports expose operational unique-claim/call counts and unavailable verified
+payments until reconciliation exists. This is containment, not a payment ledger.
+
+A model's `RESOLVED` advice never closes a claim. Eligible terminal-call observations can route
+to review or nonfinancial information gathering; protected claim states, intervening edits,
+and newer calls prevent stale transitions. Summary persistence, conditional state change,
+audit, and existing usage tally commit atomically; sequential replay does not re-run committed
+inference. Notifications request review. Active calls cannot persist a partial final summary.
+
+Missing/blank subscriber or provider NPI blocks enqueue and dialing without substituting a
+claim number. Worker failure records NEEDS_INFO with scoped CAS/audit and is non-retryable in
+BullMQ, inline, and SQS; it must not be overwritten by final-receive DLQ escalation.
+
+Limits remain explicit: approved amount is not actual payment; exact evidence-bound action
+approval and financial reconciliation are unimplemented. A DB transaction does not make
+external inference/notifications transactional. Incurred inference cost needs its own ledger,
+notifications need an outbox, and external call acceptance needs durable intents/reconciliation.
+Separate-process crashes, real vendor behavior, and authorized clinic end-to-end runs remain
+required. Current synthetic tests do not establish production accuracy or recovery attribution.
+
+## ADR-057 — Normalize provider evidence through a transactional inbox
+
+**Date:** 2026-10-13. **Status:** implemented locally; no deployment/live certification.
+
+Retell's actual signed `{event,call}` payload is separate from our simulation envelope.
+Accept only the timestamped SDK signature over raw bytes, using the API key designated
+for webhook signing. No random generated credential or untimestamped fixture fallback.
+The provider supplies no delivery event ID: lifecycle identity is event type plus call ID;
+transcript snapshots have a content hash and remain provisional rather than claimed
+provider revision order. Unsupported analysis never supplies business facts.
+
+Store normalized early events before acknowledging 202. Bind them only via our Call's
+unique provider ID, never webhook tenant metadata. Receipt ownership, source event,
+call metadata/status and audit form one transaction; rollback leaves retry possible.
+Clear inbox payload after tenant-bound event persistence. Known duplicate effects collapse,
+conflicting lifecycle data remains a review/reconciliation case. The worker reads terminal
+evidence from Postgres across processes. A hangup does not establish human contact;
+provider timing is independent of local cancellation/workflow status.
+
+Final source transcripts replace cumulative snapshots. Preserve exact text and speaker
+uncertainty; abstain from summarizing missing/empty/provisional evidence. UI streams are
+scoped to call, credential and API origin, including late asynchronous responses.
+
+Use documented Stop Call, never Delete Call, for termination requests. A successful stop
+request is not terminal confirmation; bounded errors propagate for reconciliation.
+Retell remains a comparison adapter, not an approved GPT/Claude business-inference fallback.
+
+This slice does not solve call acceptance ambiguity, worker-crash redial, outbox delivery,
+source revision ordering, unmatched inbox retention/operations, or real vendor behavior.
+Synthetic separate-process producer-crash proof must not be presented as those stronger
+claims. Production migration and provider actions retain the user's approval boundaries.
+
+## ADR-058 — A persisted intent owns external submission, not a queue delivery
+
+**Date:** 2026-10-13. **Status:** first safety slice implemented and verified locally;
+reconciliation/outbox/deadlines remain open release gates.
+
+Reserve one active CallIntent per tenant/claim with the exact queued claim version and
+atomic audit. Queue keys identify that reservation; legacy/unreserved or mismatched jobs
+cannot place calls. Composite database references prevent cross-tenant claim/call binding.
+Commit READY → SUBMITTING, exact request/hash and conditional claim transition before any
+provider create request. The opaque intent ID supplies provider idempotency/correlation.
+Current Retell create documentation specifies a one-hour body `idempotency_key` window;
+SDK 5.16.0 transmits this field although its types predate it. Disable create retries and
+bound the request to 30 seconds. Provider errors never prove non-acceptance.
+
+An uncertain response persists UNKNOWN; a crashed submitter can remain SUBMITTING. Both
+retain active ownership indefinitely until verified reconciliation. Do not automatically
+reset them, create another intent, switch providers or treat an empty lookup as non-acceptance.
+Known ACCEPTED calls resume from durable IDs/evidence. Call completion and conditional claim
+state/audit/intent terminalization form one transaction. Missing current identity does not
+prevent observing an already accepted call. DLQ cancels only an exact READY intent; failed
+terminal persistence keeps SQS delivery retryable. Stop acceptance alone cannot authorize
+hold rescheduling. Local cancellation status cannot close the SSE transcript prematurely.
+
+Two OS-process crash tests use an independent synthetic acceptance ledger, with SDK network
+contract tests separate. This is synthetic no-redial evidence, not real Retell/AWS validation
+or completed durable delivery. Next add transactional outbox/relay, scoped provider recovery,
+observer leases/deadlines, versioned HTTP request replay and PHI snapshot retention. An old
+worker that ignores these records is not a safe rollback while intents remain unresolved.
+
+## ADR-059 — Commit delivery obligations with state; cancellation waits for evidence
+
+**Date:** 2026-10-13. **Status:** implemented locally; deployment and real-provider verification pending.
+
+Persist a tenant-scoped JobOutbox row with every new CallIntent and with terminal call
+finalization/summary fan-out. Summary retry reservations serialize on the scoped terminal
+Call and commit their audit and command together. A broker failure after commit returns
+HTTP202 for the saved request; queue availability does not decide whether work exists.
+Payloads contain validated queue routing fields and opaque IDs, with an immutable hash and
+unique `(organizationId, kind, idempotencyKey)`. They do not contain transcripts.
+
+Deliver at least once through a token-fenced, expiring lease. Persist each attempt before
+sending; use bounded transport timeouts, exponential backoff and quarantine after ten
+attempts. Invalid/hash-conflicting payloads never dispatch. Broker acceptance followed by
+a crash leaves the same command eligible for replay. DELIVERED means transport receipt,
+not a completed phone call or inference. External-action deduplication remains the consumer's
+responsibility: the CallIntent fence prevents redial, while concurrent summary inference
+and incurred-cost accounting still require FW-26. A timed-out transport may complete later.
+
+The BullMQ worker sweeps at startup and every five seconds without overlapping its own
+sweeps. AWS reuses the private worker Lambda and existing SQS dispatcher through a fixed
+EventBridge event, 25 rows and a 20-second work budget. The schedule is disabled by default;
+no cloud resource was deployed or enabled. DB operations are not preempted by this work
+budget. Leases handle concurrent/repeated invocations; they do not establish exactly-once
+transport. Old inline HTTP202/fire-and-forget is not a durable receipt: await a matching
+HTTP200 only after the runtime records a disposition, otherwise retain pending delivery.
+Its authenticated fixed-bound relay endpoint still needs an operator-configured scheduler.
+
+Cancellation atomically saves a request marker, event and audit, with a conditional
+CALLING-claim transition to review. It never invents terminal status, end time or duration.
+Duplicate requests are no-ops; a committed provider terminal event wins. The frontend shows
+pending cancellation and keeps polling; Stop Call acceptance alone is not termination.
+
+Local separate-process tests kill the producer before first delivery and the relay after an
+independent broker fsyncs acceptance but before its acknowledgement. A fresh relay replays
+the identical command; two consumers produce one synthetic provider acceptance. This proves
+these crash boundaries, not real AWS/Retell behavior. Persisted observer deadlines,
+ambiguous provider-ID reconciliation, quarantine operations/alerts and authorized external
+validation remain required. Keep additive evidence on rollback; never deploy an old worker
+that ignores unresolved intents as a supposed safe recovery.
+
+## ADR-060 — Reconcile positive provider identity; never infer permission to redial
+
+**Date:** 2026-10-13. **Status:** implemented and tested locally; live compatibility and deployment remain release gates.
+
+An Owner/Admin may check an UNKNOWN or sufficiently old SUBMITTING intent from claim
+detail. Read-only Retell discovery is a separate port, with no create/delete/stop operation.
+Use current v3 metadata predicates and opaque pagination; retrieve the one candidate through
+v2 Get Call. Default bounds are three pages, twenty candidates, ten per page, two MiB per
+response and a ten-second whole-operation deadline. Core bounds combined lookup to twenty-five
+seconds; no automatic remote retry occurs. Provider response/error bodies never become API
+errors or audit metadata. General database log/PHI controls remain a broader W8 gate.
+
+Persist lookup attempts with a sixty-second token-fenced lease before reading remotely;
+allow sixty seconds after SUBMITTING and between completed checks. Validate the canonical
+stored request hash, opaque intent nonce, payer, agent, outbound direction and both numbers.
+Recheck identity on detail. Empty, incomplete, failed, conflicting or multiple matches never
+reset the intent, release its active-claim uniqueness, or authorize another provider/action.
+Lease expiry permits another read-only check, not another call. Human review remains explicit.
+
+One verified positive match commits Call/intent binding, normalized final source when present,
+audit and a resume outbox command together. Source evidence is labeled `retell_get_call` with
+retrieval time, never a synthetic signed-webhook receipt. No post-call analysis becomes business
+evidence. Missing provider timing stays null. Reviewed Claim state is left untouched.
+The provider Call ID remains globally unique; composite references preserve tenant/claim scope.
+
+The call queue carries optional strict `resume:{intentId,callId}` with transport key
+`call.resume.<intentId>`. Reusing the original key would be suppressed by retained BullMQ
+jobs. Resume must match the scoped binding and all immutable routing fields; only ACCEPTED
+observation or TERMINAL no-op is permitted, never the READY submission path. Inline receipt
+validation follows that exact binding and requires TERMINAL. Atomic finalization still owns
+one summary obligation even if original and resume observers overlap; observer leases are FW-36.
+
+When the original create response races recovery, either binding order keeps the same Call.
+An in-flight lookup may attach verified terminal evidence to the exact already-bound Call only
+while it still owns the unexpired lookup lease. It also commits the durable resume obligation;
+dropping that source could otherwise strand the original observer when the webhook is missing.
+A newer lease/token is never overwritten. Stale UI results are claim-bound and do not invent
+IN_QUEUE on an accepted-request replay.
+
+Synthetic contract, Postgres, HTTP, UI, separate-process SIGKILL and race checks are evidence
+for these local invariants only. A positive nonterminal match can still stall after a lost
+end webhook. Accepted-call deadlines, account sweeps, quarantine operations, real-provider
+compatibility, authorized clinic tests and production rollout remain open. Upgrade/drain old
+workers before exposing recovery so an older parser cannot discard the resume command.
+
+## ADR-061 — Observe accepted calls in bounded steps with durable termination state
+
+**Date:** 2026-10-13. **Status:** local implementation and synthetic verification; deployment and live termination remain release gates.
+
+An accepted provider call must outlive a particular queue consumer. Migration twelve adds
+CallIntent deadlines, due time, observer lease/attempts, last checked result/review marker,
+and separate stop request/attempt/acknowledgement/confirmation timestamps. Submission freezes
+the deadline before the external request. The same duration is appended to the canonical
+request snapshot and sent as `agent_override.agent.max_call_duration_ms`; old request hashes
+remain valid. Accepted binding gives the first subscriber a thirty-second scheduling grace.
+Recovery and legacy backfill anchor to original submission/creation, never worker restart.
+
+Each observation acquires a sixty-second token-fenced lease. The initial same-process window
+is one second; explicit no-key demo autopilot retains a bounded ninety-second window with a
+longer lease. Persisted sources are checked before remote work. Known-ID Get Call is bounded
+to ten seconds and must match the saved hash and exact outbound identity. Verified terminal
+source, terminal intent/call, conditional version-bound claim transition, audit and one summary
+outbox obligation commit atomically. Stale owners cannot insert source or overwrite finalization.
+Concurrent biller edits remain intact. Persistence failures retain ACCEPTED with a due time;
+transport acknowledgement is not a claim that the call or summary finished.
+
+A cancellation marker or saved duration deadline can request Stop. Persist the attempt before
+sending, then recheck current ownership. Retry the same provider ID no sooner than sixty
+seconds, at most three times; confirmation ends five minutes after the first stop request.
+An acknowledged or failed Stop never manufactures endedAt, terminal status, transcript, or a
+summary. Exhaustion requires review. After confirmation expiry, automatic remote reads stop;
+DB-source checks continue every five minutes and an authorized manual status check can retrieve
+later terminal evidence. Read-only checks cannot Stop or create calls. A fresh missing-key
+FakeRetell cannot acknowledge a real persisted call; only the just-started known synthetic
+adapter can stop its own in-memory scenario. Crashed demos require evidence/review.
+
+The existing trusted recovery entrypoints run outbox relay and up to five due accepted-call
+observations independently. Observer selection prioritizes null legacy timers so they cannot
+starve behind recurring calls. A twenty-five-second wall budget admits another row only when
+two ten-second external operations fit; database latency itself is not preempted. No queue
+message generation is needed per tick. AWS recovery remains disabled until explicitly deployed
+and enabled; a saved due time alone is not deployed recovery. Drain old workers before rollout.
+
+The stop/check/lease protocol cannot provide exactly-once Stop across a process pause or lost
+acknowledgement; retries target the same existing call and never authorize redial. The provider
+cap is additional protection, not verified real-line termination. Hold detection/DTMF and
+actual provider behavior remain unverified. Synthetic process tests prove the documented crash
+boundaries only. FW-38 separately replaces raw Prisma event logging with allowlisted target/
+timestamp records; thrown errors elsewhere still need their own safe handling.
+
+## ADR-062 — Scoped operations review and bounded delivery recovery
+
+**Date:** 2026-10-13. **Status:** implemented locally; deployment and operational evidence pending.
+
+Delivery acknowledgement cannot establish that a call or summary finished. Operators need to
+see due work, quarantine and missing legacy commands without raw payloads or a blind redial.
+An exhausted transport job may also remain in BullMQ, where re-adding its original ID does
+not run it again.
+
+1. Additive migration thirteen adds per-row `deliveryAttemptLimit`, monotonic `recoveryCount`
+   and a separate `CLOSED`/`closedAt` disposition. Attempts are never reset. Owner/Admin
+   approval grants exactly three additional delivery attempts for an exhausted, valid,
+   quarantined READY command with the unchanged queued claim version. Early quarantine,
+   active leases, invalid bindings, ambiguous submissions and accepted calls cannot be reset.
+2. Recovery revalidates the canonical command/hash, scoped actor, domain state and review
+   version in a serializable transaction. Audit and allowance/disposition commit together.
+   No endpoint accepts replacement payloads, provider IDs or freeform patient-bearing reasons.
+   Existing UNKNOWN/SUBMITTING calls use read-only reconciliation; ACCEPTED calls use their
+   existing status control. Summary redelivery remains blocked until inference ownership and
+   incurred-cost accounting are durable (FW-26).
+3. A confirmed terminal/cancelled intent or existing summary may close its exact quarantined
+   delivery as no work needed. `CLOSED` is not `DELIVERED`; closing never fabricates a receipt,
+   call outcome, transcript, summary, payment or new external action.
+4. Approved BullMQ recovery uses `outbox.<rowId>.recovery.<count>` as transport job ID while
+   preserving the immutable domain idempotency key and command. Retries within the allowance
+   share that transport generation. SQS carries validated optional envelope `transportJobId`; inline carries the same value
+   in an authenticated private header. Their domain bodies/receipt keys stay unchanged. The
+   runtime retains provenance through failure handling, and rechecks durable intent state
+   before acknowledging it. An older-generation failure cannot cancel newer recovery; an
+   unresolved READY/SUBMITTING no-op returns SQS retry or inline503. Domain consumers still
+   own external-action deduplication.
+5. `/v1/operations` and its cursor-paginated delivery/call lists require the stored Owner/Admin
+   role and organization scope. The Settings screen exposes safe counters, dates and closed
+   error codes, snapshot review and explicit approval. Five-minute delivery age is measured
+   from due time, not creation time; call observation uses a two-minute overdue threshold.
+   Missing legacy READY commands are visible but reads never invent them. No zero-backlog
+   result is a service-health or scheduler-heartbeat claim.
+
+Only synthetic localhost databases are migrated. No production deployment, recovery-schedule
+activation, live call, notification to others or account change is authorized by this ADR.
+Notification escalation, transport execution monitoring, unmatched inbox operations and staged
+AWS evidence remain separate gates. The original outbox/evidence must survive rollback.
+
+## ADR-063 — Release-gated Fireworks observation boundary
+
+**Date:** 2026-10-13. **Status:** implemented locally; no model approval or production integration.
+
+Business reasoning must use approved Fireworks-hosted open weights. An API key, catalog route
+or valid JSON is insufficient approval or evidence. A separate leaf package implements the
+first task, versioned claim observation from final transcripts, without changing live worker
+selection or the Retell comparison baseline.
+
+1. Trusted server configuration selects an explicit immutable release ID. Candidate and
+   disabled releases cannot send requests. Enabled entries bind exact endpoint/route, measured
+   response identity, organizations, task/prompt/schema/rule hashes, implementation artifact,
+   safety limits and reviewed evidence references. A policy SHA-256 and dated approval prevent
+   accidental scope/limit changes from reusing review. Protected input also requires separate
+   contractual/source approval. References are operator-reviewed records, not cryptographic
+   vendor attestation; artifact identity must be supplied by the future trusted build integration.
+2. Input objects are strict and cloned, with matching organization/claim/version and unique
+   sources. Output requires exact source/version/UTF-16 spans, identity, bounded integer USD
+   amounts, explicit code nomenclature or UNKNOWN, compatible actions and strict abstention.
+   Source anchors and lexical rules prove consistency only. They do not prove attribution,
+   applicability, clinical correctness or settlement. Every result requires human review.
+3. Native fetch fixes US host/path and denies redirects. Only allowlisted nonstreaming fields
+   are sent; tenant/release cache keys contain no source text. No tool execution, storage option,
+   prompt repair, implicit fake or cross-model/provider fallback exists. Fake fixtures are
+   explicitly synthetic and tied to the entire input; an unknown fixture abstains.
+4. One monotonic deadline covers headers, body, parsing, validation and backoff. Request128KiB,
+   response1MiB, depth32, output4096 and thirty seconds are maxima that releases may tighten.
+   At most one retry follows explicit429/500/502/503/504 and applicable Retry-After within the
+   same budget. Ambiguous network failure, cancellation and invalid output do not retry.
+   Abort cannot establish that generation stopped or was free.
+5. Safe progress preserves each completed/active transport attempt even when the gateway's
+   cancellation watchdog wins. Unknown token usage remains null, never zero or inferred.
+   Errors expose closed codes/status/timing/usage only. Observations and evidence themselves
+   contain sensitive content and must not be logged. FW-14 still owns application telemetry;
+   FW-26 must persist ownership/spend before worker replay is allowed.
+
+Both checked-in routes remain CANDIDATE. No inference, speech, call, deployment or cutover
+occurred. New credentials passed one bounded read-only authenticated account/user GET each;
+remaining account policy/entitlement inventory proceeds alongside FW-26. Qualified dental evaluations, source authorization, actual model revision/license/region/
+retention and capped inference authorization remain release gates. Streaming/tools and the
+ElevenLabs voice chain require separate implementation and comparative evidence.
+
+## ADR-064 — Durable inference ownership before summary recovery
+
+**Date:** 2026-10-13. **Status:** implemented locally for synthetic generation 1; no live inference or production rollout.
+
+The old summary transaction saved usage only when summary/state/audit writes succeeded.
+Crashes or duplicate transport jobs could also repeat model requests. A Redis lease could not
+preserve provider evidence or distinguish a never-sent request from uncertain acceptance.
+
+1. Add organization-scoped `InferenceBudget`, `InferenceRun`, and `InferenceAttempt` with
+   additive migrations fourteen/fifteen. One call has exactly one generation and one admitted
+   send in this slice; transport retry keys cannot create inference generations. Composite
+   call/claim/organization and run/organization foreign keys enforce ownership. A database
+   trigger preserves request/release/source/claim snapshots; sensitive payloads never enter
+   safe audit/error projections.
+2. Organization row locks serialize token admission, attempt start and settlement. RESERVED
+   can be reclaimed after lease expiry because no send was committed; SUBMITTING becomes
+   UNKNOWN and cannot authorize another send. The original owner may still save a late
+   positive receipt. An attempt marker commits before provider contact. An immutable saved
+   response is resumed from its original claim/source snapshot, with the original claim
+   version and later-call guards controlling application.
+3. Per-day bigint budgets include reported usage plus every outstanding reservation across
+   all days. Existing same-day summary usage is imported once as unattributed baseline.
+   Known usage, including schema-rejected and above-allocation responses, is recorded once
+   independently of summary application. Missing usage stays null and retains its allocation;
+   expiry, timeout, HTTP failure, midnight and absent billing deltas do not prove zero cost.
+   `Organization.summaryTokensUsed` is only a bounded legacy display projection. The synthetic
+   byte/output allocation is an operational admission unit, not an attested token or dollar cap.
+4. Receipt persistence precedes summary/state/audit application. APPLIED commits with those
+   effects; review disposition has its own transactional `reviewAppliedAt` marker so failure
+   after a rejection receipt cannot lose claim-review effects. Replays apply local effects
+   once without model resubmission. No process-local or Redis lock governs ownership.
+5. SQS/inline review acknowledgement requires the exact scoped UNKNOWN/REJECTED run and
+   committed review marker. Busy/unconfirmed exceptions remain retryable/redriveable even on
+   the final delivery attempt. Owner/Admin summary status exposes safe state only; retry
+   preserves existing summaries and refuses submitted/unknown/rejected runs. It never selects
+   a replacement generation. General quarantined-summary recovery remains closed pending its
+   distinct approval/recovery proof.
+6. Only the fixed synthetic summary adapter is accepted. A configured Anthropic key now makes
+   production factory creation fail closed; explicitly constructed LiveClaude comparison
+   fixtures remain, with SDK retries disabled and nullable reported usage. Neither new API
+   key enables inference. Fireworks's observation task cannot honestly populate legacy
+   confidence/representative fields: versioned summary mapping is FW-27. The gateway's void
+   progress callback is best effort, so FW-41 must add awaited admission and receipt storage
+   for every HTTP attempt before any retrying live integration.
+
+Independent review reproduced and fixed lost rejection application, changed-config allowance
+validation and lock-order hazards. PostgreSQL concurrency/rollback and independent-process
+SIGKILL tests use only synthetic localhost requests with fsynced acceptance evidence. They do
+not establish provider idempotency, dental accuracy, spend caps or real recovery parity.
+At this ADR's date, the best-effort post-commit review notification could still be lost; its
+transactional replacement is now implemented locally in ADR-079/FW-40, with external delivery
+and rollout still open. No production deployment, account mutation, paid inference, speech or calls
+were performed. Production rollout must drain old consumers and preserve this evidence on
+rollback; this ADR does not authorize deployment or messaging.
+
+## ADR-065 — Journal each native Fireworks request before sending
+
+**Date:** 2026-10-13. **Status:** implemented and verified locally; production routing and
+model approval remain disabled.
+
+The gateway's progress callback could describe a request but could not await a reservation
+or preserve a response across process death. A retrying worker therefore needed a durable
+boundary for each HTTP attempt, separate from validated observations and later claim effects.
+
+1. Require an awaited journal at native transport and gateway entry. The worker's explicit
+   durable observation adapter binds scoped terminal call, claim/source versions, request and
+   wire hashes, release-policy hash, attempt cap and original send deadline. Migrations16–18
+   extend the existing ledger with per-attempt billing day, bounded raw response, completion
+   identity/history and fractional elapsed time. Only isolated localhost databases were changed.
+2. Commit admission before every fetch, and recheck cancellation and the original deadline
+   after storage returns. At most one retry follows an explicit supported HTTP error; its
+   response and interpretation commit first, then a fresh full allocation commits. Different
+   UTC days cannot erase outstanding liability. The progress callback remains diagnostic.
+3. Save complete bounded response evidence before interpreting it. Non-success bodies are
+   discarded; status and normalized retry delay are sufficient for retry policy. Known usage
+   commits independently of model/finish/schema/semantic rejection or final-result audit.
+   Missing usage stays null. Contradictory totals/cache values reject the response and cannot
+   release a reservation using a false zero; the database also rejects inconsistent DTOs.
+   Invocation usage is unknown if any constituent attempt is unknown.
+4. A later owner locally revalidates saved raw evidence without another provider request,
+   including after the original send deadline. A response lost before durable storage leaves
+   an uncertain attempt that cannot be resent. A cancelled/deadline interpretation with unknown
+   usage may be refined once from its immutable saved response; retain the original completion
+   in history and never overwrite known component values. A definite parsed interpretation and known usage survive later caller cancellation unchanged.
+   Completion identity excludes replay timing so recalculating elapsed time cannot duplicate accounting.
+5. A final result requires matching committed attempt DTOs; cached reads create no new send
+   lease. Raw receipts survive failure of final-result audit/application. Expired zero-attempt
+   reservations refund the exact original allocation under the org lock, clear ownership and
+   remain terminal. No refund follows expiry alone when an attempt may have been sent.
+6. Keep the production summary handler synthetic. The new adapter returns versioned reviewed
+   observations but does not apply them to claims, create legacy confidence/representative
+   fields, replace historical summaries or introduce a new API/runtime selector. FW-27 owns
+   that workflow; FW-40 owns notifications. Credentials alone cannot activate a release.
+
+Independent review found and corrected cancelled-response replay lockout, contradictory usage
+settlement and a permanently held unsent reservation. Real localhost transport exposed the
+fractional-timing schema mismatch and cached-result lease contention. Process proofs kill
+workers at durable boundaries and compare separate fsynced synthetic provider acceptances;
+they also cover cancellation while a real admission transaction is blocked. These are local
+invariants, not provider idempotency, accuracy, end-to-end clinical evidence or dollar caps.
+No paid inference, speech, call, account mutation, production migration or deployment ran.
+
+## ADR-066 — Immutable native observations and exact-version biller review
+
+**Date:** 2026-10-13. **Status:** accepted for local implementation; not deployed.
+
+Native Fireworks observations do not contain the legacy confidence/representative fields, and
+an acknowledged payer statement is not financial settlement. The application needs inspectable
+sources and review receipts without fabricating a CallSummary or mutating claim/payment state.
+
+1. Store append-only ClaimObservation rows per durable inference run and append-only review
+   receipts, protected by tenant-scoped foreign keys and database immutability triggers.
+   Freeze output, exact source text, request/source hashes, release/task/prompt/schema versions
+   and provenance. Publish the observation, APPLIED marker and safe audit atomically; preserve
+   provider usage independently so application failure cannot erase spend or cause a resend.
+2. Bind one source to a persisted final CallEvent on the run's call. Its identifier contains
+   the event ID, and its version is SHA-256 of exact raw text. A new reservation requires the
+   latest final event; replay/publication verify the original bound event. Publication holds
+   a shared event lock while verifying, avoiding a validation-to-publication mutation gap.
+   Provisional, missing, mismatched and fabricated sources fail closed.
+3. Append publication versions for history, but use original CallIntent creation chronology
+   (legacy Call creation as fallback), then call ID, to choose current evidence. Reconciliation
+   can create an older call later; receipt arrival must not make its evidence current.
+4. Require a stored organization billing role, exact observation digest and claim version
+   for acknowledgment/dismissal. Dismissal needs a note. Changed claims, newer calls and
+   superseded observations and changed/missing final transcripts reject new reviews. Identical retries return the original receipt,
+   even if later work makes the finding stale. A review is a snapshot decision; an overlapping
+   later call may subsequently make it stale, which current eligibility and UI disclose.
+5. Expose scoped list, saved-result publish and review APIs, generated SDK types and an evidence
+   section on claim detail. Display payer-reported amounts as unverified and label synthetic
+   data independently of provider provenance. Preserve reviewed history alongside stale
+   warnings. Actor-attributed access audits precede GET/POST evidence responses, including
+   retries; failed audit withholds the response. No review writes claim status, confirms payment
+   or dispatches external actions.
+
+This completes the local publication/review portion of FW-27. One generation per call remains:
+explicit replacement authorization and automatic native job routing require follow-on work. Both model releases remain unapproved; synthetic/local HTTP
+proofs do not establish dental accuracy or external parity. No provider generation, speech,
+real calls, production migrations or deployments ran.
+
+## ADR-067 — Explicit same-call regeneration and recovery without another send
+
+**Date:** 2026-10-13. **Status:** accepted for local implementation; not deployed.
+
+A corrected transcript needs a new observation while preserving the original finding, review,
+and provider liability. Retrying an interrupted HTTP request must not silently authorize a
+second generation or erase an uncertain provider send.
+
+1. Add immutable tenant-scoped `ObservationRegeneration` approvals (migrations 20/21). An
+   Owner/Admin approves the exact claim version, latest final transcript, prior observation/run,
+   next generation, release policy and implementation artifact, with a reason and opaque
+   idempotency key. Approval lasts 15 minutes. Identical actor/key/reason/preview retries return
+   the original authorization before current-source checks; a changed binding conflicts.
+   Store the parsed release as a serialized JSON scalar to preserve policy-hash field order.
+2. Derive generations only from durable approval. Recheck stored role, current claim/source,
+   latest call, supersession, approval expiry and policy/artifact before new reservation and
+   every new attempt. Unknown/active prior work cannot authorize replacement. Completed failed
+   responses retain unknown usage holds. A proven-unsent failure requires zero attempts/usage,
+   exact durable failure evidence and an audit before a separately reviewed generation.
+3. Preserve all observations and reviews; currentness follows original call chronology, then
+   inference generation, then publication version. A newer unexpired unused approval or any
+   newer run prevents reviewing the old finding (`NEWER_GENERATION`). Late older publication
+   cannot displace a newer generation.
+4. Execute explicit regeneration synchronously through the existing native journal. The API
+   bounds response waiting at 30 seconds and aborts send permission on disconnect/timeout;
+   database work may settle later, so callers recover the exact saved authorization. No new
+   background queue is implied. The UI preserves the frozen submission/key after an ambiguous
+   response, checks saved work, and resumes that ID or explicitly retries the identical body.
+5. Final receipts publish locally without credentials. Raw-receipt recovery validates the saved
+   approved manifest and current implementation pin in replay-only mode, even after original
+   approval/deadline expiry. It requires durable evidence, ignores injected transport, forbids
+   new attempt admission and uses a transport that cannot send. A saved503 cannot trigger a
+   fresh retry. Normal sends recheck release validity after awaited admission.
+6. Keep runtime model releases CANDIDATE and automatic jobs synthetic. API keys and the new
+   optional artifact pin do not activate an approved release. Source/request/model/endpoint
+   overrides are never accepted from clients. Every evidence response requires a safe actor
+   access audit. Regeneration changes no claim status, payment, legacy summary or external action.
+
+Real Postgres, native synthetic transports and a separate-process SIGKILL proof verify local
+execution/recovery; browser checks use mocked auth/API. These are not live dental quality,
+provider contract evidence or production parity. AWS remains unchanged. Automatic native job
+routing, release evaluation/approval, voice and supported real connectors remain open.
+
+## ADR-068 — Automatic native findings through durable post-call jobs
+
+**Date:** 2026-10-13. **Status:** accepted for local implementation; not deployed.
+
+The durable native adapter and approved regeneration API did not participate in ordinary
+post-call jobs. Existing consumers, delivery retry, operations recovery and call detail understood
+only legacy summaries, so a native response could remain invisible or lack a safe completion path.
+
+1. Reuse `summary.generate` across BullMQ, inline and AWS SQS. Select new work explicitly with
+   `SUMMARY_ANALYSIS_PROVIDER` (default SYNTHETIC) and `OBSERVATION_RELEASE_ID`. Existing generation
+   one runs always retain their persisted provider/request. There is no provider fallback and
+   queue payloads cannot select models, sources, data class or generations. A concurrent provider
+   selection mismatch is retryable, never a successful unsupported-provider disposition.
+2. Build native requests from scoped terminal calls and the latest final event on that call.
+   Default to PROTECTED; synthetic data class and transports are trusted constructor-only test
+   seams. Native publication produces immutable findings, not fabricated legacy summary fields
+   or financial state transitions. Delayed analysis of an older call is permitted; existing
+   chronology/currentness rules prevent it from displacing newer evidence.
+3. Migration22 stores an immutable serialized release manifest on InferenceRun. New native
+   reservations bind it, and each new HTTP attempt rechecks approval/artifact/current claim and
+   final transcript. Saved raw responses recover with the archived manifest and matching current
+   implementation artifact, even after expiry or catalog removal, in no-send replay mode. Fresh
+   sends still require the exact release to remain approved in the current catalog. Final
+   results publish without configuration. Legacy null snapshots are not backfilled; generation2
+   can rely on its existing immutable authorization snapshot.
+4. Busy owners, missing/unapproved configuration, admission budget/source problems before a
+   terminal result, and persistence failures remain delivery failures. A durable terminal
+   rejection (including stale source or retry-budget denial after reservation) is not resent.
+   UNKNOWN/REJECTED completes delivery only after a review marker and
+   safe audit commit; no claim/financial transition follows. Unknown acceptance is never resent.
+   Expired zero-attempt reservations settle from saved identity without keys or artifact config.
+   Native publication and review dispositions can close a quarantined operations command only
+   after its exact durable evidence is bound to the reviewed recovery snapshot.
+5. Expose safe provider/observation/review status to authenticated same-organization users.
+   Owner/Admin delivery retry can recover saved results/raw receipts or persist missing review
+   effects after ownership expiry, without submitting another model request;
+   it never creates a replacement generation. Call detail uses bounded visible polling, explicit
+   refresh and a link to claim findings; findings refresh respects organization/user cache scope.
+
+Checked-in model releases remain CANDIDATE. Credentials and a selector cannot establish approval,
+dental quality, provider-contract suitability or production readiness. Validation uses localhost
+Postgres and synthetic providers; no paid inference, real calls or AWS deployment is implied.
+Model evaluation/approval, operational monitoring, voice and supported connectors remain
+required by the full objective. The notification outbox gap recorded here is locally addressed
+by ADR-079; external notification delivery and rollout remain open.
+
+## ADR-069 — Independent reference annotations and deterministic evaluation evidence
+
+**Date:** 2026-10-13. **Status:** accepted for local tooling; no model approval.
+
+The native gateway's structural and lexical checks cannot establish payer attribution,
+negation handling, dental correctness or settlement. Reusing expected labels as fake model
+outputs would create circular evidence. FW-15/16 therefore adds a separate `@dentabill/evals`
+workspace with a complete offline seed, score and verification workflow.
+
+1. Reference annotations are authored independently. The initial 25 examples remain DRAFT,
+   synthetic and DEVELOPMENT, with explicit rationale and prohibited interpretations. These
+   are engineering hypotheses, not domain adjudication. An adjudicated record must retain two
+   distinct reviewers' original annotations, evidence references and input digests, plus final
+   adjudication bound to the entire case. Declarations alone cannot prove qualifications.
+2. Corpus and result schemas are strict. Every declared case must have exactly one result
+   bound to the exact target-adjusted request. Missing, extra, duplicate or swapped entries
+   reject the evaluation. Practice/patient/claim/scenario groups, claim IDs and exact duplicate
+   source texts cannot cross development/calibration/held-out partitions. Undeclared near
+   duplicates still need human detection; this seed is not an untouched evaluation set.
+3. Scoring separates schema/lexical validity, complete reference values, exact field-bound
+   citation agreement, coverage and abstention. Errors, malformed outputs and failed requests
+   stay visible. Null fields on abstention do not generate trivial successes. Every tag/split
+   has denominators; empty rates are null. Citation multiset agreement is deliberately
+   conservative and does not establish entailment or clinical truth.
+4. Usage counts attempt receipts once, including failed/retried work; unknown usage is not
+   zero. Costs and measured human review seconds remain null. Saved latency is unverified
+   reported latency. Field/citation edits are a correction proxy. The correlated draft seed
+   cannot justify a confidence interval or production quality threshold.
+5. The CLI's seed baseline calls the existing fake gateway with no registered outputs and
+   therefore abstains. Score performs no inference. Verify recomputes the full report and
+   review packet, including original inputs, target policy, current evaluator/gateway source
+   and dependency fingerprints. Artifacts use exclusive private local files. Closed error
+   codes and redacted reports exclude transcript/output bodies.
+6. Imported provenance and review IDs remain unauthenticated declarations. Every review
+   packet keeps `productionApproval: false`; this tool has no authority to promote a release.
+   Runtime model policy is unchanged. Actual provider capture, independent human adjudication,
+   ratified thresholds, applicable vendor evidence and authorized deployment remain required.
+
+No new inference provider, paid request, production migration or deployment is introduced.
+
+## ADR-070 — Bounded synthetic contract discovery before release approval
+
+**Date:** 2026-10-13. **Status:** accepted for local capture tooling; no production approval.
+
+FW-42 encountered a bootstrap dependency: production release approval requires a measured
+response-model identity and serving evidence that cannot be honestly populated before a first
+response exists. Credentials and publisher model cards cannot supply that evidence. Introducing
+fictional release IDs/evidence or weakening normal gateway approval would conceal the gap.
+
+1. A separate discovery transport shares the fixed US host, bounds, cancellation and awaited
+   journal implementation. It returns only capture status, attempts and usage after saving raw
+   JSON; it never returns a validated observation, model identity or generated content. The
+   ordinary gateway and expected-model transport retain their existing approval/identity rules.
+2. A local capture plan freezes at most25 synthetic cases, one exact candidate, request bytes,
+   code/dependency fingerprint, host/path, account digest, current price/context/license evidence
+   and a 24-hour execution window. The target remains CANDIDATE. An exact plan-digest confirmation
+   is a trusted local operator action, not authenticated proof of a human's authority.
+3. The whole inventory reserves a conservative micro-USD allowance before execution, using
+   uncached input and completion rates at the full documented model context on both sides.
+   This intentionally over-reserves reasoning until measured, rounds upward and never refunds
+   uncertainty. It is not a verified provider-side invoice cap; regional model mapping and actual
+   usage/billing still need evidence. Reported counts above the bound stop further cases.
+4. One immutable admission publishes identity and its allowance together before HTTP. Private
+   0700/0600 records use temp-file fsync, exclusive atomic link, then directory fsync. Response
+   bytes precede interpretation; an interrupted receipt replays without sending. An admission
+   without a response retains liability and becomes UNKNOWN only after the same-host owner is
+   confirmed dead. A live/reused PID blocks takeover. NO_SEND claims the same slot to prevent a
+   cancelled concurrent runner from masking another runner's provider request.
+5. Reverse publication-order reads validate every receipt and final-result binding. Raw usage
+   is checked again on restart so an earlier cancellation receipt cannot hide a known overrun.
+   Every frozen case retains a disposition; missing usage/failures never become free or accurate.
+6. The CLI has separate prepare, inspect and run commands. Only run uses a key and verifies its
+   exact account read-only before sending. It cannot buy credits, change account policy, approve
+   a model, touch application data, migrate/deploy AWS or place calls. Local filesystem durability
+   is not a distributed/account-wide spending service. Authorized runs must not be cloned,
+   relocated, edited or deleted to obtain another allowance.
+
+Actual read-only account/model evidence is in the provider register. Fake HTTP/process tests
+validate mechanics only. First real discovery requests require the concrete spending scope to be
+confirmed; quality measurement then requires a reviewed synthetic-evaluation release and normal
+gateway captures. Qualified reference review and the full connector/voice/product scope remain open.
+
+## ADR-071 — Explicit CSV source identity and non-destructive import reports
+
+**Date:** 2026-10-13. **Status:** implemented locally; deployment and real PMS evidence pending.
+
+The prior importer discarded the detected source and source patient reference, treated
+`(organizationId, claimNumber)` as identity without a unique constraint, checked outside
+transactions, and committed 500-row chunks independently. Same-file/concurrent duplicates
+could be inserted; changed and cross-source claims could be silently skipped. No existing
+legacy identity can be inferred safely from that data.
+
+New CSV claims use `(organizationId, sourceSystem, sourceNamespace, sourceClaimId)`.
+The source database namespace is explicitly declared by the operator, and `SourceClaimId`
+is explicitly exported; only Open Dental’s documented internal `ClaimNum` has a native
+alias. Display identifiers, DOB and subscriber IDs are never fallbacks. Optional source
+versions are opaque. The nullable expand-only migration preserves every legacy row,
+adds a scoped unique index and complete-provenance CHECK, and makes imported provenance
+immutable. Legacy duplicates remain reportable rather than deleted or merged.
+
+The importer holds an organization NO KEY UPDATE lock across lookup, insert chunks and
+aggregate audit. A keyed fingerprint binds normalized fields plus all exact source cells
+(sorted normalized headers), including currently unmodeled data; raw cells remain transient.
+Equal rows deduplicate. Conflicting same-file identities are all withheld. Changed source
+records and legacy display matches are reported with no mutation of the existing claim.
+The unique index additionally fences writers outside this importer. Namespace and hash-secret
+changes require intentional reconciliation; an operator declaration is not authenticated
+PMS identity. A source-format change can still require reviewed cross-system reconciliation.
+
+The UI requires the source database, separates unchanged rows from conflicts, exposes row
+outcomes/links and downloads a report without raw source data. Missing source IDs are visible
+row outcomes, never invented values. CSV parsing rejects ambiguous headers/aliases, malformed
+records, invalid calendar dates, out-of-range amounts and invalid UTF-8. A record-aware preview
+bounds parsing before normalization at 5,000 data records; no newline counting is used.
+A local real-Postgres migration replay preserves duplicate reviewed records byte-for-byte;
+concurrent uploads and a late-chunk failure are covered by real database tests.
+
+This slice implements import admission/reporting, not reviewed source updates or real source
+synchronization. FW-43 tracks versioned source reconciliation and legacy binding; FW-21 and
+contracted connectors retain their full scope. No production migration, deployment or
+third-party request is authorized by this decision.
+
+## ADR-072 — Immutable procedure and coverage import snapshots
+
+**Date:** 2026-10-13. **Status:** implemented locally; external connector/deployment evidence pending.
+
+Claim-level code arrays cannot identify procedures for partial payment or reversal allocation.
+Codes may repeat across teeth and source procedure IDs are not the same as submitted claim
+line IDs. Coverage order alone does not identify the payer billed by a secondary claim.
+Current Open Dental documentation distinguishes ClaimProc billed fees from procedure fees,
+quantities, estimates and adjustments; not every ClaimProc is a billed line. This decision
+models an explicit custom import contract, not an inferred native PMS adapter.
+
+1. Optional `ClaimLines`/`Coverages` JSON columns preserve explicit source facts. Per-line
+   billed totals reconcile exactly in integer cents; quantity is independent and nullable.
+   Repeated submitted codes survive with distinct source line IDs. Raw location/numbering
+   system text is bounded, never restricted to adult teeth1–32 or interpreted as clinical truth.
+   Unknown child keys, invalid dates/totals, duplicate identities and ambiguous target coverage
+   reject the entire CSV row. Upload bounds include10,000 children and512 KiB per details cell.
+2. Expand-only migration24 adds `ClaimSourceDetails`, `ClaimSourceLine`, `ClaimSourceCoverage`.
+   Composite tenant/claim foreign keys, scoped child/position/sequence uniqueness, admission
+   checks and deferred exact counts/totals/target checks seal the snapshot at commit. The
+   schema rejects updates, additions and individual deletion while the claim exists; existing
+   parent-claim cascade deletion still works. No legacy row or reviewed state is backfilled.
+3. Snapshot admission requires an identified source claim and its current amount. Subsequent
+   local claim corrections do not change imported facts. Parent, snapshot, child chunks and
+   aggregate audit share one transaction. A details-specific fingerprint prevents an older
+   unmodeled JSON export from being mistaken for a fully imported snapshot on replay.
+4. Coverage sequence and `isClaimCoverage` are separate explicit facts. Source subscription,
+   plan, subscriber and patient-member IDs remain distinct and nullable. This display/import
+   slice never populates outbound subscriber identity, verifies eligibility or changes financial
+   state. The current adapter continues to require its own explicit subscriber identity.
+5. GET detail exposes scoped ordered source facts; POST/PATCH/list retain their summary
+   response shapes. The claim page separates original totals from current local amounts and
+   paginates procedure lines. Detail cache keys include the selected practice and status edits
+   preserve the snapshot through refetch. Summary-only claims show absent detail rather than
+   fabricated one-line procedures.
+
+The contract and fabricated upload are documented in `apps/api/test/fixtures/csv/README.md`.
+Public sources: [ClaimProcs](https://www.opendental.com/site/apiclaimprocs.html),
+[Procedures](https://www.opendental.com/site/apiprocedurelogs.html),
+[PatPlans](https://www.opendental.com/site/apipatplans.html),
+[InsSubs](https://www.opendental.com/site/apiinssubs.html),
+[Claims](https://www.opendental.com/site/apiclaims.html).
+
+Stable line identities enable the next FW-21 slice; payment events, allocations, adjustments,
+reversals, reconciliation and source revision approval are not implemented by these snapshots.
+No live connector, migration of AWS, production rollout, real payment or parity claim follows.
+
+## ADR-073 — Reviewed remittance evidence with bounded reversals
+
+**Date:** 2026-10-13. **Status:** local implementation; deployment, real remittance connectors and cash evidence pending.
+
+A payer's remittance reports adjudication; it does not prove receipt, posting, settlement or
+incremental recovery. CMS distinguishes EFT transfer instructions from ERA explanations and
+allows one payment across multiple claims. Its Medicare recoupment example shows a corrected
+claim reversal preceding actual recoupment; that example is Medicare-specific, not a universal
+payer rule. Open Dental likewise separates claim procedure insurance amounts from batch checks,
+estimates and write-offs. We preserve these distinctions rather than treating a reviewed report
+as a bank transaction.
+
+1. A strict custom version1 JSON contract imports one claim-level PAYMENT or REVERSAL event.
+   USD amounts are exact signed decimal strings. Line amounts decompose the claim report;
+   adjustments retain independent signed amounts and raw code/reference fields. The source
+   declares COMPLETE, PARTIAL or ABSENT line detail. Missing line/coverage identities remain
+   unmatched; procedure codes, claim numbers and traces are never identity substitutes.
+   Provider-level adjustments, native835 parsing, cash movements and PMS postings are outside
+   this contract and remain required future work.
+2. Source identity is `(organizationId, sourceNamespace, sourceRecordId)`, unique across claims.
+   Canonical evidence is keyed with the existing hash secret and bound to its claim. Identical
+   retries return the same record; changed evidence conflicts without overwriting history.
+   Traces/document IDs are correlation fields and may repeat across independent claim events.
+   The operator's declaration is not proof that the evidence came from a payer.
+3. A fresh preview binds evidence hash, current claim timestamp and scoped evidence/review
+   counts. Stored OWNER, ADMIN or BILLING_STAFF roles can accept/reject. The review stores the
+   actor, token, exact evidence/version, original reference and idempotency key. Request replay
+   binds the actor and identical decision/token, returning the original result even after later
+   ledger changes. A changed preview requires a fresh review; a timeout retains the same request.
+4. Accepted rows mirror the imported header, line allocations and adjustments exactly. Rejected
+   evidence contributes no amount or children. A reversal can arrive first and remain unresolved;
+   accepting it requires an accepted original PAYMENT with matching tenant, claim, source,
+   payer identity and explicit coverage. Cumulative reversals cannot exceed the original header,
+   each line, unallocated residual or each signed adjustment. None represents actual recoupment.
+5. Migration25 adds four immutable tables, scoped restrictive FKs and deferred exact child/mirror
+   checks. A review-admission tuple write serializes direct SQL writers even under repeatable-read
+   snapshots while preserving claim updatedAt. API transactions lock the claim and commit the
+   complete review/children/audit together. Source admission additionally locks the organization
+   for uniqueness across claims. No workflow status, claim amount or recovered-revenue metric changes.
+6. Financial evidence prevents parent claim deletion; the API returns409 rather than losing
+   evidence or emitting a raw FK error. Actor/source references are also retained. This is an
+   integrity safeguard, not a completed legal retention/deletion program. Approved correction,
+   erasure, legal-hold and backup policies remain production work; immutable evidence must not
+   be dropped as an operational workaround.
+7. The biller screen imports custom JSON, exposes exact source facts and fresh mappings, supports
+   acceptance/rejection and preserves uncertain retry commands. Amount summaries count only
+   accepted claim reports, with line allocations and residual as their components. Cash receipt,
+   posting and settlement remain explicitly UNVERIFIED. User/practice cache scoping prevents late
+   auth resolution or mutation completion from crossing the initiating scope.
+8. Import raw and normalized payloads are bounded to1MiB, with500 allocations/500 adjustments.
+   Pages fetch at most11 records and return at most10, additionally bounded to2MiB including
+   summary/cursor allowance. This leaves room for the Lambda proxy envelope and JSON escaping
+   within the documented6MiB synchronous response limit. Clients follow hasMore/cursor and
+   cannot assume requested limit equals returned count. Validation/DB errors never log source
+   payloads. Read, import, review and exact-replay access have PHI-safe audit entries.
+
+Primary sources checked2026-10-13:
+[CMS EFT/ERA](https://www.cms.gov/priorities/key-initiatives/burden-reduction/administrative-simplification/transactions/health-care-payment-remittance-advice-electronic-funds-transfer),
+[CMS claim/provider adjustments](https://www.cms.gov/medicare/coding-billing/electronic-billing/health-care-payment-remittance-advice),
+[Medicare2012 recoupment example](https://www.cms.gov/regulations-and-guidance/guidance/transmittals/downloads/r1101otn.pdf),
+[Open Dental ClaimPayments](https://www.opendental.com/site/apiclaimpayments.html),
+[Open Dental ClaimProcs](https://www.opendental.com/site/apiclaimprocs.html),
+[AWS Lambda quotas](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html).
+
+The fabricated files in `apps/api/test/fixtures/remittances` are a custom contract, not an ERA,
+PMS export or supported connector. Full financial correctness still requires independent cash,
+posting, provider adjustments, source reconciliation and defensible attribution. No production
+migration, AWS deployment, paid inference, actual call or real financial action ran.
+
+## ADR-074 — Reviewed bank-account source observations before claim reconciliation
+
+**Continuation:** additive migration27 closes the direct SQL/API token admission mismatch.
+Cash-only CHECKs count UTF-16 units, reject ECMAScript edge whitespace and Unicode Cc/Cf/Cs,
+and validate all required/nullable payload tokens. Migration26 and shared source/remittance
+helpers remain unchanged. The migration validates existing rows atomically; incompatible
+retained facts stop the migration without rewriting or deleting evidence. Exact verification
+and the next dependency are recorded in `docs/HANDOFF_2026-10-13.md`.
+
+**Date:** 2026-10-13. **Status:** local implementation; no bank connector, live receipt,
+production migration or deployment approved.
+
+A payer remittance, a PMS deposit and a bank-account transaction are independent evidence.
+A bank credit may cover multiple claims and provider adjustments; multiplying it across claim
+records is incorrect. Bank feeds can also revise or remove a posted transaction. We therefore
+retain source observations at practice/account level before implementing claim reconciliation.
+
+1. Three immutable scoped tables retain source transaction identity, ordered source observations
+   and actor-bound accept/reject decisions. Account identity includes source namespace/account;
+   system/product cannot change within that tuple. Original source amount/sign convention is
+   retained beside the canonical positive-credit/negative-debit amount. Only USD is supported.
+2. Explicit positive sourceSequence orders a transaction's revisions. Opaque sourceVersion,
+   observedAt and arrival time do not order financial state. Exact source-record retries replay;
+   changes to a record/sequence conflict. Newer observations never overwrite earlier evidence.
+3. The highest accepted sequence is the accepted history state. It contributes to account totals
+   only when it is also the latest observed sequence and POSTED. PENDING/REMOVED/UNKNOWN,
+   unreviewed and stale accepted observations are excluded. Rejecting the latest observation
+   does not resolve an earlier accepted version's uncertainty. A removed record is not a debit
+   or refund; actual debits are separate signed observations. Null remains unknown.
+4. Historical accepted pending-transaction links form an account-scoped undirected identity
+   graph, including missing parent IDs, sibling replacements, chains and cycles. Later null
+   links do not erase identity; a changed non-null link blocks acceptance. For every proposed
+   ACCEPT status, the prospective component may contain at most one accepted POSTED transaction.
+   Stale accepted POSTED nodes still fence overlap until a nonposted revision is reviewed.
+   Traversal above100 IDs blocks review explicitly; it never silently returns a partial safe answer.
+5. All cash admission writes the organization tuple without changing updatedAt. This serializes
+   direct SQL and repeatable-read writers as well as the API. Review stores exact evidence hash,
+   sequence, previous accepted ID, current stored role and org-wide evidence:review counts.
+   Composite restrictive references and deferred parent sealing retain complete immutable facts.
+6. Fresh previews bind evidence/current state and the organization ledger version. Immutable
+   decisions bind actor, payload, token and idempotency key; identical retries return the original
+   result even after later imports. Every import/review/read/replay requires a scoped audit;
+   audit failures roll back mutations or withhold reads. Closed errors never log source payloads.
+7. Five API routes and the actual cash-evidence dashboard implement upload, account summaries,
+   transaction/revision paging, previews and review. Fixed provenance is MANUAL_UPLOAD;
+   bank verification and settlement remain UNVERIFIED regardless of provider-like input names.
+   The UI retains uncertain commands, isolates user/practice caches and requires fresh review
+   after409. Custom JSON is not a native bank/PMS export or an authenticated integration.
+8. Raw/canonical imports are limited to64KiB. Pages return at most100 records and2MiB, sometimes
+   fewer than the requested count. Account summaries cover whole accounts represented on the
+   returned transaction page, so the envelope is bounded; there is no cross-account total.
+
+Token admission follows [ECMAScript trim](https://tc39.es/ecma262/multipage/text-processing.html#sec-trimstring)
+and the [Unicode category database](https://www.unicode.org/Public/17.0.0/ucd/extracted/DerivedGeneralCategory.txt).
+The cash-only ranges match Unicode15–17; regressions compare the database rules with the running
+JavaScript engine's categories and trim behavior, including every forbidden scalar and adjacent
+boundaries. Runtime Unicode upgrades must keep these checks green before release.
+
+Primary sources checked2026-10-13:
+[CMS EFT/ERA](https://www.cms.gov/priorities/key-initiatives/burden-reduction/administrative-simplification/transactions/health-care-payment-remittance-advice-electronic-funds-transfer),
+[CMS claim/provider adjustments](https://www.cms.gov/medicare/coding-billing/electronic-billing/health-care-payment-remittance-advice),
+[Open Dental deposits](https://www.opendental.com/site/apideposits.html),
+[Open Dental reconciliation](https://www.opendental.com/manual/reconcile.html),
+[Plaid transaction lifecycle](https://plaid.com/docs/transactions/transactions-data/),
+[Plaid transaction API](https://plaid.com/docs/api/products/transactions/), and
+[Plaid Transfer reconciliation](https://plaid.com/docs/transfer/reconciling-transfers/).
+Plaid Transactions uses positive outflow; its pending-to-posted replacement can change IDs and
+amounts, and posted records can be modified/removed. Plaid Transfer is a different product whose
+posted/settled states cannot be reused as bank Transactions or final settlement proof. A future
+sync adapter must commit an entire consistent pagination window and checkpoint atomically.
+
+Next: reconcile bank transaction net amounts to remittance batches, then preserve gross claim
+allocations and provider adjustments without exceeding cash capacities. A100+80 claim report
+with a30 provider deduction yields150 cash, not180. Independent PMS posting receipts, reviewed
+external posting, actual supported connectors, source corrections and outcome attribution remain
+required. No claim status, payment, remittance amount, settlement or recovered revenue changes
+as a side effect of this slice.
+
+## ADR-075 — Explicit remittance batch net and provider adjustments
+
+**Date:** 2026-10-13. **Status:** local synthetic implementation; no external connector,
+production migration, posting or bank verification.
+
+A batch can report multiple claims and provider-level adjustments. Claim reports100+80 and a
+provider deduction30 yield a reported batch net150. Neither the180 claim total nor accepting
+the batch establishes cash received. CMS distinguishes claim and provider adjustments; Open
+Dental exposes batch payment amounts separately from individual claim procedure payments.
+
+1. Migration28 adds immutable batch evidence, review, accepted claim-member and provider-adjustment
+   tables. Identity is organization/namespace/batch plus a unique namespace/source record. Exact
+   replay succeeds; changed evidence conflicts. This slice admits one snapshot per batch. Source
+   revisions/corrections remain unsupported; inventing a new batch identity is not a correction.
+2. Explicit namespace/record references resolve already reviewed claim remittance events. Full
+   signed PAYMENT or REVERSAL amounts are bound to their exact evidence/review/claim IDs. One
+   accepted event belongs to at most one batch. Trace, document, payer name and equal amounts
+   never infer membership or cash allocation.
+3. Provider adjustments retain raw code system/reason/reference/provider/date plus original
+   amount and sign convention. Canonical amount is the signed net effect; REDUCTION_POSITIVE
+   negates the source amount. Unknown codes remain uninterpreted source facts. No provider
+   adjustment becomes a fabricated claim payment, write-off or recovery.
+4. Incomplete, unknown and unbalanced observations remain importable/rejectable. Acceptance
+   requires COMPLETE detail, all three known headers, exact listed claim/adjustment sums and
+   net equality. Provider-only, zero and negative batches are supported. Unknown is never zero.
+5. Fresh preview tokens bind batch hash, organization batch ledger counts and exact member
+   evidence/review/amount/status. Reviews bind actor, stored role, token and idempotency key.
+   Exact retries return the original result. Organization tuple writes serialize admission
+   without changing updatedAt. Restrictive composite FKs, exact mirrors, deferred parent sealing
+   and direct SQL checks retain complete accepted facts and reject stale repeatable-read writers.
+6. Four authenticated routes and the dashboard implement import, paged inbox, preview and
+   accept/reject with scoped generated-SDK transport. Successful reads/replays/mutations require
+   audit. Raw validation/source/Prisma errors stay closed. Raw, canonical and PostgreSQL JSONB
+   representations are bounded to256KiB; arrays to100 each; list pages to20 records and2MiB.
+7. Provenance remains MANUAL_UPLOAD; cash receipt, posting and settlement remain UNVERIFIED.
+   This is a custom JSON contract, not a native835 parser, authenticated payer/bank/PMS source,
+   reconciliation, external posting instruction or recovered-revenue calculation.
+
+Primary sources checked2026-10-13:
+[CMS payment/remittance advice](https://www.cms.gov/medicare/coding-billing/electronic-billing/health-care-payment-remittance-advice),
+[Open Dental ClaimPayments](https://www.opendental.com/site/apiclaimpayments.html).
+Next: reviewed bank-to-batch reconciliation with revision/staleness handling and bounded cash
+capacities, then independent PMS posting receipts. Batch corrections, native connectors and
+defensible recovery attribution remain open.
+
+## ADR-076 — Reviewed cash-to-batch matches retain reservations until released
+
+**Date:** 2026-10-14. **Status:** local synthetic implementation; no authenticated bank/PMS
+connector, verified cash receipt, external posting, settlement or production migration.
+
+A bank source can be revised, removed or replaced after a biller matches it to a remittance
+batch. Silently freeing that reservation would let the same reported money be reused. Matches
+therefore retain their exact accepted evidence/review bindings and both capacity reservations
+until a separately reviewed full release. A fresh source observation can make a match stale;
+it cannot erase the decision or change its retry receipt.
+
+1. Migration29 adds immutable `CashBatchMatch` and `CashBatchRelease`, scoped restrictive source,
+   review and actor references, direct SQL admission and organization tuple serialization. It
+   leaves prior evidence and helper definitions unchanged. The organization timestamp is preserved.
+2. Signed nonzero matches support partial many-to-many matching. Both sources must have the
+   proposed direction; the cash evidence must be accepted, latest-observed and POSTED, and the
+   batch must be accepted. Active absolute match sums cannot exceed either absolute source amount.
+   Batch capacity is reviewed net: claim reports180 less provider deduction30 permit150.
+3. Historical accepted pending-link components retain replacement identity across revisions,
+   missing parents, siblings, chains and cycles. A reservation against another evidence in that
+   component blocks reuse until explicit release. A later null never erases an earlier link.
+   Traversal over100 source IDs fails closed. Identity remains scoped to source namespace/account;
+   this does not resolve two connectors referring to the same real bank account or transaction.
+4. Fresh match previews bind both sources, reviews, amount, component, capacities and the six-part
+   cash-evidence:cash-review:batch-evidence:batch-review:match:release ledger. Stored roles remain
+   OWNER/ADMIN/BILLING_STAFF. Exact retries bind actor, command, token and idempotency key.
+5. A full release records WRONG_MATCH, SOURCE_CHANGED or OTHER_REVIEWED_ERROR and requires its
+   own fresh preview and exact retry binding. Release never depends on current source validity
+   or successful graph traversal, so a stale or overflowed source cannot trap its reservation.
+   There is one release per match; partial releases are not supported. No source record is deleted.
+6. Mutation receipts remain immutable on replay. Paged reads separately derive CURRENT, STALE
+   or RELEASED status. All reads/replays/mutations require scoped audit; audit failure withholds
+   reads or rolls back changes. Raw validation/source/Prisma errors stay closed. Five handlers
+   use four `/v1/cash-reconciliations` path keys; bodies4KiB, pages default10/max20 and2MiB.
+7. The generated-SDK dashboard requires explicit source selection and signed amount, shows
+   original source signs separately from nonnegative capacity magnitudes, and preserves uncertain
+   retry commands across both actions. User/organization changes clear scoped state. Source labels
+   or matching traces never infer a relationship. Provenance is MANUAL_REVIEW; bank verification,
+   posting and settlement remain UNVERIFIED and claim cash remains UNALLOCATED.
+
+Primary sources refreshed2026-10-14: [Open Dental reconciliation](https://www.opendental.com/manual/reconcile.html),
+[CMS payment/remittance advice](https://www.cms.gov/medicare/coding-billing/electronic-billing/health-care-payment-remittance-advice).
+Next: independent PMS posting receipts, explicit source/batch corrections, claim cash allocation
+and defensible attribution. Real connectors and authorized end-to-end evidence remain mandatory.
+
+## ADR-077 — Resolve organization identity before tenant rate limits
+
+**Date:** 2026-10-14. **Status:** local regression reproduced and fixed; not deployed.
+
+The installed `@fastify/rate-limit`10.3 defaults route overrides to `onRequest`, before the
+application's `requireAuth` preHandler populates organization identity. Two overrides—
+PATCH `/v1/me/organization` and POST `/v1/claims/:id/calls`—therefore put every requester into
+the same route-local `anon` bucket. Ten anonymous requests or one practice's traffic could
+block unrelated practices. Existing recovery/operations routes already use the correct hook.
+
+Set these two overrides to `hook: 'preHandler'`. The installed plugin appends its limiter after
+the existing authentication hook, which rejects anonymous requests before the organization
+bucket is consulted. Keep10/minute per practice, shared by its users/IPs, and the current global
+limiter unchanged. Route overrides replace the global limiter; this is not a new distributed
+fleet quota or an anonymous-traffic admission layer. Production infrastructure controls and
+deployed multi-instance behavior remain separate operational validation.
+
+Four real-Postgres route regressions fail before the fix and pass after it, proving authentication
+ordering, shared practice quotas, different-practice isolation and blocked writes. Focused
+rate-limit/me/calls77/77 pass. The test call route uses a nonexistent synthetic claim and cannot
+create a call intent or external call. No schema, provider configuration or external action changed.
+
+## ADR-078 — Independent PMS posting observations and retained entry identity
+
+**Date:** 2026-10-14. **Status:** local synthetic implementation validated; not deployed, no authenticated PMS connector or external financial action.
+
+PMS payment headers and procedure-payment entries are separate source facts. Open Dental's
+batch API allows a payment header that differs from its claim-procedure payment sum; entry
+records can be detached and attached to another partial payment. A payment-record observation
+is neither bank receipt nor authorization to write a payment.
+
+1. Migration30 adds immutable PostingSourceReceipt/Evidence/Review/Entry. Identity is scoped to
+   organization/source system/namespace/receipt ID; the product is stable within that source
+   scope. Exact source-record replay and unique receipt sequence prevent silent replacement.
+   Explicit positive source sequence orders the full snapshot; opaque versions, observation
+   times and arrival order never substitute. Child source versions are retained separately.
+2. The custom PMS_PAYMENT_RECEIPT input preserves nullable signed header and entry amounts,
+   original signs, raw statuses and partial/transfer flags, source entry/issued dates, deposit/
+   trace references and claim/line/procedure IDs. Source entry ID is distinct from procedure ID.
+   PAYMENT/TRANSFER/ADJUSTMENT/UNKNOWN categories remain importer assertions. Native source
+   adapters must interpret documented sentinel dates as absent, not meaningful posting dates.
+3. Header and entry totals need not match. Known listed subtotal includes every supplied entry
+   kind; unknown entry count remains visible. A complete total and header difference exist only
+   with COMPLETE detail and known entry amounts (and a known header for the difference). No
+   difference becomes a fabricated adjustment, allocation or paid amount. REMOVED has no amount
+   or entries and does not establish a refund. Partial and unknown facts remain reviewable.
+4. ACCEPT requires the latest observed sequence and a fresh evidence/prior-review/ledger token;
+   older evidence may be rejected. Newer unreviewed or rejected evidence makes the prior accepted
+   observation stale. Exact actor/command/token/key retries return the original immutable review.
+5. One source entry cannot be held by two accepted receipt histories in the same source scope.
+   The most recent accepted COMPLETE snapshot replaces its retained entry IDs; accepted REMOVED
+   clears them. Later accepted PARTIAL/ABSENT snapshots union observed IDs with retained history,
+   rather than freeing omitted entries. Rejected/unreviewed revisions never release identities.
+   This reservation is source membership only, not a monetary reservation or cash allocation.
+6. Accepted child rows mirror every payload entry/index exactly, including nullable values;
+   rejected reviews create none. Scoped restrictive references, deferred seals, organization
+   tuple admission, stored role checks, audit and closed errors protect API and direct SQL writes.
+   Raw/canonical/JSONB inputs256KiB,100 entries and20-record/2MiB pages bound the workflow.
+7. The five API handlers, SDK and dashboard support import, inbox/history, preview and review.
+   References remain UNLINKED: acceptance creates no local claim/procedure relationship or total.
+   MANUAL_UPLOAD provenance and UNVERIFIED source/bank verification/settlement remain explicit.
+   A separate evidence-bound relationship review and real supported read/write connectors are
+   required before posting can be reconciled to claims or an external payment action authorized.
+
+Primary documentation refreshed2026-10-14:
+[Open Dental ClaimPayments](https://www.opendental.com/site/apiclaimpayments.html),
+[Open Dental ClaimProcs](https://www.opendental.com/site/apiclaimprocs.html).
+This design preserves their distinct identities and partial-header behavior without claiming
+that the custom manual input is a native export, authenticated API capture or connector.
+
+## ADR-079 — Transactional review notifications with frozen delivery identity
+
+**Date:** 2026-10-14. **Status:** partial local implementation; migration 31 applied only to
+localhost isolated/shared databases. Local verification recorded below. External delivery disabled;
+not merged or deployed.
+
+The earlier post-commit notification could be lost after a summary commit and could not safely
+recover an ambiguous submission. Store the review alert with its source transaction, then keep
+submission ownership and receipts separate from domain publication and actual email delivery.
+
+1. Migration 31 `20261014190000_review_notification_outbox` adds ReviewNotificationIntent,
+   ReviewNotificationDelivery, ReviewNotificationAttempt and ReviewNotificationReceipt.
+   Intent/domain publication/audit commit atomically for synthetic summary transitions, native
+   observation publication and inference-review outcomes, including approved regeneration.
+   Organization/run/purpose uniqueness prevents duplicate intents. No historical backfill or
+   rewrite is introduced; prior summaries, observations, financial evidence and audit remain.
+2. Immutable intents bind source/request hashes, generation, claim versions, source marker,
+   summary/observation and regeneration actor. The oldest eligible OWNER/ADMIN by createdAt/id
+   is selected deterministically and its user ID, role and email are frozen. Missing recipients
+   block delivery; recipient drift never silently rebinds or resets a blocked intent.
+3. The frozen `review-available.v1` payload contains only the recipient and fixed generic
+   subject/text/application path, with an independently checked SHA-256 hash and permanent UUID
+   delivery key. It contains no patient, claim, payer, amount, transcript or inference content.
+   These private delivery fields are omitted from Operations responses and audit metadata.
+4. Database admission checks retained source/current claim versions, latest call/generation,
+   source transcript, review state and recipient identity. A native human review suppresses
+   never-submitted PENDING/BLOCKED alerts atomically; it cannot erase prior submission history.
+   A source or recipient change after a submission boundary quarantines further attempts.
+5. A one-minute lease, immutable attempt and first-submission timestamp/fixed 23-hour deadline
+   are persisted before submission. At most five attempts reuse the same key and identical
+   payload within that deadline. Retryable receipts wait at least one minute and honor bounded
+   retry-after. Conflicts, exhausted attempts and expired uncertain work quarantine; no new-key
+   retry extends the window. Late/wrong leases cannot overwrite receipts or newer ownership.
+6. The dispatcher accepts only an explicitly injected SYNTHETIC transport and defaults to
+   DISABLED. It bounds each call by 25 seconds, remaining lease and remaining retry window.
+   SIMULATED receipts remain distinct from provider ACCEPTED and actual delivery. There is no
+   callable live adapter, scheduled live relay, send endpoint, retry control or recipient-rebind
+   action in this slice. Existing legacy notification history is retained.
+7. Two audited OWNER/ADMIN GETs expose scoped status counts, filtered cursor pages and at most
+   five attempt receipts. They return closed reason codes, recipient-binding status and safe
+   claim/call links, excluding emails, bodies, hashes, delivery keys and provider receipt IDs.
+   The Operations list/history uses the generated SDK and explicitly labels delivery disabled.
+
+Resend documents a 24-hour idempotency window; the local 23-hour deadline is a conservative
+application bound, not measured provider behavior. Handoff and delivery remain separate facts.
+[Idempotency](https://resend.com/docs/dashboard/emails/idempotency-keys),
+[usage limits](https://resend.com/docs/api-reference/rate-limit),
+[event types](https://resend.com/docs/webhooks/event-types) and
+[retrieve sent email](https://resend.com/docs/api-reference/emails/retrieve-email) were reviewed
+read-only on 2026-10-14. No real provider request or message was sent.
+
+**Verification checkpoint:** DB 37 direct invariants plus 1 migration-preservation test pass;
+prior inference/observation/regeneration 53 and native accounting 34 pass. Focused producers 69
+across 3 files and process/transport 9 pass, including restart/deduplication, competing leases,
+expiry without submission, bounded timeout, malformed receipts, retry-after, conflict and receipt-
+audit rollback. Migration 31 applied to both localhost databases; API/Lambda/Next builds pass.
+SDK 56, notifier 20 and UI 35 plus web typecheck/lint pass. One synthetic 1280/390px component
+batch reports no overflow, page errors or axe violations; separate visual review returned ship
+and documentation review required no system change. Detector exit 126 provides no verdict.
+Focused notification API 15 and affected workspace lint/typecheck 30 pass. Independent API/
+dispatcher review found no actionable issues. Full API passes 878/878 across 43 files in 532.38s
+(`/tmp/dentabill-notification-api-full.log`). The full worker run passed 144/145 across 12 files;
+one existing inference-process test hit its 5-second timeout while the host had 0% CPU idle.
+The first two process-test timeouts were aligned to the adjacent crash test's 25-second bound;
+the focused recheck passed 3/3 in 5.32s (`/tmp/dentabill-notification-inference-process-recheck.log`).
+All 145 worker cases have passing evidence across those runs; this is not a single clean full
+145-case rerun. Focused suites overlap and are not summed. No full authenticated-shell or
+deployment evidence is claimed.
+
+## ADR-080 — Stable remittance batch revisions and retained reservations
+
+**Date:** 2026-10-14. **Status:** implemented and verified locally. Migration 32
+is frozen and applied only to localhost isolated/shared databases. Not merged or deployed.
+The preceding FW-40 slice is committed as `4af99ec`; its external delivery remains disabled.
+
+A corrected batch must preserve its source identity, accepted member history and existing cash
+reservations. Uploading a replacement under a new batch ID could otherwise bypass ownership or
+reuse capacity. Source revision ordering must also remain independent of arrival and review time.
+
+1. Migration 32 `20261014200000_remittance_batch_revisions` adds immutable RemittanceBatch,
+   RemittanceBatchRevision and RemittanceBatchMemberOwnership sidecars. It backfills structural
+   links only: existing version 1 payloads, hashes, review receipts, member bindings, cash matches,
+   releases and timestamps remain unchanged. Existing helper definitions remain intact; new
+   versioned admission/link/seal triggers extend the contract. Organization-scoped restrictive
+   references and deferred seals prevent missing or forged sidecar bindings, including direct SQL.
+2. Version 1 remains an explicitly unsequenced baseline (`sourceSequence: null` in the response
+   sidecar, absent from its original payload). Version 2 requires a positive integer sequence and
+   a new immutable source record under the original namespace/batch ID. Sequence uniqueness and
+   source order govern history; no timestamp, sourceVersion string or arrival order invents a
+   sequence. An exact source retry retains the original evidence and hash.
+3. Only the latest observed revision can be accepted. A newer unreviewed or rejected observation
+   makes prior acceptance stale rather than silently falling back to it. Preview tokens bind
+   source/currentness, member bindings, membership changes and ledger state. Review objects stay
+   immutable on exact retry, while their response envelope refreshes currentness metadata; the
+   entire response is not byte-immutable. History is audited, tenant/batch cursor-bound and paged
+   within the existing 20-record/2MiB bounds.
+4. Exact accepted claim-remittance events may recur across revisions of the same stable batch.
+   Each event's first accepted membership establishes permanent ownership by that batch. Preview
+   distinguishes added, retained and omitted members against the prior accepted source revision.
+   Omission never releases ownership or permits another batch to claim the event. No cross-batch
+   ownership transfer or claim-remittance correction chain is introduced.
+5. Cash reservations aggregate by stable batch identity across all source revisions. Existing
+   matches become stale when their exact source binding changes, but retain their reservations.
+   New matches require the latest accepted observed revision and are blocked while another
+   revision has an unreleased match. Only a separately reviewed full release frees a reservation;
+   prior match/release receipts stay immutable. Lower, higher, negative or zero corrected nets do
+   not silently resize or release existing matches. Zero net is not a withdrawal operation.
+6. Five batch API handlers and the generated SDK expose import, list, source history, preview
+   and review. The existing batch and cash dashboards show sequence/currentness, membership
+   changes and retained reservations. The version 2 download and fixture 07 are fabricated manual
+   examples, each preserving its respective original batch identity while changing net 150 to 140. The public v2 download derives from the public v1 example; public and API fixture bytes
+   are not identical. Neither rewrites the original evidence.
+
+**Local verification:** DB 27 plus expanded migration preservation 1,
+prior financial regressions 344 across 5 files in 131s, SDK 57, focused batch API 71/71 in 39.21s, cash API 66/66 in 33.04s, UI 70, web/API typechecks
+and scoped lint pass. Version 1 raw/canonical fixture hashes and review HMAC compatibility remain
+verified after revision support. Expanded preservation covers accepted/rejected/unreviewed v1,
+active/released cash matches and earlier posting/inference/notification rows and helper definitions.
+Independent cash admission/service and batch API reviews found no actionable issues. Migration 32
+is applied only to localhost isolated/shared databases; its SQL remains unchanged since freezing.
+Full API passes 909/909 across 43 files in 216.61s; API/Lambda builds pass. UI 70 includes the
+public v1/v2 download-pair regression. The final coherent 1280/390px actual-component capture
+batch reports zero overflow, page errors and axe violations; earlier mismatched batch captures
+are excluded. Root nonauthor review returned ship, and the separate documenter found no durable
+PRODUCT/DESIGN/sidecar delta. This is synthetic auth/API evidence, not the authenticated full app
+or a detector verdict. Next production build passes; batch route is 8.55kB/184kB first load and
+cash reconciliation 8.38kB/184kB. Affected workspace lint/typecheck passes 30/30 in 31.268s
+(19 cached), after two test-only lint corrections. Counts from overlapping suites are not summed.
+
+This slice does not authenticate source evidence, receive or allocate cash, post a payment or
+settle a claim. Reviewed posting relationships, claim cash allocation/attribution, explicit
+cross-batch ownership transfer, claim-remittance correction chains and real bank/PMS connectors
+remain open, alongside the full original parity plan. No real financial/provider action,
+external notification, merge or deployment is authorized by this local implementation.
+
+## ADR-081 — Reviewed posting-entry identity associations
+
+**Date:** 2026-10-14. **Status:** implemented and verified locally. Migration 33
+is frozen and applied only to localhost isolated/shared databases. Not merged or deployed.
+ADR-080 is the preceding committed slice (`710060b`).
+
+Raw posting references must remain source facts, while a biller can separately review their
+association with an imported claim and optional immutable source line. Matching display numbers,
+procedure codes or amounts is insufficient, and linking an entry must not mutate financial state.
+
+1. Migration 33 `20261014210000_posting_claim_relationships` adds immutable
+   PostingClaimRelationship and PostingClaimRelease tables. Composite organization/source/review/
+   entry/claim/line/actor references, organization and claim admission locks, ledger checks and
+   direct SQL guards protect the association. There is no historical backfill or modification of
+   prior helper definitions, raw snapshots, evidence/review receipts or financial records.
+2. Only DENTRIX, EAGLESOFT and OPEN_DENTAL source systems can resolve targets. Source system,
+   namespace and source claim ID must exactly match the imported claim and its retained source
+   hash. A supplied source line ID requires the exact immutable local source line; a supplied
+   procedure ID must agree on that line. Without a source line ID, only a claim-level association
+   is allowed, even if a raw procedure reference exists. That procedure remains unresolved;
+   duplicate display numbers, repeated procedure codes and monetary similarity are never keys.
+3. The posting observation must be the latest observed revision and accepted. Preview binds the
+   exact source entry/review/hash/currentness, claim version/source hash, optional line, blockers
+   and ledger. Review revalidates those bindings. A newer unreviewed/rejected observation or a
+   changed local claim makes a retained association stale; prior acceptance is not a fallback.
+4. Link and full-release decisions have immutable actor-bound receipts and audited exact retries.
+   A changed request under an existing idempotency key conflicts. List responses separately
+   expose dynamic CURRENT/STALE/RELEASED status. Original posting evidence, source references,
+   header/detail differences, unknowns and signs are never rewritten by the relationship.
+5. An unreleased relationship reserves organization/system/namespace/source-entry identity across
+   revisions and receipt IDs, including omitted, removed, rejected or changed entries. Staleness
+   cannot free it. A fresh separately reviewed full release frees only that association; it remains
+   available when the source or claim is stale. No partial release, automatic relink or transfer
+   occurs. Neither linking nor release changes claim amounts/status, cash, posting evidence,
+   settlement or recovered revenue.
+6. Six authenticated OWNER/ADMIN/BILLING_STAFF handlers provide source targets, filtered history,
+   relationship preview/create and release preview/create. Reads/replays are audited; decision
+   audits commit atomically. Mutation bodies are 4KiB; history pages are bounded to 20 records/
+   2MiB with tenant/filter-bound cursors. Generated SDK and the existing posting dashboard expose
+   exact target review, immutable retry receipts, stale reservations and explicit full release.
+   Source/bank verification and settlement remain UNVERIFIED; claim cash remains UNALLOCATED.
+
+**Local verification:** DB 68 plus migration preservation 1, SDK 63,
+UI 56 and API typecheck/scoped lint pass. Focused API passes 47/47 in 15.42s after an initial 45/47
+with two timeout-only failures; a bounded 30-second test/hook allowance resolved them without a
+product change. Prior DB regressions have passing evidence for all 292 cases across initial 290
+passes plus two timeout rechecks in 721ms under observed host memory paging, not one clean full
+rerun. Independent API and SQL reviews found no actionable issue. The synthetic actual-page/hook/
+SDK capture batch at 1280/390px reports no overflow, page errors or axe violations and proves exact
+create/release retries, explicit release reasons and retained unallocated cash. An initial harness
+async assertion needed a bounded wait; no UI product fix was required. Root nonauthor review
+returned ship; separate documentation inspection found no durable PRODUCT/DESIGN/sidecar delta.
+Detector exit 126 gives no verdict, and this is not an authenticated full-app rehearsal. Full API
+passes cleanly: 956/956 across 44 files in 320.50s
+(`/tmp/dentabill-posting-relationships-api-full.log`). Affected workspace lint/typecheck passes
+30/30 in 1m21.295s (14 cached). API TypeScript, Lambda and Next production builds pass; the posting
+route is 11.6kB/184kB first load. Overlapping suites are not summed.
+No real source/provider request or financial action ran.
+
+Next independent slice: FW-45 guarded synthetic fixtures/manifest, read-only preflight and a
+reproducible walkthrough, followed by authenticated rehearsal and finished-video support. Plan one coherent exact-identity
+bundle: CSV claims, remittance 100/80, provider adjustment -30 and batch net 150, cash 150 matched
+as 100 then 50, posting header 150/entries 180, then corrected batch 140 and explicit releases.
+Use a dedicated localhost demo database and read-only preflight; external configuration remains
+absent except intentional Clerk authentication. Actual authenticated rehearsal/recording and asset
+integration follow the fixture pack. Existing seed/simulator paths are not demo-ready and no
+recording asset exists yet. FW-43 canonical source observations, reviewed legacy binding and additive
+source snapshots/application, claim-remittance correction chains, explicit cross-batch ownership
+transfer, claim cash allocation/attribution, real connectors and the full remaining plan stay open. Local associations do not prove external
+posting, source authenticity, cash receipt, settlement or recovered revenue.
+
+## ADR-082 — Connected synthetic demo bundle and read-only preparation gate
+
+**Date:** 2026-10-14. **Status:** local preparation and startup isolation implemented and verified.
+ADR-081 is committed as `8dd6f11`. No migration, public API or product UI change is introduced.
+Authenticated rehearsal, recording and landing-page asset integration remain unverified/open.
+
+The earlier seed/simulator path used stale financial assumptions and was not an authenticated
+walkthrough of the current source-review workflow. Prepare one coherent synthetic fixture chain
+and check a dedicated local environment without silently creating, resetting or modifying it.
+
+1. `apps/web/public/examples/demo/manifest.json` defines `financial-review-v1` and hashes the
+   connected custom fixtures. The existing CSV/financial parsers validate exact claim/line/
+   namespace references, source signs and expected totals. The sequence is remittance100+80,
+   provider adjustment−30/batch150, cash150 matched100 then50, posting header150/entries180 and
+   optional same-batch correction140. Posting claim A has an exact line; claim B's transfer has
+   no line and its raw procedure reference remains unresolved. These are fabricated manual
+   inputs, not authenticated exports or evidence of source/bank verification or recovered revenue.
+2. Bundle admission uses strict manifest/contract shapes, bounded regular files, path-safe names,
+   symlink refusal, SHA-256 checks and cross-file identity/financial invariants. Hashes establish
+   consistency with this local manifest; they do not authenticate a provider. The preflight does
+   not import, accept, match, post or otherwise apply the bundle.
+3. `demo-preflight.mts` accepts only explicit organization/user and Clerk organization/user IDs.
+   It validates configuration before application/client imports and does not call the legacy
+   seed/reset/simulator. Database targets must use
+   PostgreSQL on localhost/loopback with a `dentabill_demo_` name and only optional public schema;
+   application/API origins must be distinct consistent local HTTP origins. Explicit development,
+   inline jobs, synthetic analysis, disabled auto-transition and demo interlocks are required.
+   Known live-provider/cloud/billing/mail/telemetry settings, Redis/SQS URLs, model-release
+   selectors, Clerk webhook secret, NODE_OPTIONS, NODE_PATH, ESBUILD_BINARY_PATH,
+   DOTENV_CONFIG_PATH and DEBUG are rejected. Clerk test-key format is the
+   intentional exception, and is never reported as successful authentication.
+4. The database inspector uses a repeatable-read transaction set READ ONLY and verifies the
+   actual database name/mode. Every applied migration must match the current local checksum,
+   be finished and not rolled back, with no missing/duplicate/extra migration. The exact local
+   organization/user must bind to the supplied Clerk IDs and stored OWNER/ADMIN role; any other
+   practice or actor fails the exclusive-demo check. It reads binding/count metadata without
+   selecting other tenant facts or writing audit/application records.
+5. Successful output is limited to safe status/scenario/manifest-hash/migration-count/role and explicit
+   `CLERK_TEST_CONFIGURATION_PRESENT_NOT_VERIFIED`, rehearsal `NOT_VERIFIED` and recording
+   `NOT_VERIFIED` markers. Failure exposes a closed reason code, without URLs, credentials or
+   raw fixtures. Preflight success cannot stand in for browser authentication, provider proof,
+   actor provisioning, server startup or a recording.
+6. `DEMO.md` follows the implemented screens with the connected bundle and separates optional
+   call/correction chapters. Claims and evidence remain manual/synthetic, cash stays unallocated,
+   and no recovered-money narrative is invented. The old `seed:demo --reset`, 40-claim seed,
+   `demo:call` and `simulate-live-call.mts` are not the supported walkthrough. Guarded local
+   provisioning and an environment-clean launcher remain separate work; raw `pnpm dev`, dotenv
+   symlinks or test-header browser bypasses are not a verified launch path.
+
+7. Startup isolation uses a private runtime because the repository's generated Prisma client can
+   auto-load `packages/db/.env` through `warnEnvConflicts` after initial configuration validation.
+   The outer CLI now validates first, then `prepareIsolatedDemoRuntime` creates a private0700
+   temporary directory, copies the tracked schema and uses the installed pinned Prisma generator/
+   client with the native engine and automatic installation disabled. Generated metadata must
+   contain no configured environment-file paths, and the private tree must contain no dotenv file.
+   Generation and esbuild run as separate children with minimal explicit environments. All workspace
+   application modules are bundled; only the fresh private Prisma client and trusted pino/pino-pretty
+   packages remain external. The command executes with an explicit environment allowlist and its
+   output must match the closed JSON report schema. Temporary artifacts are cleaned up on success
+   and failure. This trusts the installed Node/pnpm/tsx/dependency toolchain and cannot undo a parent
+   preload that already executed; it is not a hostile-host sandbox or authenticated app launcher.
+
+**Local verification:** the earlier115 tests and read-only
+smoke remain fixture/financial/database evidence but did not prove startup isolation. Fresh
+root checks pass122/122 across5 files in27.53s (bundle29, HTTP flow1, policy82, database4, CLI6;
+`/tmp/dentabill-demo-isolated-focused.log`). The isolated-runtime helper separately passes15/15
+in5.72s (`/tmp/dentabill-demo-isolated-runtime.log`), including generated metadata admission,
+zero dotenv reads under the guard, private Prisma engine initialization, bundled workspace code
+and rejected override canaries. This is137 passing cases across two runs, not one combined run.
+An admitted real private command against an unreachable database returns the closed
+DEMO_DATABASE_UNAVAILABLE report. Independent review found no remaining actionable issue.
+
+A fresh positive smoke of the actual isolated CLI passed after all33 migrations with an exact
+OWNER binding and readOnly status (`/tmp/dentabill-demo-isolated-smoke.log`). Migration setup used
+a private copied schema/migration chain, pinned CLI and explicit fresh environment. Nonworking
+synthetic Clerk test keys left authentication, rehearsal and recording NOT_VERIFIED. Postcheck
+retained1 organization/1 actor/0 claims/0 audits; only the newly owned ephemeral database was
+removed afterward. Provisioning/dropping belongs to the smoke harness, not preflight. The earlier
+manifest formatting changed its own hash but no fixture hashes; no stale hash is pinned as current.
+
+The runtime remediation is verified. Current affected API/dependency lint/typecheck passes24/24
+(22 cached,19.697s; `/tmp/dentabill-demo-isolated-checks.log`), and strict CLI.mts typecheck and
+API production build pass. The earlier30/30 used a broader pre-fix filter; it is not the current
+remediation check count. Test-flow cleanup stays limited to the
+two explicit localhost test databases. No additional browser, Next or Lambda build is claimed
+for this slice; there is no product UI or runtime API import change. No authenticated Clerk
+rehearsal, recording, landing-page asset, production change or real provider/financial action
+is claimed.
+
+Next: ADR-083 create-only guarded local provisioning, then an isolated web/API launcher without
+dotenv symlinks that reintroduce live configuration. An authenticated walkthrough follows before
+recording and integrating the finished asset. FW-43 source observations, reviewed legacy binding,
+additive snapshots/application, claim-remittance corrections, cross-batch ownership transfer,
+claim cash allocation/attribution and the complete remaining plan stay open.
+
+## ADR-083 — Create-only isolated synthetic demo provisioning
+
+**Date:** 2026-10-14. **Status:** implemented and verified locally.
+ADR-082 is committed as `be680d6`. No new schema migration, public API or product UI change is
+introduced. The app launcher, real Clerk rehearsal, recording and landing asset remain open.
+
+The supported walkthrough needs a fresh dedicated database and exact actor binding before the
+read-only preflight can pass. Bootstrap those facts through a separate isolated command without
+reusing the legacy seed/reset/simulator or importing workflow fixtures.
+
+1. `demo-provision.mts` and the existing preflight entrypoint are thin wrappers around
+   `command-cli.ts`. The shared runner validates the explicit localhost/demo-name, local-origin,
+   synthetic-mode and external-configuration rules before importing the private runtime. It
+   generates a provision UUID, executes only the bundled command with the environment allowlist,
+   validates a closed report with a matching process exit status and disposes private artifacts.
+   ADR-082's installed-toolchain trust and inability to undo an already-run parent preload remain.
+2. The provision command admits only the private runtime's schema path, verifies the connected
+   fixture manifest and stages the complete migration chain before starting database work.
+   Bounded regular-file/no-follow reads and SHA-256 comparisons preserve the checked SQL bytes;
+   a versioned digest binds the sorted migration names/checksums. The private tree contains only
+   those migrations and the known PostgreSQL lock file. No new migration is added by this slice.
+3. The maintenance connection must identify the actual writable `postgres` database. CREATE
+   DATABASE runs outside a transaction with a strictly admitted, quoted fresh `dentabill_demo_`
+   identifier and `template0`. Existing targets and concurrent creation are refused. There is no
+   reset, drop, resume or automatic creation retry. The pinned Prisma migration CLI applies the
+   private staged chain with a minimal explicit environment; it does not use repository dotenv.
+4. A read-only transaction verifies the actual target, every exact finished/non-rolled-back
+   migration checksum and empty workflow/bootstrap tables. One transaction then creates exactly
+   the supplied organization/user and Clerk binding, a synthetic Owner, a Delta Dental payer
+   configuration using synthetic NPI `9999999999`, and one mandatory `demo.provisioned` audit.
+   The audit binds the provision UUID, scenario, manifest hash and migration digest/count; failure
+   rolls back all bootstrap facts. No claims, calls, inference, notifications, billing usage or
+   financial evidence are imported or generated.
+5. A second read-only check verifies the exact actor/practice/payer/audit facts, migration journal
+   and absence of workflow data. Only then may stdout report PROVISIONED with provision UUID,
+   database name, actor/audit IDs, manifest hash and migration digest/count. Authentication,
+   authenticated rehearsal and recording remain NOT_VERIFIED. Configured test-key presence does
+   not prove a Clerk session or authorize an external action.
+6. Failures expose a closed code, phase and database state without credentials or raw error output.
+   Acknowledged creations are preserved after migration/seed/postcheck failures. Create ambiguity
+   is CREATE_OUTCOME_UNKNOWN; a child, cleanup or report failure that prevents the parent from
+   knowing the outcome is OUTCOME_UNKNOWN. Such uncertainty must never claim NOT_CREATED. An
+   existing target stays EXISTING_UNCHANGED and must not be modified by a subsequent invocation.
+
+**Local verification:** 15/15 database cases pass in 37.86s, including competing processes, existing
+refusal, migration-failure preservation, atomic audit rollback and postcheck failure. Cleanup
+removed only seven acknowledged test databases (`/tmp/dentabill-demo-provision-database.log`).
+Focused checks pass 27/27 across 5 files in 13.72s: shared CLI 8, contract 2, staging 5, provision CLI 6 and
+preflight CLI 6 (`/tmp/dentabill-demo-provision-focused.log`). These are 42 cases across two runs,
+not a single combined run. Independent bootstrap review found no actionable issue.
+
+The actual CLI smoke created a fresh target with all 33 migrations and a receipt matching the
+stored audit ID/metadata. It held 1 organization/1 Owner/1 payer/1 audit and 0 claims/calls/inference/
+billing. A second actual invocation returned EXISTING_UNCHANGED, read-only preflight passed and
+before/after hashes of organization/user/payer/audit data agreed. Only the newly owned smoke
+database was removed (`/tmp/dentabill-demo-provision-smoke.log`). Nonworking synthetic Clerk keys
+were used; authentication and browser rehearsal were not exercised.
+
+Final affected API/dependency lint/typecheck passes 24/24 (22 cached, 18.531s;
+`/tmp/dentabill-demo-provision-checks-final.log`). Strict types for both CLI entrypoints and API
+production build pass (`/tmp/dentabill-demo-provision-cli-types.log`,
+`/tmp/dentabill-demo-provision-api-build.log`). Initial lint findings in UUID validation, braces
+and the private-path filesystem annotation were fixed; the final contract/actual provision CLI
+recheck passes 8/8 in 4.23s (`/tmp/dentabill-demo-provision-final-recheck.log`). Those cases overlap
+the original 42 distinct cases, not 50. No additional browser, Next or Lambda build is claimed
+for this CLI-only slice.
+
+Next: an isolated API/web launcher, including a private Next copy that avoids repository dotenv,
+then actual Clerk authentication and a complete synthetic walkthrough. Recording and landing-page
+asset integration follow. FW-43 source reconciliation, remaining financial corrections/ownership/
+allocation work and the full original assignment remain open; no production deployment or real
+provider/financial action is claimed.
+
+## ADR-084 — Isolated local API and Next demo launcher
+
+**Date:** 2026-10-14. **Status:** implemented and verified locally.
+ADR-083 is committed as `f3c8796`. No new schema migration, public API contract or product UI
+change is part of this slice. Authentication, authenticated rehearsal and recording remain open.
+
+The supported synthetic walkthrough needs actual app processes without reintroducing repository
+dotenv through ordinary development startup. Extend the isolated preparation/provisioning path
+with an explicit launcher and honest startup/stop reports.
+
+1. `demo-launch.mts` delegates to `launch-command.ts`. The parent validates a fresh environment
+   snapshot against the same dedicated localhost/demo-name, exact actor, synthetic-mode and
+   external-configuration rules, then derives explicit API and web allowlists. The web hostname
+   must be `localhost`; API hosts may use any admitted loopback address. API/app ports must be
+   distinct and nonzero, with no silent hostname rewrite. Only macOS/Linux owned process groups
+   are supported; there is no shell or alternate-port
+   fallback. No migration, seed, reset, database drop or fixture import is a launcher action.
+2. The private API/Prisma child repeats the complete read-only preflight in the same process before
+   importing the actual server, requires configured Clerk keys and binds only the approved loopback
+   origin. It emits a closed ready/failure IPC message tied to the launch UUID and origin. Signals,
+   parent disconnect and startup failures initiate bounded shutdown, including API/database cleanup.
+   Configured Clerk keys are required for the real authentication path, not evidence of a session.
+3. Next uses its actual public custom-server interface in development mode against a new private0700
+   physical copy of web source, public assets, required configuration and shared UI. Dotenv names,
+   build/test/cache artifacts are excluded; other source symlinks and nonregular files are refused,
+   with bounded file/tree reads. Two explicit links reuse trusted installed dependencies at the
+   private root `node_modules` and `apps/web/node_modules`. Before Next starts, the private copy
+   must resolve the installed TypeScript, React types and Node types setup requirements to the
+   same files as the source workspace, including the type declaration entrypoints. The
+   copied manifest and each fixture hash must agree with that launch's preflight. The web child
+   receives local origins and Clerk configuration but no database URL or job secret. Its exact
+   loopback listener emits launch-bound ready/failure IPC and has bounded shutdown handlers.
+4. The parent accepts only closed messages matching its launch UUID and approved origins, then
+   probes API readiness and the served manifest bytes/hash before reporting SERVICES_RUNNING.
+   These are startup/asset checks; they do not exercise Clerk login or the authenticated dashboard.
+   The report keeps providerMode SYNTHETIC and authentication, authenticatedRehearsal and recording
+   NOT_VERIFIED. Installed Node/dependencies remain trusted; the guard cannot undo an already-run
+   parent preload and is not a hostile-host sandbox.
+5. Child stdout/stderr are discarded; lifecycle diagnostics expose closed codes. Readiness timeouts,
+   cancellation or an unexpected child exit stop the owned processes. Shutdown targets only the
+   detached groups created by this launcher, with bounded graceful and forced phases, and never
+   discovers/kills a process by port. Private files are disposed only after process cleanup is
+   confirmed. `forcedBySupervisor` records only the supervisor's forced termination; child
+   watchdogs may also exit forcibly, and no job-drain guarantee is made. STOPPED/LAUNCH_FAILED
+   preserve the database and expose process-cleanup uncertainty;
+   startup/stop itself does not modify workflow data. Normal authenticated app actions may write
+   to the dedicated demo database during the later rehearsal.
+
+**Local verification:** the single final combined suite passes 70/70 across8 files in16.80s after
+final typing/lint repairs (`/tmp/dentabill-demo-launch-focused-final.log`). Affected API/dependency
+lint/typecheck passes24/24 (22 cached,19.979s; `/tmp/dentabill-demo-launch-checks-final.log`); strict
+types for all three CLI entrypoints and API production build pass
+(`/tmp/dentabill-demo-launch-cli-types.log`, `/tmp/dentabill-demo-launch-api-build.log`). Independent
+API/process/web review found no actionable issue after the port-zero, dependency and self-proxy fixes.
+The actual CLI smoke passes (`/tmp/dentabill-demo-launch-smoke.log`): SERVICES_RUNNING, exact served
+manifest hash, a public page returning200, test headers rejected with401 on `/v1/me`, and SIGTERM
+followed by STOPPED. Owned listeners were released, database hashes remained unchanged and only
+the owned test database was removed. The smoke used fake/nonworking Clerk keys; it does not
+verify authentication, authenticated rehearsal or recording. No additional Next production build
+is claimed for this slice without product UI changes; the actual staged Next public page compiled
+and served200 during the smoke.
+
+The first actual Next startup failed because the private app lacked root-level TypeScript
+resolution. Next attempted npm metadata GETs and cache/log writes, then failed on `workspace:*`
+before installation; original workspace packages were unchanged. The failed private runtime was
+removed. The second explicit dependency link and three installed setup-requirement checks above
+address that path. This failed attempt has no zero-network claim. A later Next/Clerk self-proxy
+loop arose because NextURL normalizes127/IPv6 loopback names to `localhost` while Clerk rewrites
+the same request. The launcher now explicitly requires web `localhost` and distinct nonzero ports,
+without silently rewriting configuration; API hosts retain admitted loopback support. Successful
+startup smoke and final combined tests/checks are recorded above. No actual Clerk
+authentication, full-app browser rehearsal, recording, finished asset or deployment is claimed.
+
+The requested read-only Clerk CLI discovery identified the development instance/domain and
+matching existing admin associated with `usedentabill.xyz`, without printing keys or mutations.
+Next: actual Clerk authentication and the full synthetic capabilities rehearsal. The requested full dummy IVR and claim-collection chapter still
+needs preparation and proof; no production source cutover, real calls or paid inference is implied.
+Recording and landing-page asset integration follow. FW-43 source
+reconciliation, financial corrections/ownership/allocation and the full original scope remain open.
+
+## ADR-085 — Real Clerk-authenticated synthetic rehearsal and truthful call evidence
+
+**Date:** 2026-10-14. **Status:** local rehearsal, validation and owned-resource cleanup complete.
+ADR-084 is committed as `19f4b9b`. Edited media, landing integration and the full plan remain open.
+
+The user requested an authenticated app demonstration, including simulated IVR/claim-information
+collection and a landing-page recording. Exercise the real local UI while describing synthetic
+phone, analysis and financial evidence accurately.
+
+1. Read-only Clerk CLI discovery verified an existing development application, instance,
+   organization and matching admin. An official short-lived ticket established the real browser
+   session. Bearer-token `/v1/me` returned 200 for the exact local OWNER, without test headers.
+   Keep credentials, ticket/token/session values and identifying account data out of committed
+   files. This proves scoped development authentication, not production or live connectors.
+2. The actual UI imported two connected claims and completed one 39-second payer-matched synthetic
+   call. Its readable conversation includes synthetic practice/subscriber/service-date information
+   and a reference. The saved legacy CallSummary is pending, with Denise, `REF-SIM-DELTA-001` and
+   CALL_BACK; claim A remains MANUAL_REVIEW. No native ClaimObservation is created. Scripted menu
+   choices and hold text are not audio or actual DTMF; `ivrNavigated` and `humanReached` remain
+   false. The inference run is SYNTHETIC/APPLIED with 150 synthetic ledger tokens, not paid usage.
+3. The call page selects canonical transcript evidence, separates conversation from operational
+   events and displays the exact saved summary. Call/summary reads and cancellation cache updates
+   bind to the originating actor/practice. Synthetic representative turns may show collection
+   progress without establishing real human contact. The account-switcher label contrast was fixed.
+4. The authenticated UI accepted reports of $100 + $80, batch gross $180/provider adjustment −$30/
+   net $150, cash $150 and matches of $100 + $50. Posting header $150 and entries $180 stayed
+   separate, with an exact-line association for A and a claim-only association for B. Correction
+   to $140 staled the old reservations and blocked another match. Full releases of $50 then $100
+   preserved history; rematching $140 left cash capacity $10 and batch capacity $0. The simulated
+   call did not cause these separately imported facts or establish cash allocation, posting,
+   settlement or recovered revenue.
+5. Read-only database proof confirms 2 claims, 2 lines, 1 completed call, 1 legacy summary,
+   0 observations, 1 inference run/attempt, 3 matches, 2 releases and 2 posting relationships.
+   The dedicated local rehearsal database is preserved. Raw footage and review captures are
+   evidence of the rehearsal, not an edited/captioned final video or landing integration.
+6. The audit UI previously expected an expanded user object and mislabeled recorded actors as
+   System. It now uses SDK wire types, recorded actor IDs or Actor not recorded, exact saved-case
+   Claim/Call/CallSummary/Organization filters and scoped reads. Future auditLog.list writes record
+   the local actor. Historical null actors are preserved rather than assigned an invented identity.
+
+**Verification:** 205 distinct focused cases pass across 147 earlier cases and 58 new audit cases
+(API 11 + web 47), not one combined run. The final web run passed 47/47 across five files in 2.51s;
+a 24/24 recheck after lint-only repairs overlaps those cases. Final affected lint/type checks pass
+30/30 (24 cached, 41.961s). API and fresh isolated Next production builds pass; the private Next
+runtime was disposed. Logs: `/tmp/dentabill-demo-audit-api.log`,
+`/tmp/dentabill-demo-audit-web-final.log`, `/tmp/dentabill-demo-audit-tests-final.log`,
+`/tmp/dentabill-demo-rehearsal-checks-final.log`, `...-api-build.log` and `...-web-build.log`.
+
+Actual authenticated call and audit pages at 1440px and 390px, including the audit drawer, pass
+with no overflow/page errors and zero axe WCAG 2 A/AA + 2.1 AA violations. Call contrast failed
+initially at 4.21 and passed after the label repair; the failed check is not counted as a pass.
+Call QA and read-only database proof are under `/tmp/dentabill-authenticated-demo.cdscvk/`, including
+`responsive-call-proof.json`, call-review captures, `verify.sql` and `database-proof.txt`.
+
+The original raw capture completed at 1440×900, VP8, 25fps and 1242.24s, with 11 additional actual
+review shots. Keep raw media outside public assets. The created Clerk session is revoked, the
+launcher exited 0, owned services are stopped and ports 4480/4481/4490 have no listeners. Owned
+private build/test cleanup is complete and the rehearsal database remains preserved.
+
+**Narrow follow-up, not a recording blocker:** eight older authenticated API audit writes omit
+local actor attribution and misname `metadata.clerkUserId`: `calls.ts` call.enqueue/list/read and
+callSummary.read/retry; `claims.ts` claim.list/read; `reports.ts` report.read. Repair separately
+with persisted-actor fixtures, without historical rewrites. This milestone fixes future
+auditLog.list attribution only; current financial actions are attributed and verified.
+
+Next: commit ADR-085, edit the actual footage, produce poster/captions/descriptive transcript and
+integrate verified user-controlled responsive landing playback. No finished media, deployment,
+real payer call, paid inference or external financial action is claimed. FW-43 source observations,
+reviewed legacy binding/additive snapshots and the entire remaining financial/connector plan stay
+open. FW-45 and the full goal are not complete.
+
+## ADR-086 — Narrated synthetic film, native landing playback and open-D identity
+
+**Date:** 2026-10-14. **Status:** local media/landing verification and owned-resource cleanup
+complete; scoped transcript-fix review SHIP. ADR-085 is committed as `de6b1ac`. No publication or
+deployment.
+
+The user requested an engaging edited demonstration with narration through the workflow,
+less administrative burden for dental practitioners as its theme, and a modern replacement for
+the tooth logo. Use the actual authenticated synthetic rehearsal from ADR-085 as the source.
+
+1. Deliver a 171.6-second (about 2:52) film at 1600×1000, 25fps, H.264 with AAC stereo at 48 kHz;
+   the MP4 is 16,827,456 bytes. Ten chapters cover import, simulated claim-information collection,
+   the saved pending/manual-review result, separate remittance/batch/cash evidence, posting
+   associations, correction/full release/rematch and audit history. Narration and visible
+   disclosure preserve synthetic provenance, unverified bank/PMS evidence and the distinction
+   between a saved record and settlement or recovered revenue.
+2. Generate all ten narration chapters locally with Kokoro 0.9.4, voice af_heart. Independent
+   local Whisper base.en transcription found no material omissions. Use original quiet sine-
+   arpeggio music rather than sampled recordings. `docs/demo-film/production.json` records the
+   model/source links, Apache-2.0 model license, model hash, media hashes, chapter timing and
+   technical details. Local media production does not establish a live application/provider
+   inference path or actual payer call.
+3. Keep the finished MP4, poster, English WebVTT and descriptive transcript HTML/CSS under
+   `apps/web/public/media/dentabill-demo/`. The 43 cues use native automatic placement with
+   adjacent overlaps removed; the transcript explains important visual information as well as
+   narration. `ClaimDemo` uses native controls, inline playback, a reserved 8:5 frame,
+   `preload="none"`, no autoplay/loop, and explicit transcript/download links. Avoid loading the
+   video before the viewer chooses to play.
+4. Replace the tooth with one authored, solid open-D ribbon path shared by BrandMark, the
+   standalone SVG, favicon and derived Apple icon. Retain the existing palette, type and
+   interface hierarchy. DESIGN.md and `.impeccable/design.json` document the implemented mark
+   and native player composition.
+5. Preserve public production/edit/script metadata in `docs/demo-film/`. Keep the original raw
+   recording, chapter WAVs, graphics and render recipe in gitignored
+   `.impeccable/review/demo-film-source/`, without authentication metadata or caches. This local
+   archive supports later edits; a fresh clone does not contain those raw sources. Refresh
+   manifest hashes after final formatting or asset edits rather than copying stale digests.
+
+**Verification:** 22 tests across four files pass; 10 affected lint/type checks pass (6 cached,
+about 26 seconds); the isolated Next production build passes. These are ADR-086 checks and are
+not added to ADR-085's 205-case result. Actual Chrome landing and transcript pages at 1440px/390px
+have no overflow, page errors or axe violations. Browser proof confirms zero MP4 requests before
+play, native playback, seeking to 128 seconds, fullscreen, download, HTTP 206 with exactly 1024
+requested bytes and HTTP 200 for the 43-cue VTT. Caption placement was corrected to automatic
+and rechecked. Logs: `/tmp/dentabill-demo-film-tests.log`, `...-checks.log`, `...-build.log`;
+proof: `/tmp/dentabill-authenticated-demo.cdscvk/film/browser-proof.json`.
+
+The fresh finish review requested two transcript fixes: replace system-ui with established
+Inter/Newsreader typography, and remove the decorative eyebrow. Both were applied together;
+self-hosted WOFF2 files and official OFL notices are under the public media `fonts/` directory,
+with no runtime external font request. Updated 1440px/390px captures confirm both fonts loaded,
+no eyebrow, no overflow and zero axe violations (`film/transcript-fix-proof.json`). The reviewer
+returned SHIP for these scored fixes with no visible fix-batch regression. That bounded verdict
+is not independent whole-surface, audio or motion approval. All narration words match captions
+after normalization; the 43 cues are ordered, nonoverlapping and in bounds. Full MP4 decode passes.
+
+Owned review servers on ports 4485 and 4487 are stopped; the original launcher reported
+FILM_SERVER_DISPOSED and removed its private runtime. The Impeccable detector attempt failed with
+permission denied/exit 126 and provides no automated verdict. No publication or deployment is
+claimed.
+
+Next: commit ADR-086, then FW-43 additive canonical source observations, reviewed legacy binding
+and additive snapshots under the existing implementation plan. The eight legacy authenticated actor-write
+repairs remain a separate tested follow-up with no historical rewrite. Real connector, remaining
+financial and production evidence gates are unchanged. This is a local demo milestone; the full
+goal remains ACTIVE.
+
+## ADR-087 — 67-second motion-design film built in code; call screen redesign
+
+**Date:** 2026-10-15. **Status:** rendered and verified locally; not committed, published or
+deployed. Supersedes ADR-086's film (the landing player, captions and transcript links stay).
+
+The owner rejected ADR-086's 2:52 screen-recording walkthrough: too long, no motion or sound
+design, and not aimed at dental practices. Modern SaaS demos are 30–90 seconds, scenario-led,
+with kinetic type, zoom-to-action camera moves and sound design, readable with the sound off.
+
+1. Build the film in code with Remotion (`apps/demo-film`, pinned 4.0.531) instead of editing a
+   screen recording: animated recreations of the dashboard in DESIGN.md tokens, so every shot is
+   legible at 16:9 and re-renders in one command (`pnpm --filter @dentabill/demo-film render`).
+2. The story sells the agent: hook (stuck on hold) → brand → CSV drop → one click → the call
+   (phone-tree pills, real DTMF tones, hold fast-forward, live chat with the rep) → call results
+   card → six calls at once → “Insurance calls, handled.” 66.8 s, 1920×1080, 30 fps, −14 LUFS.
+3. The call reenacts `packages/payer-ivr/src/demo/local-navigation.ts`; voices are Kokoro-82M
+   (Apache-2.0), music and effects are synthesized (no samples). The “Synthetic data · simulated
+   call” badge and the end-card disclosure stay. No invented statistics.
+4. Before filming, the call screen was redesigned so the film shows the product as it is: an
+   outcome card (status, next step, reference with copy, representative, durations), a phone
+   tree path derived only from transcript turns (`lib/calls/call-insights.ts`), chat-style
+   conversation, a live banner with timer and waveform, and human event labels.
+5. ADR-086's `docs/demo-film/{script,edit,production}.json` described the old film and are
+   removed; `docs/demo-film/README.md` documents the new one. Remotion's free license covers
+   companies of up to three people.

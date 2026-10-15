@@ -19,11 +19,8 @@ import type { RetellEventListener, RetellPort } from './port.js';
  * Activation guard: `RETELL_API_KEY` empty/absent AND `DEMO_AUTOPILOT === 'true'`.
  * When inactive, the wrapped port's behaviour is completely untouched.
  *
- * Outcomes are deterministic per `idempotencyKey`, not random, so repeated
- * demo clicks yield reproducible results — but they are drawn from a library
- * of six distinct conversations (`demo-scenarios.ts`) rather than the two
- * inline branches this previously carried, so a fleet of concurrent demo calls
- * reads as six different calls instead of clones.
+ * Each supported payer has a neutral pending-review script. Source metadata
+ * personalizes the conversation without inventing claim or payment facts.
  *
  * Timers are injectable (testing seam) so unit tests can drive the scenario
  * with fake timers instead of waiting out the full call.
@@ -49,20 +46,6 @@ interface PendingScenario {
   ended: boolean;
 }
 
-/**
- * Simple hash function to derive a deterministic outcome from a string.
- * Used to make demo outcomes reproducible per idempotencyKey without randomness.
- */
-function deterministicHash(s: string): number {
-  let hash = 0;
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    hash = (hash << 5) - hash + c;
-    hash |= 0; // Convert to 32-bit integer
-  }
-  return Math.abs(hash);
-}
-
 export class DemoAutopilot implements RetellPort {
   readonly #port: RetellPort;
   readonly #enabled: boolean;
@@ -82,7 +65,7 @@ export class DemoAutopilot implements RetellPort {
   async startCall(input: StartCallInput): Promise<StartCallResult> {
     const result = await this.#port.startCall(input);
 
-    if (this.#enabled) {
+    if (this.#enabled && !this.#scenarios.has(result.retellCallId)) {
       const scenario: PendingScenario = {
         retellCallId: result.retellCallId,
         input,
@@ -129,10 +112,10 @@ export class DemoAutopilot implements RetellPort {
   }
 
   #scheduleScenario(pending: PendingScenario): void {
-    const hash = deterministicHash(pending.input.idempotencyKey);
-    const script: DemoScenario = selectDemoScenario(hash);
+    const script: DemoScenario = selectDemoScenario(pending.input.payerCode);
 
     const vars = {
+      practiceName: pending.input.agentMetadata.practiceName,
       subscriberId: pending.input.agentMetadata.subscriberId,
       dateOfService: pending.input.agentMetadata.dateOfService,
     };
@@ -171,6 +154,8 @@ export class DemoAutopilot implements RetellPort {
         durationSeconds: script.durationSeconds,
         endReason: RetellCallEndReason.COMPLETED,
         collectedInfo: {
+          simulation: true,
+          payerCode: script.payerCode,
           claimStatus: outcome.claimStatus,
           referenceNumber: outcome.referenceNumber,
           representativeName: outcome.representativeName,

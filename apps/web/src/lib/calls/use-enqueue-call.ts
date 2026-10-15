@@ -16,9 +16,8 @@ import type { EnqueueCallResponse } from './types.js';
  * mutations under `lib/calls/` makes T22's surface area small and
  * keeps the claim hooks untouched.
  *
- * On success we patch the cached claim detail to `IN_QUEUE` and
- * invalidate the list so the row re-renders with the live status
- * indicator.
+ * A replay can return an already accepted call. Refresh server state
+ * instead of guessing that every accepted request moved the claim to IN_QUEUE.
  */
 export interface EnqueueCallVars {
   readonly claimId: string;
@@ -28,12 +27,6 @@ interface ApiErrorBody {
   message?: string;
   code?: string;
 }
-
-/**
- * Server returns 202 with the queued call session id; we treat its
- * arrival as the moment to flip the cached claim status optimistically.
- */
-const IN_QUEUE_PATCH = { status: 'IN_QUEUE' as const };
 
 export function useEnqueueCall(): UseMutationResult<EnqueueCallResponse, Error, EnqueueCallVars> {
   const { client, withAuthHeaders } = useDentaBillApi();
@@ -72,12 +65,11 @@ export function useEnqueueCall(): UseMutationResult<EnqueueCallResponse, Error, 
       return result.data;
     },
     onSuccess: async (_response, vars) => {
-      const detailKey = ['claims', 'detail', vars.claimId] as const;
-      queryClient.setQueryData<{ status: 'IN_QUEUE' } & Record<string, unknown>>(
-        detailKey,
-        (existing) => (existing ? { ...existing, ...IN_QUEUE_PATCH } : existing),
-      );
-      await queryClient.invalidateQueries({ queryKey: ['claims', 'list'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['claims', 'detail', vars.claimId] }),
+        queryClient.invalidateQueries({ queryKey: ['claims', 'list'] }),
+        queryClient.invalidateQueries({ queryKey: ['calls'] }),
+      ]);
     },
   });
 }

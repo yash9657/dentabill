@@ -77,9 +77,11 @@ without it every command dies with a bare `Host key verification failed.`
 - api: `NODE_ENV=production`, `PORT=3001`, `DATABASE_URL`/`REDIS_URL` as
   `${{Postgres.DATABASE_URL}}` / `${{Redis.REDIS_URL}}` references,
   `RAILWAY_DOCKERFILE_PATH=apps/api/Dockerfile`, Clerk keys, freshly generated
-  `DOB_HASH_SECRET` + `RETELL_WEBHOOK_SECRET` (production does **not** reuse dev
-  secrets), `DEMO_IGNORE_PAYER_HOURS=true`, `NEXT_PUBLIC_APP_URL` (currently
+  `DOB_HASH_SECRET` (production does **not** reuse dev secrets),
+  `DEMO_IGNORE_PAYER_HOURS=true`, `NEXT_PUBLIC_APP_URL` (currently
   pointing at the api's own domain — **repoint at Vercel** once that exists).
+  FW-28 correction: omit `RETELL_WEBHOOK_SECRET` for demo; real webhooks require
+  the Retell API key with the dashboard webhook badge, not a generated value.
 - call-worker: `WORKER_PORT=3010`, `DEMO_AUTOPILOT=true`, `WORKER_OUTBOUND_NUMBER`
   (placeholder `+15555550100`, replace with the real Retell number).
 - summary-worker: `WORKER_PORT=3011`, `SUMMARIZER_AUTO_TRANSITION_ENABLED=true`,

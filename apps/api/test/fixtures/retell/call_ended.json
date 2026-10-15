@@ -1,0 +1,18 @@
+{
+  "event": "call_ended",
+  "call": {
+    "call_type": "phone_call",
+    "call_id": "call_synthetic_contract_01",
+    "agent_id": "agent_synthetic_contract_01",
+    "agent_version": 1,
+    "call_status": "ended",
+    "from_number": "+12025550100",
+    "to_number": "+12025550101",
+    "direction": "outbound",
+    "start_timestamp": 1791892800000,
+    "end_timestamp": 1791892830123,
+    "duration_ms": 30123,
+    "disconnection_reason": "user_hangup",
+    "transcript": "Agent: This is a synthetic contract test.\nUser: Test complete."
+  }
+}

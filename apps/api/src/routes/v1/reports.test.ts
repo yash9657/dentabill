@@ -1,19 +1,11 @@
 import { prisma } from '@dentabill/db';
 import type { Organization } from '@dentabill/db';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildServer } from '../../app.js';
 
-interface ApiErrorBody {
-  error: true;
-  message: string;
-  code: string;
-}
-
-function bodyAsError(response: { json: () => unknown }): ApiErrorBody {
-  return response.json() as ApiErrorBody;
-}
+import type { ReportsSummaryResponse as Report } from './reports.js';
 
 async function makeOrg(name: string): Promise<Organization> {
   return prisma.organization.create({
@@ -21,7 +13,13 @@ async function makeOrg(name: string): Promise<Organization> {
   });
 }
 
-describe('GET /v1/reports/summary (G-D1a)', () => {
+const unavailablePayments = {
+  status: 'unavailable',
+  reason: 'PAYMENT_LEDGER_NOT_IMPLEMENTED',
+  amountCents: null,
+};
+
+describe('GET /v1/reports/summary (FW-01/FW-02)', () => {
   let server: FastifyInstance;
 
   beforeAll(async () => {
@@ -37,241 +35,221 @@ describe('GET /v1/reports/summary (G-D1a)', () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     await prisma.$executeRawUnsafe(
       'TRUNCATE TABLE "Organization", "User", "Claim", "Call", "CallSummary", "CallEvent", "PayerConfig", "AuditLog", "BillingUsageRecord" RESTART IDENTITY CASCADE',
     );
   });
 
-  it('rejects unauthenticated requests with 401', async () => {
+  async function getReport(orgId: string): Promise<Report> {
     const response = await server.inject({
       method: 'GET',
       url: '/v1/reports/summary',
+      headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': orgId },
     });
+    expect(response.statusCode).toBe(200);
+    return response.json<Report>();
+  }
+
+  function expectEmptyWeeks(weeks: Report['callActivityByWeek']): void {
+    expect(weeks).toHaveLength(8);
+    expect(
+      weeks.every(
+        (week) =>
+          week.callCount === 0 && week.completedCallCount === 0 && week.uniqueClaimCount === 0,
+      ),
+    ).toBe(true);
+  }
+
+  async function seedRepeatedCalls(orgId: string): Promise<void> {
+    const resolved = await prisma.claim.create({
+      data: {
+        organizationId: orgId,
+        patientDOBHash: 'hash_resolved',
+        claimNumber: 'CL-PARTIAL',
+        cdtCodes: ['D2740'],
+        claimAmount: '300.00',
+        payerCode: 'DELTA_DENTAL_PPO',
+        serviceDate: new Date('2026-01-15T00:00:00Z'),
+        status: 'RESOLVED',
+        priority: 80,
+      },
+    });
+    const denied = await prisma.claim.create({
+      data: {
+        organizationId: orgId,
+        patientDOBHash: 'hash_denied',
+        claimNumber: 'CL-DENIED',
+        cdtCodes: ['D2740'],
+        claimAmount: '250.00',
+        payerCode: 'DELTA_DENTAL_PPO',
+        serviceDate: new Date('2026-01-15T00:00:00Z'),
+        status: 'DENIED',
+        priority: 80,
+      },
+    });
+    for (const [index, claimId] of [resolved.id, resolved.id, denied.id, denied.id].entries()) {
+      const call = await prisma.call.create({
+        data: {
+          organizationId: orgId,
+          claimId,
+          retellCallId: `${orgId}_call_${String(index)}`,
+          status: index === 3 ? 'FAILED' : 'COMPLETED',
+          attemptNumber: index + 1,
+          startedAt: new Date(),
+          endedAt: new Date(),
+          durationSeconds: 60,
+        },
+      });
+      await prisma.callSummary.create({
+        data: {
+          organizationId: orgId,
+          callId: call.id,
+          claimStatus: claimId === resolved.id ? 'PAID' : 'DENIED',
+          amountApproved: claimId === resolved.id ? '100.00' : null,
+          denialCode: claimId === denied.id ? 'CO-16' : null,
+          denialReason: claimId === denied.id ? 'Missing information' : null,
+          nextAction: 'MANUAL_REVIEW',
+          rawTranscript: 'Synthetic payer report; payment has not been reconciled.',
+          claudeSummary: 'Synthetic fixture',
+        },
+      });
+    }
+  }
+
+  it('rejects unauthenticated requests', async () => {
+    const response = await server.inject({ method: 'GET', url: '/v1/reports/summary' });
     expect(response.statusCode).toBe(401);
-    expect(bodyAsError(response).code).toBe('AUTHENTICATION_REQUIRED');
   });
 
-  it('returns aggregates for an empty org', async () => {
-    const org = await makeOrg('Empty Org');
-    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
-    const response = await server.inject({
-      method: 'GET',
-      url: '/v1/reports/summary',
-      headers,
-    });
-    expect(response.statusCode).toBe(200);
-    const body = response.json<{
-      recoveredByWeek: unknown[];
-      denialReasons: unknown[];
-      claimAging: { bucket: string; count: number }[];
-      payerOutcomes: unknown[];
-      callVolume: unknown[];
-    }>();
-    expect(body.recoveredByWeek).toEqual([]);
-    expect(body.denialReasons).toEqual([]);
-    expect(body.claimAging).toHaveLength(5);
-    expect(body.claimAging.every((b) => b.count === 0)).toBe(true);
+  it('reports an unavailable payment metric, including for an empty organization', async () => {
+    const org = await makeOrg('Empty');
+    const body = await getReport(org.id);
+    expect(body.verifiedPayments).toEqual(unavailablePayments);
+    expectEmptyWeeks(body.callActivityByWeek);
     expect(body.payerOutcomes).toEqual([]);
+    expect(body.denialReasons).toEqual([]);
+    expect(body.claimAging.every((bucket) => bucket.count === 0)).toBe(true);
     expect(body.callVolume).toEqual([]);
+    expect(body).not.toHaveProperty('recoveredByWeek');
   });
 
-  it('aggregates resolved claims by week', async () => {
-    const org = await makeOrg('ResolvedOrg');
-    const _claim1 = await prisma.claim.create({
+  it('separates repeated calls, completed calls, distinct claims and claims marked resolved', async () => {
+    const org = await makeOrg('Repeated calls');
+    await seedRepeatedCalls(org.id);
+    const body = await getReport(org.id);
+    expect(body.payerOutcomes).toEqual([
+      {
+        payer: 'DELTA_DENTAL_PPO',
+        callCount: 4,
+        completedCallCount: 3,
+        uniqueClaimCount: 2,
+        claimsMarkedResolvedCount: 1,
+        avgDurationSeconds: 60,
+      },
+    ]);
+    expect(body.callActivityByWeek).toHaveLength(8);
+    expect(body.callActivityByWeek.at(-1)).toMatchObject({
+      callCount: 4,
+      completedCallCount: 3,
+      uniqueClaimCount: 2,
+    });
+    expect(body.denialReasons).toEqual([
+      { code: 'CO-16', label: 'Missing information', uniqueClaimCount: 1 },
+    ]);
+    expect(body.verifiedPayments).toEqual(unavailablePayments);
+    expect(body.payerOutcomes[0]).not.toHaveProperty('recoveredCents');
+    expect(body.payerOutcomes[0]).not.toHaveProperty('resolvedCount');
+
+    const stats = await server.inject({
+      method: 'GET',
+      url: '/v1/calls/stats',
+      headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id },
+    });
+    expect(stats.statusCode).toBe(200);
+    expect(stats.json()).toMatchObject({ callsToday: 4, verifiedPayments: unavailablePayments });
+    expect(stats.json()).not.toHaveProperty('recoveredThisWeekCents');
+  });
+
+  it('uses call start time for weekly activity, not a resolved claim modification time', async () => {
+    const org = await makeOrg('Historical activity');
+    await seedRepeatedCalls(org.id);
+    await prisma.call.updateMany({
+      where: { organizationId: org.id },
+      data: { startedAt: new Date(Date.now() - 70 * 24 * 60 * 60 * 1000) },
+    });
+    const body = await getReport(org.id);
+    expectEmptyWeeks(body.callActivityByWeek);
+    expect(body.callVolume).toEqual([]);
+    expect(body.payerOutcomes[0]).toMatchObject({ callCount: 4, uniqueClaimCount: 2 });
+    expect(body.verifiedPayments.amountCents).toBeNull();
+  });
+
+  it('fills all eight Monday cohorts and preserves gaps, time boundaries, and tenant scope', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-12T00:00:00.000Z'));
+    const org = await makeOrg('Weekly boundaries');
+    const otherOrg = await makeOrg('Other weekly activity');
+    await seedRepeatedCalls(otherOrg.id);
+    const claim = await prisma.claim.create({
       data: {
         organizationId: org.id,
-        patientDOBHash: 'hash_a',
-        claimNumber: 'CL-RESOLVED-1',
+        patientDOBHash: 'hash_weekly',
+        claimNumber: 'CL-WEEKLY',
         cdtCodes: ['D2740'],
-        claimAmount: '100.00',
+        claimAmount: '300.00',
         payerCode: 'DELTA_DENTAL_PPO',
         serviceDate: new Date('2026-01-15T00:00:00Z'),
-        status: 'RESOLVED',
         priority: 80,
       },
     });
-
-    const _claim2 = await prisma.claim.create({
-      data: {
+    const starts = [
+      '2026-08-23T23:59:59.999Z',
+      '2026-08-24T00:00:00.000Z',
+      '2026-08-24T12:00:00.000Z',
+      '2026-10-11T23:59:59.999Z',
+      '2026-10-12T00:00:00.000Z',
+      '2026-10-12T00:00:00.001Z',
+      null,
+    ];
+    await prisma.call.createMany({
+      data: starts.map((startedAt, index) => ({
         organizationId: org.id,
-        patientDOBHash: 'hash_b',
-        claimNumber: 'CL-RESOLVED-2',
-        cdtCodes: ['D2740'],
-        claimAmount: '200.00',
-        payerCode: 'CIGNA_DENTAL',
-        serviceDate: new Date('2026-01-15T00:00:00Z'),
-        status: 'RESOLVED',
-        priority: 80,
-      },
+        claimId: claim.id,
+        retellCallId: `${org.id}_boundary_${String(index)}`,
+        status: 'COMPLETED' as const,
+        attemptNumber: index + 1,
+        startedAt: startedAt ? new Date(startedAt) : null,
+      })),
     });
-
-    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
-    const response = await server.inject({
-      method: 'GET',
-      url: '/v1/reports/summary',
-      headers,
-    });
-    expect(response.statusCode).toBe(200);
-    const body = response.json<{
-      recoveredByWeek: { weekStart: string; recoveredCents: number; claimCount: number }[];
-    }>();
-    expect(body.recoveredByWeek.length).toBeGreaterThan(0);
-    const totalRecovered = body.recoveredByWeek.reduce((sum, w) => sum + w.recoveredCents, 0);
-    const totalClaims = body.recoveredByWeek.reduce((sum, w) => sum + w.claimCount, 0);
-    expect(totalRecovered).toBe(30000); // 100 + 200 dollars = 30000 cents
-    expect(totalClaims).toBe(2);
+    const body = await getReport(org.id);
+    expect(body.callActivityByWeek).toEqual([
+      { weekStart: '2026-08-24', callCount: 2, completedCallCount: 2, uniqueClaimCount: 1 },
+      { weekStart: '2026-08-31', callCount: 0, completedCallCount: 0, uniqueClaimCount: 0 },
+      { weekStart: '2026-09-07', callCount: 0, completedCallCount: 0, uniqueClaimCount: 0 },
+      { weekStart: '2026-09-14', callCount: 0, completedCallCount: 0, uniqueClaimCount: 0 },
+      { weekStart: '2026-09-21', callCount: 0, completedCallCount: 0, uniqueClaimCount: 0 },
+      { weekStart: '2026-09-28', callCount: 0, completedCallCount: 0, uniqueClaimCount: 0 },
+      { weekStart: '2026-10-05', callCount: 1, completedCallCount: 1, uniqueClaimCount: 1 },
+      { weekStart: '2026-10-12', callCount: 1, completedCallCount: 1, uniqueClaimCount: 1 },
+    ]);
+    expect(body.payerOutcomes[0]?.uniqueClaimCount).toBe(1);
+    expect(body.verifiedPayments).toEqual(unavailablePayments);
   });
 
-  it('breaks down denial reasons', async () => {
-    const org = await makeOrg('DenialOrg');
-    const call1 = await prisma.call.create({
-      data: {
-        organizationId: org.id,
-        claimId: (
-          await prisma.claim.create({
-            data: {
-              organizationId: org.id,
-              patientDOBHash: 'h1',
-              claimNumber: 'CL-DENIAL-1',
-              cdtCodes: ['D2740'],
-              claimAmount: '100.00',
-              payerCode: 'DELTA_DENTAL_PPO',
-              serviceDate: new Date(),
-              status: 'DENIED',
-              priority: 80,
-            },
-          })
-        ).id,
-        retellCallId: 'rcid_denial_1',
-        status: 'COMPLETED',
-        attemptNumber: 1,
-      },
-    });
-
-    await prisma.callSummary.create({
-      data: {
-        organizationId: org.id,
-        callId: call1.id,
-        claimStatus: 'DENIED',
-        denialCode: 'CODE_100',
-        denialReason: 'Not a covered service',
-        nextAction: 'APPEAL',
-        rawTranscript: 'test',
-        claudeSummary: 'test',
-      },
-    });
-
-    const call2 = await prisma.call.create({
-      data: {
-        organizationId: org.id,
-        claimId: (
-          await prisma.claim.create({
-            data: {
-              organizationId: org.id,
-              patientDOBHash: 'h2',
-              claimNumber: 'CL-DENIAL-2',
-              cdtCodes: ['D2740'],
-              claimAmount: '100.00',
-              payerCode: 'DELTA_DENTAL_PPO',
-              serviceDate: new Date(),
-              status: 'DENIED',
-              priority: 80,
-            },
-          })
-        ).id,
-        retellCallId: 'rcid_denial_2',
-        status: 'COMPLETED',
-        attemptNumber: 1,
-      },
-    });
-
-    await prisma.callSummary.create({
-      data: {
-        organizationId: org.id,
-        callId: call2.id,
-        claimStatus: 'DENIED',
-        denialCode: 'CODE_100',
-        denialReason: 'Not a covered service',
-        nextAction: 'APPEAL',
-        rawTranscript: 'test',
-        claudeSummary: 'test',
-      },
-    });
-
-    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
-    const response = await server.inject({
-      method: 'GET',
-      url: '/v1/reports/summary',
-      headers,
-    });
-    expect(response.statusCode).toBe(200);
-    const body = response.json<{
-      denialReasons: { code: string; label: string; count: number }[];
-    }>();
-    expect(body.denialReasons).toHaveLength(1);
-    expect(body.denialReasons[0]).toMatchObject({
-      code: 'CODE_100',
-      label: 'Not a covered service',
-      count: 2,
-    });
-  });
-
-  it('does not leak data across organizations (cross-org isolation)', async () => {
-    const orgA = await makeOrg('OrgA');
-    const orgB = await makeOrg('OrgB');
-
-    await prisma.claim.create({
-      data: {
-        organizationId: orgA.id,
-        patientDOBHash: 'h_a',
-        claimNumber: 'CL-A-1',
-        cdtCodes: ['D2740'],
-        claimAmount: '500.00',
-        payerCode: 'DELTA_DENTAL_PPO',
-        serviceDate: new Date(),
-        status: 'RESOLVED',
-        priority: 80,
-      },
-    });
-
-    await prisma.claim.create({
-      data: {
-        organizationId: orgB.id,
-        patientDOBHash: 'h_b',
-        claimNumber: 'CL-B-1',
-        cdtCodes: ['D2740'],
-        claimAmount: '100.00',
-        payerCode: 'DELTA_DENTAL_PPO',
-        serviceDate: new Date(),
-        status: 'RESOLVED',
-        priority: 80,
-      },
-    });
-
-    const responseA = await server.inject({
-      method: 'GET',
-      url: '/v1/reports/summary',
-      headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': orgA.id },
-    });
-
-    const responseB = await server.inject({
-      method: 'GET',
-      url: '/v1/reports/summary',
-      headers: { 'x-test-user-id': 'user_b', 'x-test-org-id': orgB.id },
-    });
-
-    const bodyA = responseA.json<{
-      recoveredByWeek: { recoveredCents: number }[];
-    }>();
-    const bodyB = responseB.json<{
-      recoveredByWeek: { recoveredCents: number }[];
-    }>();
-
-    const totalA = bodyA.recoveredByWeek.reduce((sum, w) => sum + w.recoveredCents, 0);
-    const totalB = bodyB.recoveredByWeek.reduce((sum, w) => sum + w.recoveredCents, 0);
-
-    expect(totalA).toBe(50000); // orgA only
-    expect(totalB).toBe(10000); // orgB only
-    expect(totalA).not.toBe(totalB);
+  it('isolates all reporting aggregates by organization', async () => {
+    const orgA = await makeOrg('A');
+    const orgB = await makeOrg('B');
+    await seedRepeatedCalls(orgB.id);
+    const a = await getReport(orgA.id);
+    const b = await getReport(orgB.id);
+    expectEmptyWeeks(a.callActivityByWeek);
+    expect(a.payerOutcomes).toEqual([]);
+    expect(a.denialReasons).toEqual([]);
+    expect(a.callVolume).toEqual([]);
+    expect(a.claimAging.every((bucket) => bucket.count === 0)).toBe(true);
+    expect(b.payerOutcomes[0]).toMatchObject({ callCount: 4, uniqueClaimCount: 2 });
+    expect(b.denialReasons[0]?.uniqueClaimCount).toBe(1);
+    expect(b.callVolume.reduce((sum, day) => sum + day.callCount, 0)).toBe(4);
   });
 });

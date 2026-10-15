@@ -1,3 +1,4 @@
+import { relayJobOutbox } from '@dentabill/call-worker';
 import { prisma } from '@dentabill/db';
 import type { Organization } from '@dentabill/db';
 import type { FastifyInstance } from 'fastify';
@@ -25,6 +26,21 @@ function bodyAsError(response: { json: () => unknown }): ApiErrorBody {
   return response.json() as ApiErrorBody;
 }
 
+async function rejectProducerInsert(table: 'AuditLog' | 'JobOutbox'): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    `CREATE FUNCTION reject_api_producer_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic producer persistence outage'; END $$`,
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TRIGGER reject_api_producer_write BEFORE INSERT ON "${table}" FOR EACH ROW EXECUTE FUNCTION reject_api_producer_write()`,
+  );
+}
+
+afterEach(async () => {
+  await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS reject_api_producer_write ON "AuditLog"');
+  await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS reject_api_producer_write ON "JobOutbox"');
+  await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS reject_api_producer_write()');
+});
+
 /**
  * `/v1/claims/:id/calls` integration tests against real Postgres.
  *
@@ -49,6 +65,7 @@ async function makeClaim(
   orgId: string,
   overrides?: Partial<{
     status: 'PENDING' | 'COMPLETED' | 'WRITTEN_OFF';
+    subscriberId: string | null;
     payerCode: 'DELTA_DENTAL_PPO' | 'CIGNA_DENTAL' | 'METLIFE_DENTAL' | 'AETNA_DENTAL' | 'UNKNOWN';
   }>,
 ): Promise<SeededClaim> {
@@ -57,6 +74,8 @@ async function makeClaim(
       organizationId: orgId,
       patientDOBHash: 'hash_abc',
       patientDOBLast4: '1990',
+      subscriberId:
+        overrides?.subscriberId === undefined ? 'SYNTHETIC-MEMBER' : overrides.subscriberId,
       claimNumber: `CL-${Math.random().toString(36).slice(2, 8)}`,
       cdtCodes: ['D2740'],
       claimAmount: '420.00',
@@ -76,25 +95,22 @@ describe('POST /v1/claims/:id/calls (P3-T16)', () => {
   beforeAll(async () => {
     delete process.env.CLERK_SECRET_KEY;
     delete process.env.CLERK_PUBLISHABLE_KEY;
-    server = await buildServer({ logger: false });
     await prisma.$connect();
-    // Replace the queue's `add` with a spy so injected tests don't
-    // open a real Redis connection. The lazy-connect setting in
-    // queue.ts means no socket is opened until first call anyway.
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  beforeEach(async () => {
+    // Each case gets fresh in-memory rate-limit state, independent of earlier requests.
+    server = await buildServer({ logger: false });
     queueAddSpy = vi.fn(async () => ({ id: 'mocked' }));
     server.callsQueue.add = queueAddSpy as unknown as typeof server.callsQueue.add;
   });
 
-  afterAll(async () => {
-    await server.close();
-    await prisma.$disconnect();
-  });
-
-  beforeEach(() => {
-    queueAddSpy.mockClear();
-  });
-
   afterEach(async () => {
+    await server.close();
     await prisma.$executeRawUnsafe(
       'TRUNCATE TABLE "Organization", "User", "Claim", "Call", "CallSummary", "CallEvent", "PayerConfig", "AuditLog", "BillingUsageRecord" RESTART IDENTITY CASCADE',
     );
@@ -175,6 +191,53 @@ describe('POST /v1/claims/:id/calls (P3-T16)', () => {
     expect(queueAddSpy).not.toHaveBeenCalled();
   });
 
+  it.each([null, '', '   '])(
+    'rejects missing subscriber ID (%j) before any enqueue side effect',
+    async (subscriberId) => {
+      const org = await makeOrg('Missing identity');
+      const claim = await makeClaim(org.id, { subscriberId });
+      const before = await prisma.claim.findFirstOrThrow({
+        where: { id: claim.id, organizationId: org.id },
+      });
+      const response = await server.inject({
+        method: 'POST',
+        url: `/v1/claims/${claim.id}/calls`,
+        headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id },
+        payload: {},
+      });
+      expect(response.statusCode).toBe(422);
+      expect(bodyAsError(response).code).toBe('MISSING_CALL_IDENTITY');
+      expect(queueAddSpy).not.toHaveBeenCalled();
+      const after = await prisma.claim.findFirstOrThrow({
+        where: { id: claim.id, organizationId: org.id },
+      });
+      expect(after.status).toBe(before.status);
+      expect(after.updatedAt).toEqual(before.updatedAt);
+      expect(await prisma.call.count({ where: { organizationId: org.id } })).toBe(0);
+      expect(
+        await prisma.auditLog.count({ where: { organizationId: org.id, action: 'call.enqueue' } }),
+      ).toBe(0);
+    },
+  );
+
+  it('rejects whitespace-only NPI before enqueue', async () => {
+    const org = await makeOrg('Blank NPI');
+    await prisma.organization.update({ where: { id: org.id }, data: { npi: '   ' } });
+    const claim = await makeClaim(org.id);
+    const response = await server.inject({
+      method: 'POST',
+      url: `/v1/claims/${claim.id}/calls`,
+      headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id },
+      payload: {},
+    });
+    expect(response.statusCode).toBe(422);
+    expect(bodyAsError(response).code).toBe('MISSING_PROVIDER_NPI');
+    expect(queueAddSpy).not.toHaveBeenCalled();
+    expect(
+      await prisma.claim.findFirstOrThrow({ where: { id: claim.id, organizationId: org.id } }),
+    ).toMatchObject({ status: 'PENDING' });
+  });
+
   it('rejects 422 UNSUPPORTED_PAYER for a Phase-3-unsupported payer', async () => {
     const org = await makeOrg('A');
     const claim = await makeClaim(org.id, { payerCode: 'AETNA_DENTAL' });
@@ -221,6 +284,24 @@ describe('POST /v1/claims/:id/calls (P3-T16)', () => {
       const org = await makeOrg('A');
       const claim = await makeClaim(org.id);
       const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+      queueAddSpy.mockImplementationOnce(async () => {
+        expect(
+          await prisma.callIntent.count({ where: { organizationId: org.id, state: 'READY' } }),
+        ).toBe(1);
+        expect(
+          await prisma.auditLog.count({
+            where: { organizationId: org.id, action: 'call.enqueue' },
+          }),
+        ).toBe(1);
+        expect(
+          await prisma.jobOutbox.findFirst({ where: { organizationId: org.id } }),
+        ).toMatchObject({
+          state: 'PENDING',
+          kind: 'CALL_PLACE',
+          deliveryAttempts: 1,
+        });
+        return { id: 'mocked' };
+      });
       const response = await server.inject({
         method: 'POST',
         url: `/v1/claims/${claim.id}/calls`,
@@ -236,7 +317,7 @@ describe('POST /v1/claims/:id/calls (P3-T16)', () => {
       }>();
       expect(body.claimId).toBe(claim.id);
       expect(body.attemptNumber).toBe(1);
-      expect(body.jobId.startsWith(`${claim.id}-a1-`)).toBe(true);
+      expect(body.jobId.startsWith('call_')).toBe(true);
 
       // BullMQ add() called with the right shape.
       expect(queueAddSpy).toHaveBeenCalledTimes(1);
@@ -272,6 +353,15 @@ describe('POST /v1/claims/:id/calls (P3-T16)', () => {
         jobId: body.jobId,
         payerCode: 'DELTA_DENTAL_PPO',
       });
+      const outbox = await prisma.jobOutbox.findFirstOrThrow({ where: { organizationId: org.id } });
+      expect(outbox).toMatchObject({
+        kind: 'CALL_PLACE',
+        state: 'DELIVERED',
+        idempotencyKey: body.jobId,
+        deliveryAttempts: 1,
+        payload: data,
+      });
+      expect(outbox.deliveredAt).not.toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -311,7 +401,106 @@ describe('POST /v1/claims/:id/calls (P3-T16)', () => {
     }
   });
 
-  it('rolls Claim back to its original status if BullMQ add() throws', async () => {
+  it('concurrent requests reserve one intent and one atomic enqueue audit', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T18:00:00.000Z'));
+    try {
+      const org = await makeOrg('Synthetic concurrency');
+      const claim = await makeClaim(org.id);
+      const request = {
+        method: 'POST' as const,
+        url: `/v1/claims/${claim.id}/calls`,
+        headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id },
+        payload: {},
+      };
+      const responses = await Promise.all([server.inject(request), server.inject(request)]);
+      expect(responses.map((r) => r.statusCode)).toEqual([202, 202]);
+      expect(responses[0].json<{ jobId: string }>().jobId).toBe(
+        responses[1].json<{ jobId: string }>().jobId,
+      );
+      expect(await prisma.callIntent.count({ where: { organizationId: org.id } })).toBe(1);
+      expect(await prisma.jobOutbox.count({ where: { organizationId: org.id } })).toBe(1);
+      expect(queueAddSpy).toHaveBeenCalledTimes(1);
+      expect(
+        await prisma.auditLog.count({ where: { organizationId: org.id, action: 'call.enqueue' } }),
+      ).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('blocks another call while a previous submission is uncertain even after manual review', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T18:00:00.000Z'));
+    try {
+      const org = await makeOrg('Synthetic uncertain');
+      const claim = await makeClaim(org.id);
+      const request = {
+        method: 'POST' as const,
+        url: `/v1/claims/${claim.id}/calls`,
+        headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id },
+        payload: {},
+      };
+      expect((await server.inject(request)).statusCode).toBe(202);
+      await prisma.callIntent.updateMany({
+        where: { organizationId: org.id, claimId: claim.id },
+        data: { state: 'UNKNOWN' },
+      });
+      await prisma.claim.updateMany({
+        where: { organizationId: org.id, id: claim.id },
+        data: { status: 'MANUAL_REVIEW' },
+      });
+      const blocked = await server.inject(request);
+      expect(blocked.statusCode).toBe(409);
+      expect(bodyAsError(blocked).message).toContain('reconciliation');
+      expect(queueAddSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('counts yesterday reservations submitted today toward the daily attempt cap', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T18:00:00.000Z'));
+    try {
+      const org = await makeOrg('Synthetic attempt date');
+      const claim = await makeClaim(org.id);
+      const row = await prisma.claim.findFirstOrThrow({
+        where: { id: claim.id, organizationId: org.id },
+      });
+      for (const attemptNumber of [1, 2]) {
+        await prisma.callIntent.create({
+          data: {
+            organizationId: org.id,
+            claimId: claim.id,
+            payerCode: row.payerCode,
+            claimPriority: row.priority,
+            claimVersion: row.updatedAt,
+            idempotencyKey: `prior-reservation-${String(attemptNumber)}`,
+            attemptNumber,
+            state: 'TERMINAL',
+            createdAt: new Date('2026-10-12T18:00:00Z'),
+            submittedAt: new Date(),
+          },
+        });
+      }
+      const response = await server.inject({
+        method: 'POST',
+        url: `/v1/claims/${claim.id}/calls`,
+        headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id },
+        payload: {},
+      });
+      expect(response.statusCode).toBe(429);
+      expect(queueAddSpy).not.toHaveBeenCalled();
+      expect(
+        await prisma.claim.findFirst({ where: { id: claim.id, organizationId: org.id } }),
+      ).toMatchObject({ status: 'PENDING' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retains the same durable intent when BullMQ delivery is ambiguous', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-01-13T18:00:00.000Z'));
     queueAddSpy.mockImplementationOnce(async () => {
@@ -327,9 +516,169 @@ describe('POST /v1/claims/:id/calls (P3-T16)', () => {
         headers,
         payload: {},
       });
-      expect(response.statusCode).toBe(500); // unhandled — sanitised by global handler
+      expect(response.statusCode).toBe(202);
       const after = await prisma.claim.findUniqueOrThrow({ where: { id: claim.id } });
-      expect(after.status).toBe('PENDING');
+      expect(after.status).toBe('IN_QUEUE');
+      const intent = await prisma.callIntent.findFirstOrThrow({
+        where: { organizationId: org.id, claimId: claim.id },
+      });
+      expect(intent.state).toBe('READY');
+      expect(response.json<{ jobId: string }>().jobId).toBe(intent.idempotencyKey);
+      const pending = await prisma.jobOutbox.findFirstOrThrow({
+        where: { organizationId: org.id },
+      });
+      expect(pending).toMatchObject({
+        state: 'PENDING',
+        deliveryAttempts: 1,
+        lastErrorCode: 'DISPATCH_FAILED',
+        idempotencyKey: intent.idempotencyKey,
+        deliveredAt: null,
+      });
+      expect(pending.availableAt.getTime()).toBeGreaterThan(Date.now());
+      const retry = await server.inject({
+        method: 'POST',
+        url: `/v1/claims/${claim.id}/calls`,
+        headers,
+        payload: {},
+      });
+      expect(retry.statusCode).toBe(202);
+      expect(retry.json<{ jobId: string }>().jobId).toBe(intent.idempotencyKey);
+      expect(queueAddSpy).toHaveBeenCalledTimes(1);
+      expect(await prisma.callIntent.count({ where: { organizationId: org.id } })).toBe(1);
+      expect(await prisma.jobOutbox.count({ where: { organizationId: org.id } })).toBe(1);
+      vi.setSystemTime(pending.availableAt);
+      const delivered = await server.inject({
+        method: 'POST',
+        url: `/v1/claims/${claim.id}/calls`,
+        headers,
+        payload: {},
+      });
+      expect(delivered.statusCode).toBe(202);
+      expect(queueAddSpy).toHaveBeenCalledTimes(2);
+      expect(queueAddSpy.mock.calls[0]?.[1]).toEqual(queueAddSpy.mock.calls[1]?.[1]);
+      expect(await prisma.jobOutbox.findFirst({ where: { organizationId: org.id } })).toMatchObject(
+        {
+          state: 'DELIVERED',
+          deliveryAttempts: 2,
+          idempotencyKey: intent.idempotencyKey,
+        },
+      );
+      expect(
+        await prisma.auditLog.count({ where: { organizationId: org.id, action: 'call.enqueue' } }),
+      ).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(['AuditLog', 'JobOutbox'] as const)(
+    'rolls back the claim, intent, audit, and outbox when %s insertion fails',
+    async (table) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-13T18:00:00.000Z'));
+      try {
+        const org = await makeOrg('Synthetic rollback');
+        const claim = await makeClaim(org.id);
+        const before = await prisma.claim.findFirstOrThrow({
+          where: { id: claim.id, organizationId: org.id },
+        });
+        await rejectProducerInsert(table);
+        const response = await server.inject({
+          method: 'POST',
+          url: `/v1/claims/${claim.id}/calls`,
+          headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id },
+          payload: {},
+        });
+        expect(response.statusCode).toBe(500);
+        expect(queueAddSpy).not.toHaveBeenCalled();
+        expect(
+          await prisma.claim.findFirst({ where: { id: claim.id, organizationId: org.id } }),
+        ).toEqual(before);
+        expect(await prisma.callIntent.count({ where: { organizationId: org.id } })).toBe(0);
+        expect(await prisma.jobOutbox.count({ where: { organizationId: org.id } })).toBe(0);
+        expect(
+          await prisma.auditLog.count({
+            where: { organizationId: org.id, action: 'call.enqueue' },
+          }),
+        ).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it('retains the command when queue acceptance succeeds but marking delivery fails', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T18:00:00.000Z'));
+    try {
+      const org = await makeOrg('Synthetic receipt failure');
+      const claim = await makeClaim(org.id);
+      await prisma.$executeRawUnsafe(
+        `CREATE FUNCTION reject_api_producer_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.state = 'DELIVERED' THEN RAISE EXCEPTION 'synthetic delivery receipt outage'; END IF; RETURN NEW; END $$`,
+      );
+      await prisma.$executeRawUnsafe(
+        'CREATE TRIGGER reject_api_producer_write BEFORE UPDATE ON "JobOutbox" FOR EACH ROW EXECUTE FUNCTION reject_api_producer_write()',
+      );
+      const request = {
+        method: 'POST' as const,
+        url: `/v1/claims/${claim.id}/calls`,
+        headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id },
+        payload: {},
+      };
+      expect((await server.inject(request)).statusCode).toBe(202);
+      const pending = await prisma.jobOutbox.findFirstOrThrow({
+        where: { organizationId: org.id },
+      });
+      expect(pending).toMatchObject({ state: 'PENDING', deliveredAt: null, deliveryAttempts: 1 });
+      expect(pending.leaseExpiresAt).not.toBeNull();
+      expect((await server.inject(request)).statusCode).toBe(202);
+      expect(queueAddSpy).toHaveBeenCalledTimes(1);
+      await prisma.$executeRawUnsafe('DROP TRIGGER reject_api_producer_write ON "JobOutbox"');
+      if (!pending.leaseExpiresAt) throw new Error('Missing pending delivery lease');
+      vi.setSystemTime(pending.leaseExpiresAt);
+      expect((await server.inject(request)).statusCode).toBe(202);
+      expect(queueAddSpy).toHaveBeenCalledTimes(2);
+      expect(queueAddSpy.mock.calls[0]?.[1]).toEqual(queueAddSpy.mock.calls[1]?.[1]);
+      expect(await prisma.callIntent.count({ where: { organizationId: org.id } })).toBe(1);
+      expect(await prisma.jobOutbox.findFirst({ where: { organizationId: org.id } })).toMatchObject(
+        { state: 'DELIVERED', deliveryAttempts: 2 },
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('acknowledges a durable reservation if a redundant postcommit outbox write fails', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T18:00:00.000Z'));
+    try {
+      const org = await makeOrg('Synthetic postcommit outage');
+      const claim = await makeClaim(org.id);
+      await prisma.$executeRawUnsafe(
+        `CREATE FUNCTION reject_api_producer_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF EXISTS (SELECT 1 FROM "JobOutbox" WHERE "organizationId" = NEW."organizationId" AND "kind" = NEW."kind" AND "idempotencyKey" = NEW."idempotencyKey") THEN RAISE EXCEPTION 'synthetic redundant outbox write outage'; END IF; RETURN NEW; END $$`,
+      );
+      await prisma.$executeRawUnsafe(
+        'CREATE TRIGGER reject_api_producer_write BEFORE INSERT ON "JobOutbox" FOR EACH ROW EXECUTE FUNCTION reject_api_producer_write()',
+      );
+      const response = await server.inject({
+        method: 'POST',
+        url: `/v1/claims/${claim.id}/calls`,
+        headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id },
+        payload: {},
+      });
+      expect(response.statusCode).toBe(202);
+      const intent = await prisma.callIntent.findFirstOrThrow({
+        where: { organizationId: org.id },
+      });
+      expect(response.json<{ jobId: string }>().jobId).toBe(intent.idempotencyKey);
+      expect(
+        await prisma.jobOutbox.count({
+          where: { organizationId: org.id, idempotencyKey: intent.idempotencyKey },
+        }),
+      ).toBe(1);
+      expect(
+        await prisma.auditLog.count({ where: { organizationId: org.id, action: 'call.enqueue' } }),
+      ).toBe(1);
     } finally {
       vi.useRealTimers();
     }
@@ -632,7 +981,7 @@ describe('POST /v1/calls/:id/cancel (P3-T20 — idempotent cancel)', () => {
     );
   });
 
-  it('flips an in-flight call to FAILED + CANCELLED_BY_OPERATOR + escalates Claim', async () => {
+  it('requests cancellation while preserving provider status and terminal evidence', async () => {
     const seed = await seedOrgClaimAndCall({ status: 'NAVIGATING_IVR' });
     const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': seed.orgId };
     const response = await server.inject({
@@ -641,22 +990,48 @@ describe('POST /v1/calls/:id/cancel (P3-T20 — idempotent cancel)', () => {
       headers,
     });
     expect(response.statusCode).toBe(200);
-    const body = response.json<{ status: string; dlqReason: string }>();
-    expect(body.status).toBe('FAILED');
-    expect(body.dlqReason).toBe('CANCELLED_BY_OPERATOR');
+    const body = response.json<{
+      status: string;
+      dlqReason: string | null;
+      cancelRequestedAt: string | null;
+      endedAt: string | null;
+      durationSeconds: number | null;
+    }>();
+    expect(body).toMatchObject({
+      status: 'NAVIGATING_IVR',
+      dlqReason: null,
+      endedAt: null,
+      durationSeconds: null,
+    });
+    expect(body.cancelRequestedAt).toEqual(expect.any(String));
 
     const callAfter = await prisma.call.findUniqueOrThrow({ where: { id: seed.callId } });
-    expect(callAfter.endedAt).not.toBeNull();
+    expect(callAfter.endedAt).toBeNull();
+    expect(callAfter.durationSeconds).toBeNull();
+    expect(callAfter.cancelRequestedAt?.toISOString()).toBe(body.cancelRequestedAt);
+    expect(callAfter.cancelRequestedBy).toBe('user_a');
     const claimAfter = await prisma.claim.findUniqueOrThrow({ where: { id: seed.claimId } });
     expect(claimAfter.status).toBe('MANUAL_REVIEW');
     const events = await prisma.callEvent.findMany({
-      where: { callId: seed.callId, eventType: 'call.cancelled' },
+      where: { callId: seed.callId, eventType: 'call.cancel.requested' },
     });
     expect(events).toHaveLength(1);
     const audits = await prisma.auditLog.findMany({
-      where: { organizationId: seed.orgId, action: 'call.cancel' },
+      where: { organizationId: seed.orgId, action: 'call.cancel.requested' },
     });
     expect(audits).toHaveLength(1);
+    for (const url of [`/v1/calls/${seed.callId}`, '/v1/calls']) {
+      const read = await server.inject({ method: 'GET', url, headers });
+      expect(read.statusCode).toBe(200);
+      const data = read.json<{
+        cancelRequestedAt?: string;
+        items?: { id: string; cancelRequestedAt: string }[];
+      }>();
+      expect(
+        data.items?.find((item) => item.id === seed.callId)?.cancelRequestedAt ??
+          data.cancelRequestedAt,
+      ).toBe(body.cancelRequestedAt);
+    }
   });
 
   it('is idempotent: a terminal call returns 200 without re-writing', async () => {
@@ -672,9 +1047,86 @@ describe('POST /v1/calls/:id/cancel (P3-T20 — idempotent cancel)', () => {
     expect(callAfter.status).toBe('COMPLETED');
     expect(callAfter.dlqReason).toBeNull();
     const events = await prisma.callEvent.findMany({
-      where: { callId: seed.callId, eventType: 'call.cancelled' },
+      where: { callId: seed.callId, eventType: 'call.cancel.requested' },
     });
     expect(events).toHaveLength(0);
+    expect(callAfter.cancelRequestedAt).toBeNull();
+    expect(response.json<{ cancelRequestedAt: string | null }>().cancelRequestedAt).toBeNull();
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: seed.orgId, action: 'call.cancel.requested' },
+      }),
+    ).toBe(0);
+  });
+
+  it('concurrent cancellation requests write one request event and audit', async () => {
+    const seed = await seedOrgClaimAndCall({ status: 'ON_HOLD' });
+    const request = {
+      method: 'POST' as const,
+      url: `/v1/calls/${seed.callId}/cancel`,
+      headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': seed.orgId },
+    };
+    const responses = await Promise.all([server.inject(request), server.inject(request)]);
+    expect(responses.map((response) => response.statusCode)).toEqual([200, 200]);
+    expect(responses[0].json()).toEqual(responses[1].json());
+    expect(responses[0].json()).toMatchObject({
+      status: 'ON_HOLD',
+      endedAt: null,
+      durationSeconds: null,
+    });
+    expect(
+      await prisma.callEvent.count({
+        where: { callId: seed.callId, eventType: 'call.cancel.requested' },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: seed.orgId, action: 'call.cancel.requested' },
+      }),
+    ).toBe(1);
+  });
+
+  it('preserves a reviewed claim when requesting cancellation', async () => {
+    const seed = await seedOrgClaimAndCall({ status: 'ON_HOLD' });
+    const reviewed = await prisma.claim.update({
+      where: { id: seed.claimId, organizationId: seed.orgId },
+      data: { status: 'WRITTEN_OFF' },
+    });
+    const response = await server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seed.callId}/cancel`,
+      headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': seed.orgId },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(
+      await prisma.claim.findFirst({ where: { id: seed.claimId, organizationId: seed.orgId } }),
+    ).toEqual(reviewed);
+  });
+
+  it('records the originating Clerk actor for a DB-resolved authenticated user', async () => {
+    const seed = await seedOrgClaimAndCall({ status: 'ON_HOLD' });
+    const actor = await prisma.user.create({
+      data: {
+        organizationId: seed.orgId,
+        clerkUserId: 'clerk_cancel_real_identity',
+        email: 'synthetic-actor@cancel.test',
+        role: 'OWNER',
+      },
+    });
+    const response = await server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seed.callId}/cancel`,
+      headers: { 'x-test-user-id': actor.clerkUserId },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(
+      await prisma.call.findFirst({ where: { id: seed.callId, organizationId: seed.orgId } }),
+    ).toMatchObject({ cancelRequestedBy: actor.clerkUserId });
+    expect(
+      await prisma.auditLog.findFirst({
+        where: { organizationId: seed.orgId, action: 'call.cancel.requested' },
+      }),
+    ).toMatchObject({ metadata: { clerkUserId: actor.clerkUserId } });
   });
 
   it('returns 404 when the call belongs to a different org (cross-org leak)', async () => {
@@ -690,6 +1142,8 @@ describe('POST /v1/calls/:id/cancel (P3-T20 — idempotent cancel)', () => {
     // Org A's call must remain unchanged.
     const callAfter = await prisma.call.findUniqueOrThrow({ where: { id: seedA.callId } });
     expect(callAfter.dlqReason).toBeNull();
+    expect(callAfter.cancelRequestedAt).toBeNull();
+    expect(await prisma.callEvent.count({ where: { callId: seedA.callId } })).toBe(0);
   });
 });
 
@@ -728,17 +1182,25 @@ describe('GET /v1/calls/stats (P3-T25 — overview aggregates)', () => {
       callsToday: number;
       queueDepth: number;
       avgCallSeconds: number | null;
-      recoveredThisWeekCents: number;
+      verifiedPayments: {
+        status: 'unavailable';
+        reason: 'PAYMENT_LEDGER_NOT_IMPLEMENTED';
+        amountCents: null;
+      };
     }>();
     expect(body).toEqual({
       callsToday: 0,
       queueDepth: 0,
       avgCallSeconds: null,
-      recoveredThisWeekCents: 0,
+      verifiedPayments: {
+        status: 'unavailable',
+        reason: 'PAYMENT_LEDGER_NOT_IMPLEMENTED',
+        amountCents: null,
+      },
     });
   });
 
-  it('aggregates callsToday + queueDepth + avgCallSeconds + recovered$ correctly', async () => {
+  it('aggregates operational metrics without inferring payments from resolved claims', async () => {
     const org = await makeOrg('StatsAgg');
     // Seed claim referenced by the calls.
     const baseClaim = await prisma.claim.create({
@@ -839,7 +1301,7 @@ describe('GET /v1/calls/stats (P3-T25 — overview aggregates)', () => {
       ],
     });
 
-    // Recovered: two RESOLVED claims updated within last 7 days.
+    // Recently modified RESOLVED claims do not establish payment evidence.
     await prisma.claim.create({
       data: {
         organizationId: org.id,
@@ -877,15 +1339,23 @@ describe('GET /v1/calls/stats (P3-T25 — overview aggregates)', () => {
       callsToday: number;
       queueDepth: number;
       avgCallSeconds: number | null;
-      recoveredThisWeekCents: number;
+      verifiedPayments: {
+        status: 'unavailable';
+        reason: 'PAYMENT_LEDGER_NOT_IMPLEMENTED';
+        amountCents: null;
+      };
     }>();
     expect(body.callsToday).toBe(2);
     // 2 fresh PENDING/IN_QUEUE rows + the seedClaim's CALLING row (also queueable).
     expect(body.queueDepth).toBe(3);
     // Avg over 60, 120, 90 (the 999s call is outside the 7-day window).
     expect(body.avgCallSeconds).toBe(90);
-    // 350.50 + 149.50 = 500.00 → 50000¢
-    expect(body.recoveredThisWeekCents).toBe(50000);
+    expect(body.verifiedPayments).toEqual({
+      status: 'unavailable',
+      reason: 'PAYMENT_LEDGER_NOT_IMPLEMENTED',
+      amountCents: null,
+    });
+    expect(body).not.toHaveProperty('recoveredThisWeekCents');
   });
 
   it('does not leak rows from another organization', async () => {
@@ -928,7 +1398,11 @@ describe('GET /v1/calls/stats (P3-T25 — overview aggregates)', () => {
       callsToday: 0,
       queueDepth: 0,
       avgCallSeconds: null,
-      recoveredThisWeekCents: 0,
+      verifiedPayments: {
+        status: 'unavailable',
+        reason: 'PAYMENT_LEDGER_NOT_IMPLEMENTED',
+        amountCents: null,
+      },
     });
   });
 });
@@ -1099,8 +1573,63 @@ describe('GET /v1/calls/:id/summary + POST /v1/calls/:id/summary/retry', () => {
     expect(summariesAddSpy).not.toHaveBeenCalled();
   });
 
+  it.each(['INITIATED', 'NAVIGATING_IVR', 'ON_HOLD', 'HUMAN_REACHED', 'COLLECTING'] as const)(
+    'POST retry: refuses an active %s call before dispatch or audit',
+    async (status) => {
+      const seed = await seedSummaryFixture('OWNER');
+      await prisma.call.updateMany({
+        where: { id: seed.callId, organizationId: seed.orgId },
+        data: { status },
+      });
+      await prisma.callSummary.deleteMany({
+        where: { callId: seed.callId, organizationId: seed.orgId },
+      });
+      const response = await server.inject({
+        method: 'POST',
+        url: `/v1/calls/${seed.callId}/summary/retry`,
+        headers: { 'x-test-user-id': seed.clerkUserId },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(bodyAsError(response).code).toBe('VALIDATION_ERROR');
+      expect(summariesAddSpy).not.toHaveBeenCalled();
+      expect(
+        await prisma.call.findFirstOrThrow({
+          where: { id: seed.callId, organizationId: seed.orgId },
+        }),
+      ).toMatchObject({ status });
+      expect(
+        await prisma.callSummary.count({
+          where: { callId: seed.callId, organizationId: seed.orgId },
+        }),
+      ).toBe(0);
+      expect(
+        await prisma.auditLog.count({
+          where: {
+            resourceId: seed.callId,
+            organizationId: seed.orgId,
+            action: 'callSummary.retry',
+          },
+        }),
+      ).toBe(0);
+    },
+  );
+
   it('POST retry: OWNER enqueues summary.generate with deterministic retryNumber', async () => {
     const seed = await seedSummaryFixture('OWNER');
+    await prisma.callSummary.deleteMany({
+      where: { organizationId: seed.orgId, callId: seed.callId },
+    });
+    summariesAddSpy.mockImplementationOnce(async (_name, _data, opts) => {
+      expect(
+        await prisma.auditLog.count({
+          where: { organizationId: seed.orgId, action: 'callSummary.retry' },
+        }),
+      ).toBe(1);
+      expect(
+        await prisma.jobOutbox.findFirst({ where: { organizationId: seed.orgId } }),
+      ).toMatchObject({ kind: 'SUMMARY_GENERATE', state: 'PENDING', deliveryAttempts: 1 });
+      return { id: (opts as { jobId: string }).jobId };
+    });
     const first = await server.inject({
       method: 'POST',
       url: `/v1/calls/${seed.callId}/summary/retry`,
@@ -1119,6 +1648,148 @@ describe('GET /v1/calls/:id/summary + POST /v1/calls/:id/summary/retry', () => {
     });
     expect(second.statusCode).toBe(202);
     expect(second.json<{ retryNumber: number }>().retryNumber).toBe(2);
+    const outboxes = await prisma.jobOutbox.findMany({
+      where: { organizationId: seed.orgId },
+      orderBy: { idempotencyKey: 'asc' },
+    });
+    expect(outboxes).toHaveLength(2);
+    expect(outboxes.map((row) => row.idempotencyKey)).toEqual([
+      `call.${seed.callId}.retry.1`,
+      `call.${seed.callId}.retry.2`,
+    ]);
+    expect(
+      outboxes.every((row) => row.state === 'DELIVERED' && row.kind === 'SUMMARY_GENERATE'),
+    ).toBe(true);
+  });
+
+  it('POST retry: concurrent requests reserve distinct retry numbers with matching audits and outbox commands', async () => {
+    const seed = await seedSummaryFixture('OWNER');
+    await prisma.callSummary.deleteMany({
+      where: { organizationId: seed.orgId, callId: seed.callId },
+    });
+    const responses = await Promise.all(
+      Array.from({ length: 3 }, () =>
+        server.inject({
+          method: 'POST',
+          url: `/v1/calls/${seed.callId}/summary/retry`,
+          headers: { 'x-test-user-id': seed.clerkUserId },
+        }),
+      ),
+    );
+    expect(responses.map((response) => response.statusCode)).toEqual([202, 202, 202]);
+    const bodies = responses.map((response) =>
+      response.json<{ retryNumber: number; jobId: string }>(),
+    );
+    expect(bodies.map((body) => body.retryNumber).sort()).toEqual([1, 2, 3]);
+    expect(new Set(bodies.map((body) => body.jobId)).size).toBe(3);
+    expect(summariesAddSpy).toHaveBeenCalledTimes(3);
+    const outboxes = await prisma.jobOutbox.findMany({ where: { organizationId: seed.orgId } });
+    expect(outboxes).toHaveLength(3);
+    for (const body of bodies) {
+      expect(outboxes.find((row) => row.idempotencyKey === body.jobId)).toMatchObject({
+        state: 'DELIVERED',
+        kind: 'SUMMARY_GENERATE',
+        payload: {
+          organizationId: seed.orgId,
+          callId: seed.callId,
+          idempotencyKey: body.jobId,
+          promptVersion: 'v1',
+        },
+      });
+    }
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: seed.orgId, action: 'callSummary.retry' },
+      }),
+    ).toBe(3);
+  });
+
+  it.each(['AuditLog', 'JobOutbox'] as const)(
+    'POST retry: %s failure rolls back the retry reservation and preserves evidence',
+    async (table) => {
+      const seed = await seedSummaryFixture('OWNER');
+      await prisma.callSummary.deleteMany({
+        where: { organizationId: seed.orgId, callId: seed.callId },
+      });
+      const before = await prisma.call.findFirstOrThrow({
+        where: { id: seed.callId, organizationId: seed.orgId },
+      });
+      await rejectProducerInsert(table);
+      const response = await server.inject({
+        method: 'POST',
+        url: `/v1/calls/${seed.callId}/summary/retry`,
+        headers: { 'x-test-user-id': seed.clerkUserId },
+      });
+      expect(response.statusCode).toBe(500);
+      expect(summariesAddSpy).not.toHaveBeenCalled();
+      expect(
+        await prisma.call.findFirst({ where: { id: seed.callId, organizationId: seed.orgId } }),
+      ).toEqual(before);
+      expect(
+        await prisma.callSummary.findFirst({
+          where: { callId: seed.callId, organizationId: seed.orgId },
+        }),
+      ).toBeNull();
+      expect(await prisma.jobOutbox.count({ where: { organizationId: seed.orgId } })).toBe(0);
+      expect(
+        await prisma.auditLog.count({
+          where: { organizationId: seed.orgId, action: 'callSummary.retry' },
+        }),
+      ).toBe(0);
+    },
+  );
+
+  it('POST retry: transport failure remains durably accepted and relay respects backoff', async () => {
+    const seed = await seedSummaryFixture('OWNER');
+    await prisma.callSummary.deleteMany({
+      where: { organizationId: seed.orgId, callId: seed.callId },
+    });
+    summariesAddSpy.mockRejectedValueOnce(new Error('synthetic queue unavailable'));
+    const response = await server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seed.callId}/summary/retry`,
+      headers: { 'x-test-user-id': seed.clerkUserId },
+    });
+    expect(response.statusCode).toBe(202);
+    const body = response.json<{ jobId: string; retryNumber: number }>();
+    expect(body.retryNumber).toBe(1);
+    const pending = await prisma.jobOutbox.findFirstOrThrow({
+      where: { organizationId: seed.orgId },
+    });
+    expect(pending).toMatchObject({
+      state: 'PENDING',
+      deliveredAt: null,
+      deliveryAttempts: 1,
+      lastErrorCode: 'DISPATCH_FAILED',
+      idempotencyKey: body.jobId,
+    });
+    expect(pending.availableAt.getTime()).toBeGreaterThan(Date.now());
+    expect(
+      await relayJobOutbox({
+        prisma,
+        jobDispatcher: server.jobDispatcher,
+        organizationId: seed.orgId,
+      }),
+    ).toMatchObject({ selected: 0 });
+    expect(summariesAddSpy).toHaveBeenCalledTimes(1);
+    expect(
+      await relayJobOutbox({
+        prisma,
+        jobDispatcher: server.jobDispatcher,
+        organizationId: seed.orgId,
+        clock: () => pending.availableAt,
+      }),
+    ).toMatchObject({ sent: 1 });
+    expect(summariesAddSpy).toHaveBeenCalledTimes(2);
+    expect(summariesAddSpy.mock.calls[0]?.[1]).toEqual(summariesAddSpy.mock.calls[1]?.[1]);
+    expect(
+      await prisma.jobOutbox.findFirst({ where: { organizationId: seed.orgId } }),
+    ).toMatchObject({ state: 'DELIVERED', idempotencyKey: body.jobId, deliveryAttempts: 2 });
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: seed.orgId, action: 'callSummary.retry' },
+      }),
+    ).toBe(1);
   });
 
   it('POST retry: 404 when call does not belong to the caller’s org', async () => {
@@ -1141,5 +1812,233 @@ describe('GET /v1/calls/:id/summary + POST /v1/calls/:id/summary/retry', () => {
     });
     expect(response.statusCode).toBe(404);
     expect(summariesAddSpy).not.toHaveBeenCalled();
+  });
+
+  it('refuses replacement of an existing summary without deleting evidence or reserving delivery', async () => {
+    const seed = await seedSummaryFixture();
+    const before = await prisma.callSummary.findFirstOrThrow({
+      where: { organizationId: seed.orgId, callId: seed.callId },
+    });
+    const response = await server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seed.callId}/summary/retry`,
+      headers: { 'x-test-user-id': seed.clerkUserId },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(bodyAsError(response).code).toBe('SUMMARY_ALREADY_EXISTS');
+    expect(
+      await prisma.callSummary.findFirst({
+        where: { organizationId: seed.orgId, callId: seed.callId },
+      }),
+    ).toEqual(before);
+    expect(await prisma.jobOutbox.count({ where: { organizationId: seed.orgId } })).toBe(0);
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: seed.orgId, action: 'callSummary.retry' },
+      }),
+    ).toBe(0);
+    expect(summariesAddSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects caller-selected generation or provider request data', async () => {
+    const seed = await seedSummaryFixture();
+    const response = await server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seed.callId}/summary/retry`,
+      headers: { 'x-test-user-id': seed.clerkUserId },
+      payload: { generation: 2, requestPayload: {} },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(summariesAddSpy).not.toHaveBeenCalled();
+  });
+
+  async function seedInferenceState(
+    seed: { orgId: string; callId: string },
+    state: 'RESERVED' | 'SUBMITTING' | 'UNKNOWN' | 'RESPONDED' | 'REJECTED' | 'APPLIED',
+  ) {
+    const call = await prisma.call.findFirstOrThrow({
+      where: { organizationId: seed.orgId, id: seed.callId },
+      include: { claim: true },
+    });
+    await prisma.callSummary.deleteMany({
+      where: { organizationId: seed.orgId, callId: seed.callId },
+    });
+    await prisma.inferenceBudget.create({
+      data: { organizationId: seed.orgId, billingDay: '2026-10-13', tokenLimit: 100_000n },
+    });
+    return prisma.inferenceRun.create({
+      data: {
+        organizationId: seed.orgId,
+        callId: seed.callId,
+        claimId: call.claimId,
+        claimVersion: call.claim.updatedAt,
+        generation: 1,
+        provider: 'SYNTHETIC',
+        releaseId: 'synthetic-summary.v1',
+        promptVersion: 'v1',
+        sourceHash: 'a'.repeat(64),
+        requestHash: 'b'.repeat(64),
+        requestPayload: { protected: 'PRIVATE_INFERENCE_SNAPSHOT' },
+        billingDay: '2026-10-13',
+        tokenAllowance: 1000n,
+        reservedTokens: 1000n,
+        state,
+        lastErrorCode: 'PRIVATE_PROVIDER_ERROR',
+      },
+    });
+  }
+
+  it.each(['SUBMITTING', 'UNKNOWN', 'REJECTED', 'APPLIED'] as const)(
+    'blocks manual retry for %s generation 1 and preserves its immutable identity',
+    async (state) => {
+      const seed = await seedSummaryFixture();
+      const run = await seedInferenceState(seed, state);
+      const response = await server.inject({
+        method: 'POST',
+        url: `/v1/calls/${seed.callId}/summary/retry`,
+        headers: { 'x-test-user-id': seed.clerkUserId },
+      });
+      expect(response.statusCode).toBe(409);
+      expect(bodyAsError(response).code).toBe(
+        state === 'SUBMITTING'
+          ? 'SUMMARY_INFERENCE_BUSY'
+          : state === 'APPLIED'
+            ? 'SUMMARY_ALREADY_EXISTS'
+            : 'SUMMARY_INFERENCE_REVIEW_REQUIRED',
+      );
+      expect(
+        await prisma.inferenceRun.findFirst({ where: { id: run.id, organizationId: seed.orgId } }),
+      ).toEqual(run);
+      expect(await prisma.jobOutbox.count({ where: { organizationId: seed.orgId } })).toBe(0);
+      expect(
+        await prisma.auditLog.count({
+          where: { organizationId: seed.orgId, action: 'callSummary.retry' },
+        }),
+      ).toBe(0);
+      expect(summariesAddSpy).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['RESERVED', 'RESPONDED'] as const)(
+    'requeues %s work without creating another inference run or replacing its saved request',
+    async (state) => {
+      const seed = await seedSummaryFixture();
+      const run = await seedInferenceState(seed, state);
+      const response = await server.inject({
+        method: 'POST',
+        url: `/v1/calls/${seed.callId}/summary/retry`,
+        headers: { 'x-test-user-id': seed.clerkUserId },
+        payload: {},
+      });
+      expect(response.statusCode).toBe(202);
+      expect(
+        await prisma.inferenceRun.findFirst({ where: { id: run.id, organizationId: seed.orgId } }),
+      ).toEqual(run);
+      expect(await prisma.inferenceRun.count({ where: { organizationId: seed.orgId } })).toBe(1);
+      expect(summariesAddSpy).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('waits for the inference organization lock before reserving retry work and rechecks committed submission', async () => {
+    const seed = await seedSummaryFixture();
+    const run = await seedInferenceState(seed, 'RESERVED');
+    let releaseLedger: () => void = () => undefined;
+    let announceLock: (pid: number) => void = () => undefined;
+    const ledgerGate = new Promise<void>((resolve) => {
+      releaseLedger = resolve;
+    });
+    const locked = new Promise<number>((resolve) => {
+      announceLock = resolve;
+    });
+    const ledger = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${seed.orgId} FOR NO KEY UPDATE`;
+      const [backend] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      if (!backend) throw new Error('Synthetic ledger connection is unavailable.');
+      announceLock(backend.pid);
+      await ledgerGate;
+      // A worker can complete its call/run writes while the API waits at the shared org lock.
+      await tx.call.updateMany({
+        where: { organizationId: seed.orgId, id: seed.callId },
+        data: { status: 'COMPLETED' },
+      });
+      await tx.inferenceRun.updateMany({
+        where: { organizationId: seed.orgId, id: run.id },
+        data: { state: 'SUBMITTING', submittedAt: new Date() },
+      });
+    });
+    const backendPid = await locked;
+    const request = server.inject({
+      method: 'POST',
+      url: `/v1/calls/${seed.callId}/summary/retry`,
+      headers: { 'x-test-user-id': seed.clerkUserId },
+    });
+    const response = Promise.resolve(request);
+    try {
+      await vi.waitFor(async () => {
+        const waiting = await prisma.$queryRaw<{ count: bigint }[]>`
+          SELECT count(*) FROM pg_stat_activity
+          WHERE datname = current_database()
+            AND ${backendPid} = ANY(pg_blocking_pids(pid))
+            AND query LIKE 'SELECT id FROM "Organization"%'
+        `;
+        expect(waiting[0]?.count).toBe(1n);
+      });
+    } finally {
+      releaseLedger();
+      await ledger;
+    }
+    const result = await response;
+    expect(result.statusCode).toBe(409);
+    expect(bodyAsError(result).code).toBe('SUMMARY_INFERENCE_BUSY');
+    expect(await prisma.jobOutbox.count({ where: { organizationId: seed.orgId } })).toBe(0);
+    expect(summariesAddSpy).not.toHaveBeenCalled();
+  });
+
+  it('shows safe processing state to billing staff without granting retry or exposing snapshots', async () => {
+    const seed = await seedSummaryFixture();
+    await seedInferenceState(seed, 'UNKNOWN');
+    const response = await server.inject({
+      method: 'GET',
+      url: `/v1/calls/${seed.callId}/summary/status`,
+      headers: { 'x-test-user-id': seed.clerkUserId },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      callId: seed.callId,
+      generation: 1,
+      state: 'UNKNOWN',
+      canRetry: false,
+      summaryId: null,
+      lastErrorCode: 'INFERENCE_REVIEW_REQUIRED',
+    });
+    expect(response.body).not.toContain('PRIVATE');
+    await prisma.user.updateMany({
+      where: { organizationId: seed.orgId, clerkUserId: seed.clerkUserId },
+      data: { role: 'BILLING_STAFF' },
+    });
+    const staff = await server.inject({
+      method: 'GET',
+      url: `/v1/calls/${seed.callId}/summary/status`,
+      headers: { 'x-test-user-id': seed.clerkUserId, 'x-test-role': 'OWNER' },
+    });
+    expect(staff.statusCode).toBe(200);
+    expect(staff.json()).toMatchObject({
+      canRetry: false,
+      provider: 'SYNTHETIC',
+      observationId: null,
+      reviewRequired: true,
+    });
+    expect(staff.body).not.toContain('PRIVATE');
+  });
+
+  it('returns404 for another tenant summary processing state', async () => {
+    const first = await seedSummaryFixture();
+    const second = await seedSummaryFixture();
+    const response = await server.inject({
+      method: 'GET',
+      url: `/v1/calls/${first.callId}/summary/status`,
+      headers: { 'x-test-user-id': second.clerkUserId },
+    });
+    expect(response.statusCode).toBe(404);
   });
 });

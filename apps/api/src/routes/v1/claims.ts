@@ -5,6 +5,12 @@ import { z } from 'zod';
 
 import { isValidClaimTransition } from '../../lib/claim-state.js';
 
+import {
+  ClaimSourceDetailsResponseSchema,
+  sourceDetailsInclude,
+  toSourceDetailsResponse,
+} from './claim-source-details.js';
+
 /**
  * `/v1/claims` — basic CRUD on Claim rows (P2-T38).
  *
@@ -80,6 +86,11 @@ const ClaimResponseSchema = z.object({
 });
 
 type ClaimResponse = z.infer<typeof ClaimResponseSchema>;
+
+const ClaimDetailResponseSchema = ClaimResponseSchema.extend({
+  sourceDetails: ClaimSourceDetailsResponseSchema.nullable(),
+}).strict();
+type ClaimDetailResponse = z.infer<typeof ClaimDetailResponseSchema>;
 
 const ClaimCreateSchema = z.object({
   patientDOBHash: z.string().min(1),
@@ -378,19 +389,23 @@ export function claimsRoutes(fastify: FastifyInstance): void {
     {
       preHandler: requireAuth,
       schema: {
-        description: 'Fetch a single claim by id, scoped to the auth organization.',
+        description:
+          'Fetch a single claim and its read-only imported source details, scoped to the auth organization.',
         security,
         params: IdParamSchema,
-        response: { 200: ClaimResponseSchema },
+        response: { 200: ClaimDetailResponseSchema },
       },
     },
-    async (request): Promise<ClaimResponse> => {
+    async (request): Promise<ClaimDetailResponse> => {
       const auth = request.dentabillAuth;
       if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
       const { orgId } = auth;
       const { id } = request.params as z.infer<typeof IdParamSchema>;
       const db = getOrgScopedDb(orgId);
-      const row = await db.claim.findFirst({ where: { id } });
+      const row = await db.claim.findFirst({
+        where: { id, organizationId: orgId },
+        include: sourceDetailsInclude(orgId),
+      });
       if (!row) {
         throw new ApiError('NOT_FOUND', 'Claim not found in your organization.');
       }
@@ -402,7 +417,7 @@ export function claimsRoutes(fastify: FastifyInstance): void {
         // See claim.list note above on userId omission.
         metadata: { clerkUserId: auth.userId },
       });
-      return toResponse(row);
+      return { ...toResponse(row), sourceDetails: toSourceDetailsResponse(row) };
     },
   );
 
@@ -485,7 +500,8 @@ export function claimsRoutes(fastify: FastifyInstance): void {
     {
       preHandler: requireAuth,
       schema: {
-        description: 'Delete a claim. Hard-delete; soft-delete arrives in Phase 4.',
+        description:
+          'Delete a claim without retained remittance evidence. Financial evidence prevents deletion.',
         security,
         params: IdParamSchema,
         response: { 204: z.null() },
@@ -497,16 +513,23 @@ export function claimsRoutes(fastify: FastifyInstance): void {
       const { orgId } = auth;
       const { id } = request.params as z.infer<typeof IdParamSchema>;
 
-      const db = getOrgScopedDb(orgId);
-      const existing = await db.claim.findFirst({ where: { id }, select: { id: true } });
-      if (!existing) {
-        throw new ApiError('NOT_FOUND', 'Claim not found in your organization.');
-      }
-
-      // deleteMany over delete for the same reason update uses updateMany:
-      // the org-scope write middleware requires `organizationId` on every
-      // multi-tenant write, and `delete` only takes a unique-key where.
-      await prisma.claim.deleteMany({ where: { id, organizationId: orgId } });
+      await prisma.$transaction(async (db) => {
+        const existing = await db.$queryRaw<{ id: string }[]>`
+          SELECT id FROM "Claim" WHERE id = ${id} AND "organizationId" = ${orgId} FOR UPDATE
+        `;
+        if (!existing.length)
+          throw new ApiError('NOT_FOUND', 'Claim not found in your organization.');
+        const retained = await db.claimRemittanceEvidence.findFirst({
+          where: { claimId: id, organizationId: orgId },
+          select: { id: true },
+        });
+        if (retained)
+          throw new ApiError(
+            'CONFLICT',
+            'This claim has retained remittance evidence and cannot be deleted.',
+          );
+        await db.claim.deleteMany({ where: { id, organizationId: orgId } });
+      });
       reply.code(204);
       return null;
     },

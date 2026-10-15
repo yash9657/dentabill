@@ -9,20 +9,25 @@
  * single attempt per receive; SQS owns the retry loop:
  *
  *   - attempt number = `ApproximateReceiveCount`;
- *   - success / duplicate (skipped)       → message deleted;
+ *   - success / duplicate / durable uncertainty → message deleted;
  *   - failure with attempts remaining      → reported in `batchItemFailures`,
  *     after shortening its visibility timeout to the job's BullMQ backoff
  *     (calls 30 s, 60 s; summaries 15 s, 30 s) so SQS redelivers on that
  *     schedule instead of after the queue-wide timeout;
- *   - failure on the final attempt         → the inline path's terminal
- *     hand-off runs (call → DLQ escalation, claim → MANUAL_REVIEW; summary →
- *     error log), then the message is deleted;
+ *   - final call failure                   → READY-only intent cancellation
+ *     is acknowledged only after its durable effects commit;
+ *   - unconfirmed summary or call failure  → remains a batch failure for
+ *     SQS retry/redrive, including BUSY summary work on the final receive;
  *   - unparseable body / unexpected crash  → reported as a failure without
  *     a visibility change, so it lands in the SQS DLQ via redrive.
  *
  * Module scope holds one runtime (and with it the `@dentabill/db` Prisma
  * singleton) that is reused across warm invocations.
+ * A private EventBridge invocation also performs one bounded outbox sweep;
+ * it does not instantiate the call/summary runtime or accept tenant input.
  */
+import { relayJobOutbox } from '@dentabill/call-worker';
+import { prisma } from '@dentabill/db';
 import { createLogger, type Logger } from '@dentabill/logger';
 import {
   createRedisConnection,
@@ -30,9 +35,13 @@ import {
   createSqsRetryScheduler,
   parseSqsJobMessage,
 } from '@dentabill/queue';
+import { z } from 'zod';
 
 import {
   createInlineJobRuntime,
+  createCallObservationSweep,
+  type CallObservationReport,
+  type CallObservationSweep,
   type AttemptReport,
   type InlineJobRuntime,
 } from './lib/inline-jobs.js';
@@ -43,7 +52,7 @@ export interface SqsRecord {
   readonly messageId: string;
   readonly receiptHandle: string;
   readonly body: string;
-  readonly attributes: { readonly ApproximateReceiveCount?: string };
+  readonly attributes: { readonly ApproximateReceiveCount?: string | undefined };
 }
 
 export interface SqsEvent {
@@ -77,12 +86,22 @@ export function receiveAttempt(record: SqsRecord): number {
 }
 
 /** What a runtime report means for the SQS message. */
-export function decide(report: AttemptReport): RecordDecision {
-  return report.status === 'retry' ? 'retry' : 'delete';
+export function decide(
+  report: AttemptReport,
+  kind: 'call.place' | 'summary.generate' = 'call.place',
+): RecordDecision {
+  if (report.status === 'retry') return 'retry';
+  if (report.status === 'failed' && !report.dlq) {
+    switch (kind) {
+      case 'call.place':
+      case 'summary.generate':
+        return 'retry';
+    }
+  }
+  return 'delete';
 }
 
-const errInfo = (err: unknown): unknown =>
-  err instanceof Error ? { message: err.message, name: err.name } : err;
+const DELIVERY_ERROR = { code: 'JOB_DELIVERY_UNCONFIRMED' } as const;
 
 export async function processRecord(
   record: SqsRecord,
@@ -94,27 +113,31 @@ export async function processRecord(
   let message;
   try {
     message = parseSqsJobMessage(record.body);
-  } catch (err) {
+  } catch {
     deps.logger.error(
-      { ...log, err: errInfo(err) },
+      { ...log, err: DELIVERY_ERROR },
       'sqs worker: invalid job message — leaving it for the DLQ',
     );
     return 'retry';
   }
 
-  const jobAttempt = { attempt, maxAttempts: deps.maxReceiveCount };
+  const jobAttempt = {
+    attempt,
+    maxAttempts: deps.maxReceiveCount,
+    ...(message.transportJobId !== undefined && { transportJobId: message.transportJobId }),
+  };
   let report: AttemptReport;
   try {
     report =
       message.type === 'call.place'
         ? await deps.runtime.runCallAttempt(message.data, jobAttempt)
         : await deps.runtime.runSummaryAttempt(message.data, jobAttempt);
-  } catch (err) {
-    // Infrastructure failure outside the processor (e.g. the lease query).
+  } catch {
+    // Infrastructure failure outside the processor (e.g. a runtime lookup).
     // The terminal hand-off could not run, so never delete: SQS retries and,
     // after maxReceiveCount, moves the message to the DLQ.
     deps.logger.error(
-      { ...log, type: message.type, jobId: message.data.idempotencyKey, err: errInfo(err) },
+      { ...log, type: message.type, jobId: message.data.idempotencyKey, err: DELIVERY_ERROR },
       'sqs worker: job crashed outside the processor',
     );
     return 'retry';
@@ -125,13 +148,13 @@ export async function processRecord(
     'sqs worker: job attempt finished',
   );
 
-  const decision = decide(report);
+  const decision = decide(report, message.type);
   if (report.status === 'retry' && deps.scheduleRetry) {
     try {
       await deps.scheduleRetry(record.receiptHandle, Math.ceil(report.retryDelayMs / 1000));
-    } catch (err) {
+    } catch {
       deps.logger.warn(
-        { ...log, err: errInfo(err) },
+        { ...log, err: DELIVERY_ERROR },
         'sqs worker: could not set retry delay — queue visibility timeout applies',
       );
     }
@@ -153,13 +176,132 @@ export function createSqsJobWorker(
   };
 }
 
+// ─── Trusted Lambda invocation boundary ────────────────────────────────────
+
+const relayEventSchema = z.strictObject({
+  type: z.literal('outbox.relay'),
+  version: z.literal(1),
+});
+
+const sqsEventSchema = z.strictObject({
+  Records: z.array(
+    z.looseObject({
+      eventSource: z.literal('aws:sqs'),
+      messageId: z.string().min(1),
+      receiptHandle: z.string().min(1),
+      body: z.string(),
+      attributes: z.looseObject({ ApproximateReceiveCount: z.string().optional() }),
+    }),
+  ),
+});
+
+export const OUTBOX_RELAY_LIMIT = 25;
+export const OUTBOX_RELAY_BUDGET_MS = 20_000;
+export const CALL_OBSERVATION_LIMIT = 5;
+export const CALL_OBSERVATION_BUDGET_MS = 25_000;
+
+export interface OutboxRelayReport {
+  selected: number;
+  sent: number;
+  failed: number;
+  quarantined: number;
+}
+
+export interface LambdaJobWorkerDeps {
+  readonly sqsWorker: (event: SqsEvent) => Promise<SqsBatchResponse>;
+  readonly relayOutbox: (options: {
+    limit: number;
+    budgetMs: number;
+  }) => Promise<OutboxRelayReport>;
+  readonly logger: Logger;
+  readonly observeCalls: CallObservationSweep;
+}
+
+export type LambdaJobWorkerResponse =
+  | SqsBatchResponse
+  | (OutboxRelayReport & { observation: CallObservationReport });
+
+/**
+ * IAM on the private worker Lambda is the authorization boundary, not these
+ * fields. Only its scoped EventBridge rule (or an authorized operator) may
+ * request a cross-tenant sweep. No HTTP route or SQS message body uses this
+ * branch. The relay scopes each write to the organization stored on its row.
+ */
+export function createLambdaJobWorker(
+  deps: LambdaJobWorkerDeps,
+): (event: unknown) => Promise<LambdaJobWorkerResponse> {
+  return async (event) => {
+    if (relayEventSchema.safeParse(event).success) {
+      // Each recovery path runs even when the other fails. Neither depends on
+      // the call/summary job runtime being configured or receiving a delivery.
+      const [relay, observation] = await Promise.allSettled([
+        Promise.resolve().then(() =>
+          deps.relayOutbox({
+            limit: OUTBOX_RELAY_LIMIT,
+            budgetMs: OUTBOX_RELAY_BUDGET_MS,
+          }),
+        ),
+        Promise.resolve().then(() =>
+          deps.observeCalls({
+            limit: CALL_OBSERVATION_LIMIT,
+            budgetMs: CALL_OBSERVATION_BUDGET_MS,
+          }),
+        ),
+      ]);
+      if (relay.status === 'rejected') {
+        deps.logger.error({ code: 'OUTBOX_RELAY_FAILED' }, 'outbox relay sweep failed');
+      }
+      if (observation.status === 'rejected') {
+        deps.logger.error({ code: 'CALL_OBSERVATION_FAILED' }, 'call observation sweep failed');
+      }
+      if (relay.status === 'rejected') {
+        throw new Error('lambda-worker: outbox relay sweep failed');
+      }
+      if (observation.status === 'rejected') {
+        throw new Error('lambda-worker: call observation sweep failed');
+      }
+      const { selected, sent, failed, quarantined } = relay.value;
+      const counts = { selected, sent, failed, quarantined };
+      const {
+        selected: due,
+        observed,
+        terminal,
+        rescheduled,
+        stopRequested,
+        failed: observationFailed,
+      } = observation.value;
+      const observationCounts = {
+        selected: due,
+        observed,
+        terminal,
+        rescheduled,
+        stopRequested,
+        failed: observationFailed,
+      };
+      deps.logger[failed > 0 || quarantined > 0 ? 'warn' : 'info'](
+        counts,
+        'outbox relay sweep completed',
+      );
+      deps.logger[observationFailed > 0 ? 'warn' : 'info'](
+        observationCounts,
+        'call observation sweep completed',
+      );
+      return { ...counts, observation: observationCounts };
+    }
+
+    const sqs = sqsEventSchema.safeParse(event);
+    if (sqs.success) return deps.sqsWorker(sqs.data);
+    throw new Error('lambda-worker: unsupported invocation envelope');
+  };
+}
+
 // ─── Lambda entry ───────────────────────────────────────────────────────────
 
-let worker: ((event: SqsEvent) => Promise<SqsBatchResponse>) | null = null;
+let worker: ReturnType<typeof createLambdaJobWorker> | null = null;
 
 function buildWorker(
   env: NodeJS.ProcessEnv = process.env,
-): (event: SqsEvent) => Promise<SqsBatchResponse> {
+): ReturnType<typeof createLambdaJobWorker> {
   const queueUrl = env.JOBS_QUEUE_URL;
   if (queueUrl === undefined || queueUrl.trim() === '') {
     throw new Error('lambda-worker: JOBS_QUEUE_URL is required');
@@ -168,29 +310,42 @@ function buildWorker(
   const logger = createLogger({
     base: { service: 'job-worker', env: env.NODE_ENV ?? 'development' },
   });
-  const redis =
-    env.REDIS_URL !== undefined && env.REDIS_URL !== ''
-      ? createRedisConnection(env.REDIS_URL, { lazyConnect: true })
-      : null;
   const jobDispatcher = createSqsJobDispatcher({
     queueUrl,
     onDelayClamped: (ctx) => {
       logger.warn(ctx, 'sqs job delay clamped to the 900 s SQS maximum');
     },
   });
-  const runtime = createInlineJobRuntime({ jobDispatcher, redis, logger, env });
-  return createSqsJobWorker({
-    runtime,
+  let sqsWorker: ReturnType<typeof createSqsJobWorker> | null = null;
+  return createLambdaJobWorker({
     logger,
-    maxReceiveCount:
-      Number.isFinite(maxReceiveCount) && maxReceiveCount >= 1
-        ? maxReceiveCount
-        : DEFAULT_MAX_RECEIVE_COUNT,
-    scheduleRetry: createSqsRetryScheduler({ queueUrl }),
+    observeCalls: createCallObservationSweep({ prisma, env }),
+    relayOutbox: ({ limit, budgetMs }) =>
+      relayJobOutbox({ prisma, jobDispatcher, limit, budgetMs }),
+    sqsWorker: (event) => {
+      // Scheduled recovery must work even when voice/summary runtime config
+      // is unavailable. Keep runtime construction on the SQS path only.
+      if (sqsWorker === null) {
+        const redis =
+          env.REDIS_URL !== undefined && env.REDIS_URL !== ''
+            ? createRedisConnection(env.REDIS_URL, { lazyConnect: true })
+            : null;
+        sqsWorker = createSqsJobWorker({
+          runtime: createInlineJobRuntime({ jobDispatcher, redis, logger, env }),
+          logger,
+          maxReceiveCount:
+            Number.isFinite(maxReceiveCount) && maxReceiveCount >= 1
+              ? maxReceiveCount
+              : DEFAULT_MAX_RECEIVE_COUNT,
+          scheduleRetry: createSqsRetryScheduler({ queueUrl }),
+        });
+      }
+      return sqsWorker(event);
+    },
   });
 }
 
-export async function handler(event: SqsEvent): Promise<SqsBatchResponse> {
+export async function handler(event: unknown): Promise<LambdaJobWorkerResponse> {
   worker ??= buildWorker();
   return worker(event);
 }

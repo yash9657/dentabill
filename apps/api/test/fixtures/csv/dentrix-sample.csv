@@ -1,11 +1,11 @@
-Patient ID,Patient Name,DOB,Insurance Carrier,Claim #,Procedure Codes,Charge,Service Date,Submission Date,Status
-P0001,"Sample, A",1990-05-12,Delta Dental PPO,CL-DTX-0001,D2740,1240.00,2026-01-08,2026-01-09,Submitted
-P0002,"Sample, B",1985-11-30,Delta Dental Premier,CL-DTX-0002,"D0150,D1110",215.50,2026-01-12,2026-01-13,Submitted
-P0003,"Sample, C",1972-03-04,Cigna Dental,CL-DTX-0003,D2950,485.00,2026-01-14,,Pending
-P0004,"Sample, D",2001-07-22,MetLife Dental,CL-DTX-0004,"D2740,D2950",1675.25,2026-01-15,2026-01-16,Submitted
-P0005,"Sample, E",1995-09-09,Aetna PPO,CL-DTX-0005,D7210,925.00,2026-01-18,2026-01-18,Submitted
-P0006,"Sample, F",1968-12-01,Guardian Life Insurance,CL-DTX-0006,D2391,180.00,2026-01-19,,Pending
-P0007,"Sample, G",1980-06-17,United Concordia,CL-DTX-0007,D4341,340.00,2026-01-20,2026-01-21,Submitted
-P0008,"Sample, H",1992-02-28,Humana Dental,CL-DTX-0008,D2750,1100.00,2026-01-22,2026-01-22,Submitted
-P0009,"Sample, I",2010-04-15,Some Indie BCBS Plan,CL-DTX-0009,D1208,75.00,2026-01-23,,Pending
-P0010,"Sample, J",1978-08-08,Delta Dental PPO,CL-DTX-0010,"D2390,D2391",425.50,2026-01-25,2026-01-26,Submitted
+Patient ID,Patient Name,DOB,Insurance Carrier,Claim #,Procedure Codes,Charge,Service Date,Submission Date,Status,SourceClaimId
+P0001,"Sample, A",1990-05-12,Delta Dental PPO,CL-DTX-0001,D2740,1240.00,2026-01-08,2026-01-09,Submitted,synthetic-record-1
+P0002,"Sample, B",1985-11-30,Delta Dental Premier,CL-DTX-0002,"D0150,D1110",215.50,2026-01-12,2026-01-13,Submitted,synthetic-record-2
+P0003,"Sample, C",1972-03-04,Cigna Dental,CL-DTX-0003,D2950,485.00,2026-01-14,,Pending,synthetic-record-3
+P0004,"Sample, D",2001-07-22,MetLife Dental,CL-DTX-0004,"D2740,D2950",1675.25,2026-01-15,2026-01-16,Submitted,synthetic-record-4
+P0005,"Sample, E",1995-09-09,Aetna PPO,CL-DTX-0005,D7210,925.00,2026-01-18,2026-01-18,Submitted,synthetic-record-5
+P0006,"Sample, F",1968-12-01,Guardian Life Insurance,CL-DTX-0006,D2391,180.00,2026-01-19,,Pending,synthetic-record-6
+P0007,"Sample, G",1980-06-17,United Concordia,CL-DTX-0007,D4341,340.00,2026-01-20,2026-01-21,Submitted,synthetic-record-7
+P0008,"Sample, H",1992-02-28,Humana Dental,CL-DTX-0008,D2750,1100.00,2026-01-22,2026-01-22,Submitted,synthetic-record-8
+P0009,"Sample, I",2010-04-15,Some Indie BCBS Plan,CL-DTX-0009,D1208,75.00,2026-01-23,,Pending,synthetic-record-9
+P0010,"Sample, J",1978-08-08,Delta Dental PPO,CL-DTX-0010,"D2390,D2391",425.50,2026-01-25,2026-01-26,Submitted,synthetic-record-10

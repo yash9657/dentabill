@@ -53,6 +53,11 @@ export const CallJobDataSchema = z.object({
     .string()
     .min(1)
     .regex(/^[A-Za-z0-9_.-]+$/, 'idempotencyKey must match /^[A-Za-z0-9_.-]+$/'),
+  /** Resume observation of an already bound call; this command never places a call. */
+  resume: z
+    .object({ intentId: z.string().min(1), callId: z.string().min(1) })
+    .strict()
+    .optional(),
 });
 
 export type CallJobData = z.infer<typeof CallJobDataSchema>;
@@ -63,10 +68,18 @@ export type CallJobData = z.infer<typeof CallJobDataSchema>;
  * is the source of truth for that path.
  */
 export const CallJobResultSchema = z.object({
-  callId: z.string().min(1),
+  callId: z.string().min(1).nullable(),
   retellCallId: z.string().min(1).nullable(),
-  outcome: z.enum(['COMPLETED', 'ESCALATED', 'RESCHEDULED', 'CANCELLED']),
-  durationSeconds: z.number().int().min(0),
+  outcome: z.enum([
+    'COMPLETED',
+    'ESCALATED',
+    'RESCHEDULED',
+    'CANCELLED',
+    'BLOCKED',
+    'RECONCILIATION_REQUIRED',
+    'ALREADY_PROCESSED',
+  ]),
+  durationSeconds: z.number().int().min(0).nullable(),
 });
 
 export type CallJobResult = z.infer<typeof CallJobResultSchema>;
@@ -84,37 +97,54 @@ export type SummaryJobName = typeof SUMMARY_JOB_NAME;
  *
  * `callId` is the DentaBill `Call.id`. The worker re-loads the Call
  * with `getOrgScopedDb(organizationId)` so cross-tenant routing is
- * impossible even with a forged job. `promptVersion` allows the
- * call-worker to pin a specific prompt at enqueue time (default
- * `v1`); the audit log records what the worker actually used.
+ * impossible even with a forged job. `promptVersion` pins the legacy
+ * synthetic prompt (default `v1`). Native findings use the approved
+ * release's fixed prompt; the result records the version actually used.
  */
-export const SummaryJobDataSchema = z.object({
-  organizationId: z.string().min(1),
-  callId: z.string().min(1),
-  /** Audit + diagnostics — surfaces in `metadata.prompt`. */
-  promptVersion: z.string().min(1).default('v1'),
-  /**
-   * Idempotency key — used as BullMQ jobId — to prevent double-enqueue.
-   * Same rules as CallJobData.idempotencyKey.
-   */
-  idempotencyKey: z
-    .string()
-    .min(1)
-    .regex(/^[A-Za-z0-9_.-]+$/, 'idempotencyKey must match /^[A-Za-z0-9_.-]+$/'),
-});
+export const SummaryJobDataSchema = z
+  .object({
+    organizationId: z.string().min(1),
+    callId: z.string().min(1),
+    /** Audit + diagnostics — surfaces in `metadata.prompt`. */
+    promptVersion: z.string().min(1).default('v1'),
+    /**
+     * Idempotency key — used as BullMQ jobId — to prevent double-enqueue.
+     * Same rules as CallJobData.idempotencyKey.
+     */
+    idempotencyKey: z
+      .string()
+      .min(1)
+      .regex(/^[A-Za-z0-9_.-]+$/, 'idempotencyKey must match /^[A-Za-z0-9_.-]+$/'),
+  })
+  .strict();
 
 export type SummaryJobData = z.infer<typeof SummaryJobDataSchema>;
 
 export const SummaryJobResultSchema = z.object({
   summaryId: z.string().min(1).nullable(),
+  /** Immutable native observation; legacy summary results may omit this field. */
+  observationId: z.string().min(1).nullable().optional(),
   /**
-   * `RESOLVED` / `MANUAL_REVIEW` / `DLQ` describe what the worker did
-   * with the Claim transition; `BUDGET_EXCEEDED` is the cost-guard
-   * abort. `DLQ` returns instead of throwing because retrying a
-   * Zod-validation failure won't change the outcome.
+   * Routing outcomes describe workflow decisions, never collected cash.
+   * STALE_RESULT preserves newer/reviewed state; ALREADY_PROCESSED skips
+   * duplicate inference; CALL_NOT_TERMINAL refuses an active call;
+   * TRANSCRIPT_UNAVAILABLE abstains when finalized evidence is missing or empty.
+   * DLQ is non-retryable output validation; BUDGET_EXCEEDED skips inference.
    */
-  outcome: z.enum(['AUTO_TRANSITIONED', 'MANUAL_REVIEW', 'BUDGET_EXCEEDED', 'DLQ']),
-  tokensUsed: z.number().int().min(0),
+  outcome: z.enum([
+    'AUTO_TRANSITIONED',
+    'MANUAL_REVIEW',
+    'BUDGET_EXCEEDED',
+    'DLQ',
+    'STALE_RESULT',
+    'ALREADY_PROCESSED',
+    'CALL_NOT_TERMINAL',
+    'TRANSCRIPT_UNAVAILABLE',
+    'INFERENCE_REVIEW_REQUIRED',
+    'PROVIDER_DISABLED',
+    'OBSERVATION_PUBLISHED',
+  ]),
+  tokensUsed: z.number().int().min(0).nullable(),
   promptVersion: z.string().min(1),
 });
 

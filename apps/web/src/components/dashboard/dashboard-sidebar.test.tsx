@@ -53,6 +53,15 @@ describe('<DashboardSidebar />', () => {
     expect(screen.getByRole('link', { name: /claims/i })).toHaveAttribute('aria-current', 'page');
   });
 
+  it('marks the cash evidence inbox as a separate destination', () => {
+    renderSidebar({ pathname: '/dashboard/cash-evidence' });
+    expect(screen.getByRole('link', { name: 'Cash evidence' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByRole('link', { name: 'Reports' })).not.toHaveAttribute('aria-current');
+  });
+
   it('toggles the shell collapsed flag when the collapse control is pressed', async () => {
     const user = userEvent.setup();
     const toggleCollapsed = vi.fn();
@@ -76,4 +85,33 @@ describe('<DashboardSidebar />', () => {
     await user.click(screen.getByRole('link', { name: /claims/i }));
     expect(closeMobileDrawer).toHaveBeenCalled();
   });
+});
+
+it('marks remittance batches as a separate review destination', () => {
+  renderSidebar({ pathname: '/dashboard/remittance-batches' });
+  expect(screen.getByRole('link', { name: 'Remittance batches' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  expect(screen.getByRole('link', { name: 'Cash evidence' })).not.toHaveAttribute('aria-current');
+});
+
+it('marks cash reconciliation separately from cash source review', () => {
+  renderSidebar({ pathname: '/dashboard/cash-reconciliations' });
+  expect(screen.getByRole('link', { name: 'Cash reconciliation' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  expect(screen.getByRole('link', { name: 'Cash evidence' })).not.toHaveAttribute('aria-current');
+});
+
+it('marks posting evidence separately from cash reconciliation', () => {
+  renderSidebar({ pathname: '/dashboard/posting-evidence' });
+  expect(screen.getByRole('link', { name: 'Posting evidence' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  expect(screen.getByRole('link', { name: 'Cash reconciliation' })).not.toHaveAttribute(
+    'aria-current',
+  );
 });

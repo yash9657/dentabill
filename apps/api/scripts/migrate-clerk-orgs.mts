@@ -43,9 +43,7 @@ interface ScriptOptions {
 function parseArgs(argv: readonly string[]): ScriptOptions {
   return {
     dryRun: argv.includes('--dry-run'),
-    outDir: argv.includes('--out')
-      ? (argv[argv.indexOf('--out') + 1] ?? '/tmp')
-      : '/tmp',
+    outDir: argv.includes('--out') ? (argv[argv.indexOf('--out') + 1] ?? '/tmp') : '/tmp',
   };
 }
 

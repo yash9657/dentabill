@@ -39,17 +39,509 @@ const REQUIRED_PATHS: readonly (keyof paths)[] = [
   '/v1/claims',
   '/v1/claims/{id}',
   '/v1/claims/{id}/calls',
+  '/v1/claims/{id}/observations',
+  '/v1/claims/{id}/remittances',
+  '/v1/claims/{claimId}/remittances/{id}/preview',
+  '/v1/claims/{claimId}/remittances/{id}/review',
+  '/v1/observations/{id}/review',
+  '/v1/observations/{id}/regeneration-preview',
+  '/v1/observations/{id}/regenerate',
+  '/v1/observation-regenerations/{id}/resume',
+  '/v1/calls/{id}/observations/publish',
   '/v1/calls',
   '/v1/calls/stats',
+  '/v1/reports/summary',
   '/v1/calls/{id}',
   '/v1/calls/{id}/cancel',
+  '/v1/calls/{id}/summary/status',
+  '/v1/calls/{id}/summary/retry',
   '/v1/webhooks/retell',
   '/v1/ingest/claims',
+  '/v1/cash-evidence',
+  '/v1/cash-evidence/transactions/{id}',
+  '/v1/cash-evidence/{id}/preview',
+  '/v1/cash-evidence/{id}/review',
+  '/v1/remittance-batches',
+  '/v1/remittance-batches/{id}/preview',
+  '/v1/remittance-batches/{id}/history',
+  '/v1/remittance-batches/{id}/review',
+  '/v1/cash-reconciliations',
+  '/v1/cash-reconciliations/preview',
+  '/v1/cash-reconciliations/{id}/release/preview',
+  '/v1/cash-reconciliations/{id}/release',
+  '/v1/posting-evidence',
+  '/v1/posting-evidence/receipts/{id}',
+  '/v1/posting-evidence/{id}/preview',
+  '/v1/posting-evidence/{id}/review',
+  '/v1/posting-evidence/{id}/relationship-targets',
+  '/v1/posting-relationships',
+  '/v1/posting-relationships/preview',
+  '/v1/posting-relationships/{id}/release/preview',
+  '/v1/posting-relationships/{id}/release',
+  '/v1/operations/notifications',
+  '/v1/operations/notifications/{id}',
 ];
 
 describe('OpenAPI ↔ generated types contract', () => {
+  it('binds reviewed posting associations to exact source and claim identities without allocating money', () => {
+    const path = spec.paths['/v1/posting-relationships'];
+    const body = ['post', 'requestBody', 'content', 'application/json', 'schema'];
+    expect(path).toHaveProperty([...body, 'additionalProperties'], false);
+    expect(path).toHaveProperty(
+      [...body, 'required'],
+      [
+        'evidenceId',
+        'sourceEntryId',
+        'claimId',
+        'claimSourceLineId',
+        'reviewToken',
+        'idempotencyKey',
+      ],
+    );
+    expect(path).not.toHaveProperty([...body, 'properties', 'amount']);
+    const response = [
+      'post',
+      'responses',
+      '201',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    for (const field of ['sourceVerification', 'bankVerification', 'settlement'])
+      expect(path).toHaveProperty([...response, field, 'enum'], ['UNVERIFIED']);
+    expect(path).toHaveProperty([...response, 'claimCashAllocation', 'enum'], ['UNALLOCATED']);
+    expect(path).toHaveProperty(
+      [...response, 'relationshipBasis', 'enum'],
+      ['EXACT_SOURCE_IDENTITY'],
+    );
+    expect(path).not.toHaveProperty([...response, 'status']);
+    expect(path).not.toHaveProperty([...response, 'recoveredRevenue']);
+    expect(spec.paths['/v1/posting-relationships/{id}/release']).toHaveProperty(
+      [...body, 'required'],
+      ['reason', 'reviewToken', 'idempotencyKey'],
+    );
+    expect(spec.paths['/v1/posting-evidence/{id}/relationship-targets']).not.toHaveProperty('post');
+  });
+  it('exposes only safe notification operations reads with delivery disabled', () => {
+    const path = spec.paths['/v1/operations/notifications'];
+    const response = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    expect(path).toHaveProperty([...response, 'deliveryMode', 'enum'], ['DISABLED']);
+    expect(path).toHaveProperty(
+      [...response, 'items', 'items', 'properties', 'state', 'enum'],
+      ['PENDING', 'SENDING', 'SIMULATED', 'ACCEPTED', 'BLOCKED', 'QUARANTINED', 'SUPPRESSED'],
+    );
+    expect(path).not.toHaveProperty('post');
+    expect(spec.paths['/v1/operations/notifications/{id}']).not.toHaveProperty('post');
+    for (const field of [
+      'recipientEmail',
+      'payload',
+      'deliveryKey',
+      'payloadHash',
+      'sourceHash',
+      'providerReceiptId',
+      'deliveredAt',
+    ]) {
+      expect(path).not.toHaveProperty([...response, 'items', 'items', 'properties', field]);
+      expect(JSON.stringify(spec.paths['/v1/operations/notifications/{id}'])).not.toContain(
+        `"${field}"`,
+      );
+    }
+  });
   it('declares an OpenAPI 3.x document', () => {
     expect(spec.openapi).toMatch(/^3\./);
+  });
+
+  it('preserves independent posting source facts without promoting them to linked claim payments', () => {
+    const body = ['post', 'requestBody', 'content', 'application/json', 'schema'];
+    expect(spec.paths['/v1/posting-evidence']).toHaveProperty(
+      [...body, 'additionalProperties'],
+      false,
+    );
+    expect(spec.paths['/v1/posting-evidence']).toHaveProperty(
+      [...body, 'properties', 'entries', 'maxItems'],
+      100,
+    );
+    const entry = [...body, 'properties', 'entries', 'items', 'properties'];
+    for (const field of [
+      'sourceEntryId',
+      'sourceClaimId',
+      'sourceLineId',
+      'sourceProcedureId',
+      'sourceVersion',
+      'sourceStatus',
+      'sourceIsTransfer',
+      'sourceAmount',
+      'sourceSignConvention',
+    ])
+      expect(spec.paths['/v1/posting-evidence']).toHaveProperty([...entry, field]);
+    expect(spec.paths['/v1/posting-evidence']).toHaveProperty(
+      [...entry, 'entryKind', 'enum'],
+      ['PAYMENT', 'TRANSFER', 'ADJUSTMENT', 'UNKNOWN'],
+    );
+    const response = [
+      'post',
+      'responses',
+      '201',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    expect(spec.paths['/v1/posting-evidence']).toHaveProperty(
+      [...response, 'claimLinkage', 'enum'],
+      ['UNLINKED'],
+    );
+    for (const field of ['sourceVerification', 'bankVerification', 'settlement'])
+      expect(spec.paths['/v1/posting-evidence']).toHaveProperty(
+        [...response, field, 'enum'],
+        ['UNVERIFIED'],
+      );
+    for (const field of [
+      'knownListedEntryAmount',
+      'unknownEntryCount',
+      'completeEntryAmount',
+      'headerDifference',
+    ])
+      expect(spec.paths['/v1/posting-evidence']).toHaveProperty([
+        ...response,
+        'totals',
+        'properties',
+        field,
+      ]);
+    expect(spec.paths['/v1/posting-evidence/{id}/review']).toHaveProperty(
+      [...body, 'required'],
+      ['decision', 'reviewToken', 'idempotencyKey'],
+    );
+  });
+
+  it('separates immutable match receipts from live source currentness and explicit release', () => {
+    const body = ['post', 'requestBody', 'content', 'application/json', 'schema'];
+    expect(spec.paths['/v1/cash-reconciliations']).toHaveProperty(
+      [...body, 'required'],
+      ['cashEvidenceId', 'batchEvidenceId', 'amount', 'reviewToken', 'idempotencyKey'],
+    );
+    const receipt = [
+      'post',
+      'responses',
+      '201',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    for (const field of ['bankVerification', 'posting', 'settlement'])
+      expect(spec.paths['/v1/cash-reconciliations']).toHaveProperty(
+        [...receipt, field, 'enum'],
+        ['UNVERIFIED'],
+      );
+    expect(spec.paths['/v1/cash-reconciliations']).toHaveProperty(
+      [...receipt, 'claimCashAllocation', 'enum'],
+      ['UNALLOCATED'],
+    );
+    expect(spec.paths['/v1/cash-reconciliations']).not.toHaveProperty([...receipt, 'status']);
+    expect(spec.paths['/v1/cash-reconciliations']).toHaveProperty(
+      [
+        'get',
+        'responses',
+        '200',
+        'content',
+        'application/json',
+        'schema',
+        'properties',
+        'items',
+        'items',
+        'properties',
+        'status',
+        'enum',
+      ],
+      ['CURRENT', 'STALE', 'RELEASED'],
+    );
+    expect(spec.paths['/v1/cash-reconciliations/{id}/release']).toHaveProperty(
+      [...body, 'required'],
+      ['reason', 'reviewToken', 'idempotencyKey'],
+    );
+    expect(spec.paths['/v1/cash-reconciliations/{id}/release']).toHaveProperty(
+      [...body, 'properties', 'reason', 'enum'],
+      ['WRONG_MATCH', 'SOURCE_CHANGED', 'OTHER_REVIEWED_ERROR'],
+    );
+  });
+
+  it('keeps batch gross, signed provider effects and net separate from verified money', () => {
+    const properties = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    const preview = spec.paths['/v1/remittance-batches/{id}/preview'];
+    const evidence = [...properties, 'evidence', 'properties'];
+    for (const version of [0, 1]) {
+      const payload = [...evidence, 'payload', 'oneOf', version, 'properties'];
+      for (const field of [
+        'reportedClaimAmount',
+        'reportedAdjustmentAmount',
+        'reportedNetAmount',
+      ]) {
+        expect(preview).toHaveProperty([...payload, field, 'type'], 'string');
+        expect(preview).toHaveProperty([...payload, field, 'nullable'], true);
+      }
+      const adjustment = [...payload, 'providerAdjustments', 'items', 'properties'];
+      expect(preview).toHaveProperty([...adjustment, 'sourceAmount', 'type'], 'string');
+      expect(preview).toHaveProperty(
+        [...adjustment, 'sourceSignConvention', 'enum'],
+        ['REDUCTION_POSITIVE', 'NET_EFFECT_POSITIVE'],
+      );
+    }
+    expect(preview).toHaveProperty(
+      [...evidence, 'payload', 'oneOf', 1, 'properties', 'sourceSequence', 'maximum'],
+      2147483647,
+    );
+    expect(preview).toHaveProperty(
+      [...evidence, 'revision', 'properties', 'sourceSequence', 'nullable'],
+      true,
+    );
+    expect(preview).toHaveProperty(
+      [...evidence, 'revision', 'properties', 'isCurrentAccepted', 'type'],
+      'boolean',
+    );
+    expect(preview).toHaveProperty(
+      [...properties, 'membershipChanges', 'properties', 'ownershipPolicy', 'enum'],
+      ['RETAINED_ACROSS_REVISIONS'],
+    );
+    expect(preview).toHaveProperty([...evidence, 'provenance', 'enum'], ['MANUAL_UPLOAD']);
+    for (const field of ['cashReceipt', 'posting', 'settlement'])
+      expect(preview).toHaveProperty([...properties, field, 'enum'], ['UNVERIFIED']);
+    expect(spec.paths['/v1/remittance-batches/{id}/review']).toHaveProperty(
+      ['post', 'requestBody', 'content', 'application/json', 'schema', 'required'],
+      ['decision', 'reviewToken', 'idempotencyKey'],
+    );
+  });
+
+  it('preserves cash source revisions, nullable amounts and manual unverified provenance', () => {
+    const properties = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    const preview = spec.paths['/v1/cash-evidence/{id}/preview'];
+    const evidence = [...properties, 'evidence', 'properties'];
+    const payload = [...evidence, 'payload', 'properties'];
+    for (const field of ['amount', 'sourceAmount', 'sourceVersion', 'pendingSourceTransactionId']) {
+      expect(preview).toHaveProperty([...payload, field, 'type'], 'string');
+      expect(preview).toHaveProperty([...payload, field, 'nullable'], true);
+    }
+    expect(preview).toHaveProperty([...payload, 'sourceSequence', 'type'], 'integer');
+    expect(preview).toHaveProperty(
+      [...payload, 'sourceSignConvention', 'enum'],
+      ['CREDIT_POSITIVE', 'DEBIT_POSITIVE'],
+    );
+    expect(preview).toHaveProperty([...evidence, 'provenance', 'enum'], ['MANUAL_UPLOAD']);
+    for (const field of ['bankVerification', 'settlement'])
+      expect(preview).toHaveProperty([...properties, field, 'enum'], ['UNVERIFIED']);
+    expect(spec.paths['/v1/cash-evidence/{id}/review']).toHaveProperty(
+      ['post', 'requestBody', 'content', 'application/json', 'schema', 'required'],
+      ['decision', 'reviewToken', 'idempotencyKey'],
+    );
+  });
+
+  it('preserves typed nullable remittance identities and unverified financial states', () => {
+    const properties = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    const list = spec.paths['/v1/claims/{id}/remittances'];
+    const payload = [...properties, 'items', 'items', 'properties', 'payload', 'properties'];
+    for (const field of [
+      'sourceVersion',
+      'payerIdentifier',
+      'sourceCoverageId',
+      'reportedDate',
+      'paymentTrace',
+    ]) {
+      expect(list).toHaveProperty([...payload, field, 'type'], 'string');
+      expect(list).toHaveProperty([...payload, field, 'nullable'], true);
+    }
+    for (const field of ['cashReceipt', 'posting', 'settlement'])
+      expect(list).toHaveProperty(
+        [...properties, 'summary', 'properties', field, 'enum'],
+        ['UNVERIFIED'],
+      );
+    expect(spec.paths['/v1/claims/{claimId}/remittances/{id}/review']).toHaveProperty(
+      ['post', 'requestBody', 'content', 'application/json', 'schema', 'required'],
+      ['decision', 'reviewToken', 'idempotencyKey'],
+    );
+  });
+
+  it('describes unavailable verified payments without legacy recovered money fields', () => {
+    const responseProperties = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    for (const path of ['/v1/calls/stats', '/v1/reports/summary']) {
+      expect(spec.paths[path]).toHaveProperty(
+        [...responseProperties, 'verifiedPayments', 'properties', 'amountCents', 'enum'],
+        [null],
+      );
+      expect(spec.paths[path]).toHaveProperty(
+        [...responseProperties, 'verifiedPayments', 'properties', 'status', 'enum'],
+        ['unavailable'],
+      );
+    }
+    expect(spec.paths['/v1/calls/stats']).not.toHaveProperty([
+      ...responseProperties,
+      'recoveredThisWeekCents',
+    ]);
+    expect(spec.paths['/v1/reports/summary']).not.toHaveProperty([
+      ...responseProperties,
+      'recoveredByWeek',
+    ]);
+    const payerProperties = [...responseProperties, 'payerOutcomes', 'items', 'properties'];
+    for (const field of [
+      'callCount',
+      'completedCallCount',
+      'uniqueClaimCount',
+      'claimsMarkedResolvedCount',
+    ]) {
+      expect(spec.paths['/v1/reports/summary']).toHaveProperty([...payerProperties, field]);
+    }
+    expect(spec.paths['/v1/reports/summary']).not.toHaveProperty([
+      ...payerProperties,
+      'recoveredCents',
+    ]);
+    expect(spec.paths['/v1/reports/summary']).not.toHaveProperty([
+      ...payerProperties,
+      'resolvedCount',
+    ]);
+  });
+
+  it('requires the reviewed snapshot and exposes evidence without accepting provider output', () => {
+    const body = ['post', 'requestBody', 'content', 'application/json', 'schema'];
+    expect(spec.paths['/v1/observations/{id}/review']).toHaveProperty(
+      [...body, 'required'],
+      ['expectedDigest', 'expectedClaimVersion', 'decision'],
+    );
+    expect(spec.paths['/v1/observations/{id}/review']).toHaveProperty(
+      [...body, 'properties', 'note', 'maxLength'],
+      1000,
+    );
+    for (const path of ['/v1/observations/{id}/review', '/v1/calls/{id}/observations/publish'])
+      expect(spec.paths[path]).toHaveProperty([...body, 'additionalProperties'], false);
+    expect(spec.paths['/v1/calls/{id}/observations/publish']).toHaveProperty(
+      [...body, 'properties'],
+      {},
+    );
+    const observation = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+      'items',
+      'items',
+      'properties',
+    ];
+    expect(spec.paths['/v1/claims/{id}/observations']).toHaveProperty(
+      [...observation, 'dataClass', 'enum'],
+      ['SYNTHETIC', 'PROTECTED'],
+    );
+    for (const field of [
+      'digest',
+      'claimVersion',
+      'sources',
+      'provenance',
+      'canReview',
+      'staleReason',
+    ])
+      expect(spec.paths['/v1/claims/{id}/observations']).toHaveProperty([...observation, field]);
+  });
+
+  it('requires an exact reviewed preview for regeneration and exposes only same-authorization resume', () => {
+    const body = ['post', 'requestBody', 'content', 'application/json', 'schema'];
+    expect(spec.paths['/v1/observations/{id}/regenerate']).toHaveProperty(
+      [...body, 'required'],
+      ['expectedPreviewDigest', 'idempotencyKey', 'reason'],
+    );
+    for (const path of [
+      '/v1/observations/{id}/regenerate',
+      '/v1/observation-regenerations/{id}/resume',
+    ])
+      expect(spec.paths[path]).toHaveProperty([...body, 'additionalProperties'], false);
+    expect(spec.paths['/v1/observation-regenerations/{id}/resume']).toHaveProperty(
+      [...body, 'properties'],
+      {},
+    );
+    expect(spec.paths['/v1/observations/{id}/regenerate']).toHaveProperty(
+      [...body, 'properties', 'reason', 'maxLength'],
+      1000,
+    );
+    const preview = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    for (const field of [
+      'canRegenerate',
+      'blockedReason',
+      'previewDigest',
+      'source',
+      'release',
+      'activeAuthorization',
+    ])
+      expect(spec.paths['/v1/observations/{id}/regeneration-preview']).toHaveProperty([
+        ...preview,
+        field,
+      ]);
+  });
+
+  it('exposes native processing provenance and role-aware retry status without inference payloads', () => {
+    const properties = [
+      'get',
+      'responses',
+      '200',
+      'content',
+      'application/json',
+      'schema',
+      'properties',
+    ];
+    for (const field of ['provider', 'observationId', 'reviewRequired', 'canRetry', 'summaryId'])
+      expect(spec.paths['/v1/calls/{id}/summary/status']).toHaveProperty([...properties, field]);
+    for (const field of ['requestPayload', 'resultPayload', 'responsePayload', 'releaseSnapshot'])
+      expect(spec.paths['/v1/calls/{id}/summary/status']).not.toHaveProperty([
+        ...properties,
+        field,
+      ]);
   });
 
   it.each(REQUIRED_PATHS)(

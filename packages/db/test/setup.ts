@@ -23,6 +23,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.$disconnect();
+  // Vitest isolates modules between files; do not retain an extension with an older error class.
+  globalThis.__dentabillPrisma = undefined;
 });
 
 afterEach(async () => {

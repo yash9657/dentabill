@@ -13,24 +13,15 @@ import type {
 /**
  * `<ReportsPage>` — the reports dashboard showing:
  *
- * 1. Recovered value by week (line chart, 8 weeks)
+ * 1. Call activity by week (line chart, 8 weeks)
  * 2. Denial reasons breakdown (horizontal bar chart)
  * 3. Per-payer performance (horizontal bar chart)
  * 4. Claim aging distribution (data table)
  *
  * Responsive HTML bars preserve full labels at every width. On phones,
- * the recovered-value table replaces the SVG trend to keep dates legible.
+ * the call-activity table replaces the SVG trend to keep dates legible.
  * Loading and error states handled inline with em-dash placeholders.
  */
-
-function formatCents(cents: number): string {
-  const dollars = cents / 100;
-  return dollars.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  });
-}
 
 function formatWeekLabel(dateStr: string): string {
   const date = new Date(dateStr);
@@ -40,10 +31,10 @@ function formatWeekLabel(dateStr: string): string {
 }
 
 /**
- * Line chart: recovered value by week (last 8 weeks).
+ * Line chart: call activity by week (last 8 weeks).
  * Semantic brand marks, with an equivalent data table below.
  */
-function RecoveredByWeekChart({
+function CallActivityByWeekChart({
   data,
   isLoading,
 }: {
@@ -59,7 +50,7 @@ function RecoveredByWeekChart({
   if (isLoading || !data || data.length === 0) {
     return (
       <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
-        <h3 className="font-body text-xl font-medium text-black">Recovered value by week</h3>
+        <h3 className="font-body text-xl font-medium text-black">Call activity by week</h3>
         <div className="text-gray-dark mt-4 flex h-64 items-center justify-center text-sm">
           {isLoading ? 'Loading chart…' : 'No data available'}
         </div>
@@ -68,19 +59,19 @@ function RecoveredByWeekChart({
   }
 
   // Find max value for scaling
-  const maxCents = Math.max(...data.map((d) => d.recoveredCents), 1);
-  const pixelsPerCent = innerHeight / maxCents;
+  const maxCalls = Math.max(...data.map((d) => d.callCount), 1);
+  const pixelsPerCall = innerHeight / maxCalls;
 
   // Calculate points
   const points: { x: number; y: number; label: string; value: number }[] = [];
   data.forEach((week, i) => {
     const x = padding.left + (i / Math.max(data.length - 1, 1)) * innerWidth;
-    const y = padding.top + innerHeight - week.recoveredCents * pixelsPerCent;
+    const y = padding.top + innerHeight - week.callCount * pixelsPerCall;
     points.push({
       x,
       y,
       label: formatWeekLabel(week.weekStart),
-      value: week.recoveredCents,
+      value: week.callCount,
     });
   });
 
@@ -93,12 +84,15 @@ function RecoveredByWeekChart({
 
   return (
     <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
-      <h3 className="font-body text-xl font-medium text-black">Recovered value by week</h3>
+      <h3 className="font-body text-xl font-medium text-black">Call activity by week</h3>
+      <p className="text-gray-dark mt-2 text-sm">
+        Calls started in each UTC week. A claim may appear in more than one week.
+      </p>
       <svg
         viewBox={`0 0 ${String(chartWidth)} ${String(chartHeight)}`}
         className="mt-6 hidden h-auto w-full sm:block"
         role="img"
-        aria-label="Recovered value trend over 8 weeks"
+        aria-label="Call activity trend over 8 weeks"
       >
         <defs>
           <style>{`
@@ -161,7 +155,7 @@ function RecoveredByWeekChart({
 
         {/* Y-axis labels */}
         {[0, 0.25, 0.5, 0.75, 1].map((pct) => {
-          const value = Math.round(maxCents * pct);
+          const value = Math.round(maxCalls * pct);
           const y = padding.top + innerHeight * (1 - pct);
           return (
             <text
@@ -172,7 +166,7 @@ function RecoveredByWeekChart({
               className="chart-text"
               fontSize={11}
             >
-              {formatCents(value)}
+              {String(value)}
             </text>
           );
         })}
@@ -186,9 +180,12 @@ function RecoveredByWeekChart({
               <tr key={week.weekStart} className="border-gray-light border-b py-2">
                 <td className="text-gray-dark py-2 pr-4">{formatWeekLabel(week.weekStart)}</td>
                 <td className="py-2 pr-4 font-medium text-black">
-                  {formatCents(week.recoveredCents)}
+                  {`${String(week.callCount)} calls`}
                 </td>
-                <td className="text-gray-warm">{String(week.claimCount)} claims</td>
+                <td className="text-gray-warm">
+                  {String(week.completedCallCount)} completed · {String(week.uniqueClaimCount)}{' '}
+                  unique claims
+                </td>
               </tr>
             ))}
           </tbody>
@@ -220,23 +217,26 @@ function DenialReasonsChart({
     );
   }
 
-  const maxCount = Math.max(...data.map((reason) => reason.count), 1);
+  const maxCount = Math.max(...data.map((reason) => reason.uniqueClaimCount), 1);
   return (
     <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
       <h3 className="font-body text-xl font-medium text-black">Top denial reasons</h3>
+      <p className="text-gray-dark mt-2 text-sm">
+        Distinct claims per reported code; a claim may appear in multiple groups.
+      </p>
       <ul className="mt-6 space-y-6">
         {data.map((reason) => (
           <li key={reason.code}>
             <div className="flex items-baseline justify-between gap-4 text-sm">
               <span className="text-gray-dark min-w-0 break-words">{reason.label}</span>
               <span className="shrink-0 font-medium tabular-nums text-black">
-                {String(reason.count)}
+                {String(reason.uniqueClaimCount)}
               </span>
             </div>
             <div className="bg-gray-light mt-2 h-2 overflow-hidden rounded-full" aria-hidden="true">
               <div
                 className="bg-brand h-full rounded-full"
-                style={{ width: `${String((reason.count / maxCount) * 100)}%` }}
+                style={{ width: `${String((reason.uniqueClaimCount / maxCount) * 100)}%` }}
               />
             </div>
           </li>
@@ -247,7 +247,7 @@ function DenialReasonsChart({
 }
 
 /**
- * Horizontal bar chart: per-payer recovered amount.
+ * Horizontal bar chart: per-payer distinct claims with calls.
  * Text labels remain in normal document flow so they can wrap.
  */
 function PayerOutcomesChart({
@@ -260,7 +260,7 @@ function PayerOutcomesChart({
   if (isLoading || !data || data.length === 0) {
     return (
       <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
-        <h3 className="font-body text-xl font-medium text-black">Per-payer recovery</h3>
+        <h3 className="font-body text-xl font-medium text-black">Payer call activity</h3>
         <div className="text-gray-dark mt-4 flex h-40 items-center justify-center text-sm">
           {isLoading ? 'Loading chart…' : 'No payer data available'}
         </div>
@@ -268,27 +268,27 @@ function PayerOutcomesChart({
     );
   }
 
-  const maxRecovered = Math.max(...data.map((payer) => payer.recoveredCents), 1);
+  const maxClaims = Math.max(...data.map((payer) => payer.uniqueClaimCount), 1);
   return (
     <div className="border-border-light rounded-card min-w-0 border bg-white p-6">
-      <h3 className="font-body text-xl font-medium text-black">Per-payer recovery</h3>
+      <h3 className="font-body text-xl font-medium text-black">Payer call activity</h3>
       <ul className="mt-6 space-y-6">
         {data.map((payer) => (
           <li key={payer.payer}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
               <span className="min-w-0 break-words font-medium text-black">{payer.payer}</span>
               <span className="text-brand font-semibold tabular-nums">
-                {formatCents(payer.recoveredCents)}
+                {String(payer.uniqueClaimCount)} unique claims
               </span>
             </div>
             <div className="bg-gray-light mt-2 h-2 overflow-hidden rounded-full" aria-hidden="true">
               <div
                 className="bg-brand h-full rounded-full"
-                style={{ width: `${String((payer.recoveredCents / maxRecovered) * 100)}%` }}
+                style={{ width: `${String((payer.uniqueClaimCount / maxClaims) * 100)}%` }}
               />
             </div>
             <p className="text-gray-dark mt-2 text-xs leading-relaxed">
-              {String(payer.callCount)} calls · {String(payer.resolvedCount)} resolved
+              {String(payer.callCount)} calls · {String(payer.completedCallCount)} completed
               {payer.avgDurationSeconds !== null ? (
                 <>
                   {' '}
@@ -296,6 +296,10 @@ function PayerOutcomesChart({
                   {String(payer.avgDurationSeconds % 60)}s
                 </>
               ) : null}
+            </p>
+            <p className="text-gray-dark mt-1 text-xs leading-relaxed">
+              {String(payer.claimsMarkedResolvedCount)} of {String(payer.uniqueClaimCount)} claims
+              marked resolved. Workflow status only; payment is unverified.
             </p>
           </li>
         ))}
@@ -376,9 +380,14 @@ export function ReportsPage(): React.ReactElement {
           Reports
         </h1>
         <p className="text-body text-gray-dark mt-2">
-          Recovery trends, denial analysis, payer performance, and aging distribution.
+          Call activity, reported denials, and claim aging.
         </p>
       </header>
+
+      <p className="text-gray-dark text-sm" role="note">
+        Verified payments unavailable. Payments, posting, settlement, and recovery have not been
+        reconciled.
+      </p>
 
       {query.isError && (
         <div
@@ -390,7 +399,10 @@ export function ReportsPage(): React.ReactElement {
       )}
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-2">
-        <RecoveredByWeekChart data={data?.recoveredByWeek ?? null} isLoading={query.isLoading} />
+        <CallActivityByWeekChart
+          data={data?.callActivityByWeek ?? null}
+          isLoading={query.isLoading}
+        />
         <DenialReasonsChart data={data?.denialReasons ?? null} isLoading={query.isLoading} />
       </div>
 

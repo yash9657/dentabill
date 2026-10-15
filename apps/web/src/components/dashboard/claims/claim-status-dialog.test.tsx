@@ -9,6 +9,9 @@ import type { Claim } from '../../../lib/claims/types.js';
 import { ClaimStatusDialog } from './claim-status-dialog.js';
 
 const patchMock = vi.fn();
+vi.mock('@clerk/nextjs', () => ({
+  useAuth: () => ({ orgId: 'org_a', userId: 'user_a', isLoaded: true }),
+}));
 
 vi.mock('../../../lib/api-client.js', () => ({
   useDentaBillApi: () => ({

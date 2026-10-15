@@ -1,6 +1,7 @@
 import type { DefaultJobOptions, Job } from 'bullmq';
+import { z } from 'zod';
 
-import type { JobDispatcher } from './dispatcher.js';
+import { TransportJobIdSchema, type JobDispatcher } from './dispatcher.js';
 import type { CallJobData, SummaryJobData } from './types.js';
 
 /**
@@ -10,9 +11,9 @@ import type { CallJobData, SummaryJobData } from './types.js';
  *
  *   1. `createInlineJobDispatcher` — the producer side. Instead of
  *      `queue.add`, it POSTs the job payload to an internal API route
- *      authenticated by a shared secret. The POST is fire-and-forget: the
- *      promise is handed to `waitUntil` (Vercel keeps the invocation alive
- *      until it settles) and the caller gets the job id back immediately.
+ *      authenticated by a shared secret. Dispatch resolves only after a
+ *      completed HTTP receipt. `waitUntil` also tracks the request lifetime;
+ *      a missing receipt remains ambiguous and must be retried with the same key.
  *
  *   2. `runInlineJob` — the consumer side, used by that internal route. It
  *      wraps the payload in a minimal BullMQ-`Job`-shaped object so the
@@ -22,6 +23,7 @@ import type { CallJobData, SummaryJobData } from './types.js';
  */
 
 export const INTERNAL_JOB_SECRET_HEADER = 'x-internal-job-secret';
+export const INTERNAL_JOB_TRANSPORT_HEADER = 'x-dentabill-transport-job-id';
 
 export const INTERNAL_JOB_ROUTES = {
   calls: '/v1/internal/jobs/calls',
@@ -29,6 +31,8 @@ export const INTERNAL_JOB_ROUTES = {
 } as const;
 
 export type InlineJobKind = keyof typeof INTERNAL_JOB_ROUTES;
+
+const ReceiptSchema = z.object({ accepted: z.literal(true), jobId: z.string() });
 
 export interface CreateInlineJobDispatcherOptions {
   /** Origin of the API deployment, e.g. `https://api.example.com`. No trailing path. */
@@ -49,6 +53,8 @@ export interface CreateInlineJobDispatcherOptions {
   readonly triggerAttempts?: number;
   /** Delay between trigger attempts. Default 500 ms. */
   readonly triggerRetryDelayMs?: number;
+  /** Per-attempt HTTP response + receipt deadline. Default 5 seconds. */
+  readonly triggerTimeoutMs?: number;
   /** Called once if the trigger ultimately fails. Must not throw. */
   readonly onTriggerError?: (err: unknown, ctx: { kind: InlineJobKind; jobId: string }) => void;
 }
@@ -59,52 +65,113 @@ export function createInlineJobDispatcher(
   const doFetch = options.fetch ?? fetch;
   const attempts = Math.max(1, options.triggerAttempts ?? 3);
   const retryDelayMs = options.triggerRetryDelayMs ?? 500;
+  const timeoutMs = options.triggerTimeoutMs ?? 5_000;
   const baseUrl = options.baseUrl.replace(/\/+$/, '');
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error('Invalid inline trigger timeout.');
+  }
+
+  const requestReceipt = async (
+    kind: InlineJobKind,
+    body: CallJobData | SummaryJobData,
+    transportJobId: string | undefined,
+  ): Promise<{ status: number; confirmed: boolean }> => {
+    const controller = new AbortController();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        (async () => {
+          const res = await doFetch(`${baseUrl}${INTERNAL_JOB_ROUTES[kind]}`, {
+            method: 'POST',
+            headers: {
+              ...Object.fromEntries(
+                Object.entries(options.headers ?? {}).filter(
+                  ([name]) => name.toLowerCase() !== INTERNAL_JOB_TRANSPORT_HEADER,
+                ),
+              ),
+              'content-type': 'application/json',
+              [INTERNAL_JOB_SECRET_HEADER]: options.secret,
+              ...(transportJobId !== undefined && {
+                [INTERNAL_JOB_TRANSPORT_HEADER]: transportJobId,
+              }),
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+          if (res.status !== 200) {
+            await res.body?.cancel();
+            return { status: res.status, confirmed: false };
+          }
+          const receipt = ReceiptSchema.safeParse(await res.json());
+          return {
+            status: res.status,
+            confirmed: receipt.success && receipt.data.jobId === body.idempotencyKey,
+          };
+        })(),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            controller.abort();
+            reject(new Error('Inline job receipt timed out.'));
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
 
   const trigger = async (
     kind: InlineJobKind,
     body: CallJobData | SummaryJobData,
+    transportJobId: string | undefined,
   ): Promise<void> => {
-    let lastError: unknown;
+    let lastError = new Error('Inline job completion is unconfirmed.');
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        const res = await doFetch(`${baseUrl}${INTERNAL_JOB_ROUTES[kind]}`, {
-          method: 'POST',
-          headers: {
-            ...options.headers,
-            'content-type': 'application/json',
-            [INTERNAL_JOB_SECRET_HEADER]: options.secret,
-          },
-          body: JSON.stringify(body),
-        });
-        if (res.ok) return;
-        lastError = new Error(`internal job trigger ${kind} returned HTTP ${String(res.status)}`);
-        // 4xx (bad secret, bad payload) will not get better on retry.
+        const res = await requestReceipt(kind, body, transportJobId);
+        if (res.confirmed) return;
+        lastError = new Error(`Inline job receipt unconfirmed (HTTP ${String(res.status)}).`);
+        // Early 202 acknowledgements and malformed receipts are not completion evidence.
         if (res.status < 500) break;
-      } catch (err) {
-        lastError = err;
+      } catch {
+        // Fetch/parser errors can contain response bodies or sensitive URLs.
+        lastError = new Error('Inline job completion is unconfirmed.');
       }
       if (attempt < attempts) await sleep(retryDelayMs);
     }
     throw lastError;
   };
 
-  const fire = (kind: InlineJobKind, body: CallJobData | SummaryJobData): string => {
+  const dispatch = async (
+    kind: InlineJobKind,
+    body: CallJobData | SummaryJobData,
+    requestedTransportJobId?: string,
+  ): Promise<string> => {
+    const transportJobId = TransportJobIdSchema.optional().parse(requestedTransportJobId);
     const jobId = body.idempotencyKey;
-    const promise = trigger(kind, body).catch((err: unknown) => {
-      options.onTriggerError?.(err, { kind, jobId });
-    });
-    options.waitUntil(promise);
-    return jobId;
+    const promise = trigger(kind, body, transportJobId).then(
+      () => jobId,
+      (err: unknown) => {
+        options.onTriggerError?.(err, { kind, jobId });
+        throw err;
+      },
+    );
+    options.waitUntil(
+      promise.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
+    return await promise;
   };
 
   return {
     mode: 'inline',
-    dispatchCall(data): Promise<string> {
-      return Promise.resolve(fire('calls', data));
+    dispatchCall(data, opts): Promise<string> {
+      return dispatch('calls', data, opts?.transportJobId);
     },
-    dispatchSummary(data): Promise<string> {
-      return Promise.resolve(fire('summaries', data));
+    dispatchSummary(data, opts): Promise<string> {
+      return dispatch('summaries', data, opts?.transportJobId);
     },
   };
 }

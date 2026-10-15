@@ -2,10 +2,11 @@ import { hashPatientDOB, prisma } from '@dentabill/db';
 import { createLogger } from '@dentabill/logger';
 import { FakeRetell } from '@dentabill/payer-ivr';
 import { type CallJobData, createBullMqJobDispatcher } from '@dentabill/queue';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { loadWorkerEnv } from './env.js';
-import { createCallJobHandler, providerLineToE164 } from './handler.js';
+import { createCallJobHandler, MissingCallIdentityError, providerLineToE164 } from './handler.js';
+import { relayJobOutbox } from './job-outbox.js';
 
 /**
  * Integration tests for the real call-job handler (P3-T10).
@@ -50,7 +51,10 @@ interface SeedResult {
   readonly claimId: string;
 }
 
-async function seedOrgAndClaim(opts?: { providerNpi?: string | null }): Promise<SeedResult> {
+async function seedOrgAndClaim(opts?: {
+  providerNpi?: string | null;
+  subscriberId?: string | null;
+}): Promise<SeedResult> {
   const org = await prisma.organization.create({
     data: {
       name: 'Sunshine Family Dental',
@@ -62,6 +66,7 @@ async function seedOrgAndClaim(opts?: { providerNpi?: string | null }): Promise<
     data: {
       organizationId: org.id,
       claimNumber: 'CLM-9001',
+      subscriberId: opts?.subscriberId === null ? null : (opts?.subscriberId ?? 'MEMBER-9001'),
       patientDOBHash: hashPatientDOB({
         dob: '1990-05-12',
         organizationId: org.id,
@@ -79,7 +84,18 @@ async function seedOrgAndClaim(opts?: { providerNpi?: string | null }): Promise<
   return { orgId: org.id, claimId: claim.id };
 }
 
-function jobFor(data: CallJobData): Parameters<ReturnType<typeof createCallJobHandler>>[0] {
+async function jobFor(
+  data: CallJobData,
+): Promise<Parameters<ReturnType<typeof createCallJobHandler>>[0]> {
+  const claim = await prisma.claim.findFirst({
+    where: { id: data.claimId, organizationId: data.organizationId },
+  });
+  if (claim) {
+    await prisma.callIntent.createMany({
+      data: [{ ...data, payerCode: claim.payerCode, claimVersion: claim.updatedAt }],
+      skipDuplicates: true,
+    });
+  }
   // BullMQ Job has many fields; the handler only reads `id` + `data`.
   return { id: 'job_test_1', data } as Parameters<ReturnType<typeof createCallJobHandler>>[0];
 }
@@ -131,13 +147,15 @@ describe('createCallJobHandler — happy path', () => {
     // Retell webhook delivery beats the worker's listener registration).
     // We can therefore kick the simulation eagerly once startCall has
     // been observed — no need to coordinate against the DB write.
-    const handlerPromise = handler(jobFor(data), 'token');
+    const handlerPromise = handler(await jobFor(data), 'token');
     await waitFor(() => fake.startedCalls.length === 1);
     await fake.simulateHappyPath(retellCallId);
 
     const result = await handlerPromise;
+    if (result.callId === null) throw new Error('Expected accepted call');
     expect(result.outcome).toBe('COMPLETED');
     expect(result.callId).toMatch(/^c[a-z0-9]+$/);
+    expect(fake.startedCalls[0]?.agentMetadata.subscriberId).toBe('MEMBER-9001');
 
     const claimAfter = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
     expect(claimAfter.status).toBe('COMPLETED');
@@ -147,7 +165,8 @@ describe('createCallJobHandler — happy path', () => {
     expect(callRow.organizationId).toBe(orgId);
     expect(callRow.claimId).toBe(claimId);
     expect(callRow.status).toBe('COMPLETED');
-    expect(callRow.humanReached).toBe(true);
+    // A hangup/completion event alone does not prove a human was reached.
+    expect(callRow.humanReached).toBe(false);
     expect(callRow.attemptNumber).toBe(1);
     expect(callRow.endedAt).not.toBeNull();
     expect(callRow.durationSeconds).not.toBeNull();
@@ -162,6 +181,56 @@ describe('createCallJobHandler — happy path', () => {
     expect(events.length).toBeGreaterThanOrEqual(5);
     expect(events.map((e) => e.eventType)).toContain('call.ended');
     expect(events.map((e) => e.eventType)).toContain('call.transcript');
+  });
+});
+
+describe('createCallJobHandler — reviewed state protection', () => {
+  it('preserves a reviewed claim and audits the skipped transition after the provider ends', async () => {
+    const { orgId, claimId } = await seedOrgAndClaim();
+    const retellCallId = 'fake_reviewed_claim';
+    const fake = new FakeRetell({ retellCallIdFactory: () => retellCallId });
+    const handler = createCallJobHandler({
+      logger: silentLogger,
+      prisma,
+      retellPort: fake,
+      env,
+      outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+    });
+    const pending = handler(
+      await jobFor({
+        organizationId: orgId,
+        claimId,
+        payerCode: 'DELTA_DENTAL_PPO',
+        attemptNumber: 1,
+        claimPriority: 80,
+        idempotencyKey: 'reviewed-claim-test',
+      }),
+      'token',
+    );
+    await waitFor(() => fake.startedCalls.length === 1);
+    await prisma.claim.updateMany({
+      where: { id: claimId, organizationId: orgId },
+      data: { status: 'RESOLVED' },
+    });
+    await fake.simulateHappyPath(retellCallId);
+    const result = await pending;
+    if (result.callId === null) throw new Error('Expected accepted call');
+    expect(
+      (await prisma.claim.findFirstOrThrow({ where: { id: claimId, organizationId: orgId } }))
+        .status,
+    ).toBe('RESOLVED');
+    const event = await prisma.auditLog.findFirstOrThrow({
+      where: {
+        organizationId: orgId,
+        resourceId: result.callId,
+        action: 'call.end',
+      },
+    });
+    expect(event.metadata).toMatchObject({
+      proposedClaimStatus: 'COMPLETED',
+      claimTransitionApplied: false,
+    });
+    expect(event.metadata).not.toHaveProperty('finalClaimStatus');
   });
 });
 
@@ -187,11 +256,12 @@ describe('createCallJobHandler — denial path', () => {
       idempotencyKey: 'job-test-deny-1',
     };
 
-    const handlerPromise = handler(jobFor(data), 'token');
+    const handlerPromise = handler(await jobFor(data), 'token');
     await waitFor(() => fake.startedCalls.length === 1);
     await fake.simulateDenial(retellCallId);
 
     const result = await handlerPromise;
+    if (result.callId === null) throw new Error('Expected accepted call');
     expect(result.outcome).toBe('COMPLETED');
 
     const claimAfter = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
@@ -213,7 +283,7 @@ describe('createCallJobHandler — input validation & guards', () => {
     // the dequeue-time runtime guard rejects out-of-range payloads. This
     // is the trust-boundary contract — the worker cannot rely on the
     // enqueuer having validated.
-    const malformed = jobFor({
+    const malformed = await jobFor({
       organizationId: 'org_x',
       claimId: 'clm_x',
       payerCode: 'DELTA_DENTAL_PPO',
@@ -247,7 +317,9 @@ describe('createCallJobHandler — input validation & guards', () => {
       claimPriority: 50,
       idempotencyKey: 'cross-org-1',
     };
-    await expect(handler(jobFor(data), 'token')).rejects.toThrow(/not found in organization/);
+    await expect(handler(await jobFor(data), 'token')).resolves.toMatchObject({
+      outcome: 'BLOCKED',
+    });
     expect(fake.startedCalls).toHaveLength(0);
 
     // Org A's claim must remain untouched.
@@ -274,8 +346,105 @@ describe('createCallJobHandler — input validation & guards', () => {
       claimPriority: 50,
       idempotencyKey: 'no-npi-1',
     };
-    await expect(handler(jobFor(data), 'token')).rejects.toThrow(/provider NPI/);
+    await expect(handler(await jobFor(data), 'token')).rejects.toMatchObject({
+      code: 'MISSING_CALL_IDENTITY',
+      missingFields: ['providerNpi'],
+    });
     expect(fake.startedCalls).toHaveLength(0);
+  });
+
+  it.each([
+    { subscriberId: null, providerNpi: '1234567890', missingFields: ['subscriberId'] },
+    { subscriberId: '', providerNpi: '1234567890', missingFields: ['subscriberId'] },
+    { subscriberId: ' \t ', providerNpi: '1234567890', missingFields: ['subscriberId'] },
+    { subscriberId: 'MEMBER-9001', providerNpi: '', missingFields: ['providerNpi'] },
+    { subscriberId: 'MEMBER-9001', providerNpi: ' \n ', missingFields: ['providerNpi'] },
+    { subscriberId: null, providerNpi: null, missingFields: ['subscriberId', 'providerNpi'] },
+  ])('blocks dialing and routes missing identity to NEEDS_INFO: %j', async (identity) => {
+    const { orgId, claimId } = await seedOrgAndClaim(identity);
+    const fake = new FakeRetell();
+    const startCall = vi.spyOn(fake, 'startCall');
+    const handler = createCallJobHandler({
+      logger: silentLogger,
+      prisma,
+      retellPort: fake,
+      env,
+      outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+    });
+    const data: CallJobData = {
+      organizationId: orgId,
+      claimId,
+      payerCode: 'DELTA_DENTAL_PPO',
+      attemptNumber: 1,
+      claimPriority: 80,
+      idempotencyKey: 'missing-identity',
+    };
+    const failed = handler(await jobFor(data), 'token');
+    await expect(failed).rejects.toBeInstanceOf(MissingCallIdentityError);
+    await expect(failed).rejects.toMatchObject({
+      code: 'MISSING_CALL_IDENTITY',
+      missingFields: identity.missingFields,
+    });
+    expect(startCall).not.toHaveBeenCalled();
+    expect(await prisma.call.count({ where: { organizationId: orgId, claimId } })).toBe(0);
+    const claim = await prisma.claim.findFirstOrThrow({
+      where: { id: claimId, organizationId: orgId },
+    });
+    expect(claim.status).toBe('NEEDS_INFO');
+    expect(claim.lastCallAt).toBeNull();
+    const logs = await prisma.auditLog.findMany({
+      where: { organizationId: orgId, resourceId: claimId, action: 'call.blocked' },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.metadata).toEqual({
+      jobId: 'job_test_1',
+      reason: 'MISSING_CALL_IDENTITY',
+      missingFields: identity.missingFields,
+    });
+    await expect(handler(await jobFor(data), 'token')).resolves.toMatchObject({
+      outcome: 'ALREADY_PROCESSED',
+    });
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: orgId, resourceId: claimId, action: 'call.blocked' },
+      }),
+    ).toBe(1);
+    expect(startCall).not.toHaveBeenCalled();
+  });
+
+  it('does not reopen a resolved claim when a stale job lacks identity', async () => {
+    const { orgId, claimId } = await seedOrgAndClaim({ subscriberId: null });
+    await prisma.claim.updateMany({
+      where: { id: claimId, organizationId: orgId },
+      data: { status: 'RESOLVED' },
+    });
+    const fake = new FakeRetell();
+    const startCall = vi.spyOn(fake, 'startCall');
+    const handler = createCallJobHandler({
+      logger: silentLogger,
+      prisma,
+      retellPort: fake,
+      env,
+      outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
+    });
+    await expect(
+      handler(
+        await jobFor({
+          organizationId: orgId,
+          claimId,
+          payerCode: 'DELTA_DENTAL_PPO',
+          attemptNumber: 1,
+          claimPriority: 80,
+          idempotencyKey: 'stale-missing-identity',
+        }),
+        'token',
+      ),
+    ).rejects.toBeInstanceOf(MissingCallIdentityError);
+    expect(startCall).not.toHaveBeenCalled();
+    const claim = await prisma.claim.findFirstOrThrow({
+      where: { id: claimId, organizationId: orgId },
+    });
+    expect(claim.status).toBe('RESOLVED');
   });
 });
 
@@ -305,7 +474,7 @@ describe('createCallJobHandler — true cancel channel (P4-T7-prep-4)', () => {
     // row at startCall time, so we use a setInterval-friendly hook
     // instead: poll until the handler has persisted its Call row, then
     // stamp the marker and let the cancel-poll loop drive endCall.
-    const handlerPromise = handler(jobFor(data), 'token');
+    const handlerPromise = handler(await jobFor(data), 'token');
     await waitFor(() => fake.startedCalls.length === 1);
     // Wait for the handler's Call row to land in Postgres before we
     // stamp the marker — startCall returns before the DB write completes.
@@ -324,6 +493,7 @@ describe('createCallJobHandler — true cancel channel (P4-T7-prep-4)', () => {
     // COMPLETED.
     await fake.simulateHappyPath(retellCallId);
     const result = await handlerPromise;
+    if (result.callId === null) throw new Error('Expected accepted call');
     expect(result.outcome).toBe('COMPLETED');
   });
 });
@@ -350,10 +520,11 @@ describe('createCallJobHandler — summary emission (P4-T2G)', () => {
       claimPriority: 80,
       idempotencyKey: 'job-emit-1',
     };
-    const handlerPromise = handler(jobFor(data), 'token');
+    const handlerPromise = handler(await jobFor(data), 'token');
     await waitFor(() => fake.startedCalls.length === 1);
     await fake.simulateHappyPath(retellCallId);
     const result = await handlerPromise;
+    if (result.callId === null) throw new Error('Expected accepted call');
 
     expect(summariesQueue.added).toHaveLength(1);
     const enqueued = summariesQueue.added[0];
@@ -390,11 +561,32 @@ describe('createCallJobHandler — summary emission (P4-T2G)', () => {
       claimPriority: 80,
       idempotencyKey: 'job-emit-fail-1',
     };
-    const handlerPromise = handler(jobFor(data), 'token');
+    const handlerPromise = handler(await jobFor(data), 'token');
     await waitFor(() => fake.startedCalls.length === 1);
     await fake.simulateHappyPath(retellCallId);
     const result = await handlerPromise;
+    if (result.callId === null) throw new Error('Expected accepted call');
     expect(result.outcome).toBe('COMPLETED');
+    const pending = await prisma.jobOutbox.findFirstOrThrow({
+      where: { organizationId: orgId, idempotencyKey: `call.${result.callId}` },
+    });
+    expect(pending).toMatchObject({
+      state: 'PENDING',
+      deliveryAttempts: 1,
+      lastErrorCode: 'DISPATCH_FAILED',
+    });
+    const recoveredQueue = createFakeSummariesQueue();
+    await relayJobOutbox({
+      prisma,
+      jobDispatcher: createBullMqJobDispatcher({ summariesQueue: recoveredQueue }),
+      organizationId: orgId,
+      clock: () => new Date(pending.availableAt.getTime() + 1),
+    });
+    expect(recoveredQueue.added).toHaveLength(1);
+    expect(fake.startedCalls).toHaveLength(1);
+    expect(
+      await prisma.jobOutbox.findFirst({ where: { id: pending.id, organizationId: orgId } }),
+    ).toMatchObject({ state: 'DELIVERED', deliveryAttempts: 2 });
   });
 });
 

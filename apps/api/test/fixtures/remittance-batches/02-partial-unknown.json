@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "evidenceBasis": "PAYER_REMITTANCE_BATCH",
+  "sourceNamespace": "synthetic-payer-export",
+  "sourceBatchId": "synthetic-batch-partial-unknown",
+  "sourceRecordId": "synthetic-batch-record-partial-unknown",
+  "sourceDocumentId": "synthetic-remittance-document",
+  "sourceVersion": "1",
+  "payerName": "Synthetic Dental Payer",
+  "payerIdentifier": "synthetic-payer",
+  "payerIdentifierSystem": "SYNTHETIC",
+  "payeeIdentifier": "synthetic-practice",
+  "payeeIdentifierSystem": "SYNTHETIC",
+  "currency": "USD",
+  "paymentTrace": "synthetic-shared-trace",
+  "paymentTraceType": "SYNTHETIC_REFERENCE",
+  "paymentTraceIssuer": "synthetic-payer",
+  "reportedDate": "2026-10-01",
+  "sourceStatus": "payer-reported-only",
+  "detailCompleteness": "PARTIAL",
+  "reportedClaimAmount": "180.00",
+  "reportedAdjustmentAmount": null,
+  "reportedNetAmount": null,
+  "claimRemittances": [
+    {
+      "sourceNamespace": "synthetic-remittance",
+      "sourceRecordId": "synthetic-claim-report-100",
+      "reportedAmount": "100.00"
+    }
+  ],
+  "providerAdjustments": []
+}

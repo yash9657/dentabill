@@ -14,7 +14,7 @@ import { OverviewKpiTiles } from '../../../components/dashboard/overview-kpi-til
  * Three blocks, in reading order:
  *
  *   1. Stat strip. Calls today, queue depth, denials this week,
- *      recovered amount. Em-dash placeholders on first load until
+ *      verified-payment availability. Em-dash placeholders on first load until
  *      data is available. The strip is one cohesive horizontal block,
  *      not a card grid — Impeccable design law against the
  *      four-cards-in-a-row template applies here.
@@ -42,7 +42,7 @@ const PLACEHOLDER_STATS: readonly OverviewStat[] = [
   { label: 'Calls today', value: '—', caption: 'Sign in to see live metrics' },
   { label: 'Queue depth', value: '—', caption: 'Pending follow-ups' },
   { label: 'Avg call (7d)', value: '—', caption: 'Last seven days' },
-  { label: 'Recovered (7d)', value: '—', caption: 'Resolved claims, last seven days' },
+  { label: 'Verified payments', value: '—', caption: 'Unavailable: no reconciliation' },
 ];
 
 function hasClerkKeys(): boolean {

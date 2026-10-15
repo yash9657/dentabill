@@ -8,6 +8,7 @@ type EnqueuePath = paths['/v1/claims/{id}/calls']['post'];
 type ListPath = paths['/v1/calls']['get'];
 type DetailPath = paths['/v1/calls/{id}']['get'];
 type StatsPath = paths['/v1/calls/stats']['get'];
+type CancelPath = paths['/v1/calls/{id}/cancel']['post'];
 
 export type EnqueueCallResponse = EnqueuePath['responses'][202]['content']['application/json'];
 export type CallsListResponse = ListPath['responses'][200]['content']['application/json'];
@@ -16,6 +17,7 @@ export type CallStatus = CallSummary['status'];
 export type CallDetailResponse = DetailPath['responses'][200]['content']['application/json'];
 export type CallEvent = CallDetailResponse['events'][number];
 export type CallsStatsResponse = StatsPath['responses'][200]['content']['application/json'];
+export type CancelCallResponse = CancelPath['responses'][200]['content']['application/json'];
 
 export type CallsListQuery = NonNullable<ListPath['parameters']['query']>;
 
@@ -44,6 +46,12 @@ const LIVE_STATUSES: ReadonlySet<CallStatus> = new Set([
 
 export function isLiveCallStatus(status: CallStatus): boolean {
   return LIVE_STATUSES.has(status);
+}
+
+export function isCallCancellationPending(
+  call: Pick<CallSummary, 'status' | 'cancelRequestedAt'>,
+): boolean {
+  return call.cancelRequestedAt != null && isLiveCallStatus(call.status);
 }
 
 export const CALL_STATUS_OPTIONS = [

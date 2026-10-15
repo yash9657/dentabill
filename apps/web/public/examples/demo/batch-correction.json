@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 2,
+  "evidenceBasis": "PAYER_REMITTANCE_BATCH",
+  "sourceNamespace": "synthetic-demo-payer",
+  "sourceBatchId": "demo-batch",
+  "sourceRecordId": "demo-batch-record-2",
+  "sourceDocumentId": "synthetic-demo-remittance-document",
+  "sourceVersion": "synthetic-v2",
+  "payerName": "Delta Dental PPO (synthetic)",
+  "payerIdentifier": "SYNTHETIC-DEMO-PAYER",
+  "payerIdentifierSystem": "SYNTHETIC",
+  "payeeIdentifier": "SYNTHETIC-DEMO-PRACTICE",
+  "payeeIdentifierSystem": "SYNTHETIC",
+  "currency": "USD",
+  "paymentTrace": "synthetic-demo-shared-trace",
+  "paymentTraceType": "SYNTHETIC",
+  "paymentTraceIssuer": "Synthetic demo payer",
+  "reportedDate": "2026-10-13",
+  "sourceStatus": "synthetic-reported-only",
+  "detailCompleteness": "COMPLETE",
+  "reportedClaimAmount": "180.00",
+  "reportedAdjustmentAmount": "-40.00",
+  "reportedNetAmount": "140.00",
+  "claimRemittances": [
+    {
+      "sourceNamespace": "synthetic-demo-payer",
+      "sourceRecordId": "demo-remittance-a",
+      "reportedAmount": "100.00"
+    },
+    {
+      "sourceNamespace": "synthetic-demo-payer",
+      "sourceRecordId": "demo-remittance-b",
+      "reportedAmount": "80.00"
+    }
+  ],
+  "providerAdjustments": [
+    {
+      "sourceAdjustmentId": "demo-provider-adjustment",
+      "codeSystem": "SYNTHETIC_RAW",
+      "reasonCode": "DEMO_REDUCTION",
+      "sourceReference": "synthetic-demo-provider-reference",
+      "providerIdentifier": "SYNTHETIC-DEMO-PROVIDER",
+      "fiscalPeriodEnd": "2026-09-30",
+      "amount": "-40.00",
+      "sourceAmount": "40.00",
+      "sourceSignConvention": "REDUCTION_POSITIVE"
+    }
+  ],
+  "sourceSequence": 1
+}

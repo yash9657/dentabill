@@ -7,10 +7,12 @@ import type { CallJobData, SummaryJobData } from '@dentabill/queue';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createLambdaJobWorker,
   createSqsJobWorker,
   decide,
   processRecord,
   receiveAttempt,
+  type LambdaJobWorkerDeps,
   type SqsJobWorkerDeps,
   type SqsRecord,
 } from './lambda-worker.js';
@@ -75,11 +77,221 @@ describe('receiveAttempt', () => {
   });
 });
 
+describe('createLambdaJobWorker', () => {
+  function lambdaDeps() {
+    return {
+      logger: createLogger({ level: 'fatal', pretty: false }),
+      sqsWorker: vi.fn<LambdaJobWorkerDeps['sqsWorker']>().mockResolvedValue({
+        batchItemFailures: [{ itemIdentifier: 'retry-me' }],
+      }),
+      observeCalls: vi.fn<LambdaJobWorkerDeps['observeCalls']>().mockResolvedValue({
+        selected: 0,
+        observed: 0,
+        terminal: 0,
+        rescheduled: 0,
+        stopRequested: 0,
+        failed: 0,
+      }),
+      relayOutbox: vi.fn<LambdaJobWorkerDeps['relayOutbox']>().mockResolvedValue({
+        selected: 3,
+        sent: 1,
+        failed: 1,
+        quarantined: 1,
+      }),
+    };
+  }
+
+  it('runs one bounded relay sweep and logs only counters', async () => {
+    const d = lambdaDeps();
+    const warn = vi.spyOn(d.logger, 'warn');
+    // Runtime extras must not leak through the response or logs.
+    d.relayOutbox.mockResolvedValue({
+      selected: 3,
+      sent: 1,
+      failed: 1,
+      quarantined: 1,
+      ...{ payload: { patientName: 'Synthetic private patient' } },
+    });
+    const worker = createLambdaJobWorker(d);
+    await expect(worker({ type: 'outbox.relay', version: 1 })).resolves.toEqual({
+      selected: 3,
+      sent: 1,
+      failed: 1,
+      quarantined: 1,
+      observation: {
+        selected: 0,
+        observed: 0,
+        terminal: 0,
+        rescheduled: 0,
+        stopRequested: 0,
+        failed: 0,
+      },
+    });
+    expect(d.observeCalls).toHaveBeenCalledWith({ limit: 5, budgetMs: 25_000 });
+    expect(d.relayOutbox).toHaveBeenCalledTimes(1);
+    expect(d.relayOutbox).toHaveBeenCalledWith({ limit: 25, budgetMs: 20_000 });
+    expect(d.sqsWorker).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      { selected: 3, sent: 1, failed: 1, quarantined: 1 },
+      'outbox relay sweep completed',
+    );
+  });
+
+  it('reports an idle successful sweep without tenant or job identifiers', async () => {
+    const d = lambdaDeps();
+    const info = vi.spyOn(d.logger, 'info');
+    const counts = { selected: 0, sent: 0, failed: 0, quarantined: 0 };
+    d.relayOutbox.mockResolvedValue(counts);
+    await expect(createLambdaJobWorker(d)({ type: 'outbox.relay', version: 1 })).resolves.toEqual({
+      ...counts,
+      observation: {
+        selected: 0,
+        observed: 0,
+        terminal: 0,
+        rescheduled: 0,
+        stopRequested: 0,
+        failed: 0,
+      },
+    });
+    expect(info).toHaveBeenCalledTimes(2);
+    expect(info).toHaveBeenCalledWith(counts, 'outbox relay sweep completed');
+  });
+
+  it('fails the invocation on relay infrastructure failure without exposing its error', async () => {
+    const d = lambdaDeps();
+    const error = vi.spyOn(d.logger, 'error');
+    d.relayOutbox.mockRejectedValue(new Error('DB query contains synthetic private patient'));
+    await expect(createLambdaJobWorker(d)({ type: 'outbox.relay', version: 1 })).rejects.toThrow(
+      'lambda-worker: outbox relay sweep failed',
+    );
+    expect(d.observeCalls).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith(
+      { code: 'OUTBOX_RELAY_FAILED' },
+      'outbox relay sweep failed',
+    );
+    expect(d.sqsWorker).not.toHaveBeenCalled();
+  });
+
+  it('does not expose observer payloads in sweep responses or logs', async () => {
+    const d = lambdaDeps();
+    const info = vi.spyOn(d.logger, 'info');
+    const observation = {
+      selected: 1,
+      observed: 1,
+      terminal: 0,
+      rescheduled: 1,
+      stopRequested: 1,
+      failed: 0,
+    };
+    d.observeCalls.mockResolvedValue({
+      ...observation,
+      ...{ payload: 'synthetic-private-provider-content' },
+    });
+    const result = await createLambdaJobWorker(d)({ type: 'outbox.relay', version: 1 });
+    expect(result).toHaveProperty('observation', observation);
+    expect(JSON.stringify(result)).not.toContain('private-provider');
+    expect(JSON.stringify(info.mock.calls)).not.toContain('private-provider');
+  });
+
+  it('still relays durable jobs when call observation fails', async () => {
+    const d = lambdaDeps();
+    const error = vi.spyOn(d.logger, 'error');
+    d.observeCalls.mockRejectedValue(new Error('synthetic-private-provider-content'));
+    await expect(createLambdaJobWorker(d)({ type: 'outbox.relay', version: 1 })).rejects.toThrow(
+      'lambda-worker: call observation sweep failed',
+    );
+    expect(d.relayOutbox).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith(
+      { code: 'CALL_OBSERVATION_FAILED' },
+      'call observation sweep failed',
+    );
+    expect(JSON.stringify(error.mock.calls)).not.toContain('private-provider');
+  });
+
+  it.each([
+    null,
+    {},
+    { type: 'outbox.relay' },
+    { type: 'outbox.relay', version: 2 },
+    { type: 'outbox.relay', version: '1' },
+    { type: 'outbox.relay', version: 1, organizationId: 'org_injected' },
+    { type: 'outbox.relay', version: 1, limit: 10_000 },
+    { type: 'outbox.relay', version: 1, budgetMs: 900_000 },
+    { type: 'outbox.relay', version: 1, Records: [] },
+    { Records: 'invalid' },
+    { Records: [{ ...record('body'), eventSource: 'aws:sns' }] },
+    { Records: [{ ...record('body'), eventSource: 'aws:sqs', receiptHandle: null }] },
+  ])('rejects unsupported or caller-configured envelopes (%j)', async (event) => {
+    const d = lambdaDeps();
+    await expect(createLambdaJobWorker(d)(event)).rejects.toThrow(
+      'lambda-worker: unsupported invocation envelope',
+    );
+    expect(d.relayOutbox).not.toHaveBeenCalled();
+    expect(d.observeCalls).not.toHaveBeenCalled();
+    expect(d.sqsWorker).not.toHaveBeenCalled();
+  });
+
+  it('preserves the SQS envelope and partial failure response', async () => {
+    const d = lambdaDeps();
+    const event = {
+      Records: [
+        {
+          ...record({ type: 'call.place', data: callData }),
+          eventSource: 'aws:sqs',
+          eventSourceARN: 'arn:aws:sqs:us-east-1:000000000000:synthetic-jobs',
+          awsRegion: 'us-east-1',
+          attributes: { ApproximateReceiveCount: '2', SentTimestamp: '1700000000000' },
+          messageAttributes: {},
+        },
+      ],
+    };
+    await expect(createLambdaJobWorker(d)(event)).resolves.toEqual({
+      batchItemFailures: [{ itemIdentifier: 'retry-me' }],
+    });
+    expect(d.sqsWorker).toHaveBeenCalledTimes(1);
+    expect(d.sqsWorker).toHaveBeenCalledWith(event);
+    expect(d.relayOutbox).not.toHaveBeenCalled();
+    expect(d.observeCalls).not.toHaveBeenCalled();
+  });
+
+  it('does not allow an SQS message body to request a global relay', async () => {
+    const d = lambdaDeps();
+    const sqsDeps = deps({ status: 'completed', attempt: 1 });
+    const worker = createLambdaJobWorker({ ...d, sqsWorker: createSqsJobWorker(sqsDeps) });
+    await expect(
+      worker({
+        Records: [{ ...record({ type: 'outbox.relay', version: 1 }), eventSource: 'aws:sqs' }],
+      }),
+    ).resolves.toEqual({ batchItemFailures: [{ itemIdentifier: 'm-1' }] });
+    expect(d.relayOutbox).not.toHaveBeenCalled();
+    expect(d.observeCalls).not.toHaveBeenCalled();
+    expect(sqsDeps.runtime.runCallAttempt).not.toHaveBeenCalled();
+    expect(sqsDeps.runtime.runSummaryAttempt).not.toHaveBeenCalled();
+  });
+});
+
 describe('decide', () => {
-  it('only a retry report keeps the message', () => {
+  it('keeps retry reports and calls whose terminal persistence failed', () => {
     expect(decide({ status: 'completed', attempt: 1 })).toBe('delete');
+    expect(decide({ status: 'rescheduled', attempt: 1 })).toBe('delete');
     expect(decide({ status: 'skipped', reason: 'summary_exists' })).toBe('delete');
+    expect(
+      decide({
+        status: 'blocked',
+        reason: 'MISSING_CALL_IDENTITY',
+        missingFields: ['subscriberId'],
+        attempt: 1,
+      }),
+    ).toBe('delete');
     expect(decide({ status: 'failed', attempt: 3, dlq: true })).toBe('delete');
+    expect(decide({ status: 'failed', attempt: 3, dlq: false })).toBe('retry');
+    expect(decide({ status: 'failed', attempt: 3, dlq: false }, 'summary.generate')).toBe('retry');
+    expect(decide({ status: 'inference_review_required', attempt: 3 }, 'summary.generate')).toBe(
+      'delete',
+    );
+    expect(decide({ status: 'reconciliation_required', attempt: 3 })).toBe('delete');
     expect(decide({ status: 'retry', attempt: 1, retryDelayMs: 30_000, error: null })).toBe(
       'retry',
     );
@@ -137,10 +349,35 @@ describe('processRecord', () => {
   });
 
   it('duplicates skipped by the DB checks are deleted', async () => {
-    const d = deps({ status: 'skipped', reason: 'claim_not_in_queue' });
+    const d = deps({ status: 'skipped', reason: 'call_intent_already_processed' });
     await expect(processRecord(record({ type: 'call.place', data: callData }), d)).resolves.toBe(
       'delete',
     );
+  });
+
+  it('acknowledges persisted uncertainty without scheduling a fresh submission', async () => {
+    const d = deps({ status: 'reconciliation_required', attempt: 3 });
+    await expect(
+      processRecord(record({ type: 'call.place', data: callData }, '3'), d),
+    ).resolves.toBe('delete');
+    expect(d.scheduleRetry).not.toHaveBeenCalled();
+  });
+
+  it('does not acknowledge a call when its final failure could not be persisted', async () => {
+    const d = deps({ status: 'failed', attempt: 3, dlq: false });
+    await expect(
+      processRecord(record({ type: 'call.place', data: callData }, '3'), d),
+    ).resolves.toBe('retry');
+  });
+
+  it('retains exhausted summary delivery when no durable disposition was confirmed', async () => {
+    const d = deps(
+      { status: 'completed', attempt: 1 },
+      { status: 'failed', attempt: 3, dlq: false },
+    );
+    await expect(
+      processRecord(record({ type: 'summary.generate', data: summaryData }, '3'), d),
+    ).resolves.toBe('retry');
   });
 
   it('invalid bodies are left for the SQS DLQ without running anything', async () => {

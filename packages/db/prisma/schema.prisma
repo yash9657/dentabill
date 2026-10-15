@@ -12,7 +12,7 @@
 //   - PHI fields are bounded; raw transcripts and Claude outputs use Text.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // "native" for local dev + Docker images; "rhel-openssl-3.0.x" for Vercel
   // Functions (Amazon Linux 2023) — ADR-053 / docs/DEPLOY_VERCEL.md.
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
@@ -97,14 +97,65 @@ enum CallDLQReason {
 
 // ─── Models ───────────────────────────────────────────────────────────────
 
+enum CallIntentState {
+  READY
+  SUBMITTING
+  UNKNOWN
+  ACCEPTED
+  TERMINAL
+  CANCELLED
+}
+
+enum JobOutboxKind {
+  CALL_PLACE
+  SUMMARY_GENERATE
+}
+
+enum JobOutboxState {
+  PENDING
+  DELIVERED
+  QUARANTINED
+  CLOSED
+}
+
+enum InferenceProvider {
+  SYNTHETIC
+  FIREWORKS
+}
+
+enum InferenceRunState {
+  RESERVED
+  SUBMITTING
+  UNKNOWN
+  RESPONDED
+  REJECTED
+  APPLIED
+}
+
+enum InferenceAttemptState {
+  SUBMITTING
+  RESPONDED
+  UNKNOWN
+}
+
+enum ObservationDataClass {
+  SYNTHETIC
+  PROTECTED
+}
+
+enum ObservationReviewDecision {
+  ACKNOWLEDGED
+  DISMISSED
+}
+
 model Organization {
-  id         String   @id @default(cuid())
-  clerkOrgId String   @unique
-  name       String
-  npi        String?
-  plan       Plan     @default(TRIAL)
-  callsUsed  Int      @default(0)
-  settings   Json     @default("{}")
+  id                   String    @id @default(cuid())
+  clerkOrgId           String    @unique
+  name                 String
+  npi                  String?
+  plan                 Plan      @default(TRIAL)
+  callsUsed            Int       @default(0)
+  settings             Json      @default("{}")
   // Phase 4: per-org feature flag overrides on top of process-level env
   // flags (ADR-042..049). Flag service is intentionally absent in Phase 4 —
   // env wins by default; this column is the targeted-rollout escape hatch.
@@ -122,13 +173,26 @@ model Organization {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  users               User[]
-  claims              Claim[]
-  calls               Call[]
-  callSummaries       CallSummary[]
-  payerConfigs        PayerConfig[]
-  auditLogs           AuditLog[]
-  billingUsageRecords BillingUsageRecord[]
+  users                    User[]
+  claims                   Claim[]
+  calls                    Call[]
+  callIntents              CallIntent[]
+  jobOutbox                JobOutbox[]
+  inferenceBudgets         InferenceBudget[]
+  inferenceRuns            InferenceRun[]
+  inferenceAttempts        InferenceAttempt[]
+  claimObservations        ClaimObservation[]
+  observationReviews       ClaimObservationReview[]
+  observationRegenerations ObservationRegeneration[]
+  callSummaries            CallSummary[]
+  payerConfigs             PayerConfig[]
+  auditLogs                AuditLog[]
+  billingUsageRecords      BillingUsageRecord[]
+  cashSourceTransactions   CashSourceTransaction[]
+  remittanceBatchEvidence  RemittanceBatchEvidence[]
+  remittanceBatches        RemittanceBatch[]
+  postingSourceReceipts    PostingSourceReceipt[]
+  reviewNotifications      ReviewNotificationIntent[]
 }
 
 model User {
@@ -140,42 +204,716 @@ model User {
   name           String?
   createdAt      DateTime @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  auditLogs    AuditLog[]
+  organization                 Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  auditLogs                    AuditLog[]
+  observationReviews           ClaimObservationReview[]
+  observationRegenerations     ObservationRegeneration[]
+  remittanceReviews            ClaimRemittanceReview[]
+  cashSourceReviews            CashSourceReview[]
+  remittanceBatchReviews       RemittanceBatchReview[]
+  cashBatchMatches             CashBatchMatch[]
+  cashBatchReleases            CashBatchRelease[]
+  postingSourceReviews         PostingSourceReview[]
+  postingClaimRelationships    PostingClaimRelationship[]
+  postingClaimReleases         PostingClaimRelease[]
+  generatedReviewNotifications ReviewNotificationIntent[] @relation("NotificationActor")
+  receivedReviewNotifications  ReviewNotificationIntent[] @relation("NotificationRecipient")
 
+  @@unique([id, organizationId])
   @@index([organizationId])
 }
 
 model Claim {
-  id              String      @id @default(cuid())
-  organizationId  String
-  patientDOBHash  String
-  patientDOBLast4 String?
-  claimNumber     String
-  // Phase-4 expand step (ADR-045). Nullable so historical rows stay
-  // valid; the call-worker uses `subscriberId ?? claimNumber` as the
-  // metadata fallback during the expand window. Phase-5 backfills
-  // historic rows from claim narrative; Phase-5+ tightens to NOT NULL.
-  subscriberId    String?
-  cdtCodes        String[]
-  claimAmount     Decimal     @db.Decimal(10, 2)
-  payerCode       PayerCode
-  serviceDate     DateTime
-  submittedDate   DateTime?
-  status          ClaimStatus @default(PENDING)
-  priority        Int         @default(0)
-  lastCallAt      DateTime?
-  nextCallAt      DateTime?
-  retryCount      Int         @default(0)
-  maxRetries      Int         @default(3)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                String      @id @default(cuid())
+  organizationId    String
+  patientDOBHash    String
+  patientDOBLast4   String?
+  claimNumber       String
+  // CSV provenance is explicit. Legacy/manual claims stay null; display
+  // claim numbers are not promoted into source identity.
+  sourceSystem      String?     @db.VarChar(32)
+  sourceNamespace   String?     @db.VarChar(80)
+  sourceClaimId     String?     @db.VarChar(200)
+  sourceVersion     String?     @db.VarChar(200)
+  sourceContentHash String?     @db.VarChar(64)
+  // Nullable for imports without subscriber identity. Missing values block
+  // outbound calls until supplied by an authorized source or biller;
+  // claim numbers and inferred values are never substitutes.
+  subscriberId      String?
+  cdtCodes          String[]
+  claimAmount       Decimal     @db.Decimal(10, 2)
+  payerCode         PayerCode
+  serviceDate       DateTime
+  submittedDate     DateTime?
+  status            ClaimStatus @default(PENDING)
+  priority          Int         @default(0)
+  lastCallAt        DateTime?
+  nextCallAt        DateTime?
+  retryCount        Int         @default(0)
+  maxRetries        Int         @default(3)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  calls        Call[]
+  organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  calls                    Call[]
+  callIntents              CallIntent[]
+  observations             ClaimObservation[]
+  observationRegenerations ObservationRegeneration[]
+  sourceDetails            ClaimSourceDetails?
+  remittanceEvidence       ClaimRemittanceEvidence[]
+  remittanceReviews        ClaimRemittanceReview[]
+  remittanceBatchClaims    RemittanceBatchClaim[]
+  postingRelationships     PostingClaimRelationship[]
 
+  @@unique([id, organizationId])
+  @@unique([organizationId, sourceSystem, sourceNamespace, sourceClaimId], map: "Claim_source_identity_key")
+  @@index([organizationId, claimNumber])
   @@index([organizationId, status])
   @@index([organizationId, priority])
+}
+
+// Immutable imported facts, distinct from mutable local claim/workflow fields.
+// Compound references and deferred SQL constraints seal the complete snapshot.
+model ClaimSourceDetails {
+  claimId             String
+  organizationId      String
+  schemaVersion       Int      @default(1)
+  importedClaimAmount Decimal  @db.Decimal(10, 2)
+  lineCount           Int
+  coverageCount       Int
+  createdAt           DateTime @default(now())
+
+  claim     Claim                 @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  lines     ClaimSourceLine[]
+  coverages ClaimSourceCoverage[]
+
+  @@id([claimId, organizationId])
+  @@index([organizationId, claimId])
+}
+
+model ClaimSourceLine {
+  id                   String   @id @default(uuid()) @db.Uuid
+  claimId              String
+  organizationId       String
+  sourceLineId         String   @db.VarChar(200)
+  sourceProcedureId    String?  @db.VarChar(200)
+  position             Int
+  procedureCode        String   @db.VarChar(32)
+  codeVersion          String?  @db.VarChar(32)
+  serviceDate          DateTime @db.Date
+  billedAmount         Decimal  @db.Decimal(10, 2)
+  quantity             Decimal? @db.Decimal(12, 3)
+  treatmentArea        String?  @db.VarChar(80)
+  tooth                String?  @db.VarChar(80)
+  surface              String?  @db.VarChar(80)
+  quadrant             String?  @db.VarChar(80)
+  toothRange           String?  @db.VarChar(80)
+  toothNumberingSystem String?  @db.VarChar(80)
+
+  details               ClaimSourceDetails          @relation(fields: [claimId, organizationId], references: [claimId, organizationId], onDelete: Cascade)
+  remittanceAllocations ClaimRemittanceAllocation[]
+  remittanceAdjustments ClaimRemittanceAdjustment[]
+  postingRelationships  PostingClaimRelationship[]
+
+  @@unique([id, organizationId, claimId])
+  @@unique([organizationId, claimId, sourceLineId])
+  @@unique([organizationId, claimId, position])
+}
+
+model ClaimSourceCoverage {
+  id                    String    @id @default(uuid()) @db.Uuid
+  claimId               String
+  organizationId        String
+  sourceCoverageId      String    @db.VarChar(200)
+  sequence              Int
+  payerName             String    @db.VarChar(200)
+  payerIdentifier       String?   @db.VarChar(200)
+  payerIdentifierSystem String?   @db.VarChar(80)
+  isClaimCoverage       Boolean
+  sourcePlanId          String?   @db.VarChar(200)
+  sourceSubscriptionId  String?   @db.VarChar(200)
+  subscriberId          String?   @db.VarChar(200)
+  patientMemberId       String?   @db.VarChar(200)
+  groupNumber           String?   @db.VarChar(200)
+  relationship          String?   @db.VarChar(80)
+  effectiveDate         DateTime? @db.Date
+  terminationDate       DateTime? @db.Date
+
+  details ClaimSourceDetails @relation(fields: [claimId, organizationId], references: [claimId, organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, claimId, sourceCoverageId])
+  @@unique([organizationId, claimId, sequence])
+}
+
+// Immutable reported remittance evidence. These records do not establish cash
+// receipt, recoupment, claim resolution, or financial posting.
+model ClaimRemittanceEvidence {
+  id                     String   @id @default(uuid()) @db.Uuid
+  organizationId         String
+  claimId                String
+  sourceNamespace        String   @db.VarChar(80)
+  sourceRecordId         String   @db.VarChar(200)
+  sourceDocumentId       String   @db.VarChar(200)
+  sourceVersion          String?  @db.VarChar(200)
+  kind                   String   @db.VarChar(8)
+  reversesSourceRecordId String?  @db.VarChar(200)
+  reportedAmount         Decimal  @db.Decimal(10, 2)
+  currency               String   @db.VarChar(3)
+  payload                Json
+  contentHash            String   @db.Char(64)
+  createdAt              DateTime @default(now())
+
+  claim           Claim                   @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  review          ClaimRemittanceReview?  @relation("ReviewedEvidence")
+  reversalReviews ClaimRemittanceReview[] @relation("ReversedEvidence")
+  batchClaims     RemittanceBatchClaim[]
+
+  @@unique([id, organizationId, claimId])
+  @@unique([organizationId, sourceNamespace, sourceRecordId], map: "ClaimRemittanceEvidence_source_key")
+  @@index([organizationId, claimId, createdAt, id])
+}
+
+model ClaimRemittanceReview {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organizationId     String
+  claimId            String
+  evidenceId         String   @unique @db.Uuid
+  decision           String   @db.VarChar(6)
+  reviewedByUserId   String
+  idempotencyKey     String   @db.Uuid
+  requestHash        String   @db.Char(64)
+  reviewToken        String   @db.Char(64)
+  evidenceHash       String   @db.Char(64)
+  claimUpdatedAt     DateTime
+  ledgerVersion      String   @db.VarChar(80)
+  reversedEvidenceId String?  @db.Uuid
+  reportedAmount     Decimal  @db.Decimal(10, 2)
+  allocationCount    Int
+  adjustmentCount    Int
+  createdAt          DateTime @default(now())
+
+  claim            Claim                       @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  evidence         ClaimRemittanceEvidence     @relation("ReviewedEvidence", fields: [evidenceId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+  reversedEvidence ClaimRemittanceEvidence?    @relation("ReversedEvidence", fields: [reversedEvidenceId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy       User                        @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  allocations      ClaimRemittanceAllocation[]
+  adjustments      ClaimRemittanceAdjustment[]
+  batchClaims      RemittanceBatchClaim[]
+
+  @@unique([id, organizationId, claimId, evidenceId], map: "ClaimRemittanceReview_batch_binding_key")
+  @@unique([id, organizationId, claimId])
+  @@unique([organizationId, idempotencyKey])
+  @@unique([evidenceId, organizationId, claimId])
+  @@index([organizationId, claimId, createdAt, id])
+  @@index([reversedEvidenceId, organizationId, claimId])
+}
+
+model ClaimRemittanceAllocation {
+  id             String  @id @default(uuid()) @db.Uuid
+  reviewId       String  @db.Uuid
+  organizationId String
+  claimId        String
+  sourceIndex    Int
+  lineId         String  @db.Uuid
+  amount         Decimal @db.Decimal(10, 2)
+
+  review ClaimRemittanceReview @relation(fields: [reviewId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+  line   ClaimSourceLine       @relation(fields: [lineId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([reviewId, sourceIndex])
+  @@index([organizationId, claimId])
+  @@index([lineId, organizationId, claimId])
+}
+
+model ClaimRemittanceAdjustment {
+  id                 String  @id @default(uuid()) @db.Uuid
+  reviewId           String  @db.Uuid
+  organizationId     String
+  claimId            String
+  sourceIndex        Int
+  sourceAdjustmentId String  @db.VarChar(200)
+  lineId             String? @db.Uuid
+  codeSystem         String  @db.VarChar(32)
+  groupCode          String? @db.VarChar(32)
+  reasonCode         String  @db.VarChar(32)
+  amount             Decimal @db.Decimal(10, 2)
+
+  review ClaimRemittanceReview @relation(fields: [reviewId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+  line   ClaimSourceLine?      @relation(fields: [lineId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([reviewId, sourceIndex])
+  @@unique([reviewId, sourceAdjustmentId])
+  @@index([organizationId, claimId])
+  @@index([lineId, organizationId, claimId])
+}
+
+// Immutable source batch snapshots. No receipt, posting or settlement is asserted.
+model RemittanceBatchEvidence {
+  id                       String   @id @default(uuid()) @db.Uuid
+  organizationId           String
+  sourceNamespace          String   @db.VarChar(80)
+  sourceBatchId            String   @db.VarChar(200)
+  sourceRecordId           String   @db.VarChar(200)
+  sourceDocumentId         String   @db.VarChar(200)
+  sourceVersion            String?  @db.VarChar(200)
+  detailCompleteness       String   @db.VarChar(8)
+  reportedClaimAmount      Decimal? @db.Decimal(10, 2)
+  reportedAdjustmentAmount Decimal? @db.Decimal(10, 2)
+  reportedNetAmount        Decimal? @db.Decimal(10, 2)
+  payload                  Json
+  contentHash              String   @db.Char(64)
+  createdAt                DateTime @default(now())
+
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  review       RemittanceBatchReview?
+  members      RemittanceBatchClaim[]
+  cashMatches  CashBatchMatch[]
+  revision     RemittanceBatchRevision?
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, sourceNamespace, sourceRecordId], map: "RemittanceBatchEvidence_source_key")
+  @@index([organizationId, createdAt, id])
+}
+
+model RemittanceBatchReview {
+  id                       String   @id @default(uuid()) @db.Uuid
+  organizationId           String
+  evidenceId               String   @unique @db.Uuid
+  decision                 String   @db.VarChar(6)
+  reviewedByUserId         String
+  reviewedByRole           UserRole
+  idempotencyKey           String   @db.Uuid
+  requestHash              String   @db.Char(64)
+  reviewToken              String   @db.Char(64)
+  evidenceHash             String   @db.Char(64)
+  ledgerVersion            String   @db.VarChar(80)
+  claimReportedAmount      Decimal? @db.Decimal(14, 2)
+  providerAdjustmentAmount Decimal? @db.Decimal(14, 2)
+  netAmount                Decimal? @db.Decimal(14, 2)
+  claimCount               Int
+  adjustmentCount          Int
+  createdAt                DateTime @default(now())
+
+  evidence    RemittanceBatchEvidence     @relation(fields: [evidenceId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy  User                        @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  members     RemittanceBatchClaim[]
+  adjustments RemittanceBatchAdjustment[]
+  cashMatches CashBatchMatch[]
+
+  @@unique([id, organizationId])
+  @@unique([id, organizationId, evidenceId], map: "RemittanceBatchReview_binding_key")
+  @@unique([evidenceId, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, createdAt, id])
+}
+
+model RemittanceBatchClaim {
+  id                   String  @id @default(uuid()) @db.Uuid
+  reviewId             String  @db.Uuid
+  organizationId       String
+  batchEvidenceId      String  @db.Uuid
+  sourceIndex          Int
+  claimId              String
+  remittanceEvidenceId String  @db.Uuid
+  remittanceReviewId   String  @db.Uuid
+  amount               Decimal @db.Decimal(10, 2)
+
+  review             RemittanceBatchReview           @relation(fields: [reviewId, organizationId, batchEvidenceId], references: [id, organizationId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+  batchEvidence      RemittanceBatchEvidence         @relation(fields: [batchEvidenceId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  claim              Claim                           @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  remittanceEvidence ClaimRemittanceEvidence         @relation(fields: [remittanceEvidenceId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+  remittanceReview   ClaimRemittanceReview           @relation(fields: [remittanceReviewId, organizationId, claimId, remittanceEvidenceId], references: [id, organizationId, claimId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+  ownership          RemittanceBatchMemberOwnership?
+
+  @@unique([reviewId, sourceIndex])
+  @@unique([id, organizationId, remittanceEvidenceId], map: "RemittanceBatchClaim_ownership_binding_key")
+  @@unique([reviewId, remittanceEvidenceId])
+  @@index([organizationId, claimId])
+}
+
+model RemittanceBatchAdjustment {
+  id                   String    @id @default(uuid()) @db.Uuid
+  reviewId             String    @db.Uuid
+  organizationId       String
+  sourceIndex          Int
+  sourceAdjustmentId   String    @db.VarChar(200)
+  codeSystem           String    @db.VarChar(32)
+  reasonCode           String    @db.VarChar(32)
+  sourceReference      String?   @db.VarChar(200)
+  providerIdentifier   String?   @db.VarChar(200)
+  fiscalPeriodEnd      DateTime? @db.Date
+  amount               Decimal   @db.Decimal(10, 2)
+  sourceAmount         Decimal   @db.Decimal(10, 2)
+  sourceSignConvention String    @db.VarChar(20)
+
+  review RemittanceBatchReview @relation(fields: [reviewId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([reviewId, sourceIndex])
+  @@unique([reviewId, sourceAdjustmentId])
+  @@index([organizationId])
+}
+
+// Stable source identity and immutable ordering metadata; legacy payloads remain byte-for-byte intact.
+model RemittanceBatch {
+  id               String                           @id @default(uuid()) @db.Uuid
+  organizationId   String
+  sourceNamespace  String                           @db.VarChar(80)
+  sourceBatchId    String                           @db.VarChar(200)
+  createdAt        DateTime                         @default(now())
+  organization     Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revisions        RemittanceBatchRevision[]
+  memberOwnerships RemittanceBatchMemberOwnership[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, sourceNamespace, sourceBatchId], map: "RemittanceBatch_source_key")
+  @@index([organizationId, createdAt, id])
+}
+
+model RemittanceBatchRevision {
+  evidenceId     String                  @id @db.Uuid
+  organizationId String
+  batchId        String                  @db.Uuid
+  schemaVersion  Int
+  sourceSequence Int?
+  evidence       RemittanceBatchEvidence @relation(fields: [evidenceId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  batch          RemittanceBatch         @relation(fields: [batchId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([evidenceId, organizationId])
+  @@unique([batchId, sourceSequence])
+  @@index([organizationId, batchId, sourceSequence])
+}
+
+// Accepted source-event ownership never transfers merely because a correction omits a member.
+model RemittanceBatchMemberOwnership {
+  id                   String               @id @default(uuid()) @db.Uuid
+  organizationId       String
+  remittanceEvidenceId String               @db.Uuid
+  batchId              String               @db.Uuid
+  firstMemberId        String               @unique @db.Uuid
+  batch                RemittanceBatch      @relation(fields: [batchId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  firstMember          RemittanceBatchClaim @relation(fields: [firstMemberId, organizationId, remittanceEvidenceId], references: [id, organizationId, remittanceEvidenceId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([organizationId, remittanceEvidenceId], map: "RemittanceBatchMemberOwnership_event_key")
+  @@unique([firstMemberId, organizationId, remittanceEvidenceId])
+  @@index([organizationId, batchId])
+}
+
+// Immutable bank-account source observations. Reviewed source state is not
+// bank verification, settlement, a claim allocation, or cash recovery.
+model CashSourceTransaction {
+  id                  String   @id @default(uuid()) @db.Uuid
+  organizationId      String
+  sourceSystem        String   @db.VarChar(80)
+  sourceProduct       String   @db.VarChar(80)
+  sourceNamespace     String   @db.VarChar(80)
+  sourceAccountId     String   @db.VarChar(200)
+  sourceTransactionId String   @db.VarChar(200)
+  createdAt           DateTime @default(now())
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  evidence     CashSourceEvidence[]
+  reviews      CashSourceReview[]
+  batchMatches CashBatchMatch[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, sourceNamespace, sourceAccountId, sourceTransactionId], map: "CashSourceTransaction_source_key")
+  @@index([organizationId, sourceNamespace, sourceAccountId], map: "CashSourceTransaction_account_idx")
+  @@index([organizationId, createdAt, id])
+}
+
+model CashSourceEvidence {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String
+  transactionId    String   @db.Uuid
+  sourceNamespace  String   @db.VarChar(80)
+  sourceAccountId  String   @db.VarChar(200)
+  sourceRecordId   String   @db.VarChar(200)
+  sourceSequence   Int
+  sourceVersion    String?  @db.VarChar(200)
+  sourceDocumentId String   @db.VarChar(200)
+  status           String   @db.VarChar(8)
+  amount           Decimal? @db.Decimal(10, 2)
+  payload          Json
+  contentHash      String   @db.Char(64)
+  createdAt        DateTime @default(now())
+
+  transaction       CashSourceTransaction @relation(fields: [transactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  review            CashSourceReview?     @relation("CashReviewedEvidence")
+  subsequentReviews CashSourceReview[]    @relation("CashPreviousAcceptedEvidence")
+  batchMatches      CashBatchMatch[]
+
+  @@unique([id, organizationId, transactionId])
+  @@unique([organizationId, sourceNamespace, sourceAccountId, sourceRecordId], map: "CashSourceEvidence_source_event_key")
+  @@unique([transactionId, sourceSequence])
+  @@index([organizationId, transactionId, sourceSequence])
+}
+
+model CashSourceReview {
+  id                         String   @id @default(uuid()) @db.Uuid
+  organizationId             String
+  transactionId              String   @db.Uuid
+  evidenceId                 String   @unique @db.Uuid
+  decision                   String   @db.VarChar(6)
+  reviewedByUserId           String
+  reviewedByRole             UserRole
+  idempotencyKey             String   @db.Uuid
+  requestHash                String   @db.Char(64)
+  reviewToken                String   @db.Char(64)
+  evidenceHash               String   @db.Char(64)
+  ledgerVersion              String   @db.VarChar(80)
+  previousAcceptedEvidenceId String?  @db.Uuid
+  sourceSequence             Int
+  createdAt                  DateTime @default(now())
+
+  transaction              CashSourceTransaction @relation(fields: [transactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  evidence                 CashSourceEvidence    @relation("CashReviewedEvidence", fields: [evidenceId, organizationId, transactionId], references: [id, organizationId, transactionId], onDelete: Restrict, onUpdate: Restrict)
+  previousAcceptedEvidence CashSourceEvidence?   @relation("CashPreviousAcceptedEvidence", fields: [previousAcceptedEvidenceId, organizationId, transactionId], references: [id, organizationId, transactionId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy               User                  @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+
+  batchMatches CashBatchMatch[]
+
+  @@unique([id, organizationId, transactionId, evidenceId], map: "CashSourceReview_match_binding_key")
+  @@unique([organizationId, idempotencyKey])
+  @@unique([evidenceId, organizationId, transactionId])
+  @@index([organizationId, transactionId, sourceSequence])
+  @@index([previousAcceptedEvidenceId, organizationId, transactionId], map: "CashSourceReview_previous_idx")
+}
+
+// Immutable independently reviewed PMS source observations; no claim allocations or external writes.
+model PostingSourceReceipt {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String
+  sourceSystem    String   @db.VarChar(32)
+  sourceProduct   String   @db.VarChar(80)
+  sourceNamespace String   @db.VarChar(80)
+  sourceReceiptId String   @db.VarChar(200)
+  createdAt       DateTime @default(now())
+
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  evidence           PostingSourceEvidence[]
+  reviews            PostingSourceReview[]
+  claimRelationships PostingClaimRelationship[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, sourceSystem, sourceNamespace, sourceReceiptId], map: "PostingSourceReceipt_source_key")
+  @@index([organizationId, sourceSystem, sourceNamespace], map: "PostingSourceReceipt_source_scope_idx")
+  @@index([organizationId, createdAt, id])
+}
+
+model PostingSourceEvidence {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organizationId     String
+  receiptId          String   @db.Uuid
+  sourceNamespace    String   @db.VarChar(80)
+  sourceSystem       String   @db.VarChar(32)
+  sourceRecordId     String   @db.VarChar(200)
+  sourceSequence     Int
+  sourceVersion      String?  @db.VarChar(200)
+  sourceDocumentId   String   @db.VarChar(200)
+  status             String   @db.VarChar(8)
+  detailCompleteness String   @db.VarChar(8)
+  amount             Decimal? @db.Decimal(10, 2)
+  payload            Json
+  contentHash        String   @db.Char(64)
+  createdAt          DateTime @default(now())
+
+  receipt            PostingSourceReceipt       @relation(fields: [receiptId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  review             PostingSourceReview?       @relation("PostingReviewedEvidence")
+  subsequentReviews  PostingSourceReview[]      @relation("PostingPreviousAcceptedEvidence")
+  claimRelationships PostingClaimRelationship[]
+
+  @@unique([id, organizationId, receiptId])
+  @@unique([organizationId, sourceSystem, sourceNamespace, sourceRecordId], map: "PostingSourceEvidence_source_event_key")
+  @@unique([receiptId, sourceSequence])
+  @@index([organizationId, receiptId, sourceSequence])
+}
+
+model PostingSourceReview {
+  id                         String   @id @default(uuid()) @db.Uuid
+  organizationId             String
+  receiptId                  String   @db.Uuid
+  evidenceId                 String   @unique @db.Uuid
+  decision                   String   @db.VarChar(6)
+  reviewedByUserId           String
+  reviewedByRole             UserRole
+  idempotencyKey             String   @db.Uuid
+  requestHash                String   @db.Char(64)
+  reviewToken                String   @db.Char(64)
+  evidenceHash               String   @db.Char(64)
+  ledgerVersion              String   @db.VarChar(80)
+  previousAcceptedEvidenceId String?  @db.Uuid
+  sourceSequence             Int
+  createdAt                  DateTime @default(now())
+
+  receipt                  PostingSourceReceipt   @relation(fields: [receiptId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  evidence                 PostingSourceEvidence  @relation("PostingReviewedEvidence", fields: [evidenceId, organizationId, receiptId], references: [id, organizationId, receiptId], onDelete: Restrict, onUpdate: Restrict)
+  previousAcceptedEvidence PostingSourceEvidence? @relation("PostingPreviousAcceptedEvidence", fields: [previousAcceptedEvidenceId, organizationId, receiptId], references: [id, organizationId, receiptId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy               User                   @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+
+  entries            PostingSourceEntry[]
+  claimRelationships PostingClaimRelationship[]
+
+  @@unique([id, organizationId, receiptId, evidenceId], map: "PostingSourceReview_entry_binding_key")
+  @@unique([organizationId, idempotencyKey])
+  @@unique([evidenceId, organizationId, receiptId])
+  @@index([organizationId, receiptId, sourceSequence])
+  @@index([previousAcceptedEvidenceId, organizationId, receiptId], map: "PostingSourceReview_previous_idx")
+}
+
+// Accepted source entry mirrors preserve raw references. Local relationships are
+// separately reviewed append-only records; they never mutate these source facts.
+model PostingSourceEntry {
+  id                   String   @id @default(uuid()) @db.Uuid
+  organizationId       String
+  reviewId             String   @db.Uuid
+  receiptId            String   @db.Uuid
+  evidenceId           String   @db.Uuid
+  sourceIndex          Int
+  sourceEntryId        String   @db.VarChar(200)
+  sourceClaimId        String?  @db.VarChar(200)
+  sourceLineId         String?  @db.VarChar(200)
+  sourceProcedureId    String?  @db.VarChar(200)
+  sourceVersion        String?  @db.VarChar(200)
+  sourceIsTransfer     Boolean?
+  entryKind            String   @db.VarChar(10)
+  sourceStatus         String?  @db.VarChar(80)
+  amount               Decimal? @db.Decimal(10, 2)
+  sourceAmount         Decimal? @db.Decimal(10, 2)
+  sourceSignConvention String   @db.VarChar(15)
+
+  review PostingSourceReview @relation(fields: [reviewId, organizationId, receiptId, evidenceId], references: [id, organizationId, receiptId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+
+  claimRelationships PostingClaimRelationship[]
+
+  @@unique([id, organizationId, receiptId, evidenceId, reviewId], map: "PostingSourceEntry_relationship_binding_key")
+  @@unique([reviewId, sourceIndex])
+  @@unique([reviewId, sourceEntryId])
+  @@index([organizationId, sourceEntryId])
+}
+
+// Explicit reviewed source-to-claim relationships, with no payment allocation or
+// workflow mutation. Active source-entry identity is reserved until full release.
+model PostingClaimRelationship {
+  id                     String   @id @default(uuid()) @db.Uuid
+  organizationId         String
+  receiptId              String   @db.Uuid
+  evidenceId             String   @db.Uuid
+  reviewId               String   @db.Uuid
+  entryId                String   @db.Uuid
+  claimId                String
+  claimSourceLineId      String?  @db.Uuid
+  claimVersion           DateTime
+  claimSourceContentHash String   @db.Char(64)
+  sourceSystem           String   @db.VarChar(32)
+  sourceNamespace        String   @db.VarChar(80)
+  sourceEntryId          String   @db.VarChar(200)
+  sourceClaimId          String   @db.VarChar(200)
+  evidenceHash           String   @db.Char(64)
+  reviewedByUserId       String
+  reviewedByRole         UserRole
+  idempotencyKey         String   @db.Uuid
+  requestHash            String   @db.Char(64)
+  reviewToken            String   @db.Char(64)
+  ledgerVersion          String   @db.VarChar(160)
+  createdAt              DateTime @default(now())
+
+  receipt         PostingSourceReceipt  @relation(fields: [receiptId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  evidence        PostingSourceEvidence @relation(fields: [evidenceId, organizationId, receiptId], references: [id, organizationId, receiptId], onDelete: Restrict, onUpdate: Restrict)
+  review          PostingSourceReview   @relation(fields: [reviewId, organizationId, receiptId, evidenceId], references: [id, organizationId, receiptId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+  entry           PostingSourceEntry    @relation(fields: [entryId, organizationId, receiptId, evidenceId, reviewId], references: [id, organizationId, receiptId, evidenceId, reviewId], onDelete: Restrict, onUpdate: Restrict)
+  claim           Claim                 @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  claimSourceLine ClaimSourceLine?      @relation(fields: [claimSourceLineId, organizationId, claimId], references: [id, organizationId, claimId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy      User                  @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  release         PostingClaimRelease?
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, sourceSystem, sourceNamespace, sourceEntryId], map: "PostingClaimRelationship_source_idx")
+  @@index([organizationId, claimId])
+  @@index([organizationId, receiptId])
+  @@index([organizationId, createdAt, id])
+}
+
+// Release is an immutable correction, preserving the original reviewed binding.
+model PostingClaimRelease {
+  id                      String   @id @default(uuid()) @db.Uuid
+  organizationId          String
+  relationshipId          String   @unique @db.Uuid
+  reviewedByUserId        String
+  reviewedByRole          UserRole
+  reason                  String   @db.VarChar(20)
+  idempotencyKey          String   @db.Uuid
+  requestHash             String   @db.Char(64)
+  reviewToken             String   @db.Char(64)
+  ledgerVersion           String   @db.VarChar(160)
+  relationshipRequestHash String   @db.Char(64)
+  createdAt               DateTime @default(now())
+
+  relationship PostingClaimRelationship @relation(fields: [relationshipId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy   User                     @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([relationshipId, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, createdAt, id])
+}
+
+// Explicit human cash-to-batch reconciliation. These reservations do not post
+// payments, allocate cash to claims, or establish bank verification or settlement.
+model CashBatchMatch {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String
+  cashTransactionId String   @db.Uuid
+  cashEvidenceId    String   @db.Uuid
+  cashReviewId      String   @db.Uuid
+  batchEvidenceId   String   @db.Uuid
+  batchReviewId     String   @db.Uuid
+  amount            Decimal  @db.Decimal(10, 2)
+  reviewedByUserId  String
+  reviewedByRole    UserRole
+  idempotencyKey    String   @db.Uuid
+  requestHash       String   @db.Char(64)
+  reviewToken       String   @db.Char(64)
+  ledgerVersion     String   @db.VarChar(160)
+  cashEvidenceHash  String   @db.Char(64)
+  batchEvidenceHash String   @db.Char(64)
+  createdAt         DateTime @default(now())
+
+  cashTransaction CashSourceTransaction   @relation(fields: [cashTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  cashEvidence    CashSourceEvidence      @relation(fields: [cashEvidenceId, organizationId, cashTransactionId], references: [id, organizationId, transactionId], onDelete: Restrict, onUpdate: Restrict)
+  cashReview      CashSourceReview        @relation(fields: [cashReviewId, organizationId, cashTransactionId, cashEvidenceId], references: [id, organizationId, transactionId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+  batchEvidence   RemittanceBatchEvidence @relation(fields: [batchEvidenceId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  batchReview     RemittanceBatchReview   @relation(fields: [batchReviewId, organizationId, batchEvidenceId], references: [id, organizationId, evidenceId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy      User                    @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  release         CashBatchRelease?
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, cashTransactionId])
+  @@index([organizationId, batchEvidenceId])
+  @@index([organizationId, createdAt, id])
+}
+
+// Immutable release history. Stale reservations remain active until explicitly released.
+model CashBatchRelease {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String
+  matchId          String   @unique @db.Uuid
+  reviewedByUserId String
+  reviewedByRole   UserRole
+  reason           String   @db.VarChar(20)
+  idempotencyKey   String   @db.Uuid
+  requestHash      String   @db.Char(64)
+  reviewToken      String   @db.Char(64)
+  ledgerVersion    String   @db.VarChar(160)
+  matchRequestHash String   @db.Char(64)
+  createdAt        DateTime @default(now())
+
+  match      CashBatchMatch @relation(fields: [matchId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy User           @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([matchId, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, createdAt, id])
 }
 
 model Call {
@@ -207,11 +945,16 @@ model Call {
   cancelRequestedBy String?
   createdAt         DateTime       @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  claim        Claim        @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  summary      CallSummary?
-  events       CallEvent[]
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  claim                    Claim                     @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  summary                  CallSummary?
+  events                   CallEvent[]
+  intent                   CallIntent?
+  inferenceRuns            InferenceRun[]
+  observations             ClaimObservation[]
+  observationRegenerations ObservationRegeneration[]
 
+  @@unique([id, claimId, organizationId])
   @@index([organizationId])
   // Single-column claimId index kept for backward compatibility — Postgres
   // can use the composite below for `claimId`-only filters, but Prisma's
@@ -227,13 +970,321 @@ model Call {
   @@index([organizationId, claimId, status])
 }
 
+// A submission can be attempted only after READY -> SUBMITTING commits.
+// SUBMITTING/UNKNOWN are never made READY again, including after a timeout.
+model CallIntent {
+  id                         String          @id @default(cuid())
+  organizationId             String
+  claimId                    String
+  idempotencyKey             String
+  payerCode                  PayerCode
+  attemptNumber              Int
+  claimPriority              Int
+  claimVersion               DateTime
+  state                      CallIntentState @default(READY)
+  // Exact outbound request contains PHI. Never copy into audit/log metadata.
+  requestPayload             Json?
+  requestHash                String?
+  callId                     String?         @unique
+  submittedAt                DateTime?
+  completedAt                DateTime?
+  lastErrorCode              String?
+  reconciledAt               DateTime?
+  reconcileOutcome           String?
+  reconcileAvailableAt       DateTime?
+  reconcileLeaseExpiresAt    DateTime?
+  reconcileLeaseToken        String?
+  reconcileAttempts          Int             @default(0)
+  callDeadlineAt             DateTime?
+  nextObservationAt          DateTime?
+  observationLeaseToken      String?
+  observationLeaseExpiresAt  DateTime?
+  observationAttempts        Int             @default(0)
+  lastObservedAt             DateTime?
+  observationErrorCode       String?
+  observationReviewAt        DateTime?
+  stopRequestedAt            DateTime?
+  stopReason                 String?
+  stopAttempts               Int             @default(0)
+  stopLastAttemptAt          DateTime?
+  stopAcknowledgedAt         DateTime?
+  stopConfirmationDeadlineAt DateTime?
+  createdAt                  DateTime        @default(now())
+  updatedAt                  DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  claim        Claim        @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  call         Call?        @relation(fields: [callId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  // Migration also enforces one active intent per organization/claim.
+
+  @@unique([callId, claimId, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, claimId, createdAt])
+  @@index([organizationId, state, updatedAt])
+  @@index([state, nextObservationAt, observationLeaseExpiresAt])
+}
+
+// Only validated queue commands (opaque IDs and routing fields), never transcripts.
+model JobOutbox {
+  id                   String         @id @default(cuid())
+  organizationId       String
+  kind                 JobOutboxKind
+  idempotencyKey       String
+  payload              Json
+  payloadHash          String
+  state                JobOutboxState @default(PENDING)
+  availableAt          DateTime       @default(now())
+  leaseToken           String?
+  leaseExpiresAt       DateTime?
+  deliveryAttempts     Int            @default(0)
+  deliveryAttemptLimit Int            @default(10)
+  recoveryCount        Int            @default(0)
+  closedAt             DateTime?
+  deliveredAt          DateTime?
+  lastErrorCode        String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, kind, idempotencyKey])
+  @@index([organizationId, state, availableAt])
+  @@index([state, availableAt, leaseExpiresAt])
+}
+
+// Token allocations are admission controls, not an asserted provider dollar ceiling.
+// Unknown allocations remain outstanding across UTC days.
+model InferenceBudget {
+  id             String   @id @default(cuid())
+  organizationId String
+  billingDay     String   @db.VarChar(10)
+  tokenLimit     BigInt
+  baselineTokens BigInt   @default(0)
+  knownTokens    BigInt   @default(0)
+  reservedTokens BigInt   @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs         InferenceRun[]
+  attempts     InferenceAttempt[]
+
+  @@unique([organizationId, billingDay])
+  @@index([organizationId, reservedTokens])
+}
+
+// Request and result snapshots contain protected evidence. Never log these rows.
+// Generation one is the only automatic generation until versioned review is implemented.
+model InferenceRun {
+  id                  String            @id @default(cuid())
+  organizationId      String
+  callId              String
+  claimId             String
+  generation          Int               @default(1)
+  regenerationId      String?           @unique
+  maxAttempts         Int               @default(1)
+  executionDeadlineAt DateTime?
+  releasePolicyHash   String?           @db.VarChar(64)
+  releaseSnapshot     Json?
+  wireRequestHash     String?           @db.VarChar(64)
+  claimVersion        DateTime
+  sourceHash          String            @db.VarChar(64)
+  requestHash         String            @db.VarChar(64)
+  provider            InferenceProvider
+  releaseId           String
+  promptVersion       String
+  billingDay          String            @db.VarChar(10)
+  tokenAllowance      BigInt
+  reservedTokens      BigInt
+  totalTokens         BigInt?
+  state               InferenceRunState @default(RESERVED)
+  requestPayload      Json
+  resultPayload       Json?
+  receiptHash         String?           @db.VarChar(64)
+  leaseToken          String?
+  leaseExpiresAt      DateTime?
+  submittedAt         DateTime?
+  respondedAt         DateTime?
+  appliedAt           DateTime?
+  reviewAppliedAt     DateTime?
+  summaryId           String?           @unique
+  lastErrorCode       String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  organization        Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  call                Call                       @relation(fields: [callId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  budget              InferenceBudget            @relation(fields: [organizationId, billingDay], references: [organizationId, billingDay], onDelete: Restrict)
+  observation         ClaimObservation?
+  regeneration        ObservationRegeneration?   @relation("RegenerationRun", fields: [regenerationId, claimId, callId, organizationId, generation], references: [id, claimId, callId, organizationId, generation], onDelete: Restrict)
+  nextRegenerations   ObservationRegeneration[]  @relation("PreviousRegenerationRun")
+  attempts            InferenceAttempt[]
+  reviewNotifications ReviewNotificationIntent[]
+
+  @@unique([organizationId, callId, generation])
+  @@unique([id, organizationId])
+  @@unique([id, claimId, callId, organizationId])
+  @@unique([id, claimId, callId, organizationId, generation])
+  @@unique([regenerationId, claimId, callId, organizationId, generation])
+  @@index([organizationId, state, updatedAt])
+  @@index([state, leaseExpiresAt])
+}
+
+// Each native HTTP attempt has independent admission, raw evidence, and accounting.
+// Nullable usage keeps its full reservation even after another attempt succeeds.
+model InferenceAttempt {
+  id                 String                @id @default(cuid())
+  organizationId     String
+  runId              String
+  attemptNumber      Int                   @default(1)
+  billingDay         String                @db.VarChar(10)
+  responsePayload    Json?
+  responseRecordedAt DateTime?
+  responseHash       String?               @db.VarChar(64)
+  completionHash     String?               @db.VarChar(64)
+  completionHistory  Json                  @default("[]")
+  completedAt        DateTime?
+  outcome            String?
+  acceptance         String?
+  httpStatus         Int?
+  elapsedMs          Float?
+  state              InferenceAttemptState @default(SUBMITTING)
+  tokenAllowance     BigInt
+  reservedTokens     BigInt
+  totalTokens        BigInt?
+  inputTokens        BigInt?
+  outputTokens       BigInt?
+  cachedInputTokens  BigInt?
+  submittedAt        DateTime              @default(now())
+  respondedAt        DateTime?
+  lastErrorCode      String?
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  run          InferenceRun    @relation(fields: [runId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  budget       InferenceBudget @relation(fields: [organizationId, billingDay], references: [organizationId, billingDay], onDelete: Restrict)
+
+  @@unique([organizationId, runId, attemptNumber])
+  @@index([organizationId, state, submittedAt])
+}
+
+// Immutable native evidence. Version records publication sequence; source call chronology
+// determines which observation is current, so a late old response cannot supersede a newer call.
+model ClaimObservation {
+  id                      String               @id @default(cuid())
+  organizationId          String
+  claimId                 String
+  callId                  String
+  inferenceRunId          String               @unique
+  version                 Int
+  claimVersion            DateTime
+  digest                  String               @db.VarChar(64)
+  previousObservationId   String?
+  supersedesObservationId String?
+  sourceHash              String               @db.VarChar(64)
+  requestHash             String               @db.VarChar(64)
+  releaseId               String
+  provider                InferenceProvider
+  promptVersion           String
+  schemaVersion           String
+  taskVersion             String
+  dataClass               ObservationDataClass
+  output                  Json
+  sources                 Json
+  provenance              Json
+  createdAt               DateTime             @default(now())
+
+  organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  claim                    Claim                      @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  call                     Call                       @relation(fields: [callId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  inferenceRun             InferenceRun               @relation(fields: [inferenceRunId, claimId, callId, organizationId], references: [id, claimId, callId, organizationId], onDelete: Restrict)
+  previousObservation      ClaimObservation?          @relation("ObservationHistory", fields: [previousObservationId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  nextObservations         ClaimObservation[]         @relation("ObservationHistory")
+  supersedesObservation    ClaimObservation?          @relation("ObservationSupersession", fields: [supersedesObservationId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  supersededByObservations ClaimObservation[]         @relation("ObservationSupersession")
+  review                   ClaimObservationReview?
+  regenerations            ObservationRegeneration[]
+  reviewNotifications      ReviewNotificationIntent[]
+
+  @@unique([id, claimId, organizationId])
+  @@unique([id, claimId, callId, organizationId])
+  @@unique([organizationId, claimId, version])
+  @@unique([inferenceRunId, claimId, callId, organizationId])
+  @@index([organizationId, claimId, createdAt])
+  @@index([organizationId, callId])
+}
+
+// Explicit human authorization to spend on one new native generation. Immutable;
+// its resulting run records execution state without changing the approval snapshot.
+model ObservationRegeneration {
+  id                           String   @id @default(cuid())
+  organizationId               String
+  claimId                      String
+  callId                       String
+  previousObservationId        String
+  previousObservationDigest    String   @db.VarChar(64)
+  previousRunId                String
+  previousGeneration           Int
+  generation                   Int
+  createdByUserId              String
+  createdByRole                UserRole
+  reason                       String   @db.VarChar(1000)
+  idempotencyKey               String
+  claimVersion                 DateTime
+  requestPayload               Json
+  requestHash                  String   @db.VarChar(64)
+  sourceHash                   String   @db.VarChar(64)
+  releaseId                    String
+  releasePolicyHash            String   @db.VarChar(64)
+  implementationArtifactSha256 String   @db.VarChar(64)
+  releaseSnapshot              Json
+  previewDigest                String   @db.VarChar(64)
+  expiresAt                    DateTime
+  createdAt                    DateTime @default(now())
+
+  organization        Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  claim               Claim                      @relation(fields: [claimId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  call                Call                       @relation(fields: [callId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  previousObservation ClaimObservation           @relation(fields: [previousObservationId, claimId, callId, organizationId], references: [id, claimId, callId, organizationId], onDelete: Restrict)
+  previousRun         InferenceRun               @relation("PreviousRegenerationRun", fields: [previousRunId, claimId, callId, organizationId, previousGeneration], references: [id, claimId, callId, organizationId, generation], onDelete: Restrict)
+  createdBy           User                       @relation(fields: [createdByUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  inferenceRun        InferenceRun?              @relation("RegenerationRun")
+  reviewNotifications ReviewNotificationIntent[]
+
+  @@unique([id, claimId, callId, organizationId, generation])
+  @@unique([organizationId, callId, generation])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, claimId, createdAt])
+}
+
+// A review records a biller's decision about evidence; it never updates claim/payment state.
+model ClaimObservationReview {
+  id                String                    @id @default(cuid())
+  organizationId    String
+  claimId           String
+  observationId     String                    @unique
+  reviewedByUserId  String
+  reviewedByRole    UserRole
+  decision          ObservationReviewDecision
+  note              String?                   @db.VarChar(1000)
+  observationDigest String                    @db.VarChar(64)
+  claimVersion      DateTime
+  reviewedAt        DateTime                  @default(now())
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  observation  ClaimObservation @relation(fields: [observationId, claimId, organizationId], references: [id, claimId, organizationId], onDelete: Restrict)
+  reviewedBy   User             @relation(fields: [reviewedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([observationId, claimId, organizationId])
+  @@index([organizationId, claimId, reviewedAt])
+}
+
 // PHI-relevant: rawTranscript + claudeSummary may contain patient
 // names, dates of service, and denial narrative. Multi-tenancy
 // enforcement is mandatory (P4-T1A, ADR-042).
 model CallSummary {
-  id              String       @id @default(cuid())
+  id              String     @id @default(cuid())
   organizationId  String
-  callId          String       @unique
+  callId          String     @unique
   claimStatus     String
   denialReason    String?
   denialCode      String?
@@ -242,15 +1293,17 @@ model CallSummary {
   repName         String?
   referenceNumber String?
   callbackDate    DateTime?
-  amountApproved  Decimal?     @db.Decimal(10, 2)
+  amountApproved  Decimal?   @db.Decimal(10, 2)
   notes           String?
-  rawTranscript   String       @db.Text
-  claudeSummary   String       @db.Text
-  createdAt       DateTime     @default(now())
+  rawTranscript   String     @db.Text
+  claudeSummary   String     @db.Text
+  createdAt       DateTime   @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  call         Call         @relation(fields: [callId], references: [id], onDelete: Cascade)
+  organization        Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  call                Call                       @relation(fields: [callId], references: [id], onDelete: Cascade)
+  reviewNotifications ReviewNotificationIntent[]
 
+  @@unique([id, callId, organizationId], map: "CallSummary_notification_binding_key")
   // Operator dashboards filter by org and order by recency. Index
   // serves both the org-scoped read path and the per-org SLO scan.
   @@index([organizationId, createdAt])
@@ -340,23 +1393,137 @@ model BillingUsageRecord {
 
 // ─── RetellWebhookEvent ───────────────────────────────────────────────────
 //
-// Replay-protection log for Retell webhook deliveries (P3-T17 / ADR-036).
-// Each inbound webhook lands here BEFORE its body affects any other table —
-// the unique `eventId` index turns a duplicate delivery (Retell retries on
-// 5xx; misconfigured proxies can fan-out a single event) into a failed
-// INSERT, which the route handler interprets as "already processed, return
-// 200 OK as a no-op."
+// Transactional provider inbox. A signed normalized payload can arrive before
+// the Call registration commits. processedAt, CallEvent, Call status and audit
+// commit together; payload is cleared once its tenant-bound event is persisted.
+// eventId is derived from documented provider lifecycle identity, not supplied
+// by Retell. Unmatched payload retention and account reconciliation need W2 ops.
 //
 // Intentionally NOT multi-tenant: webhooks arrive without org context and
 // the org is derived from the linked Call row at processing time. Keeping
 // the table flat avoids forcing the route into a synthetic `organizationId`
 // before it has located the Call.
 model RetellWebhookEvent {
-  id           String   @id @default(cuid())
-  eventId      String   @unique
-  retellCallId String?
-  eventType    String
-  receivedAt   DateTime @default(now())
+  id             String    @id @default(cuid())
+  eventId        String    @unique
+  retellCallId   String?
+  eventType      String
+  receivedAt     DateTime  @default(now())
+  // A provider-signed event can precede our Call row. Retain normalized
+  // evidence until tenant binding and all effects commit atomically.
+  payload        Json?
+  payloadHash    String?
+  processedAt    DateTime?
+  organizationId String?
 
   @@index([retellCallId])
+  @@index([retellCallId, processedAt])
+}
+
+// Durable, generic review alerts. Intent and payload never change; delivery is synthetic only.
+model ReviewNotificationIntent {
+  id                        String    @id @default(uuid()) @db.Uuid
+  organizationId            String
+  inferenceRunId            String
+  claimId                   String
+  callId                    String
+  generation                Int
+  sourceHash                String    @db.Char(64)
+  requestHash               String    @db.Char(64)
+  claimVersion              DateTime
+  resultingClaimVersion     DateTime
+  sourceMarkerAt            DateTime
+  purpose                   String    @db.VarChar(32)
+  observationId             String?
+  summaryId                 String?
+  regenerationId            String?
+  actorKind                 String    @db.VarChar(6)
+  actorUserId               String?
+  actorRole                 UserRole?
+  recipientUserId           String?
+  recipientRole             UserRole?
+  recipientEmail            String?   @db.VarChar(254)
+  recipientSelectionVersion String    @db.VarChar(32)
+  templateVersion           String    @db.VarChar(32)
+  payload                   Json?
+  payloadHash               String?   @db.Char(64)
+  deliveryKey               String    @unique @db.Uuid
+  createdAt                 DateTime  @default(now())
+
+  organization Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  inferenceRun InferenceRun                @relation(fields: [inferenceRunId, claimId, callId, organizationId, generation], references: [id, claimId, callId, organizationId, generation], onDelete: Restrict, onUpdate: Restrict)
+  observation  ClaimObservation?           @relation(fields: [observationId, claimId, callId, organizationId], references: [id, claimId, callId, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  summary      CallSummary?                @relation(fields: [summaryId, callId, organizationId], references: [id, callId, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  regeneration ObservationRegeneration?    @relation(fields: [regenerationId, claimId, callId, organizationId, generation], references: [id, claimId, callId, organizationId, generation], onDelete: Restrict, onUpdate: Restrict)
+  actor        User?                       @relation("NotificationActor", fields: [actorUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  recipient    User?                       @relation("NotificationRecipient", fields: [recipientUserId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  delivery     ReviewNotificationDelivery?
+  attempts     ReviewNotificationAttempt[]
+  receipts     ReviewNotificationReceipt[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, inferenceRunId, purpose], map: "ReviewNotificationIntent_purpose_key")
+  @@index([organizationId, createdAt, id])
+}
+
+model ReviewNotificationDelivery {
+  notificationId    String    @id @db.Uuid
+  organizationId    String
+  state             String    @db.VarChar(12)
+  reason            String?   @db.VarChar(32)
+  mode              String?   @db.VarChar(16)
+  attemptCount      Int       @default(0)
+  activeAttemptId   String?   @db.Uuid
+  leaseToken        String?   @db.Uuid
+  leaseExpiresAt    DateTime?
+  firstSubmissionAt DateTime?
+  retryDeadlineAt   DateTime?
+  availableAt       DateTime
+  ambiguous         Boolean   @default(false)
+  updatedAt         DateTime
+
+  notification ReviewNotificationIntent @relation(fields: [notificationId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([notificationId, organizationId])
+  @@index([organizationId, state, availableAt])
+}
+
+model ReviewNotificationAttempt {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String
+  notificationId String   @db.Uuid
+  attemptNumber  Int
+  mode           String   @db.VarChar(16)
+  deliveryKey    String   @db.Uuid
+  payloadHash    String   @db.Char(64)
+  leaseToken     String   @unique @db.Uuid
+  startedAt      DateTime
+  leaseExpiresAt DateTime
+
+  notification ReviewNotificationIntent   @relation(fields: [notificationId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  receipt      ReviewNotificationReceipt?
+
+  @@unique([id, organizationId, notificationId])
+  @@unique([notificationId, attemptNumber])
+  @@index([organizationId, startedAt])
+}
+
+model ReviewNotificationReceipt {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String
+  notificationId    String    @db.Uuid
+  attemptId         String    @unique @db.Uuid
+  outcome           String    @db.VarChar(9)
+  code              String?   @db.VarChar(32)
+  providerReceiptId String?   @db.VarChar(200)
+  acceptedAt        DateTime?
+  retryAfterMs      Int?
+  receiptHash       String    @db.Char(64)
+  completedAt       DateTime
+
+  notification ReviewNotificationIntent  @relation(fields: [notificationId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  attempt      ReviewNotificationAttempt @relation(fields: [attemptId, organizationId, notificationId], references: [id, organizationId, notificationId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([attemptId, organizationId, notificationId])
+  @@index([organizationId, completedAt])
 }

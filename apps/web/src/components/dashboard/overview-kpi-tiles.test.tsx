@@ -51,7 +51,11 @@ describe('<OverviewKpiTiles /> (P3-T25)', () => {
         callsToday: 0,
         queueDepth: 0,
         avgCallSeconds: null,
-        recoveredThisWeekCents: 0,
+        verifiedPayments: {
+          status: 'unavailable',
+          reason: 'PAYMENT_LEDGER_NOT_IMPLEMENTED',
+          amountCents: null,
+        },
       },
     });
   });
@@ -62,14 +66,21 @@ describe('<OverviewKpiTiles /> (P3-T25)', () => {
         callsToday: 17,
         queueDepth: 4,
         avgCallSeconds: 95,
-        recoveredThisWeekCents: 124350, // $1,243.50
+        verifiedPayments: {
+          status: 'unavailable',
+          reason: 'PAYMENT_LEDGER_NOT_IMPLEMENTED',
+          amountCents: null,
+        },
       },
     });
     renderTiles();
     await waitFor(() => expect(screen.getByText('17')).toBeInTheDocument());
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText(/1m 35s/)).toBeInTheDocument();
-    expect(screen.getByText(/\$1,244/)).toBeInTheDocument();
+    expect(screen.getByText('Verified payments')).toBeInTheDocument();
+    expect(screen.getByText('Unavailable: no reconciliation')).toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Recovered/)).not.toBeInTheDocument();
   });
 
   it('renders an em-dash for null avgCallSeconds (no calls in last 7 days)', async () => {
@@ -78,17 +89,33 @@ describe('<OverviewKpiTiles /> (P3-T25)', () => {
         callsToday: 0,
         queueDepth: 0,
         avgCallSeconds: null,
-        recoveredThisWeekCents: 0,
+        verifiedPayments: {
+          status: 'unavailable',
+          reason: 'PAYMENT_LEDGER_NOT_IMPLEMENTED',
+          amountCents: null,
+        },
       },
     });
     renderTiles();
     await waitFor(() => {
-      // After data lands, the avg tile should still show the dash but the
-      // recovered tile resolves to a $0-style currency string (Intl USD renders
-      // "$0" with no fraction since `maximumFractionDigits: 0`).
-      expect(screen.getByText(/\$0/)).toBeInTheDocument();
+      expect(screen.getByText('Unavailable: no reconciliation')).toBeInTheDocument();
     });
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('rejects the old financial contract instead of rendering an unsupported recovery amount', async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        callsToday: 2,
+        queueDepth: 0,
+        avgCallSeconds: 60,
+        recoveredThisWeekCents: 60000,
+      },
+    });
+    renderTiles();
+    expect(await screen.findByTestId('overview-kpi-error')).toBeInTheDocument();
+    expect(screen.queryByText(/\$600/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Recovered/)).not.toBeInTheDocument();
   });
 
   it('surfaces a friendly retry message under the strip when the request errors', async () => {
@@ -118,7 +145,11 @@ describe('<OverviewKpiTiles /> (P3-T25)', () => {
         callsToday: 1,
         queueDepth: 2,
         avgCallSeconds: 45,
-        recoveredThisWeekCents: 50000,
+        verifiedPayments: {
+          status: 'unavailable',
+          reason: 'PAYMENT_LEDGER_NOT_IMPLEMENTED',
+          amountCents: null,
+        },
       },
     });
     renderTiles();

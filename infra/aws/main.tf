@@ -55,6 +55,22 @@ variable "public_api_url" {
   default = "https://api.usedentabill.xyz"
 }
 
+variable "retell_webhook_api_key_secret_id" {
+  description = "Optional existing Secrets Manager secret ID/ARN containing only the Retell API key marked for webhooks (plain text, not JSON). Empty keeps webhooks disabled for the no-key demo."
+  type        = string
+  default     = ""
+  nullable    = false
+}
+
+variable "outbox_relay_schedule_enabled" {
+  description = "Enable the minute outbox recovery sweep only after deploying the outbox migration and worker code. Disabled by default; disabling stops new ticks, not invocations already accepted by Lambda."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
+data "aws_caller_identity" "current" {}
+
 locals {
   name     = "dentabill"
   platform = data.terraform_remote_state.platform.outputs
@@ -80,15 +96,20 @@ resource "random_password" "dob_hash" {
   special = false
 }
 
-resource "random_password" "retell_webhook" {
-  length  = 48
-  special = false
+# Retell signs with its webhook-designated account API key. Never generate
+# this credential: a random password cannot verify Retell's signatures.
+data "aws_secretsmanager_secret_version" "retell_webhook_api_key" {
+  count     = var.retell_webhook_api_key_secret_id == "" ? 0 : 1
+  secret_id = var.retell_webhook_api_key_secret_id
 }
 
 locals {
   clerk = jsondecode(data.aws_secretsmanager_secret_version.clerk.secret_string)
   # Small Prisma pool per Lambda instance; Aurora caps connections by ACU.
   database_url = "postgresql://dentabill_app:${random_password.db_role.result}@${local.platform.db_endpoint}:5432/dentabill?sslmode=require&connection_limit=3&pool_timeout=30&connect_timeout=30"
+  retell_webhook_env = var.retell_webhook_api_key_secret_id == "" ? {} : {
+    RETELL_WEBHOOK_SECRET = data.aws_secretsmanager_secret_version.retell_webhook_api_key[0].secret_string
+  }
 }
 
 resource "aws_secretsmanager_secret" "app" {
@@ -99,10 +120,9 @@ resource "aws_secretsmanager_secret" "app" {
 resource "aws_secretsmanager_secret_version" "app" {
   secret_id = aws_secretsmanager_secret.app.id
   secret_string = jsonencode({
-    DATABASE_URL          = local.database_url
-    DB_ROLE_PASSWORD      = random_password.db_role.result
-    DOB_HASH_SECRET       = random_password.dob_hash.result
-    RETELL_WEBHOOK_SECRET = random_password.retell_webhook.result
+    DATABASE_URL     = local.database_url
+    DB_ROLE_PASSWORD = random_password.db_role.result
+    DOB_HASH_SECRET  = random_password.dob_hash.result
   })
 }
 
@@ -218,7 +238,7 @@ resource "aws_lambda_function" "api" {
   }
 
   environment {
-    variables = merge(local.common_env, {
+    variables = merge(local.common_env, local.retell_webhook_env, {
       AWS_LAMBDA_EXEC_WRAPPER      = "/opt/bootstrap"
       AWS_LWA_PORT                 = "8080"
       AWS_LWA_INVOKE_MODE          = "response_stream"
@@ -229,7 +249,6 @@ resource "aws_lambda_function" "api" {
       CLERK_SECRET_KEY             = local.clerk.CLERK_SECRET_KEY
       CLERK_PUBLISHABLE_KEY        = local.clerk.CLERK_PUBLISHABLE_KEY
       DOB_HASH_SECRET              = random_password.dob_hash.result
-      RETELL_WEBHOOK_SECRET        = random_password.retell_webhook.result
     })
   }
 
@@ -276,6 +295,47 @@ resource "aws_lambda_event_source_mapping" "jobs" {
     maximum_concurrency = 5
   }
   depends_on = [aws_iam_role_policy.worker_sqs]
+}
+
+# ---------------------------------------------------------------- outbox recovery
+
+# Constant target input replaces the scheduled event. This worker has no
+# public Function URL; Lambda's resource policy is the invocation boundary.
+# https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Target.html
+# https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html
+resource "aws_cloudwatch_event_rule" "outbox_relay" {
+  name                = "${local.name}-outbox-relay"
+  description         = "Recover durable call and summary outbox rows (25 rows / 20 s per sweep)."
+  schedule_expression = "rate(1 minute)"
+  state               = var.outbox_relay_schedule_enabled ? "ENABLED" : "DISABLED"
+}
+
+resource "aws_lambda_permission" "outbox_relay" {
+  statement_id   = "AllowOutboxRelaySchedule"
+  action         = "lambda:InvokeFunction"
+  function_name  = aws_lambda_function.worker.function_name
+  principal      = "events.amazonaws.com"
+  source_arn     = aws_cloudwatch_event_rule.outbox_relay.arn
+  source_account = data.aws_caller_identity.current.account_id
+}
+
+resource "aws_cloudwatch_event_target" "outbox_relay" {
+  rule      = aws_cloudwatch_event_rule.outbox_relay.name
+  target_id = "outbox-relay-worker"
+  arn       = aws_lambda_function.worker.arn
+  input     = jsonencode({ type = "outbox.relay", version = 1 })
+
+  # A lost tick is recovered by the next sweep of durable rows. Do not build
+  # a backlog of stale ticks. Lambda async retries/duplicates are separate;
+  # the DB lease must still tolerate concurrent or repeated invocations.
+  # https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_RetryPolicy.html
+  # https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-error-handling.html
+  retry_policy {
+    maximum_event_age_in_seconds = 60
+    maximum_retry_attempts       = 0
+  }
+
+  depends_on = [aws_lambda_permission.outbox_relay, aws_iam_role_policy.worker_sqs]
 }
 
 # ---------------------------------------------------------------- edge

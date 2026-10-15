@@ -7,8 +7,12 @@ import {
   normaliseCodes,
   normaliseDate,
   normaliseDateOptional,
+  normaliseOpaqueId,
 } from './normalisers.js';
+import { CsvChildLimitError, MAX_IMPORT_CHILDREN, parseSourceDetails } from './source-details.js';
 import {
+  CsvRowLimitError,
+  MAX_IMPORT_ROWS,
   UnknownCsvFormatError,
   type CanonicalClaimRow,
   type CsvSource,
@@ -22,7 +26,7 @@ import {
  */
 const COLUMN_MAPS: Readonly<Record<CsvSource, Readonly<Record<string, ColumnRole>>>> = {
   DENTRIX: {
-    'patient id': 'patientId',
+    'patient id': 'sourcePatientId',
     dob: 'dob',
     'insurance carrier': 'carrier',
     'claim #': 'claimNumber',
@@ -30,13 +34,14 @@ const COLUMN_MAPS: Readonly<Record<CsvSource, Readonly<Record<string, ColumnRole
     charge: 'amount',
     'service date': 'serviceDate',
     'submission date': 'submittedDate',
-    // Dentrix doesn't always surface a subscriber-id column on every
-    // export layout; when missing we fall back to claimNumber at the
-    // call site. ADR-045.
     'subscriber id': 'subscriberId',
+    sourceclaimid: 'sourceClaimId',
+    sourceversion: 'sourceVersion',
+    claimlines: 'claimLines',
+    coverages: 'coverages',
   },
   EAGLESOFT: {
-    ptid: 'patientId',
+    ptid: 'sourcePatientId',
     ptbirthdate: 'dob',
     carrier: 'carrier',
     claimnum: 'claimNumber',
@@ -45,9 +50,13 @@ const COLUMN_MAPS: Readonly<Record<CsvSource, Readonly<Record<string, ColumnRole
     dos: 'serviceDate',
     submittedon: 'submittedDate',
     subscriberid: 'subscriberId',
+    sourceclaimid: 'sourceClaimId',
+    sourceversion: 'sourceVersion',
+    claimlines: 'claimLines',
+    coverages: 'coverages',
   },
   OPEN_DENTAL: {
-    patnum: 'patientId',
+    patnum: 'sourcePatientId',
     birthdate: 'dob',
     inscarrier: 'carrier',
     claimident: 'claimNumber',
@@ -56,11 +65,22 @@ const COLUMN_MAPS: Readonly<Record<CsvSource, Readonly<Record<string, ColumnRole
     procdate: 'serviceDate',
     datesent: 'submittedDate',
     subscriberid: 'subscriberId',
+    sourceclaimid: 'sourceClaimId',
+    // Open Dental's record key is ClaimNum; ClaimIdent remains only display/reference text.
+    claimnum: 'sourceClaimId',
+    sourceversion: 'sourceVersion',
+    claimlines: 'claimLines',
+    coverages: 'coverages',
+    secdatetedit: 'sourceVersion',
   },
 };
 
 type ColumnRole =
-  | 'patientId'
+  | 'sourcePatientId'
+  | 'sourceClaimId'
+  | 'sourceVersion'
+  | 'claimLines'
+  | 'coverages'
   | 'dob'
   | 'carrier'
   | 'claimNumber'
@@ -78,7 +98,13 @@ const CODE_SEPARATORS: Readonly<Record<CsvSource, readonly string[]>> = {
 
 const REQUIRED_FIELDS: readonly Exclude<
   ColumnRole,
-  'patientId' | 'submittedDate' | 'subscriberId'
+  | 'sourcePatientId'
+  | 'sourceClaimId'
+  | 'sourceVersion'
+  | 'submittedDate'
+  | 'subscriberId'
+  | 'claimLines'
+  | 'coverages'
 >[] = ['dob', 'carrier', 'claimNumber', 'cdtCodes', 'amount', 'serviceDate'];
 
 /**
@@ -92,38 +118,86 @@ const REQUIRED_FIELDS: readonly Exclude<
  * without losing the rows that did parse.
  */
 export function parseClaimsCSV(buffer: Buffer): ParseResult {
-  const text = buffer.toString('utf8');
-  const parsed = Papa.parse<Record<string, string>>(text, {
-    header: true,
-    skipEmptyLines: 'greedy',
-    transformHeader: (h) => h.trim(),
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+  } catch {
+    throw new UnknownCsvFormatError();
+  }
+  // Keep cells positional until headers are validated. Object-mode parsing can
+  // rename duplicate headers or overwrite an earlier identity column.
+  const parsed = Papa.parse<string[]>(text, {
+    header: false,
+    delimiter: ',',
+    // Papa's unquoted fast path splits the entire file before applying preview.
+    // Use record-wise parsing so blank floods cannot bypass the materialization bound.
+    fastMode: false,
+    // Papa's error.row counts blank records, so filtering them here would
+    // detach malformed-row errors from the returned positional data.
+    skipEmptyLines: false,
+    preview: MAX_IMPORT_ROWS + 2,
   });
-  const headers = parsed.meta.fields ?? [];
+  // A final line terminator produces one synthetic empty Papa record. It is
+  // not another data row; all actual blank logical records still count.
+  const last = parsed.data.at(-1);
+  if (!parsed.meta.truncated && /[\r\n]$/.test(text) && last?.length === 1 && last[0] === '')
+    parsed.data.pop();
+  if (parsed.meta.truncated || parsed.data.length > MAX_IMPORT_ROWS + 1)
+    throw new CsvRowLimitError();
+  const empty = (cells: readonly string[]): boolean => cells.every((cell) => !cell.trim());
+  const headerIndex = parsed.data.findIndex((cells) => !empty(cells));
+  const headers = (parsed.data[headerIndex] ?? []).map((header) => header.trim());
+  const normalisedHeaders = headers.map((header) => header.toLowerCase());
+  if (
+    headers.some((header) => !header) ||
+    new Set(normalisedHeaders).size !== headers.length ||
+    parsed.errors.some((error) => error.row === undefined || error.row <= headerIndex)
+  )
+    throw new UnknownCsvFormatError();
   const source = detectCsvSource(headers);
-  if (!source) throw new UnknownCsvFormatError(headers);
+  if (!source) throw new UnknownCsvFormatError();
 
   const map = COLUMN_MAPS[source];
-  // Build a lookup from role -> the *exact* original header text so
-  // we can pull the value out of each row by key.
-  const roleToHeader: Partial<Record<ColumnRole, string>> = {};
-  for (const header of headers) {
-    const role = map[header.trim().toLowerCase()];
-    if (role) roleToHeader[role] = header;
-  }
+  const roleToColumn: Partial<Record<ColumnRole, number>> = {};
+  headers.forEach((header, index) => {
+    const role = map[header.toLowerCase()];
+    if (role) {
+      if (roleToColumn[role] !== undefined) throw new UnknownCsvFormatError();
+      roleToColumn[role] = index;
+    }
+  });
   for (const required of REQUIRED_FIELDS) {
-    if (!roleToHeader[required]) {
-      throw new UnknownCsvFormatError(headers);
+    if (roleToColumn[required] === undefined) {
+      throw new UnknownCsvFormatError();
     }
   }
 
   const rows: CanonicalClaimRow[] = [];
+  let childCount = 0;
   const errors: ParseRowError[] = [];
 
-  parsed.data.forEach((raw, idx) => {
-    const rowIndex = idx + 2; // +1 for header, +1 to make 1-based
+  const malformedRecords = new Set(parsed.errors.map((error) => error.row));
+  parsed.data.forEach((cells, idx) => {
+    if (idx <= headerIndex || (empty(cells) && !malformedRecords.has(idx))) return;
+    const rowIndex = idx + 1; // Record index including the header and blanks, 1-based.
+    if (cells.length !== headers.length || malformedRecords.has(idx)) {
+      errors.push({ rowIndex, message: 'CSV row: malformed record or incorrect column count' });
+      return;
+    }
     try {
-      rows.push(normaliseRow({ raw, rowIndex, source, roleToHeader }));
+      const row = normaliseRow({
+        cells,
+        headers: normalisedHeaders,
+        rowIndex,
+        source,
+        roleToColumn,
+      });
+      childCount +=
+        (row.sourceDetails?.lines.length ?? 0) + (row.sourceDetails?.coverages.length ?? 0);
+      if (childCount > MAX_IMPORT_CHILDREN) throw new CsvChildLimitError();
+      rows.push(row);
     } catch (err) {
+      if (err instanceof CsvChildLimitError) throw err;
       errors.push({
         rowIndex,
         message: err instanceof Error ? err.message : 'Unknown parse error',
@@ -135,28 +209,36 @@ export function parseClaimsCSV(buffer: Buffer): ParseResult {
 }
 
 function normaliseRow(args: {
-  readonly raw: Record<string, string>;
+  readonly cells: readonly string[];
+  readonly headers: readonly string[];
   readonly rowIndex: number;
   readonly source: CsvSource;
-  readonly roleToHeader: Partial<Record<ColumnRole, string>>;
+  readonly roleToColumn: Partial<Record<ColumnRole, number>>;
 }): CanonicalClaimRow {
-  const { raw, rowIndex, source, roleToHeader } = args;
+  const { cells, headers, rowIndex, source, roleToColumn } = args;
 
   const get = (role: ColumnRole): string => {
-    const header = roleToHeader[role];
-    if (!header) throw new Error(`internal: missing header for role ${role}`);
-    const value = raw[header];
-    return typeof value === 'string' ? value : '';
+    const column = roleToColumn[role];
+    return column === undefined ? '' : (cells[column] ?? '');
   };
 
   const dob = normaliseDate(get('dob'), 'patient DOB');
-  const claimNumber = get('claimNumber').trim();
-  if (claimNumber.length === 0) throw new Error('claimNumber: empty');
+  const claimNumber = normaliseOpaqueId(get('claimNumber'), 'claimNumber');
+  if (!claimNumber) throw new Error('claimNumber: empty');
+  const sourceClaimId = normaliseOpaqueId(get('sourceClaimId'), 'sourceClaimId');
+  const sourceVersion = normaliseOpaqueId(get('sourceVersion'), 'sourceVersion');
+  const sourcePatientId = normaliseOpaqueId(get('sourcePatientId'), 'sourcePatientId');
 
   const cdtCodes = normaliseCodes(get('cdtCodes'), CODE_SEPARATORS[source]);
   if (cdtCodes.length === 0) throw new Error('cdtCodes: empty');
 
   const claimAmount = normaliseAmount(get('amount'), 'claimAmount');
+  const sourceDetails = parseSourceDetails(
+    get('claimLines'),
+    get('coverages'),
+    claimAmount,
+    cdtCodes,
+  );
   const serviceDate = normaliseDate(get('serviceDate'), 'serviceDate');
   const submittedDate = normaliseDateOptional(get('submittedDate'), 'submittedDate');
 
@@ -164,22 +246,31 @@ function normaliseRow(args: {
   const payer = resolvePayerCode(carrierRaw);
 
   // Subscriber ID is optional — Dentrix layouts often omit it. Empty
-  // string and absent header both normalise to null so downstream
-  // can do `subscriberId ?? claimNumber` without an extra check.
-  const subscriberHeader = roleToHeader.subscriberId;
-  const subscriberRaw = subscriberHeader ? (raw[subscriberHeader] ?? '').trim() : '';
-  const subscriberId = subscriberRaw.length > 0 ? subscriberRaw : null;
+  // string and absent header both normalise to null; outbound calls
+  // remain blocked until the missing subscriber identity is supplied.
+  const subscriberId = normaliseOpaqueId(get('subscriberId'), 'subscriberId');
+  // Domain normalization intentionally drops or changes some exported fields.
+  // Keep every exact cell transiently so keyed comparison detects source edits
+  // without storing those cells or treating normalization as evidence of equality.
+  const sourceFields = headers
+    .map((header, index) => [header, cells[index] ?? ''] as const)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
 
   return {
     rowIndex,
     patientDOB: dob,
     claimNumber,
+    sourceClaimId,
+    sourceVersion,
+    sourcePatientId,
+    sourceFields,
+    sourceDetails,
     claimAmount,
     cdtCodes,
     serviceDate,
     submittedDate,
     subscriberId,
     payerCode: payer.code,
-    payerLabel: payer.label,
+    payerLabel: carrierRaw,
   };
 }

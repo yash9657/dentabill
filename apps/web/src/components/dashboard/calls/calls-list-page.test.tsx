@@ -65,6 +65,8 @@ describe('<CallsListPage /> (P3-T24)', () => {
             endedAt: null,
             durationSeconds: null,
             dlqReason: null,
+            cancelRequestedAt: null,
+            monitoring: null,
             createdAt: '2026-04-29T10:00:00.000Z',
           },
         ],

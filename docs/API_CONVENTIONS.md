@@ -125,7 +125,8 @@ side effect**:
 
 Provider headers:
 
-- Retell: `Retell-Signature`, secret in `RETELL_WEBHOOK_SECRET`.
+- Retell: `X-Retell-Signature`; `RETELL_WEBHOOK_SECRET` contains the Retell API key
+  marked for webhooks in its dashboard (not a generated signing secret).
 - Stripe: `Stripe-Signature`, secret in `STRIPE_WEBHOOK_SECRET`.
 
 Always log the verification outcome (success/failure) — that is _not_ PHI.

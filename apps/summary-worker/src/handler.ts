@@ -1,45 +1,41 @@
-import { audit, getOrgScopedDb, type CallEvent, type NextAction, type prisma } from '@dentabill/db';
+import { createHash } from 'node:crypto';
+
+import {
+  audit,
+  reserveInferenceRun,
+  beginInferenceAttempt,
+  saveInferenceReceipt,
+  markInferenceApplied,
+  markInferenceReviewed,
+  enqueueReviewNotification,
+  getOrgScopedDb,
+  type ClaimStatus,
+  type InferenceRun,
+  type NextAction,
+  type prisma,
+} from '@dentabill/db';
 import type { Logger } from '@dentabill/logger';
-import type { NotifierPort, TemplateName, TemplateVars } from '@dentabill/notifier';
+import { isKnownDenialCode } from '@dentabill/payer-ivr';
 import { SummaryJobDataSchema, type SummaryJobData, type SummaryJobResult } from '@dentabill/queue';
 import {
   SummaryValidationError,
+  SummaryOutputSchema,
   type SummarizerPort,
   type SummarizeInput,
 } from '@dentabill/summarizer';
+import { selectCallTranscript } from '@dentabill/types';
 import type { Job } from 'bullmq';
 import type { Redis } from 'ioredis';
+import { z } from 'zod';
 
-import { billingDayUtc, type CostGuard, createRedisCostGuard } from './cost-guard.js';
+import { billingDayUtc, type CostGuard } from './cost-guard.js';
 import type { SummaryWorkerEnv } from './env.js';
+import { createObservationJobHandler, type ObservationJobConfig } from './observation-handler.js';
+import { SummaryInferenceBusyError } from './summary-errors.js';
 
-/**
- * Job handler for `summary.generate`.
- *
- * High level:
- *   1. Validate the job payload (defence-in-depth — the call-worker
- *      already validated at enqueue, but the queue is a trust
- *      boundary).
- *   2. Acquire the per-org Redis cost-guard lock; on contention, throw
- *      so BullMQ retries with backoff.
- *   3. Inside the lock: read `Organization.summaryTokensUsed`. If the
- *      org is over budget, audit `summary.budget_exceeded` and return
- *      without calling Claude.
- *   4. Load the Call + transcript turns via `getOrgScopedDb`.
- *   5. Invoke `SummarizerPort.summarize`.
- *   6. Persist the `CallSummary` row. Schema rejection from
- *      `SummaryValidationError` routes Claim → MANUAL_REVIEW + audit
- *      `summary.dlq` (returned outcome `DLQ`).
- *   7. Apply transition policy:
- *        - `SUMMARIZER_AUTO_TRANSITION_ENABLED` env OFF → MANUAL_REVIEW.
- *        - `confidence < 0.95` → MANUAL_REVIEW.
- *        - `nextAction in {RESOLVED, NEEDS_INFO}` → flip Claim.
- *        - Anything else → MANUAL_REVIEW.
- *      The Claim transition writes one `claim.transition` audit row.
- *   8. Update `Organization.summaryTokensUsed += tokensUsed` (still
- *      inside the lock window).
- *   9. Release the lock.
- */
+export { SummaryInferenceBusyError } from './summary-errors.js';
+
+/** Inference ownership and usage commit before the separately retryable summary application. */
 
 export type DbClient = typeof prisma;
 
@@ -47,212 +43,420 @@ export interface SummaryHandlerDeps {
   readonly logger: Logger;
   readonly prisma: DbClient;
   /**
-   * Redis for the per-org cost-guard lock. Ignored when `costGuard` is
-   * given; one of the two is required.
+   * Legacy wiring compatibility only; inference ownership is always stored in Postgres.
    */
   readonly redis?: Redis;
-  /** Explicit cost-guard mutex (ADR-053) — e.g. the in-memory one when there is no Redis. */
+  /** Legacy wiring compatibility only; no process or Redis lock governs inference. */
   readonly costGuard?: CostGuard;
   readonly summarizer: SummarizerPort;
   readonly env: SummaryWorkerEnv;
+  readonly observationConfig?: ObservationJobConfig;
   readonly clock?: () => Date;
-  /**
-   * Optional notifier — when present, the handler dispatches a
-   * post-resolution event to the operator. Phase 4 wires FakeResend
-   * (which only logs to memory); the live adapter ships in 4.5. The
-   * notifier is intentionally optional: a misconfigured org without an
-   * outbound mailbox should still get summaries persisted, just no
-   * email.
-   */
-  readonly notifier?: NotifierPort;
-  /**
-   * Recipient resolver — given an org id, return the email to notify.
-   * Defaults to "skip notification" so the handler stays usable in
-   * tests that don't care.
-   */
-  readonly resolveRecipient?: (organizationId: string) => Promise<string | null>;
 }
 
 export type SummaryJobLike = Pick<Job<SummaryJobData, SummaryJobResult>, 'id' | 'data'>;
 
 export type SummaryHandler = (job: SummaryJobLike) => Promise<SummaryJobResult>;
 
-const AUTO_TRANSITION_ACTIONS: ReadonlySet<NextAction> = new Set<NextAction>([
-  'RESOLVED',
-  'CALL_BACK', // benign re-poll
-  'SUBMIT_DOCS',
-]);
+const SUMMARY_ELIGIBLE_STATUSES: ReadonlySet<ClaimStatus> = new Set(['COMPLETED', 'DENIED']);
 
 const MIN_AUTO_CONFIDENCE = 0.95;
 
+const CapturedRequestSchema = z
+  .object({
+    claim: z
+      .object({
+        id: z.string().min(1),
+        status: z.enum([
+          'PENDING',
+          'IN_QUEUE',
+          'CALLING',
+          'COMPLETED',
+          'DENIED',
+          'NEEDS_INFO',
+          'APPEALING',
+          'RESOLVED',
+          'WRITTEN_OFF',
+          'FAILED',
+          'MANUAL_REVIEW',
+        ]),
+        updatedAt: z.string().datetime(),
+        claimNumber: z.string(),
+        payerCode: z.string(),
+        serviceDate: z.string().datetime(),
+      })
+      .strict(),
+    call: z
+      .object({ id: z.string(), createdAt: z.string().datetime(), rawTranscript: z.string() })
+      .strict(),
+    input: z
+      .object({
+        organizationId: z.string(),
+        callId: z.string(),
+        payerCode: z.string(),
+        promptVersion: z.string(),
+        transcriptTurns: z.array(
+          z
+            .object({
+              role: z.enum(['agent', 'representative', 'system', 'remote', 'source']),
+              text: z.string(),
+              timestamp: z.string().datetime(),
+            })
+            .strict(),
+        ),
+      })
+      .strict(),
+  })
+  .strict();
+const SavedResultSchema = z
+  .object({
+    summary: SummaryOutputSchema,
+    tokensUsed: z.number().int().nonnegative().nullable(),
+    promptVersion: z.string(),
+    model: z.string(),
+  })
+  .strict();
+const hash = (value: unknown): string =>
+  createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const knownTokens = (value: unknown): number | null => {
+  if (typeof value === 'bigint')
+    return value >= 0n && value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : null;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+};
+
 export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandler {
+  const synthetic = createSyntheticSummaryJobHandler(deps);
+  const native = createObservationJobHandler(deps);
+  return async (job) => {
+    const parsed = SummaryJobDataSchema.safeParse(job.data);
+    if (!parsed.success)
+      return { summaryId: null, outcome: 'DLQ', tokensUsed: 0, promptVersion: 'unknown' };
+    const { organizationId, callId } = parsed.data;
+    const run = await deps.prisma.inferenceRun.findFirst({
+      where: { organizationId, callId, generation: 1 },
+      select: { provider: true },
+    });
+    if (!run) {
+      const summary = await deps.prisma.callSummary.findFirst({
+        where: { organizationId, callId },
+        select: { id: true },
+      });
+      if (summary)
+        return {
+          summaryId: summary.id,
+          outcome: 'ALREADY_PROCESSED',
+          tokensUsed: 0,
+          promptVersion: parsed.data.promptVersion,
+        };
+    }
+    return (run?.provider ?? deps.env.SUMMARY_ANALYSIS_PROVIDER) === 'FIREWORKS'
+      ? native(job)
+      : synthetic(job);
+  };
+}
+
+function createSyntheticSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandler {
   const clock = deps.clock ?? ((): Date => new Date());
-  const costGuard = deps.costGuard ?? (deps.redis ? createRedisCostGuard(deps.redis) : undefined);
-  if (!costGuard) {
-    throw new Error('createSummaryJobHandler: either `costGuard` or `redis` is required');
-  }
   return async function handle(job: SummaryJobLike): Promise<SummaryJobResult> {
     const validated = SummaryJobDataSchema.safeParse(job.data);
-    if (!validated.success) {
-      // Validation failure at the trust boundary is unrecoverable — do
-      // NOT throw (BullMQ would retry the same garbage). Audit and
-      // return DLQ so the job marks completed and we have a record.
-      deps.logger.error(
-        { jobId: job.id, issues: validated.error.issues },
-        'summary-worker: invalid job payload — routing to DLQ',
-      );
-      return {
-        summaryId: null,
-        outcome: 'DLQ',
-        tokensUsed: 0,
-        promptVersion: 'unknown',
-      };
-    }
+    if (!validated.success)
+      return { summaryId: null, outcome: 'DLQ', tokensUsed: 0, promptVersion: 'unknown' };
     const data = validated.data;
+    const result = (
+      outcome: SummaryJobResult['outcome'],
+      tokensUsed: number | null = 0,
+    ): SummaryJobResult => ({
+      summaryId: null,
+      outcome,
+      tokensUsed,
+      promptVersion: data.promptVersion,
+    });
     const billingDay = billingDayUtc(clock());
-
-    const lock = await costGuard.tryAcquire(data.organizationId, billingDay);
-    if (!lock) {
-      // Another worker holds the org's budget mutex. Throwing makes
-      // BullMQ requeue with backoff — this is rate-limiting, not a
-      // failure. The retry budget covers contention windows up to
-      // several minutes.
-      throw new Error(
-        `cost-guard lock contention for org=${data.organizationId} day=${billingDay}`,
-      );
-    }
-
-    try {
-      const tokensBudget = deps.env.SUMMARIZER_DAILY_TOKEN_BUDGET;
-      const org = await deps.prisma.organization.findUnique({
-        where: { id: data.organizationId },
-        select: { id: true, summaryTokensUsed: true, summaryTokensResetAt: true },
+    const orgScoped = getOrgScopedDb(data.organizationId);
+    const existingSummary = await orgScoped.callSummary.findFirst({
+      where: { callId: data.callId },
+    });
+    if (existingSummary) return { ...result('ALREADY_PROCESSED'), summaryId: existingSummary.id };
+    const existingRun = await deps.prisma.inferenceRun.findFirst({
+      where: { organizationId: data.organizationId, callId: data.callId, generation: 1 },
+    });
+    if (
+      existingRun &&
+      (existingRun.provider !== 'SYNTHETIC' || existingRun.releaseId !== 'synthetic-summary.v1')
+    )
+      throw new SummaryInferenceBusyError();
+    if (
+      deps.summarizer.inference.provider !== 'SYNTHETIC' ||
+      deps.summarizer.inference.releaseId !== 'synthetic-summary.v1'
+    )
+      return result('PROVIDER_DISABLED');
+    let captured: z.infer<typeof CapturedRequestSchema>;
+    if (existingRun) {
+      await audit({
+        action: 'inference.snapshot.read',
+        resourceType: 'InferenceRun',
+        resourceId: existingRun.id,
+        organizationId: data.organizationId,
+        metadata: { callId: data.callId, generation: existingRun.generation },
       });
-      if (!org) {
-        deps.logger.error(
-          { jobId: job.id, organizationId: data.organizationId },
-          'summary-worker: organization not found — routing to DLQ',
-        );
-        return {
-          summaryId: null,
-          outcome: 'DLQ',
-          tokensUsed: 0,
-          promptVersion: data.promptVersion,
-        };
-      }
-
-      // Reset window — if the saved reset day is older than today, zero
-      // the counter before applying the budget check.
-      const tokensAlreadyUsed = isStaleResetDay(org.summaryTokensResetAt, billingDay)
-        ? 0
-        : org.summaryTokensUsed;
-      if (tokensAlreadyUsed >= tokensBudget) {
-        await audit({
-          action: 'summary.budget_exceeded',
-          resourceType: 'Organization',
-          resourceId: org.id,
-          organizationId: org.id,
-          metadata: { billingDay, tokensUsed: tokensAlreadyUsed, tokensBudget },
-        });
-        return {
-          summaryId: null,
-          outcome: 'BUDGET_EXCEEDED',
-          tokensUsed: 0,
-          promptVersion: data.promptVersion,
-        };
-      }
-
-      // Multi-tenant load: the read-scope extension forces
-      // organizationId on every query — even a buggy or forged
-      // job payload can't cross orgs.
-      const orgScoped = getOrgScopedDb(data.organizationId);
+      const parsed = CapturedRequestSchema.safeParse(existingRun.requestPayload);
+      if (
+        !parsed.success ||
+        parsed.data.input.organizationId !== data.organizationId ||
+        parsed.data.call.id !== data.callId ||
+        parsed.data.input.callId !== data.callId ||
+        parsed.data.claim.id !== existingRun.claimId
+      )
+        throw new Error('SUMMARY_SAVED_REQUEST_INVALID');
+      captured = parsed.data;
+    } else {
       const call = await orgScoped.call.findFirst({ where: { id: data.callId } });
-      if (!call) {
-        deps.logger.error(
-          { jobId: job.id, callId: data.callId },
-          'summary-worker: call not found within org scope — routing to DLQ',
-        );
-        return {
-          summaryId: null,
-          outcome: 'DLQ',
-          tokensUsed: 0,
-          promptVersion: data.promptVersion,
-        };
-      }
-
+      if (!call) return result('DLQ');
+      if (!['COMPLETED', 'FAILED', 'VOICEMAIL'].includes(call.status))
+        return result('CALL_NOT_TERMINAL');
       const events = await deps.prisma.callEvent.findMany({
-        where: { callId: call.id },
-        orderBy: { timestamp: 'asc' },
+        where: { callId: call.id, call: { organizationId: data.organizationId } },
+        orderBy: [{ timestamp: 'asc' }, { id: 'asc' }],
       });
-      const transcriptTurns = transcriptFromEvents(events);
-
-      // PHI read — the events contain transcript text. Audit the read
-      // before any further processing so a downstream throw still
-      // leaves a trail.
+      const transcript = selectCallTranscript(events);
       await audit({
         action: 'callSummary.generate.read',
         resourceType: 'Call',
         resourceId: call.id,
         organizationId: data.organizationId,
-        metadata: { transcriptTurnCount: transcriptTurns.length, jobId: job.id ?? null },
+        metadata: { transcriptTurnCount: transcript.turns.length, jobId: job.id ?? null },
       });
-
-      // Guard: the call must have a payerCode-bearing Claim in scope.
+      if (
+        transcript.kind === 'provisional' ||
+        transcript.kind === 'unavailable' ||
+        !transcript.turns.some((turn) => turn.text.trim().length > 0)
+      )
+        return result('TRANSCRIPT_UNAVAILABLE');
       const claim = await orgScoped.claim.findFirst({ where: { id: call.claimId } });
-      if (!claim) {
-        deps.logger.error(
-          { jobId: job.id, callId: call.id },
-          'summary-worker: claim missing — routing to DLQ',
-        );
-        return {
-          summaryId: null,
-          outcome: 'DLQ',
-          tokensUsed: 0,
-          promptVersion: data.promptVersion,
-        };
-      }
-
-      let summarizeResult;
-      try {
-        const input: SummarizeInput = {
+      if (!claim) return result('DLQ');
+      captured = CapturedRequestSchema.parse({
+        claim: {
+          id: claim.id,
+          status: claim.status,
+          updatedAt: claim.updatedAt.toISOString(),
+          claimNumber: claim.claimNumber,
+          payerCode: claim.payerCode,
+          serviceDate: claim.serviceDate.toISOString(),
+        },
+        call: {
+          id: call.id,
+          createdAt: call.createdAt.toISOString(),
+          rawTranscript:
+            transcript.rawText ??
+            transcript.turns.map((turn) => `[${turn.role}] ${turn.text}`).join('\n'),
+        },
+        input: {
           organizationId: data.organizationId,
           callId: call.id,
           payerCode: claim.payerCode,
           promptVersion: data.promptVersion,
-          transcriptTurns,
-        };
-        summarizeResult = await deps.summarizer.summarize(input);
-      } catch (err) {
-        if (err instanceof SummaryValidationError) {
-          await audit({
-            action: 'summary.dlq',
+          transcriptTurns: transcript.turns.map((turn) => ({
+            role: turn.role,
+            text: turn.text,
+            timestamp: turn.observedAt.toISOString(),
+          })),
+        },
+      });
+    }
+    const claim = {
+      ...captured.claim,
+      updatedAt: new Date(captured.claim.updatedAt),
+      serviceDate: new Date(captured.claim.serviceDate),
+    };
+    const call = { ...captured.call, createdAt: new Date(captured.call.createdAt) };
+    const applyInferenceReview = async (run: InferenceRun): Promise<void> => {
+      await deps.prisma.$transaction(async (tx) => {
+        const organizations = await tx.$queryRaw<{ id: string }[]>`
+          SELECT "id" FROM "Organization" WHERE "id" = ${data.organizationId} FOR NO KEY UPDATE
+        `;
+        if (organizations.length !== 1) throw new Error('SUMMARY_ORGANIZATION_MISSING');
+        const currentRun = await tx.inferenceRun.findFirstOrThrow({
+          where: { id: run.id, organizationId: data.organizationId },
+        });
+        if (currentRun.reviewAppliedAt) return;
+        const transition = SUMMARY_ELIGIBLE_STATUSES.has(claim.status)
+          ? await tx.claim.updateMany({
+              where: summaryTransitionWhere(claim, call, data.organizationId),
+              data: { status: 'MANUAL_REVIEW' },
+            })
+          : { count: 0 };
+        await audit(
+          {
+            action: run.state === 'REJECTED' ? 'summary.dlq' : 'summary.inference_review_required',
             resourceType: 'Call',
             resourceId: call.id,
             organizationId: data.organizationId,
             metadata: {
-              jobId: job.id ?? null,
-              issues: err.issues.map((i) => `${i.path}: ${i.message}`),
+              runId: run.id,
+              code: run.lastErrorCode,
+              transitionApplied: transition.count === 1,
             },
-          });
-          // Force the Claim into MANUAL_REVIEW so the operator picks
-          // it up — never auto-decision when validation failed.
-          await deps.prisma.claim.updateMany({
-            where: { id: claim.id, organizationId: data.organizationId },
-            data: { status: 'MANUAL_REVIEW' },
-          });
-          return {
-            summaryId: null,
-            outcome: 'DLQ',
-            tokensUsed: 0,
-            promptVersion: data.promptVersion,
-          };
-        }
-        throw err;
+          },
+          tx,
+        );
+        await markInferenceReviewed(tx, {
+          organizationId: data.organizationId,
+          runId: run.id,
+          now: clock(),
+        });
+      });
+    };
+    const reservationTokens =
+      Buffer.byteLength(JSON.stringify(captured), 'utf8') * 2 +
+      deps.env.SUMMARIZER_MAX_OUTPUT_TOKENS;
+    const reservationInput = {
+      organizationId: data.organizationId,
+      callId: call.id,
+      claimId: claim.id,
+      claimVersion: claim.updatedAt,
+      sourceHash: hash({
+        rawTranscript: call.rawTranscript,
+        turns: captured.input.transcriptTurns,
+      }),
+      requestHash: hash({
+        provider: 'SYNTHETIC',
+        releaseId: deps.summarizer.inference.releaseId,
+        captured,
+      }),
+      provider: 'SYNTHETIC' as const,
+      releaseId: deps.summarizer.inference.releaseId,
+      promptVersion: captured.input.promptVersion,
+      requestPayload: captured,
+      reservationTokens,
+      dailyTokenLimit: deps.env.SUMMARIZER_DAILY_TOKEN_BUDGET,
+    };
+    let reservation = await reserveInferenceRun(deps.prisma, {
+      ...reservationInput,
+      now: clock(),
+    });
+    if (reservation.kind === 'BUSY') throw new SummaryInferenceBusyError();
+    if (reservation.kind === 'BUDGET_EXCEEDED') {
+      await audit({
+        action: 'summary.budget_exceeded',
+        resourceType: 'Organization',
+        resourceId: data.organizationId,
+        organizationId: data.organizationId,
+        metadata: { billingDay, tokensBudget: deps.env.SUMMARIZER_DAILY_TOKEN_BUDGET },
+      });
+      return result('BUDGET_EXCEEDED');
+    }
+    if (reservation.kind === 'NOT_FOUND') return result('DLQ');
+    if (reservation.kind === 'ALREADY_APPLIED')
+      return { ...result('ALREADY_PROCESSED'), summaryId: reservation.run?.summaryId ?? null };
+    if (reservation.kind === 'REVIEW_REQUIRED') {
+      if (!reservation.run) throw new Error('SUMMARY_REVIEW_RUN_MISSING');
+      await applyInferenceReview(reservation.run);
+      return result('INFERENCE_REVIEW_REQUIRED', knownTokens(reservation.run.totalTokens));
+    }
+    if (reservation.kind === 'OWNED') {
+      if (
+        !(await beginInferenceAttempt(deps.prisma, {
+          organizationId: data.organizationId,
+          runId: reservation.run.id,
+          leaseToken: reservation.leaseToken,
+          now: clock(),
+        }))
+      )
+        throw new SummaryInferenceBusyError();
+      const receiptIdentity = {
+        organizationId: data.organizationId,
+        runId: reservation.run.id,
+        leaseToken: reservation.leaseToken,
+      };
+      let invocation;
+      try {
+        const input: SummarizeInput = {
+          ...captured.input,
+          transcriptTurns: captured.input.transcriptTurns.map((turn) => ({
+            ...turn,
+            timestamp: new Date(turn.timestamp),
+          })),
+        };
+        invocation = await deps.summarizer.summarize(input);
+      } catch (error) {
+        const usage =
+          error instanceof SummaryValidationError ? knownTokens(error.tokensUsed) : null;
+        const receipt = await saveInferenceReceipt(deps.prisma, {
+          ...receiptIdentity,
+          outcome: error instanceof SummaryValidationError ? 'REJECTED' : 'UNKNOWN',
+          resultPayload: null,
+          tokensUsed: usage,
+          errorCode:
+            error instanceof SummaryValidationError ? 'OUTPUT_SCHEMA_INVALID' : 'PROVIDER_ERROR',
+          now: clock(),
+        });
+        await applyInferenceReview(receipt);
+        if (!(error instanceof SummaryValidationError))
+          return result('INFERENCE_REVIEW_REQUIRED', null);
+        return result('DLQ', usage);
       }
+      const usage = knownTokens(invocation.tokensUsed);
+      const parsed = SavedResultSchema.safeParse({ ...invocation, tokensUsed: usage });
+      if (
+        !parsed.success ||
+        invocation.promptVersion !== captured.input.promptVersion ||
+        usage === null ||
+        BigInt(usage) > reservation.run.tokenAllowance
+      ) {
+        const errorCode =
+          usage === null
+            ? 'USAGE_UNKNOWN'
+            : BigInt(usage) > reservation.run.tokenAllowance
+              ? 'TOKEN_BOUND_EXCEEDED'
+              : 'OUTPUT_SCHEMA_INVALID';
+        const receipt = await saveInferenceReceipt(deps.prisma, {
+          ...receiptIdentity,
+          outcome: usage === null ? 'UNKNOWN' : 'REJECTED',
+          resultPayload: null,
+          tokensUsed: usage,
+          errorCode,
+          now: clock(),
+        });
+        await applyInferenceReview(receipt);
+        if (usage === null) return result('INFERENCE_REVIEW_REQUIRED', null);
+        return result('DLQ', usage);
+      }
+      await saveInferenceReceipt(deps.prisma, {
+        ...receiptIdentity,
+        outcome: 'VALIDATED',
+        resultPayload: parsed.data,
+        tokensUsed: usage,
+        errorCode: null,
+        now: clock(),
+      });
+      reservation = await reserveInferenceRun(deps.prisma, { ...reservationInput, now: clock() });
+      if (reservation.kind === 'ALREADY_APPLIED')
+        return { ...result('ALREADY_PROCESSED'), summaryId: reservation.run?.summaryId ?? null };
+    }
+    if (reservation.kind !== 'RESUME') throw new SummaryInferenceBusyError();
+    const saved = SavedResultSchema.safeParse(reservation.run.resultPayload);
+    if (!saved.success) throw new Error('SUMMARY_SAVED_RESULT_INVALID');
+    const summarizeResult = saved.data;
+    const applicationOwnership = {
+      runId: reservation.run.id,
+      leaseToken: reservation.leaseToken,
+    };
+    const policy = applyTransitionPolicy({
+      autoTransitionEnabled: deps.env.SUMMARIZER_AUTO_TRANSITION_ENABLED,
+      confidence: summarizeResult.summary.confidence,
+      nextAction: summarizeResult.summary.nextAction,
+      currentStatus: claim.status,
+      denialCode: summarizeResult.summary.denialCode,
+    });
 
-      // Persist the CallSummary. The org-scope write middleware enforces
-      // organizationId presence; we pass it explicitly.
-      const summary = await deps.prisma.callSummary.create({
+    // Receipt/usage already committed; only application and its effects share this transaction.
+    const { summary, transitionApplied } = await deps.prisma.$transaction(async (tx) => {
+      // Match ledger/review lock order before child inserts or claim updates.
+      const organizations = await tx.$queryRaw<{ id: string }[]>`
+        SELECT "id" FROM "Organization" WHERE "id" = ${data.organizationId} FOR NO KEY UPDATE
+      `;
+      if (organizations.length !== 1) throw new Error('SUMMARY_ORGANIZATION_MISSING');
+      const summary = await tx.callSummary.create({
         data: {
           organizationId: data.organizationId,
           callId: call.id,
@@ -271,128 +475,66 @@ export function createSummaryJobHandler(deps: SummaryHandlerDeps): SummaryHandle
               ? null
               : (summarizeResult.summary.amountApprovedCents / 100).toFixed(2),
           notes: summarizeResult.summary.notes,
-          rawTranscript: transcriptTurns.map((t) => `[${t.role}] ${t.text}`).join('\n'),
+          rawTranscript: captured.call.rawTranscript,
           claudeSummary: stringifyClaudeSummary(summarizeResult.summary),
         },
       });
 
-      const policy = applyTransitionPolicy({
-        autoTransitionEnabled: deps.env.SUMMARIZER_AUTO_TRANSITION_ENABLED,
-        confidence: summarizeResult.summary.confidence,
-        nextAction: summarizeResult.summary.nextAction,
-        currentStatus: claim.status,
-      });
-
-      await deps.prisma.claim.updateMany({
-        where: { id: claim.id, organizationId: data.organizationId },
-        data: { status: policy.targetStatus },
-      });
-
-      await audit({
-        action: 'claim.transition',
-        resourceType: 'Claim',
-        resourceId: claim.id,
+      const transition = SUMMARY_ELIGIBLE_STATUSES.has(claim.status)
+        ? await tx.claim.updateMany({
+            where: summaryTransitionWhere(claim, call, data.organizationId),
+            data: { status: policy.targetStatus },
+          })
+        : { count: 0 };
+      const transitionApplied = transition.count === 1;
+      await audit(
+        {
+          action: transitionApplied ? 'claim.transition' : 'summary.transition_skipped',
+          resourceType: 'Claim',
+          resourceId: claim.id,
+          organizationId: data.organizationId,
+          metadata: {
+            summaryId: summary.id,
+            confidence: summarizeResult.summary.confidence,
+            nextAction: summarizeResult.summary.nextAction,
+            autoTransitioned: transitionApplied && policy.autoTransitioned,
+            fromStatus: claim.status,
+            toStatus: transitionApplied ? policy.targetStatus : null,
+            reason: transitionApplied ? policy.reason : 'CLAIM_CHANGED_OR_PROTECTED',
+            prompt: summarizeResult.promptVersion,
+            model: summarizeResult.model,
+            jobId: job.id ?? null,
+          },
+        },
+        tx,
+      );
+      await markInferenceApplied(tx, {
         organizationId: data.organizationId,
-        metadata: {
-          summaryId: summary.id,
-          confidence: summarizeResult.summary.confidence,
-          nextAction: summarizeResult.summary.nextAction,
-          autoTransitioned: policy.autoTransitioned,
-          fromStatus: claim.status,
-          toStatus: policy.targetStatus,
-          prompt: summarizeResult.promptVersion,
-          model: summarizeResult.model,
-          jobId: job.id ?? null,
-        },
-      });
-
-      // Update the org's running token tally inside the lock window.
-      // `increment` keeps the write contention-safe even though we
-      // already serialised via the lock — defence in depth.
-      await deps.prisma.organization.update({
-        where: { id: org.id },
-        data: {
-          summaryTokensUsed: isStaleResetDay(org.summaryTokensResetAt, billingDay)
-            ? summarizeResult.tokensUsed
-            : { increment: summarizeResult.tokensUsed },
-          summaryTokensResetAt: clock(),
-        },
-      });
-
-      // Optional notify. PHI-screened by the template's Zod schema —
-      // we only pass claim metadata, never patient identifiers.
-      if (deps.notifier && deps.resolveRecipient) {
-        try {
-          const to = await deps.resolveRecipient(data.organizationId);
-          if (to) {
-            await dispatchClaimNotification(deps.notifier, {
-              to,
-              organizationId: data.organizationId,
-              summaryStatus: summarizeResult.summary.claimStatus,
-              denialCode: summarizeResult.summary.denialCode,
-              claimNumber: claim.claimNumber,
-              payerCode: claim.payerCode,
-              serviceDate: claim.serviceDate,
-            });
-          }
-        } catch (err) {
-          // Notify failure is NOT fatal — the summary is persisted
-          // and audited. Log and continue.
-          deps.logger.error(
-            { err: err instanceof Error ? { message: err.message, name: err.name } : err },
-            'summary-worker: notifier dispatch failed — summary still persisted',
-          );
-        }
-      }
-
-      return {
+        ...applicationOwnership,
         summaryId: summary.id,
-        outcome: policy.autoTransitioned ? 'AUTO_TRANSITIONED' : 'MANUAL_REVIEW',
-        tokensUsed: summarizeResult.tokensUsed,
-        promptVersion: summarizeResult.promptVersion,
-      };
-    } finally {
-      await costGuard.release(lock);
-    }
+        now: clock(),
+      });
+      if (transitionApplied)
+        await enqueueReviewNotification(tx, {
+          organizationId: data.organizationId,
+          runId: applicationOwnership.runId,
+          purpose: 'REVIEW_AVAILABLE',
+          now: clock(),
+        });
+      return { summary, transitionApplied };
+    });
+
+    return {
+      summaryId: summary.id,
+      outcome: !transitionApplied
+        ? 'STALE_RESULT'
+        : policy.autoTransitioned
+          ? 'AUTO_TRANSITIONED'
+          : 'MANUAL_REVIEW',
+      tokensUsed: summarizeResult.tokensUsed,
+      promptVersion: summarizeResult.promptVersion,
+    };
   };
-}
-
-function isStaleResetDay(prev: Date | null, billingDay: string): boolean {
-  if (!prev) return true;
-  return prev.toISOString().slice(0, 10) !== billingDay;
-}
-
-interface TranscriptTurn {
-  readonly role: 'agent' | 'representative' | 'system';
-  readonly text: string;
-  readonly timestamp: Date;
-}
-
-function transcriptFromEvents(events: readonly CallEvent[]): readonly TranscriptTurn[] {
-  const turns: TranscriptTurn[] = [];
-  for (const ev of events) {
-    if (ev.eventType !== 'call.transcript') continue;
-    const data = ev.data as Record<string, unknown> | null;
-    const role = pickRole(data);
-    const text = typeof data?.text === 'string' ? data.text : '';
-    if (text.length === 0) continue;
-    turns.push({ role, text, timestamp: ev.timestamp });
-  }
-  return turns;
-}
-
-function pickRole(data: Record<string, unknown> | null): TranscriptTurn['role'] {
-  const raw = typeof data?.role === 'string' ? data.role.toLowerCase() : '';
-  // `user` is Retell's own wire vocabulary for the human on the far end of the
-  // call — the payer representative. Without it here the fallthrough labelled
-  // every rep line `agent`, so the transcript handed to the summarizer (and
-  // the `rawTranscript` persisted alongside the summary) attributed the
-  // payer's words to our own agent.
-  if (raw === 'representative' || raw === 'rep' || raw === 'human' || raw === 'user') {
-    return 'representative';
-  }
-  if (raw === 'system') return 'system';
-  return 'agent';
 }
 
 function stringifyClaudeSummary(summary: {
@@ -412,91 +554,65 @@ function stringifyClaudeSummary(summary: {
   return parts.join(' | ');
 }
 
+function summaryTransitionWhere(
+  claim: { readonly id: string; readonly status: ClaimStatus; readonly updatedAt: Date },
+  call: { readonly id: string; readonly createdAt: Date },
+  organizationId: string,
+) {
+  return {
+    id: claim.id,
+    organizationId,
+    status: claim.status,
+    updatedAt: claim.updatedAt,
+    calls: {
+      none: {
+        organizationId,
+        OR: [
+          { createdAt: { gt: call.createdAt } },
+          { createdAt: call.createdAt, id: { gt: call.id } },
+        ],
+      },
+    },
+  };
+}
+
 export interface TransitionPolicyInput {
   readonly autoTransitionEnabled: boolean;
   readonly confidence: number;
   readonly nextAction: NextAction;
-  readonly currentStatus: string;
+  readonly currentStatus: ClaimStatus;
+  readonly denialCode?: string | null;
 }
 
 export interface TransitionPolicyResult {
   readonly autoTransitioned: boolean;
-  readonly targetStatus:
-    | 'MANUAL_REVIEW'
-    | 'RESOLVED'
-    | 'NEEDS_INFO'
-    | 'CALLING'
-    | 'PENDING'
-    | 'COMPLETED';
+  readonly targetStatus: ClaimStatus;
+  readonly reason:
+    | 'CLAIM_STATE_PROTECTED'
+    | 'REVIEW_REQUIRED'
+    | 'NON_FINANCIAL_ROUTING'
+    | 'UNMAPPED_CODE';
 }
 
-/**
- * Pure transition policy. The handler invokes this with the parsed
- * `SummaryOutput` + the kill-switch flag; it returns the target
- * `Claim.status` plus a flag indicating whether this counts as an
- * auto-decision (drives the audit metadata + result outcome).
- */
 export function applyTransitionPolicy(input: TransitionPolicyInput): TransitionPolicyResult {
-  if (!input.autoTransitionEnabled) {
-    return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW' };
+  if (!SUMMARY_ELIGIBLE_STATUSES.has(input.currentStatus)) {
+    return {
+      autoTransitioned: false,
+      targetStatus: input.currentStatus,
+      reason: 'CLAIM_STATE_PROTECTED',
+    };
   }
-  if (input.confidence < MIN_AUTO_CONFIDENCE) {
-    return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW' };
+  if (input.denialCode && !isKnownDenialCode(input.denialCode)) {
+    return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW', reason: 'UNMAPPED_CODE' };
   }
-  if (!AUTO_TRANSITION_ACTIONS.has(input.nextAction)) {
-    return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW' };
+  if (
+    input.autoTransitionEnabled &&
+    Number.isFinite(input.confidence) &&
+    input.confidence >= MIN_AUTO_CONFIDENCE &&
+    input.confidence <= 1 &&
+    input.nextAction === 'SUBMIT_DOCS'
+  ) {
+    return { autoTransitioned: true, targetStatus: 'NEEDS_INFO', reason: 'NON_FINANCIAL_ROUTING' };
   }
-  switch (input.nextAction) {
-    case 'RESOLVED':
-      return { autoTransitioned: true, targetStatus: 'RESOLVED' };
-    case 'SUBMIT_DOCS':
-      return { autoTransitioned: true, targetStatus: 'NEEDS_INFO' };
-    case 'CALL_BACK':
-      // Benign re-poll — leave Claim COMPLETED so the dashboard surfaces
-      // it for the operator's next-call decision rather than auto-flipping.
-      return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW' };
-    default:
-      return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW' };
-  }
-}
-
-interface DispatchInput {
-  readonly to: string;
-  readonly organizationId: string;
-  readonly summaryStatus: string;
-  readonly denialCode: string | null;
-  readonly claimNumber: string;
-  readonly payerCode: string;
-  readonly serviceDate: Date;
-}
-
-async function dispatchClaimNotification(
-  notifier: NotifierPort,
-  input: DispatchInput,
-): Promise<void> {
-  const serviceDate = input.serviceDate.toISOString().slice(0, 10);
-  const baseVars = {
-    claimNumber: input.claimNumber,
-    payerCode: input.payerCode,
-    serviceDate,
-  };
-  let template: TemplateName;
-  let vars: TemplateVars<TemplateName>;
-
-  if (input.summaryStatus === 'paid') {
-    template = 'claim.resolved';
-    vars = { ...baseVars, amountResolvedCents: 0 };
-  } else if (input.summaryStatus === 'denied' && input.denialCode) {
-    template = 'claim.denied';
-    vars = { ...baseVars, denialCode: input.denialCode };
-  } else {
-    template = 'claim.needs_info';
-    vars = { ...baseVars, hint: 'Operator review required.' };
-  }
-  await notifier.notify({
-    to: input.to,
-    template,
-    vars,
-    organizationId: input.organizationId,
-  });
+  return { autoTransitioned: false, targetStatus: 'MANUAL_REVIEW', reason: 'REVIEW_REQUIRED' };
 }

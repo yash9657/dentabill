@@ -565,7 +565,8 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/dashboard"
 # Retell AI — from app.retellai.com
 RETELL_API_KEY="key_..."
 RETELL_AGENT_ID="agent_..."
-RETELL_WEBHOOK_SECRET="whsec_..."
+# API key with Retell's webhook badge; leave empty for no-key demo.
+RETELL_WEBHOOK_SECRET=""
 
 # Telnyx — from telnyx.com
 TELNYX_API_KEY="KEY..."

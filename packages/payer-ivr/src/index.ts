@@ -37,6 +37,13 @@ export {
 export { checkPayerHours, isWithinPayerHours, type PayerHoursResult } from './business-hours.js';
 
 export {
+  validateCallIdentity,
+  type CallIdentity,
+  type CallIdentityValidation,
+  type MissingCallIdentityField,
+} from './call-identity.js';
+
+export {
   createIvrNavigator,
   DEFAULT_MISDETECT_PATTERNS,
   type CreateIvrNavigatorInput,
@@ -48,7 +55,15 @@ export {
 
 export {
   createRetellPort,
+  createRetellReconciliationClient,
+  RetellReconciliationError,
+  type ReadonlyRetellReconciliationPort,
+  type RetellCallCandidate,
+  type RetellReconciliationClient,
+  type RetellReconciliationClientOptions,
+  type RetellReconciliationErrorCode,
   EndCallInputSchema,
+  DemoAutopilot,
   FakeRetell,
   LiveRetell,
   RetellCallEndReason,
@@ -59,11 +74,16 @@ export {
   StartCallInputSchema,
   StartCallResultSchema,
   parseRetellWebhookEnvelope,
+  acceptRetellWebhook,
+  reconcileRetellWebhookInbox,
+  RetellWebhookConflictError,
+  type RetellWebhookDelivery,
   renderTurnText,
   selectDemoScenario,
   verifyRetellWebhookSignature,
   type CreateRetellPortInput,
   type DemoOutcome,
+  type DemoAutopilotOptions,
   type DemoScenario,
   type DemoTurn,
   type DemoTurnRole,

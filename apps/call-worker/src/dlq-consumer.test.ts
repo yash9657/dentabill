@@ -1,276 +1,233 @@
-import { hashPatientDOB, prisma } from '@dentabill/db';
+import { prisma, type CallIntentState } from '@dentabill/db';
 import { createLogger } from '@dentabill/logger';
-import { type DlqJobData, DLQ_JOB_NAME, DLQ_REASONS, QUEUE_NAMES } from '@dentabill/queue';
+import { type CallJobData, type DlqJobData, DLQ_JOB_NAME, DLQ_REASONS } from '@dentabill/queue';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDlqJobHandler } from './dlq-consumer.js';
 
-/**
- * Integration tests for the DLQ consumer (P3-T14) against real
- * `dentabill_test` Postgres. Idempotency is the load-bearing property:
- * re-running the same DLQ job MUST be a no-op.
- */
-
-const HASH_SECRET = 'integration-test-secret-not-the-real-one';
-
-const silentLogger = createLogger({
-  level: 'fatal',
-  pretty: false,
-  base: { service: 'call-worker-test' },
-});
+const silentLogger = createLogger({ level: 'fatal', pretty: false, base: { service: 'test' } });
+const handler = createDlqJobHandler({ logger: silentLogger, prisma });
 
 beforeAll(async () => {
   await prisma.$connect();
 });
-
 afterAll(async () => {
   await prisma.$disconnect();
 });
-
 afterEach(async () => {
-  await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Organization", "User", "Claim", "Call", "CallSummary", "CallEvent", "PayerConfig", "AuditLog", "BillingUsageRecord" RESTART IDENTITY CASCADE',
-  );
+  await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS reject_intent_cancel_audit ON "AuditLog"');
+  await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS reject_intent_cancel_audit()');
+  await prisma.$executeRawUnsafe('TRUNCATE TABLE "Organization" RESTART IDENTITY CASCADE');
 });
 
-interface SeedResult {
-  readonly orgId: string;
-  readonly claimId: string;
-  readonly callId: string;
-}
-
-async function seedOrgClaimAndCall(opts?: {
-  attemptNumber?: number;
-  callStatus?: 'NAVIGATING_IVR' | 'COMPLETED';
-  withCall?: boolean;
-}): Promise<SeedResult> {
+async function seed(
+  state: CallIntentState = 'READY',
+  withCall = false,
+): Promise<{
+  orgId: string;
+  claimId: string;
+  intentId: string;
+  callId: string | null;
+  data: CallJobData;
+}> {
   const org = await prisma.organization.create({
-    data: {
-      name: 'Sunshine Family Dental',
-      clerkOrgId: `clerk_${Math.random().toString(36).slice(2)}`,
-      npi: '1234567890',
-    },
+    data: { name: 'Synthetic DLQ Dental', clerkOrgId: `dlq_${crypto.randomUUID()}` },
   });
   const claim = await prisma.claim.create({
     data: {
       organizationId: org.id,
-      claimNumber: 'CLM-9001',
-      patientDOBHash: hashPatientDOB({
-        dob: '1990-05-12',
-        organizationId: org.id,
-        secret: HASH_SECRET,
-      }),
-      patientDOBLast4: '0512',
+      claimNumber: 'SYNTHETIC-DLQ',
+      patientDOBHash: 'synthetic',
       cdtCodes: ['D1110'],
-      claimAmount: '245.00',
+      claimAmount: '245',
       payerCode: 'DELTA_DENTAL_PPO',
-      serviceDate: new Date('2026-01-15T00:00:00.000Z'),
-      status: 'CALLING',
+      serviceDate: new Date('2026-01-15'),
+      status: 'PENDING',
       priority: 80,
     },
   });
-  if (opts?.withCall === false) {
-    return { orgId: org.id, claimId: claim.id, callId: '' };
-  }
-  const call = await prisma.call.create({
-    data: {
-      organizationId: org.id,
-      claimId: claim.id,
-      retellCallId: `fake_call_${Math.random().toString(36).slice(2)}`,
-      retellAgentId: 'agent_test',
-      status: opts?.callStatus ?? 'NAVIGATING_IVR',
-      attemptNumber: opts?.attemptNumber ?? 1,
-      startedAt: new Date(),
-    },
+  const queued = await prisma.claim.update({
+    where: { id: claim.id, organizationId: org.id },
+    data: { status: 'IN_QUEUE' },
   });
-  return { orgId: org.id, claimId: claim.id, callId: call.id };
-}
-
-function dlqJob(
-  data: DlqJobData,
-  id = 'dlq_test_1',
-): Parameters<ReturnType<typeof createDlqJobHandler>>[0] {
-  return { id, data, name: DLQ_JOB_NAME } as Parameters<ReturnType<typeof createDlqJobHandler>>[0];
-}
-
-function buildDlqPayload(input: {
-  organizationId: string;
-  claimId: string;
-  attemptNumber: 1 | 2;
-  reason: DlqJobData['reason'];
-  failedReason?: string;
-}): DlqJobData {
-  return {
-    originalJobId: 'original-job-1',
-    originalQueueName: QUEUE_NAMES.CALLS,
-    originalJobName: 'call.place',
-    originalData: {
-      organizationId: input.organizationId,
-      claimId: input.claimId,
-      payerCode: 'DELTA_DENTAL_PPO',
-      attemptNumber: input.attemptNumber,
-      claimPriority: 80,
-      idempotencyKey: 'job-test-1',
-    },
-    reason: input.reason,
-    ...(input.failedReason !== undefined && { failedReason: input.failedReason }),
-    attemptsMade: input.attemptNumber,
-    enqueuedAt: '2026-04-28T03:00:00.000Z',
+  const call = withCall
+    ? await prisma.call.create({
+        data: {
+          organizationId: org.id,
+          claimId: claim.id,
+          retellCallId: `synthetic_${crypto.randomUUID()}`,
+          status: state === 'TERMINAL' ? 'COMPLETED' : 'NAVIGATING_IVR',
+          attemptNumber: 1,
+        },
+      })
+    : null;
+  const data: CallJobData = {
+    organizationId: org.id,
+    claimId: claim.id,
+    payerCode: 'DELTA_DENTAL_PPO',
+    attemptNumber: 1,
+    claimPriority: 80,
+    idempotencyKey: `${claim.id}-a1-synthetic`,
   };
+  const intent = await prisma.callIntent.create({
+    data: {
+      ...data,
+      payerCode: 'DELTA_DENTAL_PPO',
+      claimVersion: queued.updatedAt,
+      state,
+      callId: call?.id ?? null,
+      submittedAt: state === 'READY' ? null : new Date('2026-01-15T12:00:00Z'),
+    },
+  });
+  return { orgId: org.id, claimId: claim.id, intentId: intent.id, callId: call?.id ?? null, data };
 }
 
-describe('createDlqJobHandler — happy path (Call row exists)', () => {
-  it('stamps Call.dlqReason, flips to FAILED, writes call.dlq event, escalates Claim', async () => {
-    const { orgId, claimId, callId } = await seedOrgClaimAndCall();
-    const handler = createDlqJobHandler({ logger: silentLogger, prisma });
+function dlqJob(data: CallJobData): Parameters<typeof handler>[0] {
+  const payload: DlqJobData = {
+    originalJobId: data.idempotencyKey,
+    originalQueueName: 'calls',
+    originalJobName: 'call.place',
+    originalData: data,
+    reason: DLQ_REASONS.EXCEEDED_MAX_ATTEMPTS,
+    attemptsMade: 3,
+    enqueuedAt: '2026-10-13T12:00:00Z',
+    failedReason: 'PHI sentinel: must not enter audit evidence',
+  };
+  return { id: `dlq-${data.idempotencyKey}`, data: payload, name: DLQ_JOB_NAME } as Parameters<
+    typeof handler
+  >[0];
+}
 
-    await handler(
-      dlqJob(
-        buildDlqPayload({
-          organizationId: orgId,
-          claimId,
-          attemptNumber: 1,
-          reason: DLQ_REASONS.EXCEEDED_MAX_HOLD,
-          failedReason: 'hold cap exceeded after 600001 ms of silence',
-        }),
-      ),
-      'token',
+describe('DLQ cancellation of exact, unsubmitted intents (real Postgres)', () => {
+  it('atomically cancels READY and escalates only its reserved claim version, auditing once', async () => {
+    const row = await seed();
+    await Promise.all([handler(dlqJob(row.data), 'one'), handler(dlqJob(row.data), 'two')]);
+    expect(
+      await prisma.callIntent.findUniqueOrThrow({ where: { id: row.intentId } }),
+    ).toMatchObject({
+      state: 'CANCELLED',
+      lastErrorCode: 'DELIVERY_EXHAUSTED',
+      completedAt: expect.any(Date),
+    });
+    expect((await prisma.claim.findUniqueOrThrow({ where: { id: row.claimId } })).status).toBe(
+      'MANUAL_REVIEW',
     );
-
-    const callAfter = await prisma.call.findUniqueOrThrow({ where: { id: callId } });
-    expect(callAfter.status).toBe('FAILED');
-    expect(callAfter.dlqReason).toBe('EXCEEDED_MAX_HOLD');
-
-    const claimAfter = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
-    expect(claimAfter.status).toBe('MANUAL_REVIEW');
-
-    const events = await prisma.callEvent.findMany({
-      where: { callId, eventType: 'call.dlq' },
-    });
-    expect(events).toHaveLength(1);
-    expect(events[0]!.data).toMatchObject({
-      reason: 'exceeded_max_hold',
-      attemptsMade: 1,
-      originalJobId: 'original-job-1',
-    });
+    const audits = await prisma.auditLog.findMany({ where: { organizationId: row.orgId } });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({ action: 'call.intent.cancelled', resourceId: row.intentId });
+    expect(JSON.stringify(audits)).not.toContain('PHI sentinel');
+    expect(await prisma.call.count()).toBe(0);
   });
-});
 
-describe('createDlqJobHandler — idempotency', () => {
-  it('is a no-op when Call.dlqReason is already set (re-run safe)', async () => {
-    const { orgId, claimId, callId } = await seedOrgClaimAndCall();
-    const handler = createDlqJobHandler({ logger: silentLogger, prisma });
+  it.each(['SUBMITTING', 'UNKNOWN', 'ACCEPTED', 'TERMINAL', 'CANCELLED'] as const)(
+    'preserves %s intent, call evidence, and claim state',
+    async (state) => {
+      const row = await seed(state, true);
+      const before = await prisma.callIntent.findUniqueOrThrow({ where: { id: row.intentId } });
+      const claim = await prisma.claim.findUniqueOrThrow({ where: { id: row.claimId } });
+      const call = await prisma.call.findUniqueOrThrow({ where: { id: row.callId ?? '' } });
+      await handler(dlqJob(row.data), 'token');
+      expect(await prisma.callIntent.findUniqueOrThrow({ where: { id: row.intentId } })).toEqual(
+        before,
+      );
+      expect(await prisma.claim.findUniqueOrThrow({ where: { id: row.claimId } })).toEqual(claim);
+      expect(await prisma.call.findUniqueOrThrow({ where: { id: row.callId ?? '' } })).toEqual(
+        call,
+      );
+      expect(await prisma.auditLog.count()).toBe(0);
+      expect(await prisma.callEvent.count()).toBe(0);
+    },
+  );
 
-    const payload = buildDlqPayload({
-      organizationId: orgId,
-      claimId,
-      attemptNumber: 1,
-      reason: DLQ_REASONS.EXCEEDED_MAX_DURATION,
+  it.each(['RESOLVED', 'IN_QUEUE'] as const)(
+    'preserves a newer %s claim version',
+    async (status) => {
+      const row = await seed();
+      const intent = await prisma.callIntent.findUniqueOrThrow({ where: { id: row.intentId } });
+      const reviewed = await prisma.claim.update({
+        where: { id: row.claimId, organizationId: row.orgId },
+        data: { status, updatedAt: new Date(intent.claimVersion.getTime() + 1000) },
+      });
+      await handler(dlqJob(row.data), 'token');
+      expect(await prisma.claim.findUniqueOrThrow({ where: { id: row.claimId } })).toEqual(
+        reviewed,
+      );
+      expect(
+        (await prisma.callIntent.findUniqueOrThrow({ where: { id: row.intentId } })).state,
+      ).toBe('CANCELLED');
+      expect(
+        (await prisma.auditLog.findFirstOrThrow({ where: { resourceId: row.intentId } })).metadata,
+      ).toMatchObject({ claimChanged: false });
+    },
+  );
+
+  it('does not select a newer call or intent sharing the prior attempt number', async () => {
+    const row = await seed('TERMINAL', true);
+    const claim = await prisma.claim.findUniqueOrThrow({ where: { id: row.claimId } });
+    const newer = await prisma.callIntent.create({
+      data: {
+        ...row.data,
+        payerCode: 'DELTA_DENTAL_PPO',
+        idempotencyKey: `${row.claimId}-a1-next-day`,
+        claimVersion: claim.updatedAt,
+      },
     });
-
-    // First run: should land
-    await handler(dlqJob(payload, 'dlq_test_1'), 'token');
-    // Second run: should silently skip
-    await handler(dlqJob(payload, 'dlq_test_2'), 'token');
-
-    // Only one call.dlq event survives across re-runs.
-    const events = await prisma.callEvent.findMany({
-      where: { callId, eventType: 'call.dlq' },
-    });
-    expect(events).toHaveLength(1);
-
-    const callAfter = await prisma.call.findUniqueOrThrow({ where: { id: callId } });
-    expect(callAfter.status).toBe('FAILED');
-    expect(callAfter.dlqReason).toBe('EXCEEDED_MAX_DURATION');
+    const call = await prisma.call.findUniqueOrThrow({ where: { id: row.callId ?? '' } });
+    await handler(dlqJob(row.data), 'token');
+    expect(await prisma.callIntent.findUniqueOrThrow({ where: { id: newer.id } })).toEqual(newer);
+    expect(await prisma.call.findUniqueOrThrow({ where: { id: row.callId ?? '' } })).toEqual(call);
+    expect(await prisma.claim.findUniqueOrThrow({ where: { id: row.claimId } })).toEqual(claim);
   });
-});
 
-describe('createDlqJobHandler — no Call row (start failed before persist)', () => {
-  it('still escalates the claim to MANUAL_REVIEW + emits a structured warn', async () => {
-    const { orgId, claimId } = await seedOrgClaimAndCall({ withCall: false });
-    const handler = createDlqJobHandler({ logger: silentLogger, prisma });
-
-    await handler(
-      dlqJob(
-        buildDlqPayload({
-          organizationId: orgId,
-          claimId,
-          attemptNumber: 1,
-          reason: DLQ_REASONS.EXCEEDED_MAX_ATTEMPTS,
-        }),
-      ),
-      'token',
+  it('fails closed for missing intents and mismatched claim, payer, attempt, or tenant', async () => {
+    const row = await seed();
+    const other = await seed();
+    const before = await prisma.callIntent.findUniqueOrThrow({ where: { id: row.intentId } });
+    for (const data of [
+      { ...row.data, idempotencyKey: `${row.data.idempotencyKey}-missing` },
+      { ...row.data, claimId: other.claimId },
+      { ...row.data, payerCode: 'CIGNA_DENTAL' },
+      { ...row.data, attemptNumber: 2 },
+      { ...row.data, organizationId: other.orgId },
+    ])
+      await handler(dlqJob(data), 'token');
+    expect(await prisma.callIntent.findUniqueOrThrow({ where: { id: row.intentId } })).toEqual(
+      before,
     );
-
-    const claimAfter = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
-    expect(claimAfter.status).toBe('MANUAL_REVIEW');
-
-    // No Call → no CallEvent.
-    const events = await prisma.callEvent.findMany({});
-    expect(events).toHaveLength(0);
+    expect(await prisma.claim.count({ where: { status: 'IN_QUEUE' } })).toBe(2);
+    expect(await prisma.auditLog.count()).toBe(0);
   });
-});
 
-describe('createDlqJobHandler — DLQ reason mapping', () => {
-  it.each([
-    [DLQ_REASONS.EXCEEDED_MAX_ATTEMPTS, 'EXCEEDED_MAX_ATTEMPTS'],
-    [DLQ_REASONS.EXCEEDED_MAX_DURATION, 'EXCEEDED_MAX_DURATION'],
-    [DLQ_REASONS.EXCEEDED_MAX_HOLD, 'EXCEEDED_MAX_HOLD'],
-    [DLQ_REASONS.CANCELLED_BY_OPERATOR, 'CANCELLED_BY_OPERATOR'],
-  ])('maps DlqReason "%s" to Call.dlqReason "%s"', async (reason, expectedEnum) => {
-    const { orgId, claimId, callId } = await seedOrgClaimAndCall();
-    const handler = createDlqJobHandler({ logger: silentLogger, prisma });
-    await handler(
-      dlqJob(buildDlqPayload({ organizationId: orgId, claimId, attemptNumber: 1, reason })),
-      'token',
+  it('rolls cancellation and claim state back when audit persistence fails', async () => {
+    const row = await seed();
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION reject_intent_cancel_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'call.intent.cancelled' THEN RAISE EXCEPTION 'synthetic audit outage'; END IF; RETURN NEW; END $$`,
     );
-    const callAfter = await prisma.call.findUniqueOrThrow({ where: { id: callId } });
-    expect(callAfter.dlqReason).toBe(expectedEnum);
+    await prisma.$executeRawUnsafe(
+      'CREATE TRIGGER reject_intent_cancel_audit BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION reject_intent_cancel_audit()',
+    );
+    await expect(handler(dlqJob(row.data), 'token')).rejects.toThrow();
+    expect((await prisma.callIntent.findUniqueOrThrow({ where: { id: row.intentId } })).state).toBe(
+      'READY',
+    );
+    expect((await prisma.claim.findUniqueOrThrow({ where: { id: row.claimId } })).status).toBe(
+      'IN_QUEUE',
+    );
+    expect(await prisma.auditLog.count()).toBe(0);
+    await prisma.$executeRawUnsafe('DROP TRIGGER reject_intent_cancel_audit ON "AuditLog"');
+    await handler(dlqJob(row.data), 'token');
+    expect((await prisma.callIntent.findUniqueOrThrow({ where: { id: row.intentId } })).state).toBe(
+      'CANCELLED',
+    );
   });
-});
 
-describe('createDlqJobHandler — input validation', () => {
-  it('rejects a malformed DLQ payload at the dequeue trust boundary', async () => {
-    const handler = createDlqJobHandler({ logger: silentLogger, prisma });
+  it('rejects malformed transport input before database mutations', async () => {
     const malformed = {
-      id: 'bad-1',
-      data: { reason: 'unknown_reason' } as unknown as DlqJobData,
+      id: 'bad',
+      data: { reason: 'bad' },
       name: DLQ_JOB_NAME,
-    } as Parameters<ReturnType<typeof createDlqJobHandler>>[0];
+    } as unknown as Parameters<typeof handler>[0];
     await expect(handler(malformed, 'token')).rejects.toThrow();
-  });
-});
-
-describe('createDlqJobHandler — does not re-flip MANUAL_REVIEW', () => {
-  it('does not write Claim.status if it is already MANUAL_REVIEW', async () => {
-    const { orgId, claimId, callId } = await seedOrgClaimAndCall();
-    // Pre-flip to MANUAL_REVIEW so we can detect double-write via updatedAt
-    // moving forward only on the first DLQ run.
-    await prisma.claim.updateMany({
-      where: { id: claimId, organizationId: orgId },
-      data: { status: 'MANUAL_REVIEW' },
-    });
-    const before = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
-
-    const handler = createDlqJobHandler({ logger: silentLogger, prisma });
-    await handler(
-      dlqJob(
-        buildDlqPayload({
-          organizationId: orgId,
-          claimId,
-          attemptNumber: 1,
-          reason: DLQ_REASONS.EXCEEDED_MAX_HOLD,
-        }),
-      ),
-      'token',
-    );
-
-    const after = await prisma.claim.findUniqueOrThrow({ where: { id: claimId } });
-    // Conditional updateMany with `status: { not: 'MANUAL_REVIEW' }` means
-    // no row was matched, so updatedAt should NOT have advanced.
-    expect(after.updatedAt.getTime()).toBe(before.updatedAt.getTime());
-    // Call still got stamped though — the DLQ event landed.
-    const callAfter = await prisma.call.findUniqueOrThrow({ where: { id: callId } });
-    expect(callAfter.dlqReason).toBe('EXCEEDED_MAX_HOLD');
+    expect(await prisma.auditLog.count()).toBe(0);
   });
 });

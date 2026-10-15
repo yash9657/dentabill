@@ -12,7 +12,7 @@ export default function DashboardReportsPage(): React.ReactElement {
       <DashboardEmptyState
         eyebrow="Reports"
         title="See the bigger picture"
-        body="Sign in to review recovery trends, payer outcomes, and claim aging across your practice."
+        body="Sign in to review call activity, reported denials, and claim aging across your practice."
         previewChildren={<SkeletonTable rows={4} columns={3} />}
         primaryCta={{ label: 'Sign in', href: '/sign-in' }}
       />

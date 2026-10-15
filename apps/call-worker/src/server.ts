@@ -1,9 +1,15 @@
 import { prisma } from '@dentabill/db';
 import { createLogger, type Logger } from '@dentabill/logger';
-import { createRetellPort, type RetellPort } from '@dentabill/payer-ivr';
+import {
+  createRetellPort,
+  createRetellReconciliationClient,
+  type RetellPort,
+  type RetellReconciliationClient,
+} from '@dentabill/payer-ivr';
 import {
   createBullMqJobDispatcher,
   createCallsWorker,
+  createCallsQueue,
   createRedisConnection,
   createSummariesQueue,
   type CallsWorker,
@@ -11,10 +17,12 @@ import {
 } from '@dentabill/queue';
 import type { Redis } from 'ioredis';
 
+import { sweepDueAcceptedCalls } from './call-observer.js';
 import { createDlqJobHandler, createDlqWorker, type DlqWorker } from './dlq-consumer.js';
 import { loadWorkerEnv, type WorkerEnv } from './env.js';
 import { createCallJobHandler, type DbClient } from './handler.js';
 import { startHealthServer, type HealthServerHandle } from './health.js';
+import { relayJobOutbox } from './job-outbox.js';
 
 /**
  * Boot the call-worker (P3-T9 — wiring only). P3-T10 swaps the stub
@@ -51,6 +59,9 @@ export interface BootCallWorkerOptions {
    * which selects LiveRetell or FakeRetell automatically.
    */
   readonly retellPort?: RetellPort;
+  readonly reconciliationClient?: RetellReconciliationClient | null;
+  /** Recovery polling interval; defaults to five seconds. */
+  readonly outboxRelayIntervalMs?: number;
 }
 
 export interface CallWorkerHandle {
@@ -70,6 +81,10 @@ export interface CallWorkerHandle {
 export async function bootCallWorker(
   options: BootCallWorkerOptions = {},
 ): Promise<CallWorkerHandle> {
+  const relayIntervalMs = options.outboxRelayIntervalMs ?? 5_000;
+  if (!Number.isFinite(relayIntervalMs) || relayIntervalMs < 1) {
+    throw new Error('Invalid outbox relay interval.');
+  }
   const env = options.env ?? loadWorkerEnv();
   const logger =
     options.logger ?? createLogger({ base: { service: 'call-worker', env: env.NODE_ENV } });
@@ -86,7 +101,25 @@ export async function bootCallWorker(
       apiKey: env.RETELL_API_KEY,
       demoAutopilot: env.DEMO_AUTOPILOT === 'true',
     }).port;
+  const reconciliationClient =
+    options.reconciliationClient !== undefined
+      ? options.reconciliationClient
+      : env.RETELL_API_KEY
+        ? createRetellReconciliationClient({ apiKey: env.RETELL_API_KEY })
+        : null;
+  // A fresh no-key FakeRetell silently acknowledges unknown IDs. It cannot
+  // supply stop evidence for a persisted call after a process restart.
+  const observationRetellPort: RetellPort = env.RETELL_API_KEY
+    ? retellPort
+    : {
+        startCall: () => Promise.reject(new Error('Provider submission unavailable.')),
+        endCall: () => Promise.reject(new Error('Provider stop unavailable.')),
+        subscribe: () => () => undefined,
+      };
   const summariesQueue = createSummariesQueue({ connection });
+  const callsQueue = createCallsQueue({ connection });
+  await Promise.all([callsQueue.waitUntilReady(), summariesQueue.waitUntilReady()]);
+  const jobDispatcher = createBullMqJobDispatcher({ callsQueue, summariesQueue });
 
   const worker = createCallsWorker({
     connection,
@@ -95,9 +128,10 @@ export async function bootCallWorker(
       logger,
       prisma: prismaClient,
       retellPort,
+      reconciliationProvider: reconciliationClient,
       env,
       outboundNumberE164: env.WORKER_OUTBOUND_NUMBER,
-      jobDispatcher: createBullMqJobDispatcher({ summariesQueue }),
+      jobDispatcher,
     }),
   });
 
@@ -134,14 +168,57 @@ export async function bootCallWorker(
     logger.info({ jobId: job.id, attemptsMade: job.attemptsMade }, 'call-worker job completed');
   });
 
+  await Promise.all([worker.waitUntilReady(), dlqWorker.waitUntilReady()]);
   const health = startHealthServer({ port: env.WORKER_PORT, logger });
 
   let shuttingDown = false;
+  let relayInFlight: Promise<void> | null = null;
+  const recoverDelivery = (): void => {
+    if (shuttingDown || relayInFlight) return;
+    relayInFlight = Promise.allSettled([
+      relayJobOutbox({ prisma: prismaClient, jobDispatcher }),
+      sweepDueAcceptedCalls({
+        prisma: prismaClient,
+        provider: reconciliationClient,
+        retellPort: observationRetellPort,
+        limit: 5,
+        budgetMs: 25_000,
+      }),
+    ])
+      .then(([relay, observation]) => {
+        if (relay.status === 'fulfilled') {
+          const { selected, sent, failed, quarantined } = relay.value;
+          if (selected > 0)
+            logger.info({ selected, sent, failed, quarantined }, 'outbox relay finished');
+        } else {
+          logger.error('Outbox relay failed; pending deliveries remain saved.');
+        }
+        if (observation.status === 'fulfilled') {
+          const { selected, observed, terminal, rescheduled, stopRequested, failed } =
+            observation.value;
+          if (selected > 0)
+            logger.info(
+              { selected, observed, terminal, rescheduled, stopRequested, failed },
+              'call observation finished',
+            );
+        } else {
+          logger.error('Call observation failed; accepted calls remain saved.');
+        }
+      })
+      .finally(() => {
+        relayInFlight = null;
+      });
+  };
+  const relayTimer = setInterval(recoverDelivery, relayIntervalMs);
+  relayTimer.unref();
+  recoverDelivery();
   const shutdown = async (): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info('call-worker shutdown initiated');
     health.setDraining(true);
+    clearInterval(relayTimer);
+    await relayInFlight;
     try {
       await worker.close();
     } catch (err) {
@@ -151,6 +228,11 @@ export async function bootCallWorker(
       await dlqWorker.close();
     } catch (err) {
       logger.error({ err }, 'error closing DLQ worker — continuing shutdown');
+    }
+    try {
+      await callsQueue.close();
+    } catch (err) {
+      logger.error({ err }, 'error closing calls queue — continuing shutdown');
     }
     try {
       await summariesQueue.close();

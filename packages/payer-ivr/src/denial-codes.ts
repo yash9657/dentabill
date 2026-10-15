@@ -1,52 +1,42 @@
 /**
- * Allow-list of denial / adjustment codes the summarizer is permitted
- * to emit on `CallSummary.denialCode`. Anything outside this list is
- * either an LLM hallucination or a payer-specific code we haven't
- * mapped yet — both should route the claim to MANUAL_REVIEW rather
- * than auto-decision.
+ * Small recognition subset retained for compatibility. Unknown codes are
+ * preserved as raw observations and require review, not rejected as false.
  *
- * The codes are X12 Claim Adjustment Reason Codes (CARC) plus dental-
- * specific Remittance Advice Remark Codes (RARC) commonly cited by
- * Delta Dental PPO, Cigna Dental, and MetLife Dental IVR + rep
- * scripts. Keep this list small and dental-relevant; expanding it to
- * full CARC/RARC is Phase-6 work.
+ * CO/PR prefixes are adjustment groups, numeric suffixes are CARCs, and
+ * N-prefixed entries here are RARCs. Recognition does not validate the
+ * payer's use, clinical meaning, responsibility, or appropriate next action.
  *
- * Source: payer EOB samples + ADA dental-billing reference (2024).
- * Anything we add here needs a comment naming the payer + scenario it
- * was observed under.
+ * Existing annotations checked against X12 on 2026-10-13:
+ * https://x12.org/codes/claim-adjustment-reason-codes
+ * https://x12.org/codes/remittance-advice-remark-codes
+ * These brief paraphrases are not a complete or licensed code dictionary.
  */
 export const DENIAL_CODES = [
-  // CO-50: non-covered service (most common denial across all three
-  // Phase-3 payers). Cigna + MetLife scripts cite it verbatim.
+  // CARC 50: payer determination of insufficient medical necessity.
   'CO-50',
-  // CO-29: timely-filing limit exceeded (Cigna 365d, MetLife 180d).
+  // CARC 29: filing deadline passed; no payer-specific window is implied.
   'CO-29',
-  // CO-96: non-covered charge — patient elected non-covered procedure.
+  // CARC 96: excluded charge; consult the required accompanying remark.
   'CO-96',
-  // CO-97: benefit included in another adjudicated procedure
-  // (frequently cited on bundled cleanings + exams).
+  // CARC 97: payment for another adjudicated service includes this benefit.
   'CO-97',
-  // CO-109: claim not covered by this payer (wrong payer routing —
-  // resubmit, don't appeal).
+  // CARC 109: coverage belongs with a different payer/contractor.
   'CO-109',
-  // CO-167: diagnosis not covered (rare in dental — appears on cosmetic
-  // claims sent without a medical-necessity narrative).
+  // CARC 167: diagnosis outside coverage; no clinical cause is inferred.
   'CO-167',
-  // PR-1: deductible amount (informational, not a true denial — but
-  // reps cite it as a denial code on partial-pay claims).
+  // CARC 1: deductible component, not itself evidence of a denial.
   'PR-1',
-  // PR-2: coinsurance amount (same caveat as PR-1).
+  // CARC 2: coinsurance component.
   'PR-2',
-  // PR-3: copayment amount.
+  // CARC 3: copayment component.
   'PR-3',
-  // PR-204: not covered under the patient's current benefit plan.
+  // CARC 204: current plan excludes the service, equipment, or drug.
   'PR-204',
-  // N362: number of days/units exceeded benefit (Delta Dental PPO
-  // cites this on frequency-limited cleanings).
+  // RARC N362: service-day/unit quantity above the accepted maximum.
   'N362',
-  // N370: missing tooth clause exclusion.
+  // RARC N370: rental period beyond the payer's covered/approved months.
   'N370',
-  // N522: duplicate claim.
+  // RARC N522: duplicate of a processed or forthcoming crossover claim.
   'N522',
 ] as const;
 

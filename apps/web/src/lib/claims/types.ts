@@ -11,6 +11,11 @@ import type { paths } from '@dentabill/api-sdk/types';
 type ListResponse = paths['/v1/claims']['get']['responses'][200]['content']['application/json'];
 
 export type Claim = ListResponse['items'][number];
+export type DetailClaim =
+  paths['/v1/claims/{id}']['get']['responses'][200]['content']['application/json'];
+export type ClaimSourceDetails = NonNullable<DetailClaim['sourceDetails']>;
+export type ClaimSourceLine = ClaimSourceDetails['lines'][number];
+export type ClaimSourceCoverage = ClaimSourceDetails['coverages'][number];
 export type ClaimStatus = Claim['status'];
 export type PayerCode = Claim['payerCode'];
 export type ClaimsListResponse = ListResponse;

@@ -1,0 +1,14 @@
+{
+  "event": "call_started",
+  "call": {
+    "call_type": "phone_call",
+    "call_id": "call_synthetic_contract_01",
+    "agent_id": "agent_synthetic_contract_01",
+    "agent_version": 1,
+    "call_status": "ongoing",
+    "from_number": "+12025550100",
+    "to_number": "+12025550101",
+    "direction": "outbound",
+    "start_timestamp": 1791892800000
+  }
+}

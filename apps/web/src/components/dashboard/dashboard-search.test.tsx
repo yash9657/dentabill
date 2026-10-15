@@ -48,3 +48,47 @@ it('filters actual navigation destinations and closes when one is selected', asy
   await user.click(link);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
+
+it('finds the cash evidence inbox by account source task', async () => {
+  const user = userEvent.setup();
+  render(<DashboardSearch />);
+  await user.click(screen.getByRole('button', { name: /open command palette/i }));
+  await user.type(screen.getByRole('searchbox', { name: 'Find a page' }), 'account');
+  expect(screen.getByRole('link', { name: /Cash evidence/ })).toHaveAttribute(
+    'href',
+    '/dashboard/cash-evidence',
+  );
+});
+
+it('finds the remittance batch workflow by provider adjustment task', async () => {
+  const user = userEvent.setup();
+  render(<DashboardSearch />);
+  await user.click(screen.getByRole('button', { name: /open command palette/i }));
+  await user.type(screen.getByRole('searchbox', { name: 'Find a page' }), 'provider adjustments');
+  expect(screen.getByRole('link', { name: /Remittance batches/ })).toHaveAttribute(
+    'href',
+    '/dashboard/remittance-batches',
+  );
+});
+
+it('finds cash reconciliation through reservation release work', async () => {
+  const user = userEvent.setup();
+  render(<DashboardSearch />);
+  await user.click(screen.getByRole('button', { name: /open command palette/i }));
+  await user.type(screen.getByRole('searchbox', { name: 'Find a page' }), 'release reservations');
+  expect(screen.getByRole('link', { name: /Cash reconciliation/ })).toHaveAttribute(
+    'href',
+    '/dashboard/cash-reconciliations',
+  );
+});
+
+it('finds posting evidence through PMS receipt observation work', async () => {
+  const user = userEvent.setup();
+  render(<DashboardSearch />);
+  await user.click(screen.getByRole('button', { name: /open command palette/i }));
+  await user.type(screen.getByRole('searchbox', { name: 'Find a page' }), 'PMS receipt');
+  expect(screen.getByRole('link', { name: /Posting evidence/ })).toHaveAttribute(
+    'href',
+    '/dashboard/posting-evidence',
+  );
+});

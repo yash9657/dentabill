@@ -30,11 +30,8 @@ export interface CallNowPillProps {
 
 // Mirrors `ENQUEUEABLE_CLAIM_STATUSES` in `apps/api/src/routes/v1/calls.ts`.
 // The API is the contract; the UI must not be more restrictive (would hide
-// valid actions) or more permissive (would 409 on click). MANUAL_REVIEW
-// claims reach this set when the DLQ consumer escalates a stuck call —
-// the operator's intervention IS clicking Call Now after fixing the
-// underlying cause (e.g. adding the NPI). We label that re-attempt as
-// "Retry call" to distinguish it from a first-time dial.
+// valid actions) or more permissive (would 409 on click). Reviewed claims
+// must first visit claim detail, where submission recovery is checked.
 const QUEUEABLE_STATUSES: ReadonlySet<ClaimStatus> = new Set([
   'PENDING',
   'NEEDS_INFO',
@@ -51,9 +48,8 @@ const RETRY_STATUSES: ReadonlySet<ClaimStatus> = new Set(['MANUAL_REVIEW', 'APPE
  * claims (COMPLETED, RESOLVED, WRITTEN_OFF) and live claims that are
  * already in flight (IN_QUEUE, CALLING).
  *
- * On click → `POST /v1/claims/:id/calls`. The mutation hook patches the
- * cached claim detail to `IN_QUEUE` optimistically and invalidates the
- * list so the live indicator activates without a reload.
+ * On click → `POST /v1/claims/:id/calls`. The mutation hook refreshes
+ * the claim and call status from the server.
  *
  * Errors are rendered inline beneath the Pill (no toast system yet).
  * The most common error is `PAYER_HOURS_CLOSED` which the API returns
@@ -78,6 +74,21 @@ export function CallNowPill({
   }, [mutation, claimId]);
 
   const compact = variant === 'compact';
+
+  if (compact && RETRY_STATUSES.has(claimStatus)) {
+    return (
+      <Link
+        href={`/dashboard/claims/${claimId}`}
+        aria-label={`Review call for claim ${claimId}`}
+        className={cn(
+          'rounded-pill text-caption hairline-edge text-gray-dark inline-flex h-7 items-center bg-white/70 px-2.5 font-medium hover:bg-black hover:text-white',
+          className,
+        )}
+      >
+        Review call
+      </Link>
+    );
+  }
 
   // Non-queueable terminal / in-flight states (IN_QUEUE, CALLING,
   // COMPLETED, RESOLVED, DENIED, WRITTEN_OFF, FAILED) get a quiet
@@ -236,7 +247,7 @@ export function CallNowPill({
           aria-live="polite"
           data-testid="call-now-pill-success"
         >
-          Queued. The call will start shortly.
+          Call request accepted.
         </p>
       ) : null}
     </div>

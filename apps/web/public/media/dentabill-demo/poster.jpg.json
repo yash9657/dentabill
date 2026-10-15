@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "asset": "apps/web/public/media/dentabill-demo/poster.jpg",
+  "source": "apps/demo-film (Remotion composition DemoFilm)",
+  "origin": "Remotion still of the Call results moment, rendered by apps/demo-film/render.sh from authored React components, the DentaBill logo and self-hosted Inter/Newsreader. No image-generation model.",
+  "process": {
+    "tool": "Remotion 4.0.531 + FFmpeg",
+    "width": 1600,
+    "height": 900
+  },
+  "videoSha256": "807da1fc0fd8a098235c2617f9b18f0dba3c7ee05206e2dfeddd063caec4daf8",
+  "assetSha256": "ab062ea3a626437e6c0746322e9fca224731daa4424df7a841e90d95cb7776c1"
+}

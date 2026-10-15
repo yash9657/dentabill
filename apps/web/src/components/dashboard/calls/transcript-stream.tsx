@@ -1,10 +1,10 @@
 'use client';
 
+import { selectCallTranscript, type TranscriptSpeaker } from '@dentabill/types';
 import * as React from 'react';
 
 import {
   useCallEventStream,
-  type CallStreamEvent,
   type CallStreamStatus,
 } from '../../../lib/calls/use-call-event-stream.js';
 
@@ -33,36 +33,12 @@ function statusLabel(status: CallStreamStatus): string {
   }
 }
 
-function transcriptText(evt: CallStreamEvent): string | null {
-  const data = evt.data as { text?: unknown; transcript?: unknown };
-  if (typeof data.text === 'string') return data.text;
-  if (typeof data.transcript === 'string') return data.transcript;
-  return null;
-}
-
-/** Who is speaking on a given turn. */
-type Speaker = 'agent' | 'representative' | 'ivr';
-
-/**
- * Retell's wire vocabulary is `agent` (the AI placing the call), `user` (the
- * human it is speaking to — here, the payer representative) and `system` (the
- * IVR). Anything unrecognised is attributed to our own agent, matching
- * `pickRole` in the summary worker.
- */
-function speakerOf(evt: CallStreamEvent): Speaker {
-  const raw = (evt.data as { role?: unknown }).role;
-  const role = typeof raw === 'string' ? raw.toLowerCase() : '';
-  if (role === 'user' || role === 'representative' || role === 'rep' || role === 'human') {
-    return 'representative';
-  }
-  if (role === 'system') return 'ivr';
-  return 'agent';
-}
-
-const SPEAKER_LABEL: Record<Speaker, string> = {
+const SPEAKER_LABEL: Record<TranscriptSpeaker, string> = {
   agent: 'DentaBill agent',
-  representative: 'Payer rep',
-  ivr: 'IVR',
+  remote: 'Remote speaker (payer or IVR)',
+  representative: 'Remote speaker (payer or IVR)',
+  system: 'System / IVR',
+  source: 'Source transcript',
 };
 
 export function TranscriptStream({ callId, bearerToken, baseUrl }: Props): React.ReactElement {
@@ -74,9 +50,12 @@ export function TranscriptStream({ callId, bearerToken, baseUrl }: Props): React
     ...(baseUrl !== undefined ? { baseUrl } : {}),
   });
 
-  const transcriptRows = events
-    .map((evt) => ({ id: evt.id, text: transcriptText(evt), speaker: speakerOf(evt) }))
-    .filter((row): row is { id: string; text: string; speaker: Speaker } => row.text !== null);
+  const transcript = selectCallTranscript(events);
+  const transcriptRows = transcript.turns.map((turn) => ({
+    id: turn.id,
+    text: turn.text,
+    speaker: turn.role,
+  }));
 
   return (
     <section
@@ -94,9 +73,19 @@ export function TranscriptStream({ callId, bearerToken, baseUrl }: Props): React
         </span>
       </header>
 
+      {enabled && transcript.kind === 'provisional' ? (
+        <p role="note" className="text-caption text-gray-warm">
+          Provisional transcript snapshot; final transcript is not yet available.
+        </p>
+      ) : null}
+
       {enabled ? (
         transcriptRows.length === 0 ? (
-          <p className="text-caption text-gray-warm">Waiting for transcript turns…</p>
+          <p className="text-caption text-gray-warm">
+            {transcript.kind === 'final'
+              ? 'The final transcript is empty.'
+              : 'Waiting for transcript turns…'}
+          </p>
         ) : (
           <ol aria-live="polite" className="flex flex-col gap-3">
             {transcriptRows.map((row) => (
@@ -104,7 +93,7 @@ export function TranscriptStream({ callId, bearerToken, baseUrl }: Props): React
                 key={row.id}
                 data-speaker={row.speaker}
                 className={
-                  row.speaker === 'ivr'
+                  row.speaker === 'system'
                     ? 'flex flex-col gap-1'
                     : row.speaker === 'agent'
                       ? 'rounded-card bg-warm-stone/30 flex flex-col gap-1 px-3 py-2'
@@ -116,9 +105,9 @@ export function TranscriptStream({ callId, bearerToken, baseUrl }: Props): React
                 </span>
                 <span
                   className={
-                    row.speaker === 'ivr'
+                    row.speaker === 'system'
                       ? 'text-caption text-gray-warm'
-                      : 'text-body text-gray-dark'
+                      : 'text-body text-gray-dark whitespace-pre-wrap'
                   }
                 >
                   {row.text}

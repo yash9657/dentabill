@@ -1,12 +1,9 @@
 import { FakeClaude } from './fake.js';
-import { LiveClaude } from './live.js';
 import type { SummarizerPort } from './port.js';
 
 /**
- * Empty / unset `ANTHROPIC_API_KEY` selects the FakeClaude adapter.
- * Mirrors `createRetellPort` (ADR-033) — production deploys validate
- * the key at boot, so silent falls-back to fake here are dev/test
- * convenience only.
+ * Empty / unset ANTHROPIC_API_KEY preserves the explicit synthetic baseline.
+ * Legacy live inference is blocked; a key is not an approved provider release.
  */
 export interface CreateSummarizerPortInput {
   readonly anthropicApiKey?: string;
@@ -24,7 +21,7 @@ export interface CreateSummarizerPortInput {
 
 export interface CreateSummarizerPortResult {
   readonly summarizer: SummarizerPort;
-  readonly mode: 'live' | 'fake';
+  readonly mode: 'fake';
 }
 
 export function createSummarizerPort(input: CreateSummarizerPortInput): CreateSummarizerPortResult {
@@ -37,7 +34,5 @@ export function createSummarizerPort(input: CreateSummarizerPortInput): CreateSu
       mode: 'fake',
     };
   }
-  const liveOpts: { apiKey: string; maxOutputTokens?: number } = { apiKey: key };
-  if (input.maxOutputTokens !== undefined) liveOpts.maxOutputTokens = input.maxOutputTokens;
-  return { summarizer: new LiveClaude(liveOpts), mode: 'live' };
+  throw new Error('SUMMARY_PROVIDER_DISABLED');
 }

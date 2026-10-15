@@ -1,5 +1,11 @@
+import { createHash, randomUUID } from 'node:crypto';
+
 import { hashPatientDOB, prisma } from '@dentabill/db';
-import { FakeRetell } from '@dentabill/payer-ivr';
+import {
+  FakeRetell,
+  StartCallInputSchema,
+  type RetellReconciliationClient,
+} from '@dentabill/payer-ivr';
 import {
   CALL_JOB_NAME,
   type CallJobData,
@@ -8,9 +14,10 @@ import {
   createRedisConnection,
 } from '@dentabill/queue';
 import type { Redis } from 'ioredis';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { loadWorkerEnv } from './env.js';
+import { enqueueJobOutbox } from './job-outbox.js';
 import { bootCallWorker, type CallWorkerHandle } from './server.js';
 
 /**
@@ -98,6 +105,7 @@ async function seedOrgAndClaim(): Promise<SeedResult> {
     data: {
       organizationId: org.id,
       claimNumber: 'CLM-9001',
+      subscriberId: 'MEMBER-9001',
       patientDOBHash: hashPatientDOB({
         dob: '1990-05-12',
         organizationId: org.id,
@@ -150,7 +158,7 @@ async function waitFor(
 }
 
 describe('call-worker e2e — happy path lifecycle', () => {
-  it('drives PENDING → CALLING → COMPLETED through real BullMQ + Postgres + FakeRetell', async () => {
+  it('recovers a saved outbox command through BullMQ and persists summary delivery after completion', async () => {
     const { orgId, claimId } = await seedOrgAndClaim();
     const retellCallId = 'fake_e2e_happy_1';
     const fake = new FakeRetell({ retellCallIdFactory: () => retellCallId });
@@ -158,6 +166,7 @@ describe('call-worker e2e — happy path lifecycle', () => {
     workerHandle = await bootCallWorker({
       env: buildEnv({ workerPort: pickWorkerPort() }), // 0 → kernel-assigned ephemeral port
       retellPort: fake,
+      outboxRelayIntervalMs: 25,
     });
 
     const queue = createCallsQueue({ connection: queueConnection });
@@ -170,10 +179,8 @@ describe('call-worker e2e — happy path lifecycle', () => {
         claimPriority: 80,
         idempotencyKey: 'e2e-happy-1',
       };
-      await queue.add(CALL_JOB_NAME, data, {
-        jobId: 'e2e-happy-1',
-        ...CALLS_DEFAULT_JOB_OPTIONS,
-      });
+      await seedIntent(data);
+      await enqueueJobOutbox(prisma, { organizationId: orgId, kind: 'CALL_PLACE', data });
 
       // Worker picks the job up and calls FakeRetell.startCall.
       await waitFor(() => fake.startedCalls.length === 1);
@@ -199,7 +206,8 @@ describe('call-worker e2e — happy path lifecycle', () => {
       where: { claimId, organizationId: orgId },
     });
     expect(callRow.status).toBe('COMPLETED');
-    expect(callRow.humanReached).toBe(true);
+    // A hangup/completion event alone does not prove a human was reached.
+    expect(callRow.humanReached).toBe(false);
     expect(callRow.attemptNumber).toBe(1);
     expect(callRow.retellCallId).toBe(retellCallId);
 
@@ -208,6 +216,17 @@ describe('call-worker e2e — happy path lifecycle', () => {
     expect(events.map((e) => e.eventType)).toContain('call.transcript');
     expect(events.map((e) => e.eventType)).toContain('call.ended');
 
+    await waitFor(
+      async () =>
+        (await prisma.jobOutbox.count({
+          where: { organizationId: orgId, state: 'DELIVERED' },
+        })) === 2,
+    );
+    const summaryCommand = await prisma.jobOutbox.findFirstOrThrow({
+      where: { organizationId: orgId, kind: 'SUMMARY_GENERATE' },
+    });
+    expect(summaryCommand.idempotencyKey).toBe(`call.${callRow.id}`);
+    expect(summaryCommand.deliveryAttempts).toBe(1);
     expect(fake.startedCalls).toHaveLength(1);
     expect(fake.startedCalls[0]!.agentMetadata.providerNpi).toBe('1234567890');
   });
@@ -248,7 +267,7 @@ describe('call-worker e2e — cross-org isolation', () => {
         const job = await queue.getJob('e2e-crossorg-1');
         if (job === undefined) return false;
         const state = await job.getState();
-        return state === 'failed';
+        return state === 'completed';
       });
     } finally {
       await queue.close();
@@ -286,3 +305,186 @@ describe('call-worker e2e — graceful shutdown', () => {
     workerHandle = null; // already shut down; afterEach must not double-close.
   });
 });
+
+describe('call-worker e2e — persisted accepted-call observation', () => {
+  it.each([true, false])(
+    'resumes monitoring after restart with provider lookup available=%s',
+    async (available) => {
+      const { orgId, claimId } = await seedOrgAndClaim();
+      await prisma.claim.updateMany({
+        where: { id: claimId, organizationId: orgId },
+        data: { status: 'CALLING' },
+      });
+      const claim = await prisma.claim.findFirstOrThrow({
+        where: { id: claimId, organizationId: orgId },
+      });
+      const call = await prisma.call.create({
+        data: {
+          organizationId: orgId,
+          claimId,
+          retellCallId: `synthetic_${randomUUID()}`,
+          status: 'ON_HOLD',
+        },
+      });
+      const intentId = `intent_${randomUUID()}`;
+      const snapshot = StartCallInputSchema.parse({
+        payerCode: claim.payerCode,
+        agentId: 'agent_synthetic_restart',
+        fromNumberE164: '+15555550100',
+        toNumberE164: '+15555550200',
+        agentMetadata: {
+          practiceName: 'Synthetic restart practice',
+          providerNpi: '1234567890',
+          subscriberId: 'SYNTHETIC-RESTART',
+          dateOfService: '2026-01-15',
+        },
+        idempotencyKey: intentId,
+      });
+      await prisma.callIntent.create({
+        data: {
+          id: intentId,
+          organizationId: orgId,
+          claimId,
+          idempotencyKey: `original_${intentId}`,
+          payerCode: claim.payerCode,
+          attemptNumber: 1,
+          claimPriority: 80,
+          claimVersion: claim.updatedAt,
+          state: 'ACCEPTED',
+          callId: call.id,
+          submittedAt: new Date(Date.now() - 900_000),
+          callDeadlineAt: new Date(Date.now() - 1_000),
+          nextObservationAt: new Date(Date.now() - 1_000),
+          requestPayload: snapshot,
+          requestHash: createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'),
+        },
+      });
+      const fake = new FakeRetell();
+      const startCall = vi.spyOn(fake, 'startCall');
+      const endCall = vi.spyOn(fake, 'endCall');
+      const getCall = vi.fn<RetellReconciliationClient['getCall']>(async () => ({
+        candidate: {
+          providerCallId: call.retellCallId,
+          agentId: snapshot.agentId,
+          fromNumberE164: snapshot.fromNumberE164,
+          toNumberE164: snapshot.toNumberE164,
+          intentId,
+          callType: 'phone_call',
+          direction: 'outbound',
+          startedAt: null,
+        },
+        terminalEvent: {
+          type: 'call.ended',
+          retellCallId: call.retellCallId,
+          endReason: 'completed',
+          endedAt: new Date().toISOString(),
+          durationSeconds: 120,
+        },
+      }));
+      workerHandle = await bootCallWorker({
+        env: buildEnv({ workerPort: pickWorkerPort() }),
+        retellPort: fake,
+        reconciliationClient: available ? { findCallsByIntent: async () => [], getCall } : null,
+        outboxRelayIntervalMs: 25,
+      });
+      await waitFor(async () => {
+        const intent = await prisma.callIntent.findFirstOrThrow({
+          where: { id: intentId, organizationId: orgId },
+        });
+        return available ? intent.state === 'TERMINAL' : intent.observationReviewAt !== null;
+      });
+      const intent = await prisma.callIntent.findFirstOrThrow({
+        where: { id: intentId, organizationId: orgId },
+      });
+      const current = await prisma.call.findFirstOrThrow({
+        where: { id: call.id, organizationId: orgId },
+      });
+      expect(startCall).not.toHaveBeenCalled();
+      expect(endCall).not.toHaveBeenCalled();
+      expect(intent.stopAcknowledgedAt).toBeNull();
+      if (available) {
+        expect(getCall).toHaveBeenCalledTimes(1);
+        expect(current).toMatchObject({ status: 'COMPLETED', durationSeconds: 120 });
+        expect(
+          await prisma.jobOutbox.count({
+            where: { organizationId: orgId, kind: 'SUMMARY_GENERATE' },
+          }),
+        ).toBe(1);
+      } else {
+        expect(getCall).not.toHaveBeenCalled();
+        expect(current).toMatchObject({ status: 'ON_HOLD', durationSeconds: null, endedAt: null });
+        expect(intent).toMatchObject({
+          state: 'ACCEPTED',
+          observationErrorCode: 'STOP_UNAVAILABLE',
+          stopAttempts: 0,
+        });
+        expect(intent.nextObservationAt).not.toBeNull();
+      }
+    },
+  );
+});
+
+describe('call-worker e2e — missing identity', () => {
+  it('fails once despite retries being configured and keeps the claim in NEEDS_INFO', async () => {
+    const { orgId, claimId } = await seedOrgAndClaim();
+    await prisma.claim.updateMany({
+      where: { id: claimId, organizationId: orgId },
+      data: { subscriberId: null },
+    });
+    const fake = new FakeRetell();
+    const startCall = vi.spyOn(fake, 'startCall');
+    workerHandle = await bootCallWorker({
+      env: buildEnv({ workerPort: pickWorkerPort() }),
+      retellPort: fake,
+    });
+    const queue = createCallsQueue({ connection: queueConnection });
+    try {
+      const jobId = 'e2e-missing-identity';
+      await seedIntent({
+        organizationId: orgId,
+        claimId,
+        payerCode: 'DELTA_DENTAL_PPO',
+        attemptNumber: 1,
+        claimPriority: 80,
+        idempotencyKey: jobId,
+      });
+      await queue.add(
+        CALL_JOB_NAME,
+        {
+          organizationId: orgId,
+          claimId,
+          payerCode: 'DELTA_DENTAL_PPO',
+          attemptNumber: 1,
+          claimPriority: 80,
+          idempotencyKey: jobId,
+        },
+        { jobId, attempts: 3, backoff: { type: 'fixed', delay: 10 } },
+      );
+      await waitFor(
+        async () =>
+          (await queue.getJob(jobId))?.getState().then((state) => state === 'failed') ?? false,
+      );
+      const failedJob = await queue.getJob(jobId);
+      expect(failedJob?.attemptsMade).toBe(1);
+      expect(failedJob?.failedReason).toContain('subscriberId');
+      expect(startCall).not.toHaveBeenCalled();
+      const claim = await prisma.claim.findFirstOrThrow({
+        where: { id: claimId, organizationId: orgId },
+      });
+      expect(claim.status).toBe('NEEDS_INFO');
+      expect(claim.lastCallAt).toBeNull();
+      expect(await prisma.call.count({ where: { organizationId: orgId, claimId } })).toBe(0);
+    } finally {
+      await queue.close();
+    }
+  });
+});
+
+async function seedIntent(data: CallJobData): Promise<void> {
+  const claim = await prisma.claim.findFirstOrThrow({
+    where: { id: data.claimId, organizationId: data.organizationId },
+  });
+  await prisma.callIntent.create({
+    data: { ...data, payerCode: claim.payerCode, claimVersion: claim.updatedAt },
+  });
+}

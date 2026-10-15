@@ -203,3 +203,238 @@ For a confirmed PHI exposure:
 
 The incident-response template lands when (if) we have a first incident,
 not preemptively.
+
+### Imported procedure and coverage facts (ADR-072; local implementation)
+
+`ClaimSourceLine` and `ClaimSourceCoverage` contain potentially identifying procedure dates,
+treatment locations, payer/plan/member/subscriber IDs and source references. They use composite
+tenant/claim foreign keys and tenant-filtered GET detail projections; no new public download,
+third-party transmission or verified-eligibility assertion is added. Parser errors are closed
+messages and import audit retains only aggregate counts. Imported snapshots reject update,
+append or individual deletion while the parent claim exists; authorized parent deletion follows
+the existing cascade. This does not establish a legal retention schedule or production PHI
+approval. Payment-ledger work must define retention/reversal semantics before introducing
+financial references to source lines. Practice-scoped browser query keys isolate source detail
+caches, including status-update refetch behavior. Local tests do not establish deployed controls.
+
+### Remittance evidence and review (ADR-073; local implementation)
+
+Custom remittance JSON can contain payer claim-control, payment trace, coverage and source
+references. Four immutable tables use tenant/claim composite FKs and restrictive evidence,
+source and actor retention. Scoped stored-role checks restrict access to owner/admin/billing
+staff. Review tokens bind claim/evidence/ledger versions; idempotent request hashes also bind
+actor and decision. Pending/rejected records remain evidence and still prevent claim deletion.
+This safeguard is not a legal retention schedule, PHI authorization or implemented erasure policy.
+
+All successful reads, including exact import/review replays, require aggregate/opaque-ID access
+audit entries. New evidence/review/children and mutation audit commit together. Validation,
+malformed JSON and unexpected database failures have closed messages; no input issue values,
+payloads or raw errors reach route logs. Raw/canonical input and list-response bounds protect
+local processing and AWS payload size. Browser forms and caches bind claim, user and optional
+practice; late auth changes cannot transmit under a new scope. No inference, third-party
+submission, verified cash receipt, posting or settlement is implied by acceptance.
+
+### Manual cash source evidence (ADR-074; local only)
+
+Cash observations may contain account identifiers, traces, counterparty/source descriptions and
+financial data. Treat them as sensitive; the custom manual contract does not certify provider
+identity or establish an external PHI agreement. All five routes require authenticated practice
+scope and stored OWNER/ADMIN/BILLING_STAFF roles. Reads, previews, exact replays and mutations
+require PHI-safe audit; raw validation/Prisma errors are closed before global logging. No raw
+payload or source ID is placed in audit metadata. Raw/canonical import64KiB, page2MiB and bounded
+replacement traversal reduce unbounded resource exposure. Account summaries never combine
+accounts/connectors. Source/review rows and actor references are immutable/restrictive; approved
+retention, legal hold, erasure and backups still require a production policy. Acceptance confirms
+review of manual evidence only: bank verification and settlement stay UNVERIFIED. No real banking
+connector, money movement, claim allocation, payment posting or revenue assertion is enabled.
+
+### Manual remittance batches (ADR-075; local only)
+
+Batch records can contain payer/payee identifiers, traces and provider adjustment references.
+Treat all source fields as sensitive. All batch routes require scoped stored OWNER/ADMIN/BILLING_STAFF
+roles; read/replay audits are mandatory and mutation audits commit atomically. Strict bounded
+schemas, closed error messages and opaque audit metadata keep source values out of logs.
+Raw/canonical/JSONB256KiB,100 members/adjustments and page2MiB bounds limit processing/response size.
+Organization admission locks, immutable exact member/review bindings and restrictive actor/source
+FKs prevent tenant crossing and repeated accepted claim events. Manual acceptance establishes
+neither source authenticity nor bank receipt, posting or settlement. Production retention,
+erasure, PHI agreements and authenticated connectors remain separate gates. ADR-080 adds local batch corrections below.
+
+### Manual cash reconciliation (ADR-076; local only)
+
+Five scoped handlers require stored OWNER/ADMIN/BILLING_STAFF roles and mandatory audited reads,
+replays and atomic mutations. Source/payment identities remain sensitive; fixed errors and opaque
+audit metadata avoid payload logging. Signed capacities, exact accepted-review references and
+organization serialization prevent duplicate reservations, including direct SQL and concurrent
+reviews. Historical replacement components retain reservations after source changes; traversal
+over100 IDs blocks matching. Full release is available independently of stale/overflowed source
+state. Mutation receipts never change on retry.4KiB bodies and20-record/2MiB pages bound requests.
+Manual review establishes no source authenticity, bank verification, claim allocation, external
+posting or settlement. Cross-connector account identity, production retention/erasure, PHI
+agreements and authorized bank/PMS integration evidence remain unresolved deployment gates.
+
+### Authenticated tenant rate-limit ordering (ADR-077; local only)
+
+Call enqueue and practice-settings writes now apply their10/minute practice limiter after
+`requireAuth`. Four regressions reproduce the earlier shared pre-auth `anon` bucket and verify
+that anonymous requests cannot drain authenticated quota, users/IPs share their practice limit
+and other practices remain isolated. These are process-local plugin limits; no distributed
+quota or production WAF/load evidence is claimed. Production configuration is unchanged.
+
+### Manual PMS posting observations (ADR-078; local only)
+
+Posting source identifiers, dates, traces, deposit and claim/procedure references may be sensitive.
+All five handlers require scoped stored OWNER/ADMIN/BILLING_STAFF roles, mandatory read/replay
+audit and atomic mutation audit. Closed validation/Prisma errors and opaque metadata avoid source
+logging. Immutable review/entry mirrors, restrictive references and organization serialization
+prevent tenant crossing and duplicate accepted source-entry identity. Incomplete accepted history
+retains old entry IDs; only accepted COMPLETE/REMOVED revisions reset them. This is membership
+protection, not a cash reservation.256KiB source/JSONB,100 entries and20-record/2MiB pages bound
+input/output. Source claims remain UNLINKED; no authenticated PMS, bank verification, payment
+write or settlement is implied. Production PHI agreements, lifecycle/retention and restore remain
+required before real data.
+
+### Durable generic review notifications (ADR-079; local only)
+
+Review alerts commit with the source publication/review outcome and audit. Immutable intent
+bindings retain organization, source/run/generation, actor, selected recipient, fixed generic
+payload/hash and UUID delivery key. Recipient selection is deterministic among eligible
+OWNER/ADMIN users; missing or changed identity blocks before submission, with no implicit rebind.
+Source/current-claim/transcript/review guards suppress never-submitted obsolete work and quarantine
+changed work after submission. Native human review suppresses never-submitted alerts atomically.
+
+The payload contains only the frozen email address and fixed review-available text/path; no
+patient, claim, payer, amount, transcript or inference content is rendered into it. Treat retained
+recipient addresses as sensitive. Operations requires a stored scoped OWNER/ADMIN role and audits
+both read endpoints. Responses expose binding status and closed codes, not emails, message bodies,
+payload hashes, delivery keys or provider receipt IDs. Public errors and audit metadata omit those
+fields; browser caches are scoped to user/practice and requests are cancelled when views change.
+
+Submission ownership is persisted before the boundary: one-minute leases, at most five attempts
+and a fixed 23-hour deadline using the same key/content. Immutable attempts/receipts and scoped
+restrictive references preserve evidence; expired uncertainty cannot create a fresh-key retry.
+The only callable transport is synthetic and runtime delivery defaults to disabled. SIMULATED
+and provider ACCEPTED must never be represented as inbox delivery. No send/retry/rebind endpoint
+or UI exists. Migration 31 applied only to localhost isolated/shared databases with no historical
+backfill. Local verification is recorded in ADR-079; authorized rollout, provider/domain
+configuration, recipient/PHI agreements, retention/erasure and external receipt reconciliation
+remain separate gates.
+
+### Stable batch source corrections (ADR-080; local only)
+
+Immutable organization-scoped batch/revision/ownership sidecars preserve existing evidence and
+review bytes. Automatic SQL links, restrictive references and deferred seals enforce complete
+bindings; positive explicit v2 source sequences cannot be inferred from arrival times. The latest
+observed revision governs acceptance/currentness even after rejection. Audited history uses a
+tenant/batch-bound cursor and the existing bounded page envelope; source identifiers stay sensitive.
+
+First accepted membership permanently binds a claim-remittance event to its stable batch. Later
+same-batch revisions may repeat it, but omission cannot transfer it to another batch. Source
+corrections retain all old cash reservations and block replacement matches until explicit full
+release; accepted zero net cannot act as withdrawal. Immutable review records are distinct from
+refreshed response currentness. These controls extend manual evidence admission, not bank/PMS
+verification, payment execution or claim settlement. Local verification is tracked in ADR-080;
+production retention/erasure, external connectors and rollout remain open.
+
+### Reviewed posting-entry relationships (ADR-081; local only)
+
+All six handlers require scoped stored OWNER/ADMIN/BILLING_STAFF authority. Reads and exact
+replays are audited; link/release and their audits commit atomically. Source/claim identifiers
+remain sensitive; closed diagnostics and opaque audit metadata avoid raw payload logs. Strict
+4KiB mutation bodies and 20-record/2MiB history pages bound the API; cursors bind tenant/filter.
+
+Exact supported source system/namespace/claim identity, latest observed accepted evidence and
+claim version/source hash guard association. Supplied source-line identity cannot degrade to a
+guessed claim-only or procedure-code match; without a source line, the raw procedure remains
+unresolved. Immutable entry/claim/line/review/actor references and organization/claim locks extend
+these rules to direct SQL and races. Source-entry reservations survive stale/omitted/removed/
+rejected revisions and receipt changes until explicit full release. Release remains possible for
+stale evidence without mutating amounts, claim workflow, source facts, cash or settlement.
+Migration 33 has no historical backfill. Local verification is tracked in ADR-081; authenticated
+connectors, production retention/erasure and deployment evidence remain open.
+
+### Synthetic demo preparation (ADR-082; local only)
+
+The preflight requires a dedicated localhost/loopback `dentabill_demo_` database and consistent
+local origins. Explicit synthetic mode and known external-provider/cloud/billing/mail/telemetry
+configuration exclusions prevent a successful check with inherited live-service settings. Clerk
+test-key format is admitted intentionally, but success explicitly leaves authentication unverified.
+It does not contact Clerk or authorize a provider/financial action.
+
+Initial tests and read-only smoke did not prove startup isolation: generated Prisma could load
+repository dotenv after validation. The remediation validates outer configuration before imports,
+then generates a fresh client from the tracked schema inside a private0700 temporary directory.
+Generated environment paths must be absent; generator and esbuild children receive minimal explicit
+environments. Workspace modules are bundled and the command gets an environment allowlist; only
+private Prisma and trusted pino/pino-pretty stay external. NODE_PATH, ESBUILD_BINARY_PATH,
+DOTENV_CONFIG_PATH and DEBUG are now rejected alongside NODE_OPTIONS. Closed JSON reports and
+private cleanup bound failures. Fresh122 tests plus15 helper cases and an isolated read-only smoke
+pass, along with current API/dependency checks24/24, strict CLI types and API build. Installed
+Node/pnpm/tsx/dependencies are trusted; the guard cannot undo parent preloads already executed.
+
+Database reads run in a repeatable-read READ ONLY transaction. Actual database name, exact local/
+Clerk actor bindings, stored OWNER/ADMIN role, exclusive practice/actor counts and every migration
+checksum/status must agree. Fixture hashes, strict parsers and bounded regular-file/symlink checks
+protect the connected local bundle; these checks do not establish source authenticity or prove
+patient-data provenance. Diagnostics expose closed codes without credentials, database URLs or
+raw fixtures. No reset, migration application, actor provisioning, data import or audit write is
+performed by preflight. Create-only setup is tracked below; an environment-clean launcher and actual authenticated
+rehearsal remain required before recording. Legacy seed/simulator and browser test-header bypasses
+are not the verified path; full external and production evidence gates remain open.
+
+### Create-only local demo provisioning (ADR-083)
+
+Provisioning shares the explicit localhost `dentabill_demo_` admission and private runtime above.
+Every migration is checked and staged as exact SQL bytes with a digest before database creation;
+the pinned migration CLI runs beside the private schema with a minimal explicit environment.
+The maintenance connection must identify itself as writable `postgres`. A strictly admitted,
+quoted identifier is used for standalone CREATE DATABASE. Existing targets and creation races
+are refused; there is no reset, drop or resume operation. Failures after acknowledged creation
+preserve the database for inspection. Unknown create, child, cleanup or report outcomes must not
+be represented as NOT_CREATED.
+
+The exact migration journal and empty workflow/bootstrap tables are checked before one transaction
+writes the supplied exact local/Clerk practice/Owner binding, a synthetic payer configuration with
+NPI `9999999999` and one mandatory `demo.provisioned` audit. Audit failure rolls back the entire
+bootstrap. A read-only postcheck verifies the exact metadata, audit, journal and absence of workflow
+data before success. The closed receipt contains the provision UUID, actor/audit IDs, manifest hash
+and migration digest/count, without credentials or raw source facts. It leaves authentication,
+rehearsal and recording NOT_VERIFIED. The inherited installed-toolchain/parent-preload trust limits
+still apply. 15 database tests and 27 focused tests pass separately; independent review is clear. Actual
+CLI 33-migration creation/refusal/read-only preflight smoke passes, along with final affected
+API/dependency checks24/24, both strict CLI types and API production build. The final 8-case recheck
+overlaps the 42 distinct cases. An isolated app launcher and authenticated
+rehearsal remain separate gates; no provider or production authorization is implied.
+
+### Isolated local demo launcher (ADR-084; locally verified)
+
+The parent validates a fresh environment snapshot and derives explicit API and web allowlists.
+The private API/Prisma child repeats the read-only preflight before constructing/listening with
+the actual API and requires configured Clerk keys. The web allowlist contains local origins and
+Clerk configuration but excludes the database URL and job secret. Next runs against a physical
+private copy of source, public assets, required configuration and shared UI; dotenv names are
+excluded before file access, other source symlinks are refused and file/tree reads are bounded.
+Two explicit links at private root and app `node_modules` reuse trusted installed dependencies.
+TypeScript, React types and Node types must resolve to the same installed setup files before Next
+starts; this guards the initial missing-dependency auto-install path, verified by final tests and
+actual private Next startup.
+The copied manifest and fixture
+hashes must match that launch's successful preflight. Installed toolchain and parent-preload trust
+limits from ADR-082 continue to apply; this is not a hostile-host sandbox.
+
+Owned IPC must match the launch UUID, approved origin and closed message shape before parent
+probes check API readiness and the exact served manifest hash. These checks establish startup
+readiness, not authentication. The web hostname must explicitly be `localhost` to avoid NextURL/
+Clerk self-proxy rewrites; the API permits admitted loopback hosts. Distinct nonzero ports are
+required, without fallback or silent hostname rewriting. Children
+run in owned process groups on macOS/Linux with discarded raw logs; bounded termination targets
+only those groups. `forcedBySupervisor` reports supervisor force only; child watchdogs are separate
+and shutdown does not guarantee job drain. Unconfirmed process/file cleanup returns a closed
+failure instead of success.
+Startup/stop does not migrate, reset or drop the database; later authenticated app actions retain
+their normal local write semantics. SERVICES_RUNNING still reports authentication, rehearsal and
+recording NOT_VERIFIED. Actual CLI startup/public-page/manifest/auth-bypass-refusal/stop smoke passes
+with fake Clerk keys, unchanged database hashes and released listeners. The final combined suite
+passes 70/70 across8 files, affected API/dependency checks24/24, all three strict CLI types and API
+build pass; independent API/process/web review is clear. Actual Clerk rehearsal and external/production evidence remain
+separate gates.

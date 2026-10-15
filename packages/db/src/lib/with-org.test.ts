@@ -55,6 +55,35 @@ describe('getOrgScopedDb()', () => {
     expect(() => getOrgScopedDb(null as unknown as string)).toThrow(MissingOrgScopeError);
   });
 
+  it('isolates outbox command reads and rejects unscoped delivery-state mutations', async () => {
+    const { org1, org2 } = await seedTwoOrgsWithClaims();
+    for (const org of [org1, org2]) {
+      await prisma.jobOutbox.create({
+        data: {
+          organizationId: org.id,
+          kind: 'CALL_PLACE',
+          idempotencyKey: 'synthetic-shared-key',
+          payload: { organizationId: org.id },
+          payloadHash: 'synthetic',
+        },
+      });
+    }
+    const scoped = getOrgScopedDb(org1.id).jobOutbox;
+    const foreign = await prisma.jobOutbox.findFirstOrThrow({ where: { organizationId: org2.id } });
+    expect(await scoped.count()).toBe(1);
+    expect((await scoped.findMany()).map((row) => row.organizationId)).toEqual([org1.id]);
+    expect(await scoped.findFirst({ where: { id: foreign.id } })).toBeNull();
+    await expect(
+      prisma.jobOutbox.updateMany({
+        where: { id: foreign.id },
+        data: { state: 'DELIVERED' },
+      }),
+    ).rejects.toThrow(MissingOrgScopeError);
+    expect(
+      await prisma.jobOutbox.findFirst({ where: { id: foreign.id, organizationId: org2.id } }),
+    ).toMatchObject({ state: 'PENDING' });
+  });
+
   it('findMany on Claim returns only the calling org rows', async () => {
     const { org1, org2 } = await seedTwoOrgsWithClaims();
 

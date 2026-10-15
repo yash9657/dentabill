@@ -34,6 +34,10 @@ describe('httpStatusForCode', () => {
     expect(httpStatusForCode(API_ERROR_CODES.ORG_SCOPE_MISSING)).toBe(403);
     expect(httpStatusForCode(API_ERROR_CODES.ORG_SCOPE_VIOLATION)).toBe(403);
     expect(httpStatusForCode(API_ERROR_CODES.WEBHOOK_SIGNATURE_INVALID)).toBe(401);
+    expect(httpStatusForCode(API_ERROR_CODES.MISSING_CALL_IDENTITY)).toBe(422);
+    expect(httpStatusForCode(API_ERROR_CODES.SUMMARY_INFERENCE_BUSY)).toBe(409);
+    expect(httpStatusForCode(API_ERROR_CODES.SUMMARY_INFERENCE_REVIEW_REQUIRED)).toBe(409);
+    expect(httpStatusForCode(API_ERROR_CODES.SUMMARY_ALREADY_EXISTS)).toBe(409);
   });
 
   it('falls back to 500 for unknown codes', () => {

@@ -5,9 +5,21 @@ export {
   type CallWorkerHandle,
 } from './server.js';
 export { loadWorkerEnv, type WorkerEnv } from './env.js';
+export {
+  reconcileCallIntent,
+  getCallIntentReconciliationEligibility,
+  type CallReconciliationResult,
+  type CallReconciliationOutcome,
+  type ReconcileCallIntentOptions,
+} from './call-reconciliation.js';
 export { startHealthServer, type HealthServerHandle, type HealthServerOptions } from './health.js';
 export { createStubProcessor, type CreateStubProcessorOptions } from './processor.js';
-export { createCallJobHandler, providerLineToE164, type CallJobHandlerDeps } from './handler.js';
+export {
+  createCallJobHandler,
+  MissingCallIdentityError,
+  providerLineToE164,
+  type CallJobHandlerDeps,
+} from './handler.js';
 export {
   createHoldDetector,
   MAX_ATTEMPTS_PER_CLAIM_PER_DAY,
@@ -35,3 +47,28 @@ export {
   type DlqProcessor,
   type DlqWorker,
 } from './dlq-consumer.js';
+export {
+  enqueueJobOutbox,
+  relayJobOutbox,
+  type EnqueueJobOutboxInput,
+  type RelayJobOutboxOptions,
+  type RelayJobOutboxResult,
+} from './job-outbox.js';
+export {
+  previewJobRecovery,
+  recoverJobOutbox,
+  JobRecoveryBlockedReasonSchema,
+  type JobRecoveryBlockedReason,
+  type JobRecoveryPreview,
+  type JobRecoveryResult,
+  type PreviewJobRecoveryOptions,
+  type RecoverJobOutboxOptions,
+} from './job-recovery.js';
+
+export {
+  observeAcceptedCall,
+  sweepDueAcceptedCalls,
+  type ObserveAcceptedCallOptions,
+  type SweepDueAcceptedCallsOptions,
+  type CallObservationSweepResult,
+} from './call-observer.js';

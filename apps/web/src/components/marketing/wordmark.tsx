@@ -1,7 +1,7 @@
 import { BrandMark, cn } from '@dentabill/ui';
 import * as React from 'react';
 
-/** Shared dental symbol and wordmark lockup; the symbol is decorative beside the name. */
+/** Shared brand symbol and wordmark lockup; the symbol is decorative beside the name. */
 export interface WordmarkProps extends React.HTMLAttributes<HTMLSpanElement> {
   readonly size?: 'sm' | 'md' | 'lg';
   readonly markOnly?: boolean;

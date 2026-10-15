@@ -1,44 +1,26 @@
-import { audit, getOrgScopedDb, prisma } from '@dentabill/db';
-import { checkPayerHours } from '@dentabill/payer-ivr';
+import { randomUUID } from 'node:crypto';
+
+import { enqueueJobOutbox, relayJobOutbox } from '@dentabill/call-worker';
+import {
+  audit,
+  type CallIntent,
+  getOrgScopedDb,
+  parseFireworksRawResponse,
+  prisma,
+  type Prisma,
+} from '@dentabill/db';
+import { checkPayerHours, validateCallIdentity } from '@dentabill/payer-ivr';
 import type { CallJobData, SummaryJobData } from '@dentabill/queue';
 import { ApiError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@dentabill/types';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { requestCallCancellation } from '../../lib/cancel-call.js';
 import { payerHoursOverridden } from '../../lib/env.js';
-
-/**
- * `/v1/claims/:id/calls` — enqueue an outbound call (P3-T16).
- *
- * Phase 3 entry point for the dashboard "Call now" button. The route
- * does the bare-minimum gating then hands off to BullMQ; the actual
- * call lifecycle (Retell → IVR → rep → DB persist) lives in the
- * call-worker.
- *
- * Flow:
- *
- *   1. `requireAuth` populates `request.dentabillAuth` with `orgId` and
- *      `userId`.
- *   2. Look up the Claim through `getOrgScopedDb` so the multi-tenancy
- *      filter is automatic — a foreign claim id returns 404, not the
- *      foreign row.
- *   3. Reject if the claim is in a state where dialling makes no sense
- *      (`COMPLETED`, `WRITTEN_OFF`, etc.).
- *   4. Reject if the payer's provider line is closed at submission time
- *      (ADR-037 — business-hours guard runs at enqueue, not at worker
- *      pickup, so the user gets immediate feedback).
- *   5. Transition Claim → IN_QUEUE via the `prisma.claim.updateMany`
- *      with a composite where (matches the established API pattern in
- *      claims.ts).
- *   6. Enqueue a `call.place` job. The BullMQ jobId is the deterministic
- *      idempotency key (`<claimId>-<attemptNumber>-<timestamp slug>`)
- *      so a UI double-click collapses to a single job.
- *   7. Audit + return 202 with `{ jobId, claimId, queuedAt }`.
- *
- * Per-org rate limit: 10/min (ADR-035 — busy practices have ~50 claims
- * per biller per day; 10 enqueues per minute is well above the
- * legitimate ceiling and well below the per-payer line capacity).
- */
+import {
+  unavailableVerifiedPayments,
+  VerifiedPaymentsSchema,
+} from '../../lib/financial-reporting.js';
 
 const PHASE_3_PAYERS = ['DELTA_DENTAL_PPO', 'CIGNA_DENTAL', 'METLIFE_DENTAL'] as const;
 const PHASE_3_PAYERS_SET = new Set<string>(PHASE_3_PAYERS);
@@ -102,6 +84,37 @@ const PayerCodeEnum = z.enum([
   'UNKNOWN',
 ]);
 
+const CallMonitoringSchema = z.object({
+  deadlineAt: z.iso.datetime().nullable(),
+  nextObservationAt: z.iso.datetime().nullable(),
+  stopRequestedAt: z.iso.datetime().nullable(),
+  stopAcknowledgedAt: z.iso.datetime().nullable(),
+  reviewRequiredAt: z.iso.datetime().nullable(),
+  lastCheckedAt: z.iso.datetime().nullable(),
+  lastErrorCode: z.string().nullable(),
+});
+const OBSERVATION_ERROR_CODES = new Set([
+  'PROVIDER_LOOKUP_UNAVAILABLE',
+  'PROVIDER_LOOKUP_FAILED',
+  'PROVIDER_IDENTITY_MISMATCH',
+  'INVALID_REQUEST_SNAPSHOT',
+  'STOP_UNAVAILABLE',
+  'STOP_FAILED',
+  'STOP_CONFIRMATION_EXPIRED',
+  'STOP_ATTEMPTS_EXHAUSTED',
+  'OBSERVATION_FAILED',
+]);
+const MONITORING_SELECT = {
+  callDeadlineAt: true,
+  nextObservationAt: true,
+  stopRequestedAt: true,
+  stopAcknowledgedAt: true,
+  observationReviewAt: true,
+  lastObservedAt: true,
+  observationErrorCode: true,
+} as const;
+type MonitoringRow = Pick<CallIntent, keyof typeof MONITORING_SELECT>;
+
 const CallResponseSchema = z.object({
   id: z.string(),
   claimId: z.string(),
@@ -114,6 +127,8 @@ const CallResponseSchema = z.object({
   holdTimeSeconds: z.number().int().nullable(),
   startedAt: z.iso.datetime().nullable(),
   endedAt: z.iso.datetime().nullable(),
+  cancelRequestedAt: z.iso.datetime().nullable(),
+  monitoring: CallMonitoringSchema.nullable(),
   durationSeconds: z.number().int().nullable(),
   dlqReason: CallDLQReasonEnum.nullable(),
   createdAt: z.iso.datetime(),
@@ -199,6 +214,81 @@ const SummaryRetryResponseSchema = z.object({
   queuedAt: z.iso.datetime(),
 });
 
+const SummaryStatusResponseSchema = z.object({
+  callId: z.string(),
+  generation: z.literal(1),
+  state: z.enum([
+    'NOT_REQUESTED',
+    'RESERVED',
+    'SUBMITTING',
+    'UNKNOWN',
+    'RESPONDED',
+    'REJECTED',
+    'APPLIED',
+  ]),
+  summaryId: z.string().nullable(),
+  provider: z.enum(['SYNTHETIC', 'FIREWORKS']).nullable(),
+  observationId: z.string().nullable(),
+  reviewRequired: z.boolean(),
+  canRetry: z.boolean(),
+  lastErrorCode: z.string().nullable(),
+  updatedAt: z.iso.datetime().nullable(),
+});
+
+const SummaryRunSelect = {
+  id: true,
+  state: true,
+  provider: true,
+  lastErrorCode: true,
+  updatedAt: true,
+  leaseExpiresAt: true,
+  reviewAppliedAt: true,
+  resultPayload: true,
+  receiptHash: true,
+  observation: { select: { id: true } },
+  attempts: {
+    orderBy: { attemptNumber: 'desc' },
+    take: 1,
+    select: { id: true, responsePayload: true, responseHash: true, responseRecordedAt: true },
+  },
+} satisfies Prisma.InferenceRunSelect;
+type ProcessingRun = Prisma.InferenceRunGetPayload<{ select: typeof SummaryRunSelect }>;
+
+function processingDisposition(run: ProcessingRun | null, now = new Date()) {
+  const activeLease = !!run?.leaseExpiresAt && run.leaseExpiresAt > now;
+  const last = run?.attempts[0];
+  const rawReceipt =
+    run?.provider === 'FIREWORKS' &&
+    !!last?.responseRecordedAt &&
+    !!last.responseHash &&
+    parseFireworksRawResponse(last.responsePayload) !== null;
+  const resumableRaw = rawReceipt && (run.state === 'SUBMITTING' || run.state === 'UNKNOWN');
+  const finalReceipt = run?.provider !== 'FIREWORKS' || (!!run.resultPayload && !!run.receiptHash);
+  // A native attempt permanently fixes submission identity. Expired attempts
+  // resume saved evidence or apply review effects; they never authorize a send.
+  const nativeSettlement =
+    run?.provider === 'FIREWORKS' &&
+    (((run.state === 'UNKNOWN' || run.state === 'REJECTED') && !run.reviewAppliedAt) ||
+      (run.state === 'SUBMITTING' && !!last));
+  const canRetry =
+    !activeLease &&
+    (!run ||
+      run.state === 'RESERVED' ||
+      (run.state === 'RESPONDED' && finalReceipt) ||
+      resumableRaw ||
+      nativeSettlement);
+  return {
+    activeLease,
+    canRetry: canRetry && !run?.observation,
+    reviewRequired:
+      !!run &&
+      !run.observation &&
+      (run.state === 'REJECTED' ||
+        ((run.state === 'UNKNOWN' || (run.state === 'SUBMITTING' && !activeLease)) &&
+          !resumableRaw)),
+  };
+}
+
 interface CallSummaryRowForResponse {
   id: string;
   callId: string;
@@ -259,21 +349,18 @@ function toCallSummaryResponse(
  *                           that have an `endedAt` in the last 7
  *                           days. `null` when there are zero such
  *                           calls (the UI renders an em-dash).
- *   - `recoveredThisWeekCents` — sum of `claimAmount * 100` (cents)
- *                           across `Claim`s flipped to `RESOLVED`
- *                           in the last 7 days. Phase 4 will replace
- *                           this with a real ledger; for now we use
- *                           the claim amount as the proxy.
+ *   - `verifiedPayments` — unavailable until a reconciled payment ledger exists.
  */
 const CallsStatsResponseSchema = z.object({
   callsToday: z.number().int().min(0),
   queueDepth: z.number().int().min(0),
   avgCallSeconds: z.number().int().min(0).nullable(),
-  recoveredThisWeekCents: z.number().int().min(0),
+  verifiedPayments: VerifiedPaymentsSchema,
 });
 type CallsStatsResponse = z.infer<typeof CallsStatsResponseSchema>;
 
 interface CallRowForResponse {
+  intent?: MonitoringRow | null;
   id: string;
   claimId: string;
   retellCallId: string;
@@ -285,6 +372,7 @@ interface CallRowForResponse {
   holdTimeSeconds: number | null;
   startedAt: Date | null;
   endedAt: Date | null;
+  cancelRequestedAt: Date | null;
   durationSeconds: number | null;
   dlqReason:
     | 'EXCEEDED_MAX_ATTEMPTS'
@@ -308,6 +396,22 @@ function toCallResponse(row: CallRowForResponse): CallResponse {
     holdTimeSeconds: row.holdTimeSeconds,
     startedAt: row.startedAt ? row.startedAt.toISOString() : null,
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
+    cancelRequestedAt: row.cancelRequestedAt?.toISOString() ?? null,
+    monitoring: row.intent
+      ? {
+          deadlineAt: row.intent.callDeadlineAt?.toISOString() ?? null,
+          nextObservationAt: row.intent.nextObservationAt?.toISOString() ?? null,
+          stopRequestedAt: row.intent.stopRequestedAt?.toISOString() ?? null,
+          stopAcknowledgedAt: row.intent.stopAcknowledgedAt?.toISOString() ?? null,
+          reviewRequiredAt: row.intent.observationReviewAt?.toISOString() ?? null,
+          lastCheckedAt: row.intent.lastObservedAt?.toISOString() ?? null,
+          lastErrorCode:
+            row.intent.observationErrorCode &&
+            OBSERVATION_ERROR_CODES.has(row.intent.observationErrorCode)
+              ? row.intent.observationErrorCode
+              : null,
+        }
+      : null,
     durationSeconds: row.durationSeconds,
     dlqReason: row.dlqReason,
     createdAt: row.createdAt.toISOString(),
@@ -357,7 +461,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       preHandler: requireAuth,
       schema: {
         description:
-          'Enqueue an outbound payer call for the given claim. Returns 202 with the BullMQ job id; the call lifecycle plays out in the call-worker.',
+          'Reserve an outbound payer call intent and dispatch it. Repeated requests reuse the active intent; ambiguous provider submission requires reconciliation.',
         security,
         params: IdParamSchema,
         body: EnqueueCallBodySchema,
@@ -369,6 +473,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       // beyond Retell's per-account concurrency.
       config: {
         rateLimit: {
+          hook: 'preHandler',
           max: 10,
           timeWindow: '1 minute',
           keyGenerator: (req): string => req.dentabillAuth?.orgId ?? 'anon',
@@ -387,6 +492,54 @@ export function callsRoutes(fastify: FastifyInstance): void {
       if (!claim) {
         throw new ApiError('NOT_FOUND', 'Claim not found in your organization.');
       }
+
+      const dispatchIntent = async (
+        intent: CallIntent,
+        commandSaved = false,
+      ): Promise<EnqueueCallResponse> => {
+        if (intent.state === 'SUBMITTING' || intent.state === 'UNKNOWN') {
+          throw new ApiError(
+            'INVALID_STATE_TRANSITION',
+            'The earlier call submission needs reconciliation before another call can be placed.',
+          );
+        }
+        if (intent.state === 'READY') {
+          const data: CallJobData = {
+            organizationId: orgId,
+            claimId: id,
+            payerCode: intent.payerCode,
+            attemptNumber: intent.attemptNumber,
+            claimPriority: intent.claimPriority,
+            idempotencyKey: intent.idempotencyKey,
+          };
+          // Also backfill READY intents reserved before the outbox migration.
+          if (!commandSaved)
+            await enqueueJobOutbox(prisma, { organizationId: orgId, kind: 'CALL_PLACE', data });
+          try {
+            await relayJobOutbox({
+              prisma,
+              jobDispatcher: fastify.jobDispatcher,
+              organizationId: orgId,
+              idempotencyKey: intent.idempotencyKey,
+              limit: 1,
+              budgetMs: 5_000,
+            });
+          } catch {
+            request.log.error('Call delivery remains pending in the durable outbox.');
+          }
+        }
+        reply.code(202);
+        return {
+          jobId: intent.idempotencyKey,
+          claimId: id,
+          queuedAt: intent.createdAt.toISOString(),
+          attemptNumber: intent.attemptNumber,
+        };
+      };
+      const activeIntent = await db.callIntent.findFirst({
+        where: { claimId: id, state: { in: ['READY', 'SUBMITTING', 'UNKNOWN', 'ACCEPTED'] } },
+      });
+      if (activeIntent) return dispatchIntent(activeIntent);
 
       if (!ENQUEUEABLE_CLAIM_STATUSES.has(claim.status)) {
         throw new ApiError(
@@ -427,10 +580,21 @@ export function callsRoutes(fastify: FastifyInstance): void {
         }),
       ]);
       const resolvedNpi = payerConfigRow?.providerNpi ?? orgRow?.npi ?? null;
-      if (resolvedNpi === null || resolvedNpi.length === 0) {
+      if (resolvedNpi === null || resolvedNpi.trim().length === 0) {
         throw new ApiError(
           'MISSING_PROVIDER_NPI',
           'Add your practice NPI in Settings before placing calls. The payer rep needs it to look up the claim.',
+        );
+      }
+
+      const identity = validateCallIdentity({
+        subscriberId: claim.subscriberId,
+        providerNpi: resolvedNpi,
+      });
+      if (!identity.ok) {
+        throw new ApiError(
+          'MISSING_CALL_IDENTITY',
+          'Add the subscriber ID from the source record before placing a call.',
         );
       }
 
@@ -459,85 +623,117 @@ export function callsRoutes(fastify: FastifyInstance): void {
         );
       }
 
-      // Count today's attempts for this claim so we stamp the right
-      // `attemptNumber` (ADR-039 cap of 2/claim/day). UTC day boundary
-      // is fine for Phase 3 — payer-local wall-clock day matters most
-      // for the hold-time policy, which the worker enforces.
-      const todayUtcStart = new Date();
-      todayUtcStart.setUTCHours(0, 0, 0, 0);
-      const attemptsToday = await prisma.call.count({
-        where: {
-          organizationId: orgId,
-          claimId: id,
-          createdAt: { gte: todayUtcStart },
-        },
-      });
-      if (attemptsToday >= 2) {
-        throw new ApiError(
-          'RATE_LIMITED',
-          'This claim has already used its 2 dialling attempts for today (ADR-039).',
+      const reserved = await prisma.$transaction(async (tx) => {
+        const queued = await tx.claim.updateMany({
+          where: { id, organizationId: orgId, status: claim.status, updatedAt: claim.updatedAt },
+          data: { status: 'IN_QUEUE' },
+        });
+        if (queued.count === 0) {
+          const concurrent = await tx.callIntent.findFirst({
+            where: {
+              organizationId: orgId,
+              claimId: id,
+              state: { in: ['READY', 'SUBMITTING', 'UNKNOWN', 'ACCEPTED'] },
+            },
+          });
+          if (concurrent) {
+            if (concurrent.state === 'READY')
+              await enqueueJobOutbox(tx, {
+                organizationId: orgId,
+                kind: 'CALL_PLACE',
+                data: {
+                  organizationId: orgId,
+                  claimId: id,
+                  payerCode: concurrent.payerCode,
+                  attemptNumber: concurrent.attemptNumber,
+                  claimPriority: concurrent.claimPriority,
+                  idempotencyKey: concurrent.idempotencyKey,
+                },
+              });
+            return concurrent;
+          }
+          throw new ApiError(
+            'INVALID_STATE_TRANSITION',
+            'Claim changed before the call was queued.',
+          );
+        }
+        const legacyActive = await tx.call.count({
+          where: {
+            organizationId: orgId,
+            claimId: id,
+            status: { notIn: ['COMPLETED', 'FAILED', 'VOICEMAIL'] },
+          },
+        });
+        if (legacyActive > 0) {
+          throw new ApiError('INVALID_STATE_TRANSITION', 'An earlier call is still active.');
+        }
+        const todayUtcStart = new Date();
+        todayUtcStart.setUTCHours(0, 0, 0, 0);
+        const attemptsToday =
+          (await tx.callIntent.count({
+            where: {
+              organizationId: orgId,
+              claimId: id,
+              OR: [{ createdAt: { gte: todayUtcStart } }, { submittedAt: { gte: todayUtcStart } }],
+            },
+          })) +
+          (await tx.call.count({
+            where: {
+              organizationId: orgId,
+              claimId: id,
+              createdAt: { gte: todayUtcStart },
+              intent: null,
+            },
+          }));
+        if (attemptsToday >= 2) {
+          throw new ApiError(
+            'RATE_LIMITED',
+            'This claim has already reserved its 2 dialling attempts for today.',
+          );
+        }
+        const current = await tx.claim.findFirstOrThrow({ where: { id, organizationId: orgId } });
+        const intent = await tx.callIntent.create({
+          data: {
+            organizationId: orgId,
+            claimId: id,
+            payerCode: claim.payerCode,
+            attemptNumber: attemptsToday + 1,
+            claimPriority: body?.priorityOverride ?? claim.priority,
+            idempotencyKey: `call_${randomUUID()}`,
+            claimVersion: current.updatedAt,
+          },
+        });
+        await audit(
+          {
+            action: 'call.enqueue',
+            resourceType: 'Claim',
+            resourceId: id,
+            organizationId: orgId,
+            metadata: {
+              clerkUserId: auth.userId,
+              attemptNumber: intent.attemptNumber,
+              jobId: intent.idempotencyKey,
+              intentId: intent.id,
+              payerCode: claim.payerCode,
+            },
+          },
+          tx,
         );
-      }
-      const attemptNumber = (attemptsToday + 1) as 1 | 2;
-
-      const queuedAt = new Date();
-      const idempotencyKey = `${id}-a${String(attemptNumber)}-${queuedAt.getTime().toString(36)}`;
-      const data: CallJobData = {
-        organizationId: orgId,
-        claimId: id,
-        payerCode: claim.payerCode,
-        attemptNumber,
-        claimPriority: body?.priorityOverride ?? claim.priority,
-        idempotencyKey,
-      };
-
-      // Transition the claim into the queue BEFORE enqueuing the job —
-      // a worker pickup is allowed to see status=IN_QUEUE; if Redis
-      // throws on `add()` we leave the claim flipped, which is the
-      // less-bad failure mode (the user sees the queued state and can
-      // retry; the background reaper P3-T28 documents could pull stuck
-      // rows back to PENDING).
-      await prisma.claim.updateMany({
-        where: { id, organizationId: orgId },
-        data: { status: 'IN_QUEUE' },
-      });
-
-      try {
-        await fastify.jobDispatcher.dispatchCall(data, {
-          // Higher claimPriority → lower BullMQ priority value (BullMQ
-          // is min-first). Map [0..100] → [101..1] so 100 priority
-          // dials before 0. Inline dispatch ignores priority.
-          priority: 101 - data.claimPriority,
+        await enqueueJobOutbox(tx, {
+          organizationId: orgId,
+          kind: 'CALL_PLACE',
+          data: {
+            organizationId: orgId,
+            claimId: id,
+            payerCode: intent.payerCode,
+            attemptNumber: intent.attemptNumber,
+            claimPriority: intent.claimPriority,
+            idempotencyKey: intent.idempotencyKey,
+          },
         });
-      } catch (err) {
-        // Roll the claim back so the UI doesn't show a stuck IN_QUEUE.
-        await prisma.claim.updateMany({
-          where: { id, organizationId: orgId, status: 'IN_QUEUE' },
-          data: { status: claim.status },
-        });
-        throw err;
-      }
-
-      await audit({
-        action: 'call.enqueue',
-        resourceType: 'Claim',
-        resourceId: id,
-        organizationId: orgId,
-        metadata: {
-          clerkUserId: auth.userId,
-          attemptNumber,
-          jobId: idempotencyKey,
-          payerCode: claim.payerCode,
-        },
+        return intent;
       });
-
-      reply.code(202);
-      return {
-        jobId: idempotencyKey,
-        claimId: id,
-        queuedAt: queuedAt.toISOString(),
-        attemptNumber,
-      };
+      return dispatchIntent(reserved, true);
     },
   );
 
@@ -596,6 +792,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const db = getOrgScopedDb(orgId);
       const rows = await db.call.findMany({
         where: finalWhere,
+        include: { intent: { select: MONITORING_SELECT } },
         // `startedAt` may be null for INITIATED rows that haven't started
         // yet; Prisma sorts nulls last on desc, which is what we want
         // (in-flight rows surface above null startedAt). Cursor pagination
@@ -661,7 +858,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       // We don't go through `getOrgScopedDb` here because count/aggregate
       // helpers aren't on the org-scoped wrapper's surface; the explicit
       // filter is the established pattern for aggregates.
-      const [callsToday, queueDepth, avgRow, recoveredRows] = await Promise.all([
+      const [callsToday, queueDepth, avgRow] = await Promise.all([
         prisma.call.count({
           where: { organizationId: orgId, startedAt: { gte: startOfTodayUTC } },
         }),
@@ -676,28 +873,17 @@ export function callsRoutes(fastify: FastifyInstance): void {
             durationSeconds: { not: null },
           },
         }),
-        prisma.claim.findMany({
-          where: {
-            organizationId: orgId,
-            status: 'RESOLVED',
-            updatedAt: { gte: sevenDaysAgo },
-          },
-          select: { claimAmount: true },
-        }),
       ]);
 
       const avgCallSeconds =
         avgRow._avg.durationSeconds === null ? null : Math.round(avgRow._avg.durationSeconds);
 
-      // Prisma decimal columns come back as `Decimal | string`. We sum
-      // in cents (integer math) to avoid float drift.
-      const recoveredThisWeekCents = recoveredRows.reduce((acc, row) => {
-        const dollars = Number(row.claimAmount);
-        if (Number.isNaN(dollars)) return acc;
-        return acc + Math.round(dollars * 100);
-      }, 0);
-
-      return { callsToday, queueDepth, avgCallSeconds, recoveredThisWeekCents };
+      return {
+        callsToday,
+        queueDepth,
+        avgCallSeconds,
+        verifiedPayments: unavailableVerifiedPayments,
+      };
     },
   );
 
@@ -724,6 +910,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const row = await db.call.findFirst({
         where: { id },
         include: {
+          intent: { select: MONITORING_SELECT },
           events: { orderBy: { timestamp: 'asc' } },
           claim: {
             select: {
@@ -782,7 +969,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       preHandler: requireAuth,
       schema: {
         description:
-          'Cancel an in-flight call. Idempotent — re-cancellation of a terminal call is a 200 no-op. Phase 3 cancellation is soft: it stamps Call.dlqReason = CANCELLED_BY_OPERATOR + flips Claim → MANUAL_REVIEW; the live Retell call continues until natural termination (true mid-call cancel lands in Phase 4 once the worker bridges a cancel channel).',
+          'Request cancellation of an active call. The worker observes the durable request and asks the provider to stop; status and end time await provider evidence. Repeated requests and terminal calls are idempotent.',
         security,
         params: CallIdParamSchema,
         response: { 200: CallResponseSchema },
@@ -794,64 +981,17 @@ export function callsRoutes(fastify: FastifyInstance): void {
       const { orgId } = auth;
       const { id } = request.params as z.infer<typeof CallIdParamSchema>;
 
-      const db = getOrgScopedDb(orgId);
-      const existing = await db.call.findFirst({ where: { id } });
-      if (!existing) {
-        throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
-      }
-
-      // Idempotent: terminal status → echo current state, no side effects.
-      if (TERMINAL_CALL_STATUSES.has(existing.status)) {
-        return toCallResponse(existing);
-      }
-
-      // P4-T7-prep-4 / ADR-047 — stamp the durable cancel marker so the
-      // call-worker's poll loop tears the live Retell session down. The
-      // status flip below is the dashboard-visible signal; the marker is
-      // the worker-visible signal.
-      const cancelStamp = new Date();
-      await prisma.call.updateMany({
-        where: { id, organizationId: orgId },
-        data: {
-          status: 'FAILED',
-          dlqReason: 'CANCELLED_BY_OPERATOR',
-          endedAt: cancelStamp,
-          cancelRequestedAt: cancelStamp,
-          cancelRequestedBy: auth.userId,
-        },
-      });
-      await prisma.callEvent.create({
-        data: {
-          callId: id,
-          eventType: 'call.cancelled',
-          data: {
-            cancelledBy: auth.userId,
-            cancelledAt: new Date().toISOString(),
-          },
-        },
-      });
-      // Flip Claim → MANUAL_REVIEW so the dashboard reflects the
-      // operator decision. Conditional updateMany — already-MANUAL_REVIEW
-      // claims keep their updatedAt for downstream UI freshness markers.
-      await prisma.claim.updateMany({
-        where: {
-          id: existing.claimId,
-          organizationId: orgId,
-          status: { not: 'MANUAL_REVIEW' },
-        },
-        data: { status: 'MANUAL_REVIEW' },
-      });
-      await audit({
-        action: 'call.cancel',
-        resourceType: 'Call',
-        resourceId: id,
+      const updated = await requestCallCancellation(prisma, {
         organizationId: orgId,
-        metadata: { clerkUserId: auth.userId, previousStatus: existing.status },
+        callId: id,
+        clerkUserId: auth.clerkUserId,
       });
-
-      const updated = await db.call.findFirst({ where: { id } });
-      if (!updated) throw new ApiError('NOT_FOUND', 'Call not found after cancel.');
-      return toCallResponse(updated);
+      if (!updated) throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
+      const intent = await prisma.callIntent.findFirst({
+        where: { organizationId: orgId, callId: updated.id },
+        select: MONITORING_SELECT,
+      });
+      return toCallResponse({ ...updated, intent });
     },
   );
 
@@ -862,7 +1002,7 @@ export function callsRoutes(fastify: FastifyInstance): void {
       preHandler: requireAuth,
       schema: {
         description:
-          'Fetch the structured CallSummary for a Call, if one exists. Returns 404 when the Call is not found in the caller’s org OR no summary has been persisted yet (the dashboard polls for both states with the same handler).',
+          'Fetch a saved legacy CallSummary. Returns 404 when the scoped call or summary is absent; use summary/status for processing state and native observation links.',
         security,
         params: CallIdParamSchema,
         response: { 200: CallSummaryResponseSchema },
@@ -899,28 +1039,101 @@ export function callsRoutes(fastify: FastifyInstance): void {
     },
   );
 
-  // ─── POST /v1/calls/:id/summary/retry — re-enqueue (P4-T2H) ───────────
+  fastify.withTypeProvider().get(
+    '/calls/:id/summary/status',
+    {
+      preHandler: requireAuth,
+      schema: {
+        description:
+          'Organization-scoped generation 1 analysis status. Only stored OWNER/ADMIN users may retry. No transcript, request, or provider response is returned.',
+        security,
+        params: CallIdParamSchema,
+        response: { 200: SummaryStatusResponseSchema },
+      },
+    },
+    async (request): Promise<z.infer<typeof SummaryStatusResponseSchema>> => {
+      const auth = request.dentabillAuth;
+      if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'Authentication required.');
+      const actor = await prisma.user.findFirst({
+        where: { id: auth.userId, organizationId: auth.orgId },
+        select: { role: true },
+      });
+      if (!actor) throw new ApiError('FORBIDDEN', 'An organization user is required.');
+      const call = await prisma.call.findFirst({
+        where: {
+          id: (request.params as z.infer<typeof CallIdParamSchema>).id,
+          organizationId: auth.orgId,
+        },
+        select: { id: true, status: true },
+      });
+      if (!call) throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
+      const [run, summary] = await Promise.all([
+        prisma.inferenceRun.findFirst({
+          where: { organizationId: auth.orgId, callId: call.id, generation: 1 },
+          select: SummaryRunSelect,
+        }),
+        prisma.callSummary.findFirst({
+          where: { organizationId: auth.orgId, callId: call.id },
+          select: { id: true, createdAt: true },
+        }),
+      ]);
+      const disposition = processingDisposition(run);
+      await audit({
+        organizationId: auth.orgId,
+        userId: auth.userId,
+        action: 'callSummary.status.read',
+        resourceType: 'Call',
+        resourceId: call.id,
+      });
+      return {
+        callId: call.id,
+        generation: 1,
+        state: run?.state ?? (summary ? 'APPLIED' : 'NOT_REQUESTED'),
+        summaryId: summary?.id ?? null,
+        provider: run?.provider ?? null,
+        observationId: run?.observation?.id ?? null,
+        reviewRequired: disposition.reviewRequired,
+        canRetry:
+          ['OWNER', 'ADMIN'].includes(actor.role) &&
+          (!summary || run?.provider === 'FIREWORKS') &&
+          TERMINAL_CALL_STATUSES.has(call.status) &&
+          disposition.canRetry,
+        lastErrorCode: run?.lastErrorCode ? 'INFERENCE_REVIEW_REQUIRED' : null,
+        updatedAt: (run?.updatedAt ?? summary?.createdAt)?.toISOString() ?? null,
+      };
+    },
+  );
+
+  // ─── POST /v1/calls/:id/summary/retry — generation 1 delivery only ───
   fastify.withTypeProvider().post(
     '/calls/:id/summary/retry',
     {
       preHandler: requireAuth,
       schema: {
         description:
-          'OWNER/ADMIN-gated retry of summary generation for a Call. Re-enqueues a `summary.generate` job onto the summaries queue. Idempotent on the BullMQ side — the jobId is `call.<id>.retry.<n>` derived from existing audit history.',
+          'OWNER/ADMIN-gated retry of summary generation for a terminal Call. Atomically reserves a durable delivery command and audit record; retry reservations are serialized for each call.',
         security,
         params: CallIdParamSchema,
         response: { 202: SummaryRetryResponseSchema },
       },
     },
     async (request, reply): Promise<z.infer<typeof SummaryRetryResponseSchema>> => {
+      if (
+        !z
+          .object({})
+          .strict()
+          .safeParse(request.body === undefined ? {} : request.body).success
+      ) {
+        throw new ApiError('VALIDATION_ERROR', 'Summary retry accepts only an empty request.');
+      }
       const auth = request.dentabillAuth;
       if (!auth) throw new ApiError('AUTHENTICATION_REQUIRED', 'unreachable: requireAuth ran');
       const { orgId } = auth;
       const { id } = request.params as z.infer<typeof CallIdParamSchema>;
 
       // OWNER/ADMIN gate — billing-staff must escalate.
-      const actor = await prisma.user.findUnique({
-        where: { id: auth.userId },
+      const actor = await prisma.user.findFirst({
+        where: { id: auth.userId, organizationId: orgId },
         select: { role: true },
       });
       if (!actor || (actor.role !== 'OWNER' && actor.role !== 'ADMIN')) {
@@ -933,41 +1146,107 @@ export function callsRoutes(fastify: FastifyInstance): void {
         throw new ApiError('NOT_FOUND', 'Call not found in your organization.');
       }
 
-      // Derive a deterministic retry key from the count of past
-      // retry-audit rows on this call. BullMQ collapses duplicate jobIds
-      // so a UI double-click never enqueues twice.
-      const previousRetries = await prisma.auditLog.count({
-        where: {
-          organizationId: orgId,
-          action: 'callSummary.retry',
-          resourceType: 'Call',
-          resourceId: id,
-        },
-      });
-      const retryNumber = previousRetries + 1;
-      const idempotencyKey = `call.${id}.retry.${String(retryNumber)}`;
-      const data: SummaryJobData = {
-        organizationId: orgId,
-        callId: id,
-        promptVersion: 'v1',
-        idempotencyKey,
-      };
-      const jobId = await fastify.jobDispatcher.dispatchSummary(data);
+      if (!TERMINAL_CALL_STATUSES.has(call.status)) {
+        throw new ApiError(
+          'VALIDATION_ERROR',
+          'Wait until the call has ended before requesting a summary.',
+        );
+      }
 
-      await audit({
-        action: 'callSummary.retry',
-        resourceType: 'Call',
-        resourceId: id,
-        organizationId: orgId,
-        metadata: { clerkUserId: auth.userId, jobId, retryNumber },
+      const queued = await prisma.$transaction(async (tx) => {
+        // Match the durable inference ledger's organization-first lock order.
+        await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${orgId} FOR NO KEY UPDATE`;
+        const reserved = await tx.call.updateMany({
+          where: { id, organizationId: orgId, status: call.status },
+          data: { status: call.status },
+        });
+        if (reserved.count !== 1) {
+          throw new ApiError('INVALID_STATE_TRANSITION', 'Call changed before the summary retry.');
+        }
+        await tx.$queryRaw`SELECT id FROM "InferenceRun" WHERE "organizationId" = ${orgId} AND "callId" = ${id} AND generation = 1 FOR UPDATE`;
+        const run = await tx.inferenceRun.findFirst({
+          where: { organizationId: orgId, callId: id, generation: 1 },
+          select: SummaryRunSelect,
+        });
+        const existing = await tx.callSummary.findFirst({
+          where: { organizationId: orgId, callId: id },
+          select: { id: true },
+        });
+        if (
+          (existing && run?.provider !== 'FIREWORKS') ||
+          run?.state === 'APPLIED' ||
+          run?.observation
+        )
+          throw new ApiError(
+            'SUMMARY_ALREADY_EXISTS',
+            'Saved analysis already exists. Retrying will not replace it.',
+          );
+        const disposition = processingDisposition(run);
+        if (
+          disposition.activeLease ||
+          (run?.state === 'SUBMITTING' && run.provider === 'SYNTHETIC')
+        )
+          throw new ApiError(
+            'SUMMARY_INFERENCE_BUSY',
+            'Summary processing has already started. Another inference will not be submitted.',
+          );
+        if (!disposition.canRetry)
+          throw new ApiError(
+            'SUMMARY_INFERENCE_REVIEW_REQUIRED',
+            'This summary requires review. Another inference will not be submitted.',
+          );
+        const previousRetries = await tx.auditLog.count({
+          where: {
+            organizationId: orgId,
+            action: 'callSummary.retry',
+            resourceType: 'Call',
+            resourceId: id,
+          },
+        });
+        const retryNumber = previousRetries + 1;
+        const idempotencyKey = `call.${id}.retry.${String(retryNumber)}`;
+        const data: SummaryJobData = {
+          organizationId: orgId,
+          callId: id,
+          promptVersion: 'v1',
+          idempotencyKey,
+        };
+        const outbox = await enqueueJobOutbox(tx, {
+          organizationId: orgId,
+          kind: 'SUMMARY_GENERATE',
+          data,
+        });
+        await audit(
+          {
+            action: 'callSummary.retry',
+            resourceType: 'Call',
+            resourceId: id,
+            organizationId: orgId,
+            metadata: { clerkUserId: auth.userId, jobId: idempotencyKey, retryNumber },
+          },
+          tx,
+        );
+        return { jobId: idempotencyKey, retryNumber, queuedAt: outbox.createdAt };
       });
+      try {
+        await relayJobOutbox({
+          prisma,
+          jobDispatcher: fastify.jobDispatcher,
+          organizationId: orgId,
+          idempotencyKey: queued.jobId,
+          limit: 1,
+          budgetMs: 5_000,
+        });
+      } catch {
+        request.log.error('Summary retry delivery remains pending in the durable outbox.');
+      }
 
       reply.code(202);
       return {
-        jobId,
+        jobId: queued.jobId,
         callId: id,
-        retryNumber,
-        queuedAt: new Date().toISOString(),
+        retryNumber: queued.retryNumber,
+        queuedAt: queued.queuedAt.toISOString(),
       };
     },
   );

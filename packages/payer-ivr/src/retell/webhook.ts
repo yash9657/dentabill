@@ -1,51 +1,17 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
-import { RetellWebhookEnvelopeSchema, type RetellWebhookEnvelope } from './events.js';
+import { z } from 'zod';
 
-/**
- * HMAC-SHA256 webhook signature verification (ADR-036).
- *
- *   - Operates on the **raw body** the framework received, not on the
- *     parsed JSON. Re-serialising the parsed object produces a
- *     different byte-for-byte representation than what the sender
- *     signed; the Fastify route in `apps/api` (P3-T17) registers a
- *     content-type parser that exposes the raw `Buffer` for exactly
- *     this reason.
- *   - **Constant-time compare** via `crypto.timingSafeEqual`. Length
- *     mismatches (which `timingSafeEqual` cannot accept) are short-
- *     circuited to a constant-time mismatch with a same-length filler;
- *     a leaked length-mismatch signal is a typical timing-attack
- *     amplifier.
- *   - The function returns `boolean` only; route-level error
- *     handling distinguishes `invalid_signature` vs `replayed_event_id`
- *     vs `malformed_payload` and emits the right `ApiError`.
- *
- * The signature header is the lowercase hex digest. LiveRetell adapter
- * (P3-T7) reads `X-Retell-Signature` and passes the hex value here;
- * future header formats (e.g., `t=…,v1=…`) get parsed by the route
- * before calling this helper.
- */
+import { RetellCallEndReason, RetellEventSchema, type RetellEvent } from './events.js';
+
 export interface VerifyRetellWebhookSignatureInput {
-  /** Raw HTTP body (Buffer or string) — pre-JSON-parse. */
   rawBody: Buffer | string;
-  /** Hex digest the sender claimed. */
   signature: string;
-  /** `RETELL_WEBHOOK_SECRET` env var. */
+  /** Account API key designated for webhook signing in the Retell dashboard. */
   secret: string;
 }
 
-/**
- * Five-minute replay window for the SDK's `v=<ts>,d=<hex>` format,
- * matching the upstream `retell-sdk/lib/webhook_auth.js` default. A
- * larger window invites replay attacks; a smaller window risks
- * rejecting legitimate deliveries that crossed a slow proxy.
- */
-const SDK_TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000;
-
-const SDK_SIGNATURE_PATTERN = /^v=(\d+),d=([0-9a-fA-F]+)$/;
-
 export interface VerifyOptions {
-  /** Override "now" for deterministic tests. Defaults to `Date.now()`. */
   readonly now?: number;
 }
 
@@ -53,66 +19,181 @@ export function verifyRetellWebhookSignature(
   input: VerifyRetellWebhookSignatureInput,
   options: VerifyOptions = {},
 ): boolean {
-  const { rawBody, signature, secret } = input;
-  if (secret.length === 0) return false;
-  if (signature.length === 0) return false;
-
-  // P4-T7-prep-6 — the upstream Retell SDK signs as
-  // `v=<unix_ms>,d=<hex>` where the digest is
-  // HMAC-SHA256(secret, body + timestamp). Detect that format first.
-  const sdkMatch = SDK_SIGNATURE_PATTERN.exec(signature);
-  if (sdkMatch) {
-    const timestamp = Number(sdkMatch[1]);
-    const claimedDigest = sdkMatch[2] ?? '';
-    const now = options.now ?? Date.now();
-    if (Math.abs(now - timestamp) > SDK_TIMESTAMP_TOLERANCE_MS) return false;
-    const bodyText = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
-    const expected = createHmac('sha256', secret)
-      .update(bodyText + String(timestamp))
-      .digest('hex');
-    if (expected.length !== claimedDigest.length) {
-      timingSafeEqual(Buffer.from(expected), Buffer.from(expected));
-      return false;
-    }
-    return timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(claimedDigest, 'utf8'));
-  }
-
-  // Legacy / hand-rolled path — plain hex HMAC-SHA256 of the raw body.
-  // Kept for backwards compatibility with the Phase-3 fixture suites
-  // that pre-date the SDK contract.
-  const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
-  if (expected.length !== signature.length) {
-    // Length mismatch is a guaranteed mismatch. Run a same-length compare
-    // anyway so the time taken does not leak the actual signature length.
-    timingSafeEqual(Buffer.from(expected), Buffer.from(expected));
-    return false;
-  }
-  return timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(signature, 'utf8'));
+  if (!input.secret) return false;
+  const match = /^v=(0|[1-9]\d*),d=([0-9a-fA-F]{64})$/.exec(input.signature);
+  if (!match?.[1] || !match[2]) return false;
+  const timestamp = Number(match[1]);
+  if (!Number.isSafeInteger(timestamp)) return false;
+  if (Math.abs((options.now ?? Date.now()) - timestamp) > 5 * 60 * 1000) return false;
+  const expected = createHmac('sha256', input.secret)
+    .update(input.rawBody)
+    .update(match[1])
+    .digest();
+  return timingSafeEqual(expected, Buffer.from(match[2], 'hex'));
 }
 
-/**
- * Parse the (already verified) raw body into a typed
- * `RetellWebhookEnvelope`. Throws `RetellWebhookParseError` on shape
- * mismatch — the route catches and returns a structured `ApiError`.
- */
+const id = z.string().min(1).max(256);
+const timestamp = z.number().int().nonnegative().max(8_640_000_000_000_000);
+const wireEnvelope = z.object({
+  event: z.string().min(1).max(128),
+  call: z.object({ call_id: id }).passthrough(),
+});
+const transcriptFields = {
+  transcript: z.string().max(1_000_000).optional(),
+  transcript_object: z
+    .array(
+      z.object({
+        role: z.enum(['agent', 'user']),
+        content: z.string().max(100_000),
+        words: z
+          .array(
+            z
+              .object({
+                start: z.number().finite().nonnegative(),
+              })
+              .passthrough(),
+          )
+          .optional(),
+      }),
+    )
+    .max(20_000)
+    .optional(),
+};
+const startedCall = z.object({
+  call_id: id,
+  agent_id: id,
+  direction: z.literal('outbound'),
+  to_number: z.string().regex(/^\+[0-9]{8,15}$/),
+  start_timestamp: timestamp,
+});
+const endedCall = z
+  .object({
+    call_id: id,
+    direction: z.literal('outbound'),
+    call_status: z.enum(['ended', 'error', 'not_connected']),
+    start_timestamp: timestamp.optional(),
+    end_timestamp: timestamp.optional(),
+    duration_ms: z.number().finite().nonnegative().max(2_147_483_647_000).optional(),
+    disconnection_reason: z.string().min(1).max(128),
+    ...transcriptFields,
+  })
+  .refine(
+    (call) =>
+      call.end_timestamp === undefined ||
+      call.start_timestamp === undefined ||
+      call.end_timestamp >= call.start_timestamp,
+  );
+const transcriptCall = z.object({
+  call_id: id,
+  direction: z.literal('outbound'),
+  ...transcriptFields,
+});
+
+/** Only normalized source evidence is retained; call_analysis and tool outputs are excluded. */
+export const RetellWebhookDeliverySchema = z.object({
+  eventId: z.string().min(1),
+  retellCallId: id,
+  eventType: z.string().min(1).max(128),
+  event: RetellEventSchema.nullable(),
+});
+export type RetellWebhookDelivery = z.infer<typeof RetellWebhookDeliverySchema>;
+
 export class RetellWebhookParseError extends Error {
   override readonly name = 'RetellWebhookParseError';
 }
 
-export function parseRetellWebhookEnvelope(rawBody: Buffer | string): RetellWebhookEnvelope {
-  const text = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
-  let parsed: unknown;
+export function parseRetellWebhookEnvelope(rawBody: Buffer | string): RetellWebhookDelivery {
   try {
-    parsed = JSON.parse(text);
-  } catch (cause) {
-    throw new RetellWebhookParseError(
-      `Body is not valid JSON: ${cause instanceof Error ? cause.message : 'unknown'}`,
-    );
+    const wire = wireEnvelope.parse(JSON.parse(rawBody.toString()) as unknown);
+    const retellCallId = wire.call.call_id;
+    let event: RetellEvent | null = null;
+    if (wire.event === 'call_started') {
+      const call = startedCall.parse(wire.call);
+      event = {
+        type: 'call.started',
+        retellCallId,
+        agentId: call.agent_id,
+        toNumberE164: call.to_number,
+        startedAt: new Date(call.start_timestamp).toISOString(),
+      };
+    } else if (wire.event === 'call_ended') {
+      const call = endedCall.parse(wire.call);
+      const durationMs =
+        call.duration_ms ??
+        (call.end_timestamp !== undefined && call.start_timestamp !== undefined
+          ? call.end_timestamp - call.start_timestamp
+          : null);
+      event = {
+        type: 'call.ended',
+        retellCallId,
+        endedAt:
+          call.end_timestamp === undefined ? null : new Date(call.end_timestamp).toISOString(),
+        durationSeconds: durationMs === null ? null : Math.floor(durationMs / 1000),
+        endReason: normalizeEndReason(call.disconnection_reason, call.call_status),
+        providerEndReason: call.disconnection_reason,
+        ...(call.start_timestamp === undefined
+          ? {}
+          : { startedAt: new Date(call.start_timestamp).toISOString() }),
+        ...(hasTranscript(call) ? { transcript: normalizeTranscript(call) } : {}),
+      };
+    } else if (wire.event === 'transcript_updated') {
+      const call = transcriptCall.parse(wire.call);
+      if (!hasTranscript(call)) throw new RetellWebhookParseError('Transcript is unavailable.');
+      event = {
+        type: 'call.transcript_snapshot',
+        retellCallId,
+        transcript: normalizeTranscript(call),
+      };
+    }
+    // Lifecycle events occur once per call. Snapshots are cumulative, not transcript deltas.
+    const suffix =
+      wire.event === 'transcript_updated'
+        ? `:${createHash('sha256').update(JSON.stringify(event)).digest('hex')}`
+        : '';
+    return RetellWebhookDeliverySchema.parse({
+      eventId: `retell:${wire.event}:${retellCallId}${suffix}`,
+      retellCallId,
+      eventType: wire.event,
+      event,
+    });
+  } catch {
+    // Zod/JSON errors can echo transcript text or attacker-controlled field values.
+    throw new RetellWebhookParseError('Invalid Retell webhook payload.');
   }
-  const result = RetellWebhookEnvelopeSchema.safeParse(parsed);
-  if (!result.success) {
-    const issues = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
-    throw new RetellWebhookParseError(`Envelope failed schema: ${issues}`);
+}
+
+type TranscriptFields = z.infer<typeof transcriptCall>;
+function hasTranscript(call: TranscriptFields): boolean {
+  return call.transcript !== undefined || call.transcript_object !== undefined;
+}
+function normalizeTranscript(call: TranscriptFields): {
+  text: string | null;
+  turns: { role: 'agent' | 'user'; text: string; startOffsetSeconds: number | null }[] | null;
+} {
+  return {
+    text: call.transcript ?? null,
+    turns:
+      call.transcript_object?.map((turn) => ({
+        role: turn.role,
+        text: turn.content,
+        startOffsetSeconds: turn.words?.[0]?.start ?? null,
+      })) ?? null,
+  };
+}
+function normalizeEndReason(reason: string, status: string): RetellCallEndReason {
+  if (status === 'error') return RetellCallEndReason.ERROR;
+  switch (reason) {
+    case 'agent_hangup':
+      return RetellCallEndReason.AGENT_HANGUP;
+    case 'user_hangup':
+      return RetellCallEndReason.USER_HANGUP;
+    case 'dial_no_answer':
+      return RetellCallEndReason.NO_ANSWER;
+    case 'dial_busy':
+      return RetellCallEndReason.BUSY;
+    case 'voicemail_reached':
+      return RetellCallEndReason.VOICEMAIL;
+    default:
+      return RetellCallEndReason.ERROR;
   }
-  return result.data;
 }

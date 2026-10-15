@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto';
 
 import { createLogger, type Logger } from '@dentabill/logger';
+import type { RetellReconciliationClient } from '@dentabill/payer-ivr';
+import type { ObservationRegenerationConfig } from '@dentabill/summary-worker';
 import { ApiError } from '@dentabill/types';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
@@ -20,15 +22,26 @@ import { registerQueuePlugin } from './plugins/queue.js';
 import { registerRawBodyPlugin } from './plugins/raw-body.js';
 import { auditLogsRoutes } from './routes/v1/audit-logs.js';
 import { billingRoutes } from './routes/v1/billing.js';
+import { callRecoveryRoutes } from './routes/v1/call-recovery.js';
 import { callsSseRoutes } from './routes/v1/calls-sse.js';
 import { callsRoutes } from './routes/v1/calls.js';
+import { cashEvidenceRoutes } from './routes/v1/cash-evidence.js';
+import { cashReconciliationRoutes } from './routes/v1/cash-reconciliation.js';
+import { claimObservationRoutes } from './routes/v1/claim-observations.js';
+import { claimRemittanceRoutes } from './routes/v1/claim-remittances.js';
 import { claimsRoutes } from './routes/v1/claims.js';
 import { clerkWebhookRoutes } from './routes/v1/clerk-webhook.js';
 import { healthRoutes } from './routes/v1/health.js';
 import { ingestRoutes } from './routes/v1/ingest.js';
 import { internalJobsRoutes } from './routes/v1/internal-jobs.js';
 import { meRoutes } from './routes/v1/me.js';
+import { notificationOperationsRoutes } from './routes/v1/notification-operations.js';
+import { observationRegenerationRoutes } from './routes/v1/observation-regenerations.js';
 import { onboardingRoutes } from './routes/v1/onboarding.js';
+import { operationsRoutes } from './routes/v1/operations.js';
+import { postingEvidenceRoutes } from './routes/v1/posting-evidence.js';
+import { postingRelationshipRoutes } from './routes/v1/posting-relationships.js';
+import { remittanceBatchRoutes } from './routes/v1/remittance-batches.js';
 import { reportsRoutes } from './routes/v1/reports.js';
 import { retellWebhookRoutes } from './routes/v1/retell-webhook.js';
 
@@ -38,6 +51,10 @@ export interface BuildServerOptions {
    * If not provided, creates a default logger.
    */
   logger?: Logger | false;
+  /** Test seam; null explicitly disables provider lookup. */
+  callRecoveryProvider?: RetellReconciliationClient | null;
+  /** Trusted server-only release/transport configuration. Null keeps regeneration unavailable. */
+  observationRegenerationConfig?: ObservationRegenerationConfig | null;
 }
 
 /**
@@ -147,7 +164,7 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(cors, {
     origin: [env.NEXT_PUBLIC_APP_URL, ...corsOrigins],
     credentials: true,
-    allowedHeaders: ['authorization', 'content-type', 'x-request-id'],
+    allowedHeaders: ['authorization', 'content-type', 'x-request-id', 'x-import-source'],
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
@@ -218,8 +235,27 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Fastif
   await fastify.register(healthRoutes, { prefix: '/v1' });
   await fastify.register(meRoutes, { prefix: '/v1' });
   await fastify.register(onboardingRoutes, { prefix: '/v1' });
+  await fastify.register(operationsRoutes, { prefix: '/v1' });
+  await fastify.register(notificationOperationsRoutes, { prefix: '/v1' });
   await fastify.register(claimsRoutes, { prefix: '/v1' });
+  await fastify.register(claimObservationRoutes, { prefix: '/v1' });
+  await fastify.register(claimRemittanceRoutes, { prefix: '/v1' });
+  await fastify.register(cashEvidenceRoutes, { prefix: '/v1' });
+  await fastify.register(postingEvidenceRoutes, { prefix: '/v1' });
+  await fastify.register(postingRelationshipRoutes, { prefix: '/v1' });
+  await fastify.register(remittanceBatchRoutes, { prefix: '/v1' });
+  await fastify.register(cashReconciliationRoutes, { prefix: '/v1' });
+  await fastify.register(observationRegenerationRoutes, {
+    prefix: '/v1',
+    ...(opts.observationRegenerationConfig !== undefined
+      ? { config: opts.observationRegenerationConfig }
+      : {}),
+  });
   await fastify.register(callsRoutes, { prefix: '/v1' });
+  await fastify.register(callRecoveryRoutes, {
+    prefix: '/v1',
+    ...(opts.callRecoveryProvider !== undefined && { provider: opts.callRecoveryProvider }),
+  });
   await fastify.register(callsSseRoutes, { prefix: '/v1' });
   await fastify.register(retellWebhookRoutes, { prefix: '/v1' });
   await fastify.register(clerkWebhookRoutes, { prefix: '/v1' });

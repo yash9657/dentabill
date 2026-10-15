@@ -1,6 +1,7 @@
 import { createLogger } from '@dentabill/logger';
 import { PrismaClient } from '@prisma/client';
 
+import { registerPrismaDiagnostics } from './lib/prisma-diagnostics.js';
 import { orgScopeWriteExtension } from './middleware/org-scope.js';
 
 /**
@@ -32,15 +33,7 @@ function buildClient() {
     ],
   });
 
-  base.$on('error', (e) => {
-    log.error({ prisma: e }, 'prisma error');
-  });
-  base.$on('warn', (e) => {
-    log.warn({ prisma: e }, 'prisma warn');
-  });
-  base.$on('info', (e) => {
-    log.info({ prisma: e }, 'prisma info');
-  });
+  registerPrismaDiagnostics(base, log);
 
   return base.$extends(orgScopeWriteExtension);
 }

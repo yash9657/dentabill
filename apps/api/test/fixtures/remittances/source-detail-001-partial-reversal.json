@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "sourceNamespace": "synthetic-detail-remittances",
+  "sourceRecordId": "source-detail-001-reversal-1",
+  "sourceDocumentId": "synthetic-detail-remittance-document",
+  "sourceVersion": "1",
+  "kind": "REVERSAL",
+  "reversesSourceRecordId": "source-detail-001-payment-1",
+  "currency": "USD",
+  "reportedAmount": "-20.00",
+  "payerName": "Synthetic secondary payer",
+  "payerIdentifier": "SYNTH-002",
+  "payerIdentifierSystem": "fixture-only",
+  "payerClaimControlNumber": "source-detail-001-payer-control",
+  "sourceCoverageId": "coverage-secondary",
+  "paymentTrace": "synthetic-shared-trace",
+  "paymentTraceType": "synthetic-reference",
+  "paymentTraceIssuer": "synthetic-payer",
+  "reportedDate": "2026-01-22",
+  "sourceStatus": "payer-reported-only",
+  "lineDetailCompleteness": "PARTIAL",
+  "allocations": [
+    {
+      "sourceLineId": "proc-line-01",
+      "amount": "-10.00",
+      "sourceStatus": null
+    },
+    {
+      "sourceLineId": "proc-line-02",
+      "amount": "-5.00",
+      "sourceStatus": null
+    }
+  ],
+  "adjustments": []
+}

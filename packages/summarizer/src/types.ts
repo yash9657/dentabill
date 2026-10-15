@@ -1,4 +1,3 @@
-import { isKnownDenialCode } from '@dentabill/payer-ivr';
 import { z } from 'zod';
 
 /**
@@ -11,7 +10,7 @@ import { z } from 'zod';
  *
  *   1. The LiveClaude adapter parses the raw tool-call response with
  *      this schema before returning. Any malformed output (missing
- *      keys, hallucinated denial code, confidence out of range) is a
+ *      keys, oversized denial code, confidence out of range) is a
  *      hard failure routed to the summary DLQ — we do NOT try to
  *      "repair" LLM output.
  *
@@ -19,11 +18,9 @@ import { z } from 'zod';
  *      INSERT — defence-in-depth in case a future port shape skips
  *      step 1.
  *
- * If a payer rep cites a denial code we haven't allow-listed in
- * `packages/payer-ivr/src/denial-codes.ts`, the schema rejects it.
- * The worker's policy then routes the claim to MANUAL_REVIEW with a
- * clear "unknown denial code" reason — no auto-decision on
- * vocabulary we can't reason about. (ADR-042)
+ * Unrecognized denial codes are retained without assigning code-system or
+ * payer-policy meaning. The worker's deterministic policy requires review
+ * for these observations; schema acceptance does not establish validity.
  */
 
 const TRIM = (s: string): string => s.trim();
@@ -55,17 +52,14 @@ const NextActionEnum = z.enum([
 const ConfidenceSchema = z.number().min(0).max(1);
 
 /**
- * Denial-code allow-list. Anything not in `DENIAL_CODES` is treated
- * as a hallucination (or a payer code we haven't mapped) and forces
- * the summary into MANUAL_REVIEW. Empty string normalises to null
- * so the LLM can omit the field on non-denial outcomes.
+ * Retain the reported code's spelling, group prefix, and punctuation.
+ * The size limit contains malformed output without discarding unfamiliar
+ * codes. Empty strings normalize to null; recognition is a policy concern.
  */
 const DenialCodeSchema = z
   .string()
+  .max(64, 'denialCode must be at most 64 characters')
   .transform(TRIM)
-  .refine((v) => v.length === 0 || isKnownDenialCode(v), {
-    message: 'denialCode is not in the allow-list (see packages/payer-ivr/src/denial-codes.ts)',
-  })
   .transform((v) => (v.length === 0 ? null : v))
   .nullable();
 
@@ -104,7 +98,8 @@ export interface SummarizeInput {
   readonly callId: string;
   readonly payerCode: string;
   readonly transcriptTurns: readonly {
-    readonly role: 'agent' | 'representative' | 'system';
+    // Remote speech can be a representative or IVR; source is unsplit provider text.
+    readonly role: 'agent' | 'representative' | 'system' | 'remote' | 'source';
     readonly text: string;
     readonly timestamp: Date;
   }[];
@@ -119,12 +114,12 @@ export interface SummarizeInput {
 
 /**
  * Output of `SummarizerPort.summarize`. Wraps the validated
- * `SummaryOutput` plus the `tokensUsed` figure the worker writes to
- * `Organization.summaryTokensUsed` inside the cost-guard lock.
+ * `SummaryOutput` plus usage committed in the durable inference ledger.
+ * Null means usage is unknown and its reservation must remain outstanding.
  */
 export interface SummarizeResult {
   readonly summary: SummaryOutput;
-  readonly tokensUsed: number;
+  readonly tokensUsed: number | null;
   readonly promptVersion: string;
   readonly model: string;
 }

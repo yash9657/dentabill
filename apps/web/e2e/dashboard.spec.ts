@@ -47,6 +47,24 @@ test.describe('dashboard shell (P2-T32)', () => {
     expect(consoleErrors).toEqual([]);
   });
 
+  test('overview and reports disclose payment unavailability without recovery totals', async ({
+    page,
+  }) => {
+    await page.goto('/dashboard/overview');
+    const metrics = page.getByRole('region', { name: /headline metrics/i });
+    await expect(metrics.getByText('Verified payments')).toBeVisible();
+    await expect(metrics.getByText('Unavailable: no reconciliation')).toBeVisible();
+    await expect(metrics.getByText(/Recovered/i)).toHaveCount(0);
+    await expect(metrics.getByText(/\$/)).toHaveCount(0);
+    await page.goto('/dashboard/reports');
+    await expect(
+      page.getByText(/review call activity, reported denials, and claim aging/),
+    ).toBeVisible();
+    await expect(page.getByText(/recovery trends|recovered value|per-payer recovery/i)).toHaveCount(
+      0,
+    );
+  });
+
   test('sidebar links navigate to each top-level dashboard route', async ({
     page,
     consoleErrors,

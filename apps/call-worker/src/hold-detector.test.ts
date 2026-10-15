@@ -1,13 +1,5 @@
 import type { EndCallInput, RetellPort, StartCallResult } from '@dentabill/payer-ivr';
-import {
-  CALL_JOB_NAME,
-  type CallJobData,
-  createBullMqJobDispatcher,
-  type DlqQueue,
-  DLQ_JOB_NAME,
-  DLQ_REASONS,
-  QUEUE_NAMES,
-} from '@dentabill/queue';
+import { type CallJobData, createBullMqJobDispatcher, type DlqQueue } from '@dentabill/queue';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createHoldDetector, resolveHoldBreach } from './hold-detector.js';
@@ -67,6 +59,8 @@ describe('createHoldDetector — pure-logic silence tracking', () => {
 
 interface MockRetellPort extends RetellPort {
   ended: EndCallInput[];
+  startCall: ReturnType<typeof vi.fn<RetellPort['startCall']>>;
+  endCall: ReturnType<typeof vi.fn<RetellPort['endCall']>>;
 }
 
 function mockRetellPort(): MockRetellPort {
@@ -119,78 +113,46 @@ describe('resolveHoldBreach', () => {
     expect(retell.ended).toEqual([{ retellCallId: 'fake_call_1', reason: 'hold_cap_exceeded' }]);
   });
 
-  it('reschedules with attemptNumber+1 when attempts are not exhausted', async () => {
-    const retell = mockRetellPort();
-    const calls = mockCallsQueue();
-    const dlq = mockDlqQueue();
-    const result = await resolveHoldBreach({
-      jobDispatcher: createBullMqJobDispatcher({ callsQueue: calls }),
-      dlqQueue: dlq as unknown as DlqQueue,
-      retellPort: retell,
-      retellCallId: 'fake_call_1',
-      originalData: { ...baseJobData, attemptNumber: 1 },
-      originalJobId: 'job-1',
-      silentMs: 700_000,
-    });
-    expect(result.outcome).toBe('rescheduled');
-    expect(result.nextAttemptNumber).toBe(2);
-    expect(result.nextJobId).toBe('job-test-1-r2');
-    expect(calls.add).toHaveBeenCalledTimes(1);
-    const [jobName, payload, options] = calls.add.mock.calls[0]!;
-    expect(jobName).toBe(CALL_JOB_NAME);
-    expect(payload).toMatchObject({
-      attemptNumber: 2,
-      idempotencyKey: 'job-test-1-r2',
-      organizationId: baseJobData.organizationId,
-      claimId: baseJobData.claimId,
-    });
-    expect(options).toMatchObject({ jobId: 'job-test-1-r2' });
-    expect(dlq.add).not.toHaveBeenCalled();
-  });
+  it.each([1, 2] as const)(
+    'defers after stop acknowledgement without a replacement or DLQ at attempt %s',
+    async (attemptNumber) => {
+      const retell = mockRetellPort();
+      const calls = mockCallsQueue();
+      const dlq = mockDlqQueue();
+      const result = await resolveHoldBreach({
+        jobDispatcher: createBullMqJobDispatcher({ callsQueue: calls }),
+        dlqQueue: dlq as unknown as DlqQueue,
+        retellPort: retell,
+        retellCallId: 'fake_call_1',
+        originalData: { ...baseJobData, attemptNumber },
+        originalJobId: 'job-1',
+        silentMs: 700_000,
+      });
+      expect(result).toEqual({ outcome: 'termination_pending' });
+      expect(calls.add).not.toHaveBeenCalled();
+      expect(dlq.add).not.toHaveBeenCalled();
+      expect(retell.startCall).not.toHaveBeenCalled();
+    },
+  );
 
-  it('routes to DLQ with EXCEEDED_MAX_HOLD when the per-day cap is reached', async () => {
+  it('propagates ambiguous stop failure without redialling or escalating', async () => {
     const retell = mockRetellPort();
+    vi.mocked(retell.endCall).mockRejectedValue(new Error('synthetic stop timeout'));
     const calls = mockCallsQueue();
     const dlq = mockDlqQueue();
-    const result = await resolveHoldBreach({
-      jobDispatcher: createBullMqJobDispatcher({ callsQueue: calls }),
-      dlqQueue: dlq as unknown as DlqQueue,
-      retellPort: retell,
-      retellCallId: 'fake_call_1',
-      originalData: { ...baseJobData, attemptNumber: 2 },
-      originalJobId: 'job-attempt-2',
-      silentMs: 800_000,
-    });
-    expect(result.outcome).toBe('dlq_exhausted');
-    expect(result.nextAttemptNumber).toBeUndefined();
+    await expect(
+      resolveHoldBreach({
+        jobDispatcher: createBullMqJobDispatcher({ callsQueue: calls }),
+        dlqQueue: dlq as unknown as DlqQueue,
+        retellPort: retell,
+        retellCallId: 'fake_call_1',
+        originalData: baseJobData,
+        originalJobId: 'job-1',
+        silentMs: 700_000,
+      }),
+    ).rejects.toThrow('synthetic stop timeout');
     expect(calls.add).not.toHaveBeenCalled();
-    expect(dlq.add).toHaveBeenCalledTimes(1);
-    const [jobName, payload, options] = dlq.add.mock.calls[0]!;
-    expect(jobName).toBe(DLQ_JOB_NAME);
-    expect(payload).toMatchObject({
-      reason: DLQ_REASONS.EXCEEDED_MAX_HOLD,
-      originalQueueName: QUEUE_NAMES.CALLS,
-      originalData: { ...baseJobData, attemptNumber: 2 },
-      attemptsMade: 2,
-    });
-    expect(payload).toMatchObject({ failedReason: expect.stringMatching(/800000 ms/) });
-    expect(options).toMatchObject({ jobId: 'job-attempt-2' });
-  });
-
-  it('uses the breached jobId as the DLQ idempotency key (replay-safe)', async () => {
-    const retell = mockRetellPort();
-    const calls = mockCallsQueue();
-    const dlq = mockDlqQueue();
-    await resolveHoldBreach({
-      jobDispatcher: createBullMqJobDispatcher({ callsQueue: calls }),
-      dlqQueue: dlq as unknown as DlqQueue,
-      retellPort: retell,
-      retellCallId: 'fake_call_1',
-      originalData: { ...baseJobData, attemptNumber: 2 },
-      originalJobId: 'idempotent-job-xyz',
-      silentMs: 800_000,
-    });
-    const options = dlq.add.mock.calls[0]?.[2];
-    expect(options).toMatchObject({ jobId: 'idempotent-job-xyz' });
+    expect(dlq.add).not.toHaveBeenCalled();
+    expect(retell.startCall).not.toHaveBeenCalled();
   });
 });

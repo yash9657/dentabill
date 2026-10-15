@@ -34,10 +34,39 @@ const baseCall: CallSummary = {
   endedAt: null,
   durationSeconds: null,
   dlqReason: null,
+  cancelRequestedAt: null,
+  monitoring: null,
   createdAt: '2026-04-29T10:00:00.000Z',
 };
 
 describe('<CallsTable />', () => {
+  it('shows an unconfirmed stop alongside the active provider status', () => {
+    render(
+      <CallsTable
+        items={[
+          {
+            ...baseCall,
+            monitoring: {
+              deadlineAt: '2026-01-01T00:00:00.000Z',
+              nextObservationAt: null,
+              stopRequestedAt: '2026-01-01T00:01:00.000Z',
+              stopAcknowledgedAt: null,
+              reviewRequiredAt: '2026-01-01T00:03:00.000Z',
+              lastCheckedAt: null,
+              lastErrorCode: 'STOP_CONFIRMATION_EXPIRED',
+            },
+          },
+        ]}
+        isLoading={false}
+        isFetchingMore={false}
+        hasMore={false}
+        onReachEnd={() => undefined}
+      />,
+    );
+    expect(screen.getByLabelText('Status: Navigating IVR. Stop not confirmed')).toBeInTheDocument();
+    expect(screen.getByText('Stop not confirmed')).toBeInTheDocument();
+  });
+
   it('renders the empty state when there are no items and no error', () => {
     render(
       <CallsTable
@@ -121,5 +150,37 @@ describe('<CallsTable />', () => {
     );
     // Three "—" appear (started, hold, duration).
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('shows cancellation pending alongside the current active status', () => {
+    render(
+      <CallsTable
+        items={[{ ...baseCall, cancelRequestedAt: '2026-04-29T10:01:00.000Z' }]}
+        isLoading={false}
+        isFetchingMore={false}
+        hasMore={false}
+        onReachEnd={() => undefined}
+      />,
+    );
+    expect(
+      screen.getByRole('gridcell', { name: 'Status: Navigating IVR. Cancellation requested' }),
+    ).toHaveTextContent('Cancellation requested');
+    expect(screen.queryByText('Failed')).not.toBeInTheDocument();
+  });
+
+  it('shows the terminal outcome after a requested cancellation is confirmed ended', () => {
+    render(
+      <CallsTable
+        items={[
+          { ...baseCall, status: 'COMPLETED', cancelRequestedAt: '2026-04-29T10:01:00.000Z' },
+        ]}
+        isLoading={false}
+        isFetchingMore={false}
+        hasMore={false}
+        onReachEnd={() => undefined}
+      />,
+    );
+    expect(screen.getByRole('gridcell', { name: 'Status: Completed' })).toBeInTheDocument();
+    expect(screen.queryByText('Cancellation requested')).not.toBeInTheDocument();
   });
 });

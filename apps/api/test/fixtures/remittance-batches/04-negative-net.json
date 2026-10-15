@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "evidenceBasis": "PAYER_REMITTANCE_BATCH",
+  "sourceNamespace": "synthetic-payer-export",
+  "sourceBatchId": "synthetic-batch-negative-net",
+  "sourceRecordId": "synthetic-batch-record-negative-net",
+  "sourceDocumentId": "synthetic-remittance-document",
+  "sourceVersion": "1",
+  "payerName": "Synthetic Dental Payer",
+  "payerIdentifier": "synthetic-payer",
+  "payerIdentifierSystem": "SYNTHETIC",
+  "payeeIdentifier": "synthetic-practice",
+  "payeeIdentifierSystem": "SYNTHETIC",
+  "currency": "USD",
+  "paymentTrace": "synthetic-shared-trace",
+  "paymentTraceType": "SYNTHETIC_REFERENCE",
+  "paymentTraceIssuer": "synthetic-payer",
+  "reportedDate": "2026-10-01",
+  "sourceStatus": "payer-reported-only",
+  "detailCompleteness": "COMPLETE",
+  "reportedClaimAmount": "100.00",
+  "reportedAdjustmentAmount": "-125.00",
+  "reportedNetAmount": "-25.00",
+  "claimRemittances": [
+    {
+      "sourceNamespace": "synthetic-remittance",
+      "sourceRecordId": "synthetic-claim-report-100",
+      "reportedAmount": "100.00"
+    }
+  ],
+  "providerAdjustments": [
+    {
+      "sourceAdjustmentId": "synthetic-provider-reduction",
+      "codeSystem": "SYNTHETIC_RAW",
+      "reasonCode": "UNMAPPED-DEDUCTION",
+      "sourceReference": "synthetic-provider-reference",
+      "providerIdentifier": "synthetic-practice",
+      "fiscalPeriodEnd": "2026-09-30",
+      "amount": "-125.00",
+      "sourceAmount": "125.00",
+      "sourceSignConvention": "REDUCTION_POSITIVE"
+    }
+  ]
+}

@@ -7,6 +7,8 @@ import {
   CALLS_DEFAULT_JOB_OPTIONS,
   loadQueueEnv,
   QUEUE_NAMES,
+  SummaryJobResultSchema,
+  SummaryJobDataSchema,
 } from './index.js';
 
 describe('@dentabill/queue — wire surface', () => {
@@ -14,6 +16,53 @@ describe('@dentabill/queue — wire surface', () => {
     expect(QUEUE_NAMES.CALLS).toBe('calls');
     expect(QUEUE_NAMES.CALLS_DLQ).toBe('calls-dlq');
     expect(CALL_JOB_NAME).toBe('call.place');
+  });
+});
+
+describe('SummaryJobResultSchema', () => {
+  it('rejects caller-selected native provider, model, or generation controls in the command', () => {
+    const data = {
+      organizationId: 'synthetic-org',
+      callId: 'synthetic-call',
+      promptVersion: 'v1',
+      idempotencyKey: 'call.synthetic',
+    };
+    for (const extra of [
+      { provider: 'FIREWORKS' },
+      { releaseId: 'caller' },
+      { generation: 2 },
+      { dataClass: 'SYNTHETIC' },
+    ])
+      expect(SummaryJobDataSchema.safeParse({ ...data, ...extra }).success).toBe(false);
+  });
+  it('carries a native observation without inventing a legacy summary or known usage', () => {
+    expect(
+      SummaryJobResultSchema.parse({
+        summaryId: null,
+        observationId: 'synthetic-observation',
+        outcome: 'OBSERVATION_PUBLISHED',
+        tokensUsed: null,
+        promptVersion: 'claim-observation.v1',
+      }),
+    ).toMatchObject({ summaryId: null, observationId: 'synthetic-observation', tokensUsed: null });
+  });
+  it('preserves unknown inference usage and review disposition without coercing to zero', () => {
+    expect(
+      SummaryJobResultSchema.parse({
+        summaryId: null,
+        outcome: 'INFERENCE_REVIEW_REQUIRED',
+        tokensUsed: null,
+        promptVersion: 'v1',
+      }).tokensUsed,
+    ).toBeNull();
+    expect(
+      SummaryJobResultSchema.parse({
+        summaryId: null,
+        outcome: 'PROVIDER_DISABLED',
+        tokensUsed: 0,
+        promptVersion: 'v1',
+      }).tokensUsed,
+    ).toBe(0);
   });
 });
 

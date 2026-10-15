@@ -1,12 +1,33 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SETTINGS_TABS, SettingsTabs } from './settings-tabs.js';
+
+let role = 'OWNER';
+vi.mock('../../lib/me/use-me.js', () => ({ useMe: () => ({ data: { user: { role } } }) }));
+afterEach(() => vi.unstubAllEnvs());
 
 vi.mock('next/navigation', () => ({ usePathname: vi.fn() }));
 const { usePathname } = await import('next/navigation');
 
 describe('<SettingsTabs />', () => {
+  it.each(['OWNER', 'ADMIN', 'BILLING_STAFF'])(
+    'shows Operations only for owner/admin, given %s',
+    (value) => {
+      role = value;
+      vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_synthetic');
+      vi.mocked(usePathname).mockReturnValue('/dashboard/settings/operations');
+      render(<SettingsTabs />);
+      if (value === 'BILLING_STAFF')
+        expect(screen.queryByRole('link', { name: 'Operations' })).not.toBeInTheDocument();
+      else
+        expect(screen.getByRole('link', { name: 'Operations' })).toHaveAttribute(
+          'aria-current',
+          'page',
+        );
+    },
+  );
+
   it('renders one link per SETTINGS_TABS entry', () => {
     vi.mocked(usePathname).mockReturnValue('/dashboard/settings/organization');
     render(<SettingsTabs />);

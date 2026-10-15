@@ -18,6 +18,9 @@
     "dev": "tsx watch src/server.ts",
     "seed:demo": "tsx scripts/demo-seed.mts",
     "demo:call": "tsx scripts/simulate-live-call.mts",
+    "demo:preflight": "tsx scripts/demo-preflight.mts",
+    "demo:provision": "tsx scripts/demo-provision.mts",
+    "demo:launch": "tsx scripts/demo-launch.mts",
     "gen:openapi": "tsx scripts/dump-openapi.mts",
     "build:vercel": "pnpm --filter @dentabill/db db:generate && node scripts/build-vercel.mjs",
     "build:lambda": "pnpm --filter @dentabill/db db:generate && node scripts/build-lambda.mjs"
@@ -48,6 +51,7 @@
   },
   "devDependencies": {
     "@dentabill/config": "workspace:*",
+    "@dentabill/model-gateway": "workspace:*",
     "@types/node": "^20.15.1",
     "@types/papaparse": "^5.3.15",
     "@vercel/nft": "^1.11.0",

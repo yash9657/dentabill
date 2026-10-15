@@ -16,9 +16,19 @@ function bodyAsError(response: { json: () => unknown }): ApiErrorBody {
 }
 
 async function makeOrg(name: string): Promise<Organization> {
-  return prisma.organization.create({
+  const organization = await prisma.organization.create({
     data: { name, clerkOrgId: `clerk_${Math.random().toString(36).slice(2)}`, npi: '1234567890' },
   });
+  await prisma.user.create({
+    data: {
+      id: `${organization.id}-actor`,
+      organizationId: organization.id,
+      clerkUserId: `${organization.id}-clerk-user`,
+      email: 'synthetic-audit@example.test',
+      role: 'OWNER',
+    },
+  });
+  return organization;
 }
 
 describe('GET /v1/audit-logs (G-D2a)', () => {
@@ -53,7 +63,7 @@ describe('GET /v1/audit-logs (G-D2a)', () => {
 
   it('returns empty list for an org with no audit logs', async () => {
     const org = await makeOrg('Empty Audit Org');
-    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+    const headers = { 'x-test-user-id': `${org.id}-actor`, 'x-test-org-id': org.id };
     const response = await server.inject({
       method: 'GET',
       url: '/v1/audit-logs',
@@ -68,6 +78,11 @@ describe('GET /v1/audit-logs (G-D2a)', () => {
     expect(body.items).toEqual([]);
     expect(body.nextCursor).toBeNull();
     expect(body.hasMore).toBe(false);
+    const readAudit = await prisma.auditLog.findFirstOrThrow({
+      where: { organizationId: org.id, action: 'auditLog.list' },
+    });
+    expect(readAudit.userId).toBe(`${org.id}-actor`);
+    expect(readAudit.metadata).not.toHaveProperty('clerkUserId');
   });
 
   it('returns audit logs in desc createdAt order', async () => {
@@ -103,7 +118,7 @@ describe('GET /v1/audit-logs (G-D2a)', () => {
       },
     });
 
-    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+    const headers = { 'x-test-user-id': `${org.id}-actor`, 'x-test-org-id': org.id };
     const response = await server.inject({
       method: 'GET',
       url: '/v1/audit-logs',
@@ -137,7 +152,7 @@ describe('GET /v1/audit-logs (G-D2a)', () => {
       });
     }
 
-    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+    const headers = { 'x-test-user-id': `${org.id}-actor`, 'x-test-org-id': org.id };
     const page1 = await server.inject({
       method: 'GET',
       url: '/v1/audit-logs?limit=2',
@@ -195,7 +210,7 @@ describe('GET /v1/audit-logs (G-D2a)', () => {
       },
     });
 
-    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+    const headers = { 'x-test-user-id': `${org.id}-actor`, 'x-test-org-id': org.id };
     const response = await server.inject({
       method: 'GET',
       url: '/v1/audit-logs?resourceType=Call',
@@ -230,7 +245,7 @@ describe('GET /v1/audit-logs (G-D2a)', () => {
       },
     });
 
-    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+    const headers = { 'x-test-user-id': `${org.id}-actor`, 'x-test-org-id': org.id };
     const response = await server.inject({
       method: 'GET',
       url: '/v1/audit-logs?action=claim.create',
@@ -273,7 +288,7 @@ describe('GET /v1/audit-logs (G-D2a)', () => {
       },
     });
 
-    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+    const headers = { 'x-test-user-id': `${org.id}-actor`, 'x-test-org-id': org.id };
     const response = await server.inject({
       method: 'GET',
       url: '/v1/audit-logs?from=2026-08-21&to=2026-08-21',
@@ -299,7 +314,7 @@ describe('GET /v1/audit-logs (G-D2a)', () => {
       },
     });
 
-    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+    const headers = { 'x-test-user-id': `${org.id}-actor`, 'x-test-org-id': org.id };
     const response = await server.inject({
       method: 'GET',
       url: '/v1/audit-logs?from=2026-08-21T00:00:00.000Z&to=2026-08-21T23:59:59.999Z',
@@ -345,7 +360,7 @@ describe('GET /v1/audit-logs (G-D2a)', () => {
       },
     });
 
-    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+    const headers = { 'x-test-user-id': `${org.id}-actor`, 'x-test-org-id': org.id };
     const response = await server.inject({
       method: 'GET',
       url: '/v1/audit-logs?from=2026-01-15T11:00:00Z&to=2026-01-15T13:00:00Z',
@@ -386,13 +401,13 @@ describe('GET /v1/audit-logs (G-D2a)', () => {
     const responseA = await server.inject({
       method: 'GET',
       url: '/v1/audit-logs',
-      headers: { 'x-test-user-id': 'user_a', 'x-test-org-id': orgA.id },
+      headers: { 'x-test-user-id': `${orgA.id}-actor`, 'x-test-org-id': orgA.id },
     });
 
     const responseB = await server.inject({
       method: 'GET',
       url: '/v1/audit-logs',
-      headers: { 'x-test-user-id': 'user_b', 'x-test-org-id': orgB.id },
+      headers: { 'x-test-user-id': `${orgB.id}-actor`, 'x-test-org-id': orgB.id },
     });
 
     const bodyA = responseA.json<{
@@ -421,7 +436,7 @@ describe('GET /v1/audit-logs (G-D2a)', () => {
       },
     });
 
-    const headers = { 'x-test-user-id': 'user_a', 'x-test-org-id': org.id };
+    const headers = { 'x-test-user-id': `${org.id}-actor`, 'x-test-org-id': org.id };
     const response = await server.inject({
       method: 'GET',
       url: '/v1/audit-logs',
