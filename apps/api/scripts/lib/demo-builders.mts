@@ -57,13 +57,41 @@ function choice<T>(arr: T[]): T {
 // ─── Synthetic data pools ─────────────────────────────────────────────
 
 const FIRST_NAMES = [
-  'James', 'Sarah', 'Michael', 'Jennifer', 'David', 'Maria', 'Robert', 'Lisa',
-  'William', 'Karen', 'Richard', 'Nancy', 'John', 'Susan', 'Charles', 'Patricia',
+  'James',
+  'Sarah',
+  'Michael',
+  'Jennifer',
+  'David',
+  'Maria',
+  'Robert',
+  'Lisa',
+  'William',
+  'Karen',
+  'Richard',
+  'Nancy',
+  'John',
+  'Susan',
+  'Charles',
+  'Patricia',
 ];
 
 const LAST_NAMES = [
-  'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Miller', 'Davis', 'Wilson',
-  'Moore', 'Taylor', 'Anderson', 'Thomas', 'Jackson', 'White', 'Harris', 'Martin',
+  'Smith',
+  'Johnson',
+  'Williams',
+  'Brown',
+  'Jones',
+  'Miller',
+  'Davis',
+  'Wilson',
+  'Moore',
+  'Taylor',
+  'Anderson',
+  'Thomas',
+  'Jackson',
+  'White',
+  'Harris',
+  'Martin',
 ];
 
 const CDT_CODES = ['D2391', 'D2392', 'D2394', 'D1110', 'D1120', 'D5110', 'D5120'];
@@ -72,8 +100,10 @@ const DENIAL_CODES = ['CO-50', 'CO-29', 'CO-96', 'CO-97', 'CO-109', 'N362', 'N52
 
 // ─── Builders ─────────────────────────────────────────────────────────
 
-interface OrganizationData
-  extends Omit<Organization, 'id' | 'createdAt' | 'updatedAt' | 'settings' | 'featureFlags'> {
+interface OrganizationData extends Omit<
+  Organization,
+  'id' | 'createdAt' | 'updatedAt' | 'settings' | 'featureFlags'
+> {
   clerkOrgId: string;
   name: string;
   npi: string;
@@ -98,10 +128,7 @@ interface UserData extends Omit<User, 'id' | 'createdAt'> {
   name: string | null;
 }
 
-export function buildUser(
-  organizationId: string,
-  overrides?: Partial<UserData>,
-): UserData {
+export function buildUser(organizationId: string, overrides?: Partial<UserData>): UserData {
   return {
     clerkUserId: `user_demo_${Math.random().toString(36).slice(2)}`,
     organizationId,
@@ -147,10 +174,7 @@ interface ClaimData extends Omit<Claim, 'id' | 'createdAt' | 'updatedAt'> {
  * Build a claim with deterministic but realistic data.
  * HASH_SECRET is a dummy value for demo purposes.
  */
-export function buildClaim(
-  organizationId: string,
-  overrides?: Partial<ClaimData>,
-): ClaimData {
+export function buildClaim(organizationId: string, overrides?: Partial<ClaimData>): ClaimData {
   const patientDOB = `198${randInt(0, 10)}-${String(randInt(1, 13)).padStart(2, '0')}-${String(randInt(1, 29)).padStart(2, '0')}`;
   const patientDOBHash = hashPatientDOB({
     dob: patientDOB,
@@ -172,7 +196,9 @@ export function buildClaim(
     // Dollars, not cents: a real dental claim runs $150–$2000. Dividing by 100
     // here produced $1.50–$20.00 claims, which made the recovered-value KPI
     // read as loose change.
-    claimAmount: new Prisma.Decimal(`${String(randInt(150, 2000))}.${String(randInt(0, 100)).padStart(2, '0')}`),
+    claimAmount: new Prisma.Decimal(
+      `${String(randInt(150, 2000))}.${String(randInt(0, 100)).padStart(2, '0')}`,
+    ),
     payerCode: choice(['DELTA_DENTAL_PPO', 'CIGNA_DENTAL', 'METLIFE_DENTAL']),
     serviceDate,
     submittedDate,
@@ -276,7 +302,9 @@ export function buildCallSummary(
     organizationId,
     callId,
     claimStatus: isDenied ? 'DENIED' : 'APPROVED',
-    denialReason: isDenied ? choice(['Coverage exclusion', 'Frequency limit', 'Missing info']) : null,
+    denialReason: isDenied
+      ? choice(['Coverage exclusion', 'Frequency limit', 'Missing info'])
+      : null,
     denialCode: isDenied ? choice(DENIAL_CODES) : null,
     nextAction: isDenied ? 'APPEAL' : hasApproval ? 'RESOLVED' : 'SUBMIT_DOCS',
     confidence: 0.72 + rng() * 0.25,
@@ -284,7 +312,9 @@ export function buildCallSummary(
     referenceNumber: `REF-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
     callbackDate: rng() > 0.8 ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null,
     amountApproved: hasApproval
-      ? new Prisma.Decimal(`${String(randInt(120, 1800))}.${String(randInt(0, 100)).padStart(2, '0')}`)
+      ? new Prisma.Decimal(
+          `${String(randInt(120, 1800))}.${String(randInt(0, 100)).padStart(2, '0')}`,
+        )
       : null,
     notes: 'Synthetic demo call summary for testing.',
     rawTranscript: generateFakeTranscript(),
