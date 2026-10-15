@@ -179,13 +179,156 @@ describe('<CallDetailPage /> conversation', () => {
         ],
       },
     });
-    renderDetail();
+    const { user } = renderDetail();
     expect(await screen.findByRole('heading', { name: 'Conversation' })).toBeVisible();
     expect(screen.getAllByText(text.trim())).toHaveLength(1);
     expect(screen.getByText('Payer representative')).toBeVisible();
+    expect(screen.getByText('Event recorded.')).not.toBeVisible();
+    await user.click(screen.getByText('Call details and event log'));
     expect(screen.getByText('Event recorded.')).toBeVisible();
     expect(screen.queryByText('call.transcript')).not.toBeInTheDocument();
     expect(screen.queryByText(/PRIVATE_EVENT_METADATA|"role"|"text"/)).not.toBeInTheDocument();
+  });
+});
+
+describe('<CallDetailPage /> phone tree and live state', () => {
+  const turn = (id: string, role: string, text: string, second: number) => ({
+    id,
+    eventType: 'call.transcript',
+    timestamp: new Date(Date.UTC(2026, 9, 14, 12, 0, second)).toISOString(),
+    data: { role, text },
+  });
+
+  it('summarises the recorded phone-tree path and labels events for people', async () => {
+    getMock.mockResolvedValue({
+      data: {
+        ...baseCall,
+        status: 'COMPLETED',
+        holdTimeSeconds: 42,
+        durationSeconds: 75,
+        events: [
+          turn('t1', 'system', 'Please enter the subscriber ID.', 1),
+          turn('t2', 'agent', 'Subscriber ID DEMO1042.', 2),
+          turn('t3', 'system', 'For claim status, press 2.', 3),
+          turn('t4', 'agent', 'Pressing 2 for claim status.', 4),
+          turn('t5', 'system', 'Hold music.', 5),
+          turn('t6', 'user', 'Provider services, this is Marcus.', 6),
+          {
+            id: 'ended',
+            eventType: 'call.ended',
+            timestamp: '2026-10-14T12:01:00.000Z',
+            data: { endReason: 'completed' },
+          },
+        ],
+      },
+    });
+    const { user } = renderDetail();
+    const path = await screen.findByRole('region', { name: 'Phone tree' });
+    expect(path).toHaveTextContent(
+      'Gave subscriber IDClaim status · pressed 2On hold · 42sReached Marcus',
+    );
+    expect(screen.getByRole('list', { name: 'Recorded call progress' })).toHaveTextContent(
+      '1m 15s duration',
+    );
+    expect(screen.queryByText('Live')).not.toBeInTheDocument();
+    await user.click(screen.getByText('Call details and event log'));
+    expect(screen.getByText('Call ended')).toBeVisible();
+    expect(screen.getByText('call.ended')).toHaveClass('font-mono');
+  });
+
+  it('renders no phone tree when the transcript supports no step', async () => {
+    getMock.mockResolvedValue({
+      data: { ...baseCall, events: [turn('t1', 'system', 'For claim status, press 2.', 1)] },
+    });
+    renderDetail();
+    await screen.findByRole('heading', { name: 'Conversation' });
+    expect(screen.queryByRole('region', { name: 'Phone tree' })).not.toBeInTheDocument();
+  });
+
+  it('shows a live indicator with an elapsed timer while the call is active', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date('2026-10-13T10:02:05.000Z') });
+    try {
+      getMock.mockResolvedValue({ data: baseCall });
+      renderDetail();
+      expect(await screen.findByText('Live')).toBeVisible();
+      expect(screen.getByRole('timer')).toHaveTextContent('2:05');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.getByRole('timer')).toHaveTextContent(/2:0[89]/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('<CallDetailPage /> useful information first', () => {
+  it('keeps an unknown linked claim status explicit without guessing a known state', async () => {
+    getMock.mockResolvedValue({
+      data: { ...baseCall, claim: { ...baseCall.claim, status: 'UNRECOGNIZED' } },
+    });
+    renderDetail();
+    expect(await screen.findByText(/Status unavailable/)).toBeVisible();
+    expect(screen.queryByText('UNRECOGNIZED')).not.toBeInTheDocument();
+  });
+
+  it('keeps operational metrics accessible behind a closed disclosure', async () => {
+    getMock.mockResolvedValue({ data: baseCall });
+    const { user } = renderDetail();
+    await screen.findByRole('heading', { name: 'Call to Cigna Dental' });
+    expect(screen.getByRole('link', { name: baseCall.claim.claimNumber })).toHaveAttribute(
+      'href',
+      `/dashboard/claims/${baseCall.claimId}`,
+    );
+    expect(screen.getByText('Hold time')).not.toBeVisible();
+    expect(screen.getByText('Failure reason')).not.toBeVisible();
+    expect(screen.queryByText('DLQ reason')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Conversation' })).toBeVisible();
+    const disclosure = screen.getByText('Call details and event log');
+    expect(disclosure.closest('details')).not.toHaveAttribute('open');
+    await user.click(disclosure);
+    expect(disclosure.closest('details')).toHaveAttribute('open');
+    expect(screen.getByText('Hold time')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Event log' })).toBeVisible();
+    await user.click(disclosure);
+    expect(screen.getByText('Hold time')).not.toBeVisible();
+  });
+
+  it.each(['COMPLETED', 'FAILED', 'VOICEMAIL'] as const)(
+    'does not infer IVR navigation or human contact from terminal %s',
+    async (status) => {
+      getMock.mockResolvedValue({
+        data: { ...baseCall, status, ivrNavigated: false, humanReached: false },
+      });
+      const { user } = renderDetail();
+      await screen.findByRole('heading', { name: 'Call to Cigna Dental' });
+      const progress = screen.getByRole('list', { name: 'Recorded call progress' });
+      expect(progress).not.toHaveTextContent(/IVR|Connected|Confirmed/);
+      await user.click(screen.getByText('Call details and event log'));
+      expect(screen.getAllByText('Not confirmed')).toHaveLength(2);
+      expect(screen.queryByText('Confirmed', { exact: true })).not.toBeInTheDocument();
+    },
+  );
+
+  it('updates the visible stage from the saved call status without inventing intermediate steps', async () => {
+    getMock.mockResolvedValue({
+      data: { ...baseCall, status: 'NAVIGATING_IVR', ivrNavigated: false },
+    });
+    const { client } = renderDetail();
+    expect(await screen.findByLabelText('Status: Navigating IVR')).toBeVisible();
+    await act(async () => {
+      client.setQueryData(callQueryKey(baseCall.id, 'org-a', 'user-a'), {
+        ...baseCall,
+        status: 'COLLECTING',
+        ivrNavigated: false,
+        humanReached: false,
+      });
+    });
+    expect(await screen.findByLabelText('Status: Collecting')).toBeVisible();
+    expect(screen.queryByLabelText('Status: Navigating IVR')).not.toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Recorded call progress' })).not.toHaveTextContent(
+      'Connected',
+    );
   });
 });
 

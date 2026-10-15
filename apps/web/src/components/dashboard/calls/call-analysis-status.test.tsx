@@ -144,11 +144,12 @@ describe('Post-call analysis status', () => {
     );
     mount();
     expect(await screen.findByText('The earlier call summary is saved.')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Call results' })).toBeVisible();
     expect(screen.getByText('Synthetic analysis')).toBeVisible();
     expect(await screen.findByText('DEMO-REFERENCE-001')).toBeVisible();
     expect(screen.getByText('Synthetic representative')).toBeVisible();
     expect(screen.getByText('Submit supporting documents')).toBeVisible();
-    expect(screen.getByText('pending')).toBeVisible();
+    expect(screen.getByText('Pending review')).toBeVisible();
     expect(mocks.get).toHaveBeenCalledWith(
       '/v1/calls/{id}/summary',
       expect.objectContaining({
@@ -159,6 +160,50 @@ describe('Post-call analysis status', () => {
     );
     expect(screen.queryByRole('link', { name: 'Review claim findings' })).not.toBeInTheDocument();
     expect(mocks.post).not.toHaveBeenCalled();
+  });
+
+  it('leads with the outcome and the next step the call recorded', async () => {
+    mocks.get.mockImplementation((path: string) =>
+      Promise.resolve(
+        ok(
+          path === '/v1/calls/{id}/summary'
+            ? summary({ claimStatus: 'denied', nextAction: 'APPEAL', repName: 'Marcus' })
+            : status({ state: 'APPLIED', provider: 'SYNTHETIC', summaryId: 'summary-one' }),
+        ),
+      ),
+    );
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(
+      <QueryProvider client={createDentaBillQueryClient()}>
+        <CallAnalysisStatus
+          call={{
+            ...call,
+            durationSeconds: 61,
+            holdTimeSeconds: 125,
+            events: [
+              {
+                id: 'ended',
+                eventType: 'call.ended',
+                timestamp: '2026-10-14T12:00:00.000Z',
+                data: { collectedInfo: { nextSteps: 'Appeal within 90 days' } },
+              },
+            ],
+          }}
+        />
+      </QueryProvider>,
+    );
+    expect(await screen.findByText('Denied')).toBeVisible();
+    expect(screen.getByText('Appeal within 90 days')).toBeVisible();
+    expect(screen.getByText('Suggested action: Appeal the decision')).toBeVisible();
+    expect(screen.getByText('1m 1s')).toBeVisible();
+    expect(screen.getByText('2m 5s')).toBeVisible();
+    expect(screen.getByText('Marcus')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy reference number' }));
+    expect(writeText).toHaveBeenCalledWith('DEMO-REFERENCE-001');
+    expect(
+      await screen.findByRole('button', { name: 'Reference number copied' }),
+    ).toBeInTheDocument();
   });
 
   it.each(['missing', 'network', 'call', 'summary'] as const)(

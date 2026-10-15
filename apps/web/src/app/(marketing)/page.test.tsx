@@ -15,8 +15,8 @@ describe('HomePage', () => {
   });
   it('presents the captioned synthetic walkthrough with native playback controls', () => {
     render(<HomePage />);
-    expect(screen.getByRole('region', { name: 'See DentaBill in action' })).toBeVisible();
-    expect(screen.getByText('Synthetic demo')).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Watch DentaBill make a call' })).toBeVisible();
+    expect(screen.getByText('67 seconds · synthetic demo')).toBeVisible();
     expect(screen.getByText('English captions')).toBeVisible();
     const video = screen.getByLabelText('DentaBill product walkthrough with synthetic data');
     expect(video.tagName).toBe('VIDEO');

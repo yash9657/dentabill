@@ -22,11 +22,37 @@ describe('Call conversation', () => {
       />,
     );
     expect(screen.getByRole('heading', { name: 'Conversation' })).toBeVisible();
-    expect(screen.getByText('System / IVR')).toBeVisible();
+    expect(screen.getByText(/System \/ IVR/)).toBeInTheDocument();
     expect(screen.getByText('DentaBill agent')).toBeVisible();
     expect(screen.getByText('Payer representative')).toBeVisible();
     expect(screen.getByText(text.trim())).toBeVisible();
     expect(screen.queryByText(/"role"|"text"/)).not.toBeInTheDocument();
+  });
+
+  it('renders IVR prompts as chips, the payer on the left and DentaBill on the right', () => {
+    const { container } = render(
+      <CallConversation
+        events={[
+          event('a', 'call.transcript', { role: 'system', text: 'For claim status, press 2.' }),
+          event('b', 'call.transcript', { role: 'agent', text: 'Pressing 2 for claim status.' }),
+          event('c', 'call.transcript', {
+            role: 'user',
+            text: 'Provider services, this is Marcus.',
+          }),
+        ]}
+        status="COMPLETED"
+      />,
+    );
+    const rows = [...container.querySelectorAll('li[data-speaker]')];
+    expect(rows.map((row) => row.getAttribute('data-speaker'))).toEqual([
+      'system',
+      'agent',
+      'remote',
+    ]);
+    expect(rows[1]).toHaveClass('items-end');
+    expect(screen.getByText('Pressing 2 for claim status.')).toHaveClass('bg-brand', 'text-white');
+    // The avatar initial comes from the representative's own introduction.
+    expect(rows[2]?.querySelector('[aria-hidden]')).toHaveTextContent(/^M$/);
   });
 
   it('uses the final source transcript instead of provisional or legacy demo turns', () => {
@@ -77,6 +103,25 @@ describe('Call conversation', () => {
     );
     expect(screen.getByText('The final transcript is empty.')).toBeVisible();
     expect(screen.queryByText(/Do not substitute/)).not.toBeInTheDocument();
+  });
+
+  it('shows an honest waiting state for an active call without a transcript', () => {
+    render(<CallConversation events={[]} status="NAVIGATING_IVR" />);
+    expect(screen.getByRole('heading', { name: 'Conversation' })).toBeVisible();
+    expect(screen.getByText(/No transcript is available yet/)).toBeVisible();
+    expect(screen.queryByText('Payer representative')).not.toBeInTheDocument();
+  });
+
+  it('announces incoming conversation updates only while the call is active', () => {
+    const events = [
+      event('a', 'call.transcript', { role: 'agent', text: 'Checking the reference.' }),
+    ];
+    const { rerender } = render(<CallConversation events={events} status="COLLECTING" />);
+    expect(screen.getByRole('log')).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByRole('log')).toHaveAttribute('tabindex', '0');
+    rerender(<CallConversation events={events} status="COMPLETED" />);
+    expect(screen.getByRole('log')).toHaveAttribute('aria-live', 'off');
+    expect(screen.getByText('Checking the reference.')).toBeVisible();
   });
 
   it('does not turn arbitrary event metadata into conversation content', () => {

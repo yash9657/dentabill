@@ -2345,3 +2345,29 @@ and additive snapshots under the existing implementation plan. The eight legacy 
 repairs remain a separate tested follow-up with no historical rewrite. Real connector, remaining
 financial and production evidence gates are unchanged. This is a local demo milestone; the full
 goal remains ACTIVE.
+
+## ADR-087 — 67-second motion-design film built in code; call screen redesign
+
+**Date:** 2026-10-15. **Status:** rendered and verified locally; not committed, published or
+deployed. Supersedes ADR-086's film (the landing player, captions and transcript links stay).
+
+The owner rejected ADR-086's 2:52 screen-recording walkthrough: too long, no motion or sound
+design, and not aimed at dental practices. Modern SaaS demos are 30–90 seconds, scenario-led,
+with kinetic type, zoom-to-action camera moves and sound design, readable with the sound off.
+
+1. Build the film in code with Remotion (`apps/demo-film`, pinned 4.0.531) instead of editing a
+   screen recording: animated recreations of the dashboard in DESIGN.md tokens, so every shot is
+   legible at 16:9 and re-renders in one command (`pnpm --filter @dentabill/demo-film render`).
+2. The story sells the agent: hook (stuck on hold) → brand → CSV drop → one click → the call
+   (phone-tree pills, real DTMF tones, hold fast-forward, live chat with the rep) → call results
+   card → six calls at once → “Insurance calls, handled.” 66.8 s, 1920×1080, 30 fps, −14 LUFS.
+3. The call reenacts `packages/payer-ivr/src/demo/local-navigation.ts`; voices are Kokoro-82M
+   (Apache-2.0), music and effects are synthesized (no samples). The “Synthetic data · simulated
+   call” badge and the end-card disclosure stay. No invented statistics.
+4. Before filming, the call screen was redesigned so the film shows the product as it is: an
+   outcome card (status, next step, reference with copy, representative, durations), a phone
+   tree path derived only from transcript turns (`lib/calls/call-insights.ts`), chat-style
+   conversation, a live banner with timer and waveform, and human event labels.
+5. ADR-086's `docs/demo-film/{script,edit,production}.json` described the old film and are
+   removed; `docs/demo-film/README.md` documents the new one. Remotion's free license covers
+   companies of up to three people.

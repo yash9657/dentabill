@@ -10,9 +10,9 @@ export function ClaimDemo(): React.ReactElement {
       <header className="demo-topline">
         <div className="demo-video-title">
           <BrandMark size={22} />
-          <h2 id="demo-video-heading">See DentaBill in action</h2>
+          <h2 id="demo-video-heading">Watch DentaBill make a call</h2>
         </div>
-        <span className="demo-label">Synthetic demo</span>
+        <span className="demo-label">67 seconds · synthetic demo</span>
       </header>
       <video
         className="demo-video"
@@ -21,8 +21,8 @@ export function ClaimDemo(): React.ReactElement {
         controls
         playsInline
         preload="none"
-        width={1600}
-        height={1000}
+        width={1920}
+        height={1080}
         poster={`${mediaPath}/poster.jpg`}
       >
         <source src={`${mediaPath}/walkthrough.mp4`} type="video/mp4" />

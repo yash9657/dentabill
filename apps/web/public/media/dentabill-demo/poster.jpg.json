@@ -1,15 +1,13 @@
 {
   "schemaVersion": 1,
   "asset": "apps/web/public/media/dentabill-demo/poster.jpg",
-  "source": "apps/web/public/media/dentabill-demo/walkthrough.mp4",
-  "sourceSha256": "a5021282f15ba8cb2eb5d9a10334240c18c5aababb89ec532680a4074db093bc",
-  "origin": "DentaBill demo poster: unmodified frame at 2.0 seconds of walkthrough.mp4. Original typography and authored vector logo rendered with Chrome; Inter and Newsreader from the application font cache. No image-generation model. Video SHA256 a5021282f15ba8cb2eb5d9a10334240c18c5aababb89ec532680a4074db093bc",
+  "source": "apps/demo-film (Remotion composition DemoFilm)",
+  "origin": "Remotion still of the Call results moment, rendered by apps/demo-film/render.sh from authored React components, the DentaBill logo and self-hosted Inter/Newsreader. No image-generation model.",
   "process": {
-    "tool": "FFmpeg",
-    "frameSeconds": 2,
+    "tool": "Remotion 4.0.531 + FFmpeg",
     "width": 1600,
-    "height": 1000,
-    "metadata": "JPEG COM segment; pixels unchanged"
+    "height": 900
   },
-  "assetSha256": "ef8466a26440b4e12374746d5b26432596ad3358e017452f21a5a37670089a5e"
+  "videoSha256": "807da1fc0fd8a098235c2617f9b18f0dba3c7ee05206e2dfeddd063caec4daf8",
+  "assetSha256": "ab062ea3a626437e6c0746322e9fca224731daa4424df7a841e90d95cb7776c1"
 }

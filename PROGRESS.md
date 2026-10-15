@@ -413,6 +413,9 @@ older deployment target for the zero-extra-hosting demo.
 
 ## Recent activity
 
+- **2026-10-15 — ADR-087 demo film:** 67-second Remotion motion-design film (`apps/demo-film`)
+  replaces the 2:52 walkthrough on the landing page; call detail screen redesigned (outcome card,
+  phone tree path, chat conversation, live banner). Uncommitted; not deployed.
 - **2026-10-13 — FW-27 publication/review:** immutable native findings and exact-version biller
   reviews, scoped APIs/SDK/evidence UI, final-event binding and recovered-call chronology.
   Migration19 only on localhost; same-call regeneration remains open. No production or paid

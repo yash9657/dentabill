@@ -1,0 +1,76 @@
+{
+  "fps": 30,
+  "bpm": 120,
+  "note": "1 bar = 2s = 60 frames. Voice lines are a reenactment of packages/payer-ivr/src/demo/local-navigation.ts (synthetic identity DEMO1042, SIM-2026-1042). No payer is contacted.",
+  "voices": {
+    "ivr": {
+      "kokoroVoice": "bf_emma",
+      "filter": "telephone"
+    },
+    "rep": {
+      "kokoroVoice": "am_michael",
+      "name": "Marcus",
+      "filter": "telephone"
+    },
+    "agent": {
+      "kokoroVoice": "af_heart",
+      "filter": "light-telephone"
+    }
+  },
+  "lines": [
+    {
+      "id": "ivr1",
+      "speaker": "ivr",
+      "text": "Thanks for calling Delta Dental. For provider services, press two."
+    },
+    {
+      "id": "ivr2",
+      "speaker": "ivr",
+      "text": "For claim status, press one."
+    },
+    {
+      "id": "ivr3",
+      "speaker": "ivr",
+      "text": "Enter the provider N P I."
+    },
+    {
+      "id": "ivr5",
+      "speaker": "ivr",
+      "text": "Please hold for the next available representative."
+    },
+    {
+      "id": "rep1",
+      "speaker": "rep",
+      "text": "Provider services, this is Marcus."
+    },
+    {
+      "id": "agent2",
+      "speaker": "agent",
+      "text": "Hi Marcus! I'm checking a claim for DEMO ten forty-two, date of service September eighteenth."
+    },
+    {
+      "id": "rep2",
+      "speaker": "rep",
+      "text": "I see it. That claim is pending review. Follow up in ten business days. Reference S I M, twenty twenty-six, ten forty-two."
+    },
+    {
+      "id": "agent3",
+      "speaker": "agent",
+      "text": "Perfect. Thanks, Marcus!"
+    }
+  ],
+  "dtmf": [
+    {
+      "after": "ivr1",
+      "digits": "2"
+    },
+    {
+      "after": "ivr2",
+      "digits": "1"
+    },
+    {
+      "after": "ivr3",
+      "digits": "1234567893"
+    }
+  ]
+}

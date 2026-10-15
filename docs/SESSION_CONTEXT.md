@@ -4,6 +4,15 @@ _Last updated: 2026-10-14 (full-scope goal active; AWS baseline reconciled)._
 
 ## Current session — W0 implementation on AWS baseline
 
+### 2026-10-15: ADR-087 film rebuild and call screen redesign (Claude Code)
+
+Codex ran out of usage mid-session; its uncommitted W0 work (CSV observations, migration
+`20261014220000_claim_source_observations`, payer-ivr local navigation demo) is untouched and
+still uncommitted, as is a git stash it left. On top of its call-screen edits: the call detail
+redesign (ADR-087 §4, 167 call tests pass) and the new film in `apps/demo-film` rendered into
+`apps/web/public/media/dentabill-demo/`. Next: owner watches the film, then commit the film/UI
+work separately from codex's W0 changes.
+
 ### 2026-10-14: FW-45 narrated film and landing integration (ADR-086)
 
 ADR-085 is committed as `de6b1ac`. The actual authenticated synthetic rehearsal is now edited into
