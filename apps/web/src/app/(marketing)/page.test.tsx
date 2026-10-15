@@ -40,21 +40,17 @@ describe('HomePage', () => {
     expect(captions).toHaveAttribute('label', 'English');
     expect(captions).toHaveAttribute('default');
   });
-  it('offers a transcript and downloadable video without requiring a custom player', () => {
+  it('offers a transcript and no video download', () => {
     render(<HomePage />);
     expect(screen.getByRole('link', { name: 'Read transcript' })).toHaveAttribute(
       'href',
       '/media/dentabill-demo/transcript.html',
     );
-    const download = screen.getByRole('link', { name: 'Download video' });
-    expect(download).toHaveAttribute('href', '/media/dentabill-demo/walkthrough.mp4');
-    expect(download).toHaveAttribute('download');
+    expect(screen.queryByRole('link', { name: /download/i })).toBeNull();
     const video = screen.getByLabelText('DentaBill product walkthrough with synthetic data');
+    expect(video).toHaveAttribute('controlslist', 'nodownload');
     expect(video).toHaveTextContent('Your browser cannot play this video.');
-    expect(video.querySelector('a[download]')).toHaveAttribute(
-      'href',
-      '/media/dentabill-demo/walkthrough.mp4',
-    );
+    expect(video.querySelector('a[download]')).toBeNull();
   });
   it('shows import, call, and review as three concrete steps', () => {
     render(<HomePage />);

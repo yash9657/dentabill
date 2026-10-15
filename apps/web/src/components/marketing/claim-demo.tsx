@@ -1,5 +1,5 @@
 import { BrandMark } from '@dentabill/ui';
-import { Captions, Download, FileText } from 'lucide-react';
+import { Captions, FileText } from 'lucide-react';
 import * as React from 'react';
 
 const mediaPath = '/media/dentabill-demo';
@@ -19,6 +19,7 @@ export function ClaimDemo(): React.ReactElement {
         aria-label="DentaBill product walkthrough with synthetic data"
         aria-describedby="demo-video-disclosure"
         controls
+        controlsList="nodownload"
         playsInline
         preload="none"
         width={1920}
@@ -35,10 +36,7 @@ export function ClaimDemo(): React.ReactElement {
         />
         <p>
           Your browser cannot play this video.{' '}
-          <a href={`${mediaPath}/walkthrough.mp4`} download>
-            Download the walkthrough
-          </a>{' '}
-          or <a href={`${mediaPath}/transcript.html`}>read the transcript</a>.
+          <a href={`${mediaPath}/transcript.html`}>Read the transcript</a>.
         </p>
       </video>
       <div className="demo-video-details">
@@ -51,9 +49,6 @@ export function ClaimDemo(): React.ReactElement {
         <div className="demo-video-links">
           <a href={`${mediaPath}/transcript.html`}>
             <FileText size={16} aria-hidden /> Read transcript
-          </a>
-          <a href={`${mediaPath}/walkthrough.mp4`} download>
-            <Download size={16} aria-hidden /> Download video
           </a>
         </div>
       </div>
