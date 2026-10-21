@@ -8,14 +8,25 @@
 
 Phases 1–4 are complete and the product runs end to end at
 [usedentabill.xyz](https://usedentabill.xyz) in a disclosed **simulation mode**:
-no payer is actually dialled (`DEMO_AUTOPILOT`) and summaries fall back to a
-transcript-derived summarizer when no Anthropic key is set
-(`DEMO_SUMMARIZER_FALLBACK`). Everything else (queue, worker, database, live
-transcript, claim transition, audit) is the production path. The web app runs
-on Vercel and the API on AWS at `api.usedentabill.xyz` (branch `infra/aws`).
-Real telephony is gated on the Retell
-BAA, IVR tooling for the Retell agents, and wiring the call-duration and hold
-guards (see [Failure modes](#failure-modes-and-resilience)). Roadmap:
+no payer is actually dialled (`DEMO_AUTOPILOT`) and summaries come from a
+transcript-derived synthetic summarizer (`DEMO_SUMMARIZER_FALLBACK`), so no
+model inference runs in production. Everything else (queue, outbox relay,
+worker, database, live transcript, claim transition, audit) is the production
+path. The web app runs on Vercel and the API on AWS at `api.usedentabill.xyz`
+(Terraform in `infra/aws`).
+
+Business and post-call inference targets **Fireworks-hosted open-weight
+models** through a typed gateway (`packages/model-gateway`) that only sends
+requests under a reviewed model release, validates every output against its
+source transcript, and journals usage before each request. Both checked-in
+model releases are still unapproved, so Fireworks inference is not enabled in
+production yet. **ElevenLabs** is the chosen speech/voice-orchestration
+direction; that adapter is not built yet. The Retell voice adapters and the
+Claude summarizer remain in the code as legacy comparison paths, not the way
+forward (the production factory refuses to start with a Claude key
+configured). Real telephony is still gated on the voice integration, PHI
+agreements, and wiring the call-duration and hold guards (see
+[Failure modes](#failure-modes-and-resilience)). Roadmap:
 `docs/PHASE_PLAN.md`, `PROGRESS.md`.
 
 ## Architecture
@@ -39,23 +50,28 @@ architecture is driven by five requirements:
 
 ![System context: staff, web app, API, job worker, Postgres, Clerk, Retell, Anthropic, Stripe](docs/architecture/system-context.svg)
 
+_This diagram predates the move to Fireworks open-weight inference and the
+ElevenLabs voice direction; its Retell and Anthropic boxes are the legacy
+adapters described above._
+
 DentaBill is a **modular monolith**: one TypeScript codebase with shared types
 and one Postgres schema, deployed as separate units. The worker processors are
 plain functions, so the same handlers run under BullMQ, inside the Vercel
 function, or in a Lambda. `JOB_DISPATCH_MODE` selects which.
 
-| Component             | Responsibility                                                                                                                                                                   | Runs on (AWS target)                        |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `apps/web`            | Next.js 15 (App Router, RSC) marketing site and dashboard: claims, CSV import, live call view, reports, audit log. Clerk middleware and a nonce-based CSP.                       | Vercel                                      |
-| `apps/api`            | Fastify 5 REST API with OpenAPI, Clerk JWT auth, the claim state machine, CSV ingest, SSE call stream, Retell, Clerk and Stripe webhooks. Also hosts the SQS worker entry point. | Lambda `dentabill-api` (+ Web Adapter)      |
-| `apps/call-worker`    | `call.place` handler: takes the claim lease, places the call through `RetellPort`, persists `CallEvent`s, sets the outcome, and dispatches the summary. Also the DLQ escalation. | Lambda `dentabill-worker` (bundled via API) |
-| `apps/summary-worker` | `summary.generate` handler: per-org token budget, Claude summary, `CallSummary`, transition policy, audit row.                                                                   | Lambda `dentabill-worker`                   |
-| `apps/billing-worker` | Daily Stripe metered-usage reconciliation from the audit log.                                                                                                                    | Not deployed (billing dormant)              |
-| `packages/db`         | Prisma schema and client; org-scope write guard, `getOrgScopedDb`, `audit()`.                                                                                                    | (library)                                   |
-| `packages/queue`      | Job schemas and the `JobDispatcher` (BullMQ, inline, SQS).                                                                                                                       | (library)                                   |
-| `packages/payer-ivr`  | Payer IVR maps, per-payer Retell agent prompts, `RetellPort` (live and fake), business-hours rules.                                                                              | (library)                                   |
-| `packages/summarizer` | `SummarizerPort` (live Claude and fake); versioned prompts; output schema.                                                                                                       | (library)                                   |
-| Postgres              | System of record: organizations, claims, calls, call events, summaries, audit log, billing usage.                                                                                | Aurora Serverless v2 (shared cluster)       |
+| Component                | Responsibility                                                                                                                                                                                                   | Runs on (AWS target)                        |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `apps/web`               | Next.js 15 (App Router, RSC) marketing site and dashboard: claims, CSV import, live call view, reports, audit log. Clerk middleware and a nonce-based CSP.                                                       | Vercel                                      |
+| `apps/api`               | Fastify 5 REST API with OpenAPI, Clerk JWT auth, the claim state machine, CSV ingest, SSE call stream, (legacy) Retell, Clerk and Stripe webhooks. Also hosts the SQS worker entry point.                        | Lambda `dentabill-api` (+ Web Adapter)      |
+| `apps/call-worker`       | `call.place` handler: takes the claim lease, places the call through `RetellPort` (legacy; simulated in the demo), persists `CallEvent`s, sets the outcome, and dispatches the summary. Also the DLQ escalation. | Lambda `dentabill-worker` (bundled via API) |
+| `apps/summary-worker`    | `summary.generate` handler: per-org token budget, synthetic or release-gated Fireworks findings, `CallSummary`, transition policy, audit row.                                                                    | Lambda `dentabill-worker`                   |
+| `apps/billing-worker`    | Daily Stripe metered-usage reconciliation from the audit log.                                                                                                                                                    | Not deployed (billing dormant)              |
+| `packages/db`            | Prisma schema and client; org-scope write guard, `getOrgScopedDb`, `audit()`.                                                                                                                                    | (library)                                   |
+| `packages/queue`         | Job schemas and the `JobDispatcher` (BullMQ, inline, SQS).                                                                                                                                                       | (library)                                   |
+| `packages/payer-ivr`     | Payer IVR maps, legacy per-payer Retell agent prompts, `RetellPort` (live and fake), business-hours rules.                                                                                                       | (library)                                   |
+| `packages/summarizer`    | `SummarizerPort` (fake, plus a legacy Claude adapter blocked in production); versioned prompts; output schema.                                                                                                   | (library)                                   |
+| `packages/model-gateway` | Fireworks open-weight inference: reviewed release policy, source-bound output validation, bounded transport, usage journal.                                                                                      | (library)                                   |
+| Postgres                 | System of record: organizations, claims, calls, call events, summaries, audit log, billing usage.                                                                                                                | Aurora Serverless v2 (shared cluster)       |
 
 ### Deployment on AWS
 
@@ -73,13 +89,17 @@ provider), shared with a second app, and the **DentaBill** stack in
    `RESPONSE_STREAM` mode.
 4. The Lambda Web Adapter starts the unchanged Fastify server and proxies the
    invocation to it. The response streams back.
-5. Enqueue routes `SendMessage` to `dentabill-jobs` (via the NAT).
+5. Enqueue commits the job to a transactional outbox in Postgres and sends it
+   to `dentabill-jobs` (via the NAT). An EventBridge rule,
+   `dentabill-outbox-relay` (`rate(1 minute)`), invokes the worker to re-send
+   any outbox rows that were not delivered.
 6. The event source mapping invokes `dentabill-worker` with one message at a time
    (max concurrency 5).
 7. A message that fails three receives is moved to `dentabill-jobs-dlq`, and a
    CloudWatch alarm fires.
 8. Both functions reach Aurora on 5432 over TLS from private subnets.
-9. All other egress (Clerk JWKS, Retell, Anthropic, the SQS API) leaves through
+9. All other egress (Clerk JWKS, the SQS API, and model/voice providers once
+   enabled) leaves through
    the fck-nat instance. S3 is the only VPC endpoint.
 
 ### Job pipeline
@@ -87,7 +107,9 @@ provider), shared with a second app, and the **DentaBill** stack in
 ![Job pipeline: API to SQS to call worker, summary fan-out, retries, DLQ, live SSE](docs/architecture/job-pipeline.svg)
 
 Correctness lives in Postgres, not in the queue. `POST /v1/claims/:id/calls`
-flips the claim to `IN_QUEUE` and sends `call.place`. The worker's first act is
+flips the claim to `IN_QUEUE` and records `call.place` in a leased transactional
+outbox in the same database transaction, then sends it. The minute
+`dentabill-outbox-relay` sweep recovers any command whose send was lost. The worker's first act is
 a conditional update `IN_QUEUE → CALLING`. If that update matches zero rows, the
 message is a duplicate or stale and is acknowledged without side effects. On a
 redelivery (`ApproximateReceiveCount > 1`) `CALLING` is also accepted, so a
@@ -150,13 +172,13 @@ messages the code never handled. Details: [`docs/DEPLOY_AWS.md`](docs/DEPLOY_AWS
   encrypted.
 - **Secrets:** Clerk keys and app secrets (`DATABASE_URL`, `DOB_HASH_SECRET`)
   are stored in Secrets Manager (`dentabill/clerk`, `dentabill/app`), and the
-  Aurora master password is RDS-managed. Real Retell webhooks require a separate
-  existing secret containing Retell's webhook-designated API key; the no-key
-  demo omits it (see `infra/aws/README.md`). Today
+  Aurora master password is RDS-managed. The legacy Retell webhooks would need a
+  separate existing secret containing Retell's webhook-designated API key; the
+  no-key demo omits it (see `infra/aws/README.md`). Today
   Terraform resolves them into Lambda environment variables at deploy time, so
   they also live in the encrypted state bucket. A runtime fetch through the
   Secrets Manager extension is the upgrade path.
-- **Webhooks:** Retell and Stripe webhooks are HMAC-verified over the raw body
+- **Webhooks:** Retell (legacy) and Stripe webhooks are HMAC-verified over the raw body
   with constant-time compare and replay protection (ADR-036). Clerk webhooks are
   Svix-verified.
 - **CI credentials:** no long-lived AWS keys are stored anywhere. The GitHub OIDC
@@ -168,8 +190,10 @@ messages the code never handled. Details: [`docs/DEPLOY_AWS.md`](docs/DEPLOY_AWS
 - **Logs:** structured pino JSON with PHI-field redaction goes to CloudWatch Logs
   (14-day retention). Source maps are enabled, so stack traces point at
   TypeScript. Every job log line carries `messageId`, attempt and `jobId`.
-- **Alarms:** DLQ depth ≥ 1, and Lambda `Errors` ≥ 5 in 5 min for each function.
-  They have no notification target yet (SNS → email is the next step).
+- **Alarms:** DLQ depth ≥ 1 (`dentabill-jobs-dlq-not-empty`), and Lambda
+  `Errors` ≥ 5 in 5 min for each function (`dentabill-api-errors`,
+  `dentabill-worker-errors`). All three notify the shared `apps-alerts` SNS
+  topic on alarm and on recovery.
 - **Health:** `/v1/healthz` (liveness, used by the adapter) and `/v1/readyz`
   (checks Postgres) for an external uptime monitor.
 - **Audit trail:** the `AuditLog` table records claim transitions with summary id,
@@ -212,7 +236,7 @@ Locked per `PRD.md` §2 and `docs/DECISIONS.md`. Highlights:
 - TypeScript strict, Vitest (unit/integration), Playwright (e2e, visual, a11y)
 - PostgreSQL (16 locally, 17 on Aurora) + Prisma v6 (multi-tenant, every query org-scoped)
 - Fastify v5 API, Next.js 15 App Router + React 19, BullMQ or SQS job dispatch
-- Retell AI + Telnyx (voice), Anthropic Claude (post-call analysis)
+- Fireworks open-weight models (business and post-call inference, release-gated), ElevenLabs (voice direction; Retell and Claude adapters kept as legacy)
 - Clerk auth, Resend mail, Stripe billing (dormant)
 - Terraform (AWS provider 6) for `infra/aws`
 
@@ -231,7 +255,7 @@ pnpm install --frozen-lockfile
 
 # 3. Configure env (do not edit .env.example — it stays as the template)
 cp .env.example .env
-# edit .env with real Clerk / Retell / etc. keys when those become needed
+# edit .env with real Clerk / Fireworks / etc. keys when those become needed
 
 # 4. Boot Postgres + Redis locally
 docker compose up -d
@@ -266,7 +290,7 @@ apps/
   web/              Next.js 15 frontend (Vercel)
   api/              Fastify v5 REST API + SSE; Lambda server and SQS worker entry points
   call-worker/      call.place handler + DLQ escalation (BullMQ process locally)
-  summary-worker/   summary.generate handler: Claude post-call analysis
+  summary-worker/   summary.generate handler: post-call findings (synthetic / Fireworks)
   billing-worker/   Stripe metered-usage reconciliation (dormant)
 packages/
   config/           Shared TS / ESLint / Prettier / Vitest config
@@ -274,8 +298,10 @@ packages/
   types/            Shared Zod schemas, enums, ApiError contract
   logger/           pino with PHI-field redaction
   queue/            Job schemas + JobDispatcher (BullMQ / inline / SQS)
-  payer-ivr/        Payer IVR maps, Retell agents, RetellPort
-  summarizer/       SummarizerPort (Claude / fake), prompts
+  payer-ivr/        Payer IVR maps, legacy Retell agents, RetellPort
+  summarizer/       SummarizerPort (fake / legacy Claude), prompts
+  model-gateway/    Release-gated Fireworks inference, validation, usage journal
+  evals/            Synthetic evaluation corpus and scoring for model releases
   notifier/         Transactional email port (Resend / fake)
   billing/          BillingPort (Stripe / fake)
   api-sdk/          Typed client generated from the OpenAPI spec
